@@ -23,9 +23,11 @@ const AdminDashboard = () => {
     const checkAdminAndLoadArticles = async () => {
       setIsLoading(true);
 
-      // Check if user is admin
+      // Check if user is admin and has token
       const isAdmin = localStorage.getItem("isAdmin") === "true";
-      if (!isAdmin) {
+      const token = localStorage.getItem("token");
+
+      if (!isAdmin || !token) {
         navigate("/admin-login");
         return;
       }
@@ -35,18 +37,19 @@ const AdminDashboard = () => {
       setAdminUsername(username);
 
       try {
-        // Load ALL articles: static + user
-        const { latestStories, nigeriaNews } = await import('@/data/newsData');
-        const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
+        // Fetch articles from backend API
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
 
-        // Combine all articles with source tracking
-        const allArticles = [
-          ...latestStories.map(article => ({ ...article, source: 'static' })),
-          ...nigeriaNews.map(article => ({ ...article, source: 'static' })),
-          ...userNews.map(article => ({ ...article, source: 'user' }))
-        ];
-
-        setArticles(allArticles);
+        if (response.ok) {
+          const articlesData = await response.json();
+          setArticles(articlesData);
+        } else {
+          throw new Error('Failed to fetch articles');
+        }
       } catch (error) {
         console.error("Failed to load articles:", error);
         toast({
@@ -70,50 +73,7 @@ const AdminDashboard = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Make static article editable by converting to user article
-  const handleMakeEditable = (article: NewsItem) => {
-    try {
-      const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
 
-      // Check if already converted
-      const alreadyExists = userNews.some(item => item.id === article.id);
-
-      if (!alreadyExists) {
-        const updatedUserNews = [...userNews, {
-          ...article,
-          originalSource: 'static' // Track that this was originally static
-        }];
-
-        localStorage.setItem('userNews', JSON.stringify(updatedUserNews));
-
-        // Update the articles list to reflect the change
-        setArticles(prevArticles =>
-          prevArticles.map(a =>
-            a.id === article.id ? { ...a, source: 'user', originalSource: 'static' } : a
-          )
-        );
-
-        toast({
-          title: "Success!",
-          description: "Article is now editable. You can modify it like any other article.",
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Already Editable",
-          description: "This article is already available for editing.",
-          variant: "default",
-        });
-      }
-    } catch (error) {
-      console.error("Failed to make article editable:", error);
-      toast({
-        title: "Error",
-        description: "Failed to make article editable",
-        variant: "destructive",
-      });
-    }
-  };
 
   // Delete article function
   const handleDelete = (id: string) => {
@@ -146,6 +106,7 @@ const AdminDashboard = () => {
   const handleLogout = () => {
     localStorage.removeItem("isAdmin");
     localStorage.removeItem("adminUsername");
+    localStorage.removeItem("token");
     navigate("/");
     toast({
       title: "Logged Out",
@@ -294,43 +255,20 @@ const AdminDashboard = () => {
                         {article.readTime}
                       </TableCell>
                       <TableCell className="flex gap-2">
-                        {article.source === 'static' ? (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleMakeEditable(article)}
-                            >
-                              <Edit2 className="h-4 w-4 mr-1" />
-                              Make Editable
-                            </Button>
-                            <span className="text-xs text-muted-foreground px-2 py-1 bg-card border rounded-full flex items-center">
-                              Static
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Button variant="outline" size="sm" asChild>
-                              <Link to={`/edit-news/${article.id}`}>
-                                <Edit2 className="h-4 w-4 mr-1" />
-                                Edit
-                              </Link>
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDelete(article.id)}
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Delete
-                            </Button>
-                            {article.originalSource === 'static' && (
-                              <span className="text-xs text-muted-foreground px-2 py-1 bg-card border rounded-full flex items-center">
-                                Converted
-                              </span>
-                            )}
-                          </>
-                        )}
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/edit-news/${article.id}`}>
+                            <Edit2 className="h-4 w-4 mr-1" />
+                            Edit
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(article.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))

@@ -13,31 +13,51 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simple admin authentication
-    if (username === "admin" && password === "EntertainmentGHC2026!") {
-      // Store admin status in localStorage
-      localStorage.setItem("isAdmin", "true");
-      localStorage.setItem("adminUsername", username);
-
-      toast({
-        title: "Login Successful",
-        description: "Welcome back, Admin!",
-        variant: "default",
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
       });
 
-      // Redirect to admin dashboard
-      setTimeout(() => navigate("/admin-dashboard"), 1000);
-    } else {
-      setIsLoading(false);
+      const data = await response.json();
+
+      if (response.ok) {
+        // Store JWT token and admin status
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("isAdmin", "true");
+        localStorage.setItem("adminUsername", username);
+
+        toast({
+          title: "Login Successful",
+          description: "Welcome back, Admin!",
+          variant: "default",
+        });
+
+        // Redirect to admin dashboard
+        setTimeout(() => navigate("/admin-dashboard"), 1000);
+      } else {
+        toast({
+          title: "Login Failed",
+          description: data.message || "Invalid username or password",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Login error:', error);
       toast({
         title: "Login Failed",
-        description: "Invalid username or password",
+        description: "Network error. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
