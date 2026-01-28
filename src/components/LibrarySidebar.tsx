@@ -11,7 +11,6 @@ const libraryLinks = [
 const categoryLinks = [
   { href: "/nigeria", label: "🇳🇬 Nigeria News" },
   { href: "/culture", label: "🎭 Culture" },
-  { href: "/ai-gallery", label: "🤖 AI Gallery" },
 ];
 
 interface LibrarySidebarProps {
