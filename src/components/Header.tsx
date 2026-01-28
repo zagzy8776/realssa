@@ -13,7 +13,6 @@ import { toast } from "@/components/ui/use-toast";
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/nigeria", label: "Nigeria" },
-  { href: "/ai-gallery", label: "AI Gallery" },
   { href: "/culture", label: "Culture" },
   { href: "/post-news", label: "Post News" },
   { href: "/admin-dashboard", label: "Dashboard", adminOnly: true },
