@@ -60,9 +60,9 @@ const Index = () => {
         <div className="container mx-auto px-4">
           <SectionHeader title="Latest Stories" />
           
-          {/* Show admin-posted articles and user-posted articles in Latest Stories */}
+          {/* Show ONLY admin-posted articles in Latest Stories */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {/* Display API articles first (admin-posted) */}
+            {/* Display ONLY API articles (admin-posted) */}
             {apiArticles.map((story, index) => (
               <div
                 key={`api-${story.id}`}
@@ -80,25 +80,13 @@ const Index = () => {
                 />
               </div>
             ))}
-
-            {/* Display user-posted news */}
-            {userNews.map((story, index) => (
-              <div
-                key={`user-${story.id}`}
-                className="animate-fade-in"
-                style={{ animationDelay: `${(apiArticles.length + index) * 100}ms` }}
-              >
-                <NewsCard
-                  title={story.title}
-                  excerpt={story.excerpt}
-                  category={story.category}
-                  image={story.image || "https://via.placeholder.com/400x250?text=EntertainmentGHC"}
-                  readTime={story.readTime}
-                  date={story.date}
-                  id={story.id}
-                />
+            
+            {/* If no admin articles, show a message */}
+            {apiArticles.length === 0 && (
+              <div className="col-span-full text-center py-8 text-muted-foreground">
+                No articles posted yet. Admin can add content through the dashboard.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </section>
