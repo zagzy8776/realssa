@@ -26,7 +26,7 @@ const EditNewsPage = () => {
 
   // Load article data on component mount
   useEffect(() => {
-    const loadArticle = () => {
+    const loadArticle = async () => {
       setIsLoading(true);
 
       try {
@@ -37,9 +37,38 @@ const EditNewsPage = () => {
           return;
         }
 
-        // Load article from localStorage
-        const news = JSON.parse(localStorage.getItem('userNews') || '[]');
-        const foundArticle = news.find((item: NewsItem) => item.id === id);
+        // Try to fetch from backend API first
+        let foundArticle = null;
+        const token = localStorage.getItem("token");
+
+        if (token) {
+          try {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/${id}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            });
+
+            if (response.ok) {
+              foundArticle = await response.json();
+            }
+          } catch (apiError) {
+            console.warn("API fetch failed:", apiError);
+          }
+        }
+
+        // If not found in API, check localStorage
+        if (!foundArticle) {
+          const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
+          foundArticle = userNews.find((item: NewsItem) => item.id === id);
+        }
+
+        // If still not found, check static content
+        if (!foundArticle) {
+          const { latestStories, nigeriaNews } = await import('@/data/newsData');
+          const staticNews = [...latestStories, ...nigeriaNews];
+          foundArticle = staticNews.find((item: NewsItem) => item.id === id);
+        }
 
         if (foundArticle) {
           setArticle(foundArticle);
@@ -50,7 +79,7 @@ const EditNewsPage = () => {
             image: foundArticle.image,
             readTime: foundArticle.readTime,
           });
-          setOriginalDate(foundArticle.date);
+          setOriginalDate(foundArticle.date || new Date().toISOString());
         } else {
           toast({
             title: "Error",
