@@ -139,7 +139,9 @@ app.post('/api/auth/login', (req, res) => {
 // Get all articles (public route - no authentication needed)
 app.get('/api/articles', (req, res) => {
   const articles = readJsonFile(articlesFilePath);
-  res.json(articles);
+  // Only serve user-posted articles (admin content), filter out static content
+  const userArticles = articles.filter(article => article.source === 'user');
+  res.json(userArticles);
 });
 
 // Get articles by content type (public route)
