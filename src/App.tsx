@@ -12,7 +12,6 @@ import PolicyBrief from "./pages/PolicyBrief";
 import NotFound from "./pages/NotFound";
 import NewsPost from "./pages/NewsPost";
 import Nigeria from "./pages/Nigeria";
-import AIGallery from "./pages/AIGallery";
 import Culture from "./pages/Culture";
 import MediaDecode from "./pages/library/MediaDecode";
 import SocietalArchitecture from "./pages/library/SocietalArchitecture";
@@ -35,7 +34,6 @@ const App = () => (
           <Route path="/contact" element={<Contact />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/nigeria" element={<Nigeria />} />
-          <Route path="/ai-gallery" element={<AIGallery />} />
           <Route path="/culture" element={<Culture />} />
           <Route path="/library/media-decode" element={<MediaDecode />} />
           <Route path="/library/nigerian-manual" element={<NigerianManual />} />
