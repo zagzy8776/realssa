@@ -40,18 +40,38 @@ const AdminDashboard = () => {
 
       try {
         // Fetch articles from backend API
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        let apiArticles = [];
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
 
-        if (response.ok) {
-          const articlesData = await response.json();
-          setArticles(articlesData);
-        } else {
-          throw new Error('Failed to fetch articles');
+          if (response.ok) {
+            apiArticles = await response.json();
+          }
+        } catch (apiError) {
+          console.warn("API fetch failed:", apiError);
         }
+
+        // Get user news from localStorage
+        const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
+
+        // Import static data to show in admin dashboard
+        const { latestStories, nigeriaNews } = await import('@/data/newsData');
+
+        // Mark static articles with a special flag so admin knows they're static
+        const staticArticles = [...latestStories, ...nigeriaNews].map(article => ({
+          ...article,
+          isStatic: true,
+          source: 'static'
+        }));
+
+        // Combine all articles, with admin articles first
+        const allArticles = [...apiArticles, ...userNews, ...staticArticles];
+
+        setArticles(allArticles);
       } catch (error) {
         console.error("Failed to load articles:", error);
         toast({

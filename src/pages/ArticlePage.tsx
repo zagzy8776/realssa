@@ -18,10 +18,7 @@ const ArticlePage = () => {
         setLoading(true);
         setError(null);
 
-        // Import static data dynamically to avoid circular dependencies
-        const { latestStories, nigeriaNews } = await import('@/data/newsData');
-
-        // Try to fetch from backend API first
+        // First try to fetch from backend API
         let apiArticles = [];
         try {
           const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
@@ -29,22 +26,31 @@ const ArticlePage = () => {
             apiArticles = await response.json();
           }
         } catch (apiError) {
-          console.warn("API fetch failed, using fallback data:", apiError);
+          console.warn("API fetch failed:", apiError);
         }
 
         // Get user news from localStorage as fallback
         const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
 
-        // Combine all news sources
-        const allNews = [...latestStories, ...nigeriaNews, ...apiArticles, ...userNews];
+        // Combine API articles and user news (prioritize API articles)
+        const allNews = [...apiArticles, ...userNews];
 
-        // Find the article by ID
+        // Find the article by ID in admin-posted content first
         const foundArticle = allNews.find((item: NewsItem) => item.id === id || item.id.toString() === id);
 
         if (foundArticle) {
           setArticle(foundArticle);
         } else {
-          setError("Article not found");
+          // If not found in admin content, try static content
+          const { latestStories, nigeriaNews } = await import('@/data/newsData');
+          const staticNews = [...latestStories, ...nigeriaNews];
+          const foundStaticArticle = staticNews.find((item: NewsItem) => item.id === id || item.id.toString() === id);
+          
+          if (foundStaticArticle) {
+            setArticle(foundStaticArticle);
+          } else {
+            setError("Article not found");
+          }
         }
       } catch (err) {
         console.error("Error fetching article:", err);
