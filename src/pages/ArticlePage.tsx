@@ -21,14 +21,25 @@ const ArticlePage = () => {
         // Import static data dynamically to avoid circular dependencies
         const { latestStories, nigeriaNews } = await import('@/data/newsData');
 
-        // Get user news from localStorage
+        // Try to fetch from backend API first
+        let apiArticles = [];
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
+          if (response.ok) {
+            apiArticles = await response.json();
+          }
+        } catch (apiError) {
+          console.warn("API fetch failed, using fallback data:", apiError);
+        }
+
+        // Get user news from localStorage as fallback
         const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
 
         // Combine all news sources
-        const allNews = [...latestStories, ...nigeriaNews, ...userNews];
+        const allNews = [...latestStories, ...nigeriaNews, ...apiArticles, ...userNews];
 
         // Find the article by ID
-        const foundArticle = allNews.find((item: NewsItem) => item.id === id);
+        const foundArticle = allNews.find((item: NewsItem) => item.id === id || item.id.toString() === id);
 
         if (foundArticle) {
           setArticle(foundArticle);

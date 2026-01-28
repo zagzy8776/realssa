@@ -76,15 +76,41 @@ const AdminDashboard = () => {
 
 
   // Delete article function
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this article? This cannot be undone.")) {
       try {
-        const updatedArticles = articles.filter(article => article.id !== id);
-        const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
-        const updatedUserNews = userNews.filter(article => article.id !== id);
+        const token = localStorage.getItem("token");
+        if (!token) {
+          toast({
+            title: "Authentication Error",
+            description: "Please log in again to delete articles.",
+            variant: "destructive",
+          });
+          navigate("/admin-login");
+          return;
+        }
 
-        localStorage.setItem('userNews', JSON.stringify(updatedUserNews));
+        // Delete from backend API
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to delete article');
+        }
+
+        // Update local state
+        const updatedArticles = articles.filter(article => article.id !== id && article.id.toString() !== id);
         setArticles(updatedArticles);
+
+        // Also update localStorage as fallback
+        const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
+        const updatedUserNews = userNews.filter(article => article.id !== id && article.id.toString() !== id);
+        localStorage.setItem('userNews', JSON.stringify(updatedUserNews));
 
         toast({
           title: "Article Deleted",
@@ -95,7 +121,7 @@ const AdminDashboard = () => {
         console.error("Failed to delete article:", error);
         toast({
           title: "Error",
-          description: "Failed to delete article",
+          description: error instanceof Error ? error.message : "Failed to delete article",
           variant: "destructive",
         });
       }

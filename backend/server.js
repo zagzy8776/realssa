@@ -132,14 +132,14 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token });
 });
 
-// Protected routes
-app.use('/api/articles', authenticate);
-
-// Get all articles
+// Get all articles (public route - no authentication needed)
 app.get('/api/articles', (req, res) => {
   const articles = readJsonFile(articlesFilePath);
   res.json(articles);
 });
+
+// Protected routes for article management
+app.use('/api/articles', authenticate);
 
 // Create new article
 app.post('/api/articles', (req, res) => {

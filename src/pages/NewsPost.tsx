@@ -59,23 +59,46 @@ const NewsPost = () => {
     setIsSubmitting(true);
 
     try {
-      // Simulate API call to submit news
-      const newNewsItem: NewsItem = {
-        ...formData,
-        id: Date.now().toString(),
-        date: new Date().toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric'
-        }),
+      // Get authentication token
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast({
+          title: "Authentication Error",
+          description: "Please log in again to post articles.",
+          variant: "destructive",
+        });
+        navigate("/admin-login");
+        return;
+      }
+
+      // Prepare article data for backend API
+      const articleData = {
+        title: formData.title,
+        excerpt: formData.excerpt,
+        content: formData.excerpt, // Using excerpt as content for now
+        category: formData.category,
+        image: formData.image || "https://via.placeholder.com/400x250?text=EntertainmentGHC",
+        readTime: formData.readTime,
+        author: localStorage.getItem("adminUsername") || "Admin",
+        source: "user"
       };
 
-      // In a real app, you would send this to your backend API
-      // await api.post('/news', newNewsItem);
+      // Send to backend API
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(articleData),
+      });
 
-      // For demo purposes, we'll store in localStorage
-      const existingNews = JSON.parse(localStorage.getItem('userNews') || '[]');
-      localStorage.setItem('userNews', JSON.stringify([...existingNews, newNewsItem]));
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to post article');
+      }
+
+      const newArticle = await response.json();
 
       toast({
         title: "Success!",
@@ -83,12 +106,13 @@ const NewsPost = () => {
         variant: "default",
       });
 
-      // Redirect to homepage after submission
-      setTimeout(() => navigate('/'), 2000);
+      // Redirect to admin dashboard after submission
+      setTimeout(() => navigate('/admin-dashboard'), 2000);
     } catch (error) {
+      console.error("Error posting article:", error);
       toast({
         title: "Error",
-        description: "Failed to post news article. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to post news article. Please try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
