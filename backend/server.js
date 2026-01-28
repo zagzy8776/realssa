@@ -59,23 +59,80 @@ const initializeDataFiles = () => {
 
 initializeDataFiles();
 
-// Helper function to read JSON file
+// Helper function to read JSON file with fallback
 const readJsonFile = (filePath) => {
   try {
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(data);
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(data);
+    }
   } catch (err) {
     console.error(`Error reading ${path.basename(filePath)}:`, err);
-    return [];
   }
+  
+  // Return default data if file doesn't exist or is corrupted
+  if (filePath.includes('articles.json')) {
+    return [
+      {
+        id: '1',
+        title: 'Welcome to EntertainmentGHC',
+        excerpt: 'Discover the latest in African entertainment and culture',
+        content: '<p>Welcome to our platform where we showcase the best of African entertainment...</p>',
+        category: 'general',
+        date: new Date().toISOString(),
+        author: 'Admin',
+        source: 'static'
+      }
+    ];
+  } else if (filePath.includes('users.json')) {
+    return [
+      {
+        id: '1',
+        username: 'admin',
+        password: bcrypt.hashSync('admin123', 10),
+        isAdmin: true
+      }
+    ];
+  }
+  
+  return [];
 };
 
-// Helper function to write JSON file
+// Helper function to write JSON file with error handling and backup
 const writeJsonFile = (filePath, data) => {
   try {
+    // Ensure directory exists
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    
+    // Write to primary file
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    console.log(`Successfully wrote to ${path.basename(filePath)}`);
+    
+    // Create backup in case of file corruption
+    const backupPath = filePath.replace('.json', '_backup.json');
+    try {
+      fs.writeFileSync(backupPath, JSON.stringify(data, null, 2));
+      console.log(`Backup created: ${path.basename(backupPath)}`);
+    } catch (backupErr) {
+      console.warn(`Failed to create backup: ${backupErr.message}`);
+    }
   } catch (err) {
     console.error(`Error writing to ${path.basename(filePath)}:`, err);
+    
+    // Try to restore from backup if write fails
+    const backupPath = filePath.replace('.json', '_backup.json');
+    if (fs.existsSync(backupPath)) {
+      try {
+        const backupData = fs.readFileSync(backupPath, 'utf-8');
+        fs.writeFileSync(filePath, backupData);
+        console.log(`Restored from backup: ${path.basename(filePath)}`);
+      } catch (restoreErr) {
+        console.error(`Failed to restore from backup:`, restoreErr);
+      }
+    }
   }
 };
 
