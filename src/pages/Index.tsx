@@ -5,7 +5,7 @@ import NewsCard from "@/components/NewsCard";
 import SectionHeader from "@/components/SectionHeader";
 import RotatingHeadlines from "@/components/RotatingHeadlines";
 import Footer from "@/components/Footer";
-import { nigeriaNews, NewsItem } from "@/data/newsData";
+import { NewsItem } from "@/data/newsData";
 import { useEffect, useState } from "react";
 
 const Index = () => {
@@ -91,32 +91,6 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Nigeria News Section */}
-      <section className="py-12 md:py-16 bg-card/50">
-        <div className="container mx-auto px-4">
-          <SectionHeader title="Nigeria Entertainment News" emoji="🇳🇬" />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-            {nigeriaNews.map((story, index) => (
-              <div
-                key={story.id}
-                className="animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <NewsCard
-                  title={story.title}
-                  excerpt={story.excerpt}
-                  category={story.category}
-                  image={story.image}
-                  readTime={story.readTime}
-                  date={story.date}
-                  href={story.href}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
 
       <Footer />
