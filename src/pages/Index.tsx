@@ -3,6 +3,7 @@ import SocialButtons from "@/components/SocialButtons";
 import HeroSection from "@/components/HeroSection";
 import NewsCard from "@/components/NewsCard";
 import SectionHeader from "@/components/SectionHeader";
+import RotatingHeadlines from "@/components/RotatingHeadlines";
 import Footer from "@/components/Footer";
 import { latestStories, nigeriaNews, NewsItem } from "@/data/newsData";
 import { useEffect, useState } from "react";
@@ -50,6 +51,9 @@ const Index = () => {
       <Header />
       <SocialButtons />
       <HeroSection />
+      
+      {/* Rotating Headlines Section */}
+      <RotatingHeadlines />
 
       {/* Latest Stories Section */}
       <section className="py-12 md:py-16">

@@ -17,8 +17,13 @@ export interface NewsItem {
   readTime: string;
   date: string;
   href?: string;
-  source?: 'static' | 'user'; // Added for admin dashboard
+  source?: 'static' | 'user' | 'admin'; // Added for admin dashboard
   originalSource?: 'static'; // Added for tracking converted articles
+  contentType?: 'article' | 'feature' | 'headline' | 'announcement'; // Content type for admin management
+  status?: 'published' | 'draft' | 'scheduled'; // Status for content lifecycle
+  featured?: boolean; // Featured content for headlines
+  author?: string; // Author information
+  content?: string; // Full article content
 }
 
 export const latestStories: NewsItem[] = [
