@@ -3,10 +3,10 @@ const tickerItems = [
   "NEWS: New AI Model Revolutionizes Digital Art",
   "CULTURE: Nollywood Film Breaks Box Office Records",
   "WORLD: Major Entertainment Event Announced for 2026",
-  "AFROBEATS: Shatta Wale Announces Global Collaboration",
-  "TECH: Ghanaian AI Startup Secures $10M Funding",
-  "FASHION: Best Dressed List from Ghana Music Awards",
-  "MOVIES: New Nollywood-Ghana Co-Production in Development",
+  "BREAKING: Major Entertainment News",
+  "EXCLUSIVE: Industry Insights",
+  "UPDATE: Latest Developments",
+  "FEATURE: In-Depth Analysis",
 ];
 
 const NewsTicker = () => {

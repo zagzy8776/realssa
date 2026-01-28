@@ -22,7 +22,7 @@ const HeroSection = () => {
           <CategoryBadge category="breaking" className="mb-4" />
           
           <h1 className="font-display text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-foreground leading-tight mb-6">
-            BREAKING: Shatta Wale Drops Major International Collab Track
+            Latest Entertainment News
           </h1>
           
           <p className="text-lg md:text-xl text-muted-foreground mb-6 max-w-2xl">

@@ -38,16 +38,6 @@ const Culture = () => {
           <h2 className="text-3xl font-display font-bold mb-8 text-center">Explore African Culture</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Traditional Festivals */}
-            <div className="bg-card p-6 rounded-lg shadow-sm">
-              <h3 className="text-xl font-semibold mb-3">Traditional Festivals</h3>
-              <p className="text-muted-foreground mb-4">
-                Discover the vibrant traditional festivals across Africa that celebrate heritage, community, and cultural identity.
-              </p>
-              <div className="bg-gradient-to-r from-orange-400 to-red-500 h-32 rounded-md flex items-center justify-center text-white font-semibold">
-                Festival Celebrations
-              </div>
-            </div>
 
             {/* African Cuisine */}
             <div className="bg-card p-6 rounded-lg shadow-sm">
