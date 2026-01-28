@@ -25,12 +25,16 @@ const NewsPost = () => {
     }
   }, [navigate]);
 
-  const [formData, setFormData] = useState<Omit<NewsItem, 'id' | 'date'>>({
+  const [formData, setFormData] = useState({
     title: "",
     excerpt: "",
-    category: "afrobeats",
+    category: "afrobeats" as CategoryType,
     image: "",
     readTime: "5 min read",
+    contentType: "article",
+    status: "published",
+    featured: false,
+    content: "",
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -75,12 +79,15 @@ const NewsPost = () => {
       const articleData = {
         title: formData.title,
         excerpt: formData.excerpt,
-        content: formData.excerpt, // Using excerpt as content for now
+        content: formData.content || formData.excerpt, // Use full content if provided, otherwise use excerpt
         category: formData.category,
         image: formData.image || "https://via.placeholder.com/400x250?text=EntertainmentGHC",
         readTime: formData.readTime,
         author: localStorage.getItem("adminUsername") || "Admin",
-        source: "user"
+        source: "user",
+        contentType: formData.contentType,
+        status: formData.status,
+        featured: formData.featured
       };
 
       // Send to backend API
@@ -228,16 +235,85 @@ const NewsPost = () => {
                 )}
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="readTime" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Estimated Read Time
+                  </label>
+                  <Input
+                    id="readTime"
+                    name="readTime"
+                    value={formData.readTime}
+                    onChange={handleChange}
+                    placeholder="e.g., 5 min read"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="contentType" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Content Type
+                  </label>
+                  <Select onValueChange={(value) => setFormData(prev => ({ ...prev, contentType: value }))} value={formData.contentType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select content type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="article">News Article</SelectItem>
+                      <SelectItem value="feature">Feature Story</SelectItem>
+                      <SelectItem value="headline">Headline</SelectItem>
+                      <SelectItem value="announcement">Announcement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="status" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Status
+                  </label>
+                  <Select onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))} value={formData.status}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="published">Published</SelectItem>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="featured" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Featured Content
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="featured"
+                      checked={formData.featured}
+                      onChange={(e) => setFormData(prev => ({ ...prev, featured: e.target.checked }))}
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    />
+                    <label htmlFor="featured" className="text-sm text-muted-foreground">
+                      Mark as featured content
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <label htmlFor="readTime" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Estimated Read Time
+                <label htmlFor="content" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Full Content (Optional)
                 </label>
-                <Input
-                  id="readTime"
-                  name="readTime"
-                  value={formData.readTime}
+                <Textarea
+                  id="content"
+                  name="content"
+                  value={formData.content}
                   onChange={handleChange}
-                  placeholder="e.g., 5 min read"
+                  placeholder="Write the full article content here (optional, will use excerpt if empty)"
+                  rows={6}
                 />
               </div>
 

@@ -126,7 +126,7 @@ const Index = () => {
                         image={story.image || "https://via.placeholder.com/400x250?text=EntertainmentGHC"}
                         readTime={story.readTime || "5 min read"}
                         date={story.date}
-                        href={`/article/${story.id}`}
+                        id={story.id}
                       />
                     </div>
                   ))}
@@ -145,7 +145,7 @@ const Index = () => {
                         image={story.image || "https://via.placeholder.com/400x250?text=EntertainmentGHC"}
                         readTime={story.readTime}
                         date={story.date}
-                        href={`/article/${story.id}`}
+                        id={story.id}
                       />
                     </div>
                   ))}

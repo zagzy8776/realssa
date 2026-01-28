@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Edit2, Trash2, PlusCircle, LogOut, Search } from "lucide-react";
+import { Edit2, Trash2, PlusCircle, LogOut, Search, Star, Eye, EyeOff } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import CategoryBadge from "@/components/CategoryBadge";
 import { NewsItem } from "@/data/newsData";
@@ -14,6 +14,8 @@ const AdminDashboard = () => {
   const [articles, setArticles] = useState<NewsItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [contentTypeFilter, setContentTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [adminUsername, setAdminUsername] = useState("");
   const navigate = useNavigate();
@@ -217,7 +219,7 @@ const AdminDashboard = () => {
               className="pl-10"
             />
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by category" />
@@ -233,19 +235,28 @@ const AdminDashboard = () => {
               </SelectContent>
             </Select>
 
-            {/* Source Filter */}
-            <Select value="all" onValueChange={(value) => {
-              // This would require adding sourceFilter state
-              // For now, this is a placeholder for future enhancement
-            }}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Filter by source" />
+            <Select value={contentTypeFilter} onValueChange={setContentTypeFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by content type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Sources</SelectItem>
-                <SelectItem value="static">Static Articles</SelectItem>
-                <SelectItem value="user">Your Articles</SelectItem>
-                <SelectItem value="converted">Converted</SelectItem>
+                <SelectItem value="all">All Content Types</SelectItem>
+                <SelectItem value="article">News Article</SelectItem>
+                <SelectItem value="feature">Feature Story</SelectItem>
+                <SelectItem value="headline">Headline</SelectItem>
+                <SelectItem value="announcement">Announcement</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
               </SelectContent>
             </Select>
           </div>

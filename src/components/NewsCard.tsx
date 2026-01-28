@@ -1,4 +1,5 @@
 import { Clock, Calendar } from "lucide-react";
+import { Link } from "react-router-dom";
 import CategoryBadge from "./CategoryBadge";
 
 type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music";
@@ -11,6 +12,7 @@ interface NewsCardProps {
   readTime: string;
   date: string;
   href?: string;
+  id?: string;
 }
 
 const NewsCard = ({
@@ -20,11 +22,15 @@ const NewsCard = ({
   image,
   readTime,
   date,
-  href = "#",
+  href,
+  id,
 }: NewsCardProps) => {
+  // Use React Router Link if we have an ID, otherwise use regular link
+  const linkTo = href || (id ? `/article/${id}` : "#");
+  
   return (
     <article className="group bg-card rounded-xl overflow-hidden border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-glow">
-      <a href={href} className="block">
+      <Link to={linkTo} className="block">
         {/* Image Container */}
         <div className="relative h-48 overflow-hidden">
           <img
@@ -59,7 +65,7 @@ const NewsCard = ({
             </span>
           </div>
         </div>
-      </a>
+      </Link>
     </article>
   );
 };

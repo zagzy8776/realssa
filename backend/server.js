@@ -142,6 +142,28 @@ app.get('/api/articles', (req, res) => {
   res.json(articles);
 });
 
+// Get articles by content type (public route)
+app.get('/api/articles/type/:contentType', (req, res) => {
+  const articles = readJsonFile(articlesFilePath);
+  const contentType = req.params.contentType;
+  const filteredArticles = articles.filter(article => article.contentType === contentType);
+  res.json(filteredArticles);
+});
+
+// Get published articles only (public route)
+app.get('/api/articles/published', (req, res) => {
+  const articles = readJsonFile(articlesFilePath);
+  const publishedArticles = articles.filter(article => article.status === 'published');
+  res.json(publishedArticles);
+});
+
+// Get featured articles (public route)
+app.get('/api/articles/featured', (req, res) => {
+  const articles = readJsonFile(articlesFilePath);
+  const featuredArticles = articles.filter(article => article.featured === true && article.status === 'published');
+  res.json(featuredArticles);
+});
+
 // Create new article
 app.post('/api/articles', (req, res) => {
   const articles = readJsonFile(articlesFilePath);
@@ -162,6 +184,9 @@ app.post('/api/articles', (req, res) => {
     readTime: req.body.readTime || '5 min read',
     author: req.body.author || 'Admin',
     source: req.body.source || 'user',
+    contentType: req.body.contentType || 'article', // New field for content type
+    status: req.body.status || 'published', // New field for content status
+    featured: req.body.featured || false, // New field for featured content
     date: new Date().toISOString()
   };
 
