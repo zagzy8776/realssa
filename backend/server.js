@@ -107,6 +107,10 @@ const authenticate = (req, res, next) => {
 };
 
 // Routes
+app.get('/', (req, res) => {
+  res.json({ message: 'EntertainmentGHC API Server', status: 'running' });
+});
+
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body;
   const users = readJsonFile(usersFilePath);
@@ -138,15 +142,26 @@ app.get('/api/articles', (req, res) => {
   res.json(articles);
 });
 
-// Protected routes for article management
-app.use('/api/articles', authenticate);
-
 // Create new article
 app.post('/api/articles', (req, res) => {
   const articles = readJsonFile(articlesFilePath);
+  
+  // Generate new ID
+  const newId = articles.length > 0 
+    ? Math.max(...articles.map(a => parseInt(a.id))) + 1 
+    : 1;
+
+  // Create new article with proper structure
   const newArticle = {
-    id: (articles.length > 0 ? Math.max(...articles.map(a => parseInt(a.id))) : 0) + 1,
-    ...req.body,
+    id: newId.toString(), // Ensure ID is string
+    title: req.body.title || '',
+    excerpt: req.body.excerpt || '',
+    content: req.body.content || req.body.excerpt || '',
+    category: req.body.category || 'afrobeats',
+    image: req.body.image || 'https://via.placeholder.com/400x250?text=EntertainmentGHC',
+    readTime: req.body.readTime || '5 min read',
+    author: req.body.author || 'Admin',
+    source: req.body.source || 'user',
     date: new Date().toISOString()
   };
 
@@ -188,7 +203,8 @@ app.delete('/api/articles/:id', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+const port = process.env.PORT || 8080;
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
   console.log(`Try POST /api/auth/login with username: admin, password: admin123`);
 });
