@@ -84,7 +84,7 @@ const NewsPost = () => {
         image: formData.image || "https://via.placeholder.com/400x250?text=EntertainmentGHC",
         readTime: formData.readTime,
         author: localStorage.getItem("adminUsername") || "Admin",
-        source: "admin",
+        source: "user", // Changed from "admin" to "user" to match backend filtering
         contentType: formData.contentType,
         status: formData.status,
         featured: formData.featured

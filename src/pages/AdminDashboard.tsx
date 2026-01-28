@@ -39,14 +39,10 @@ const AdminDashboard = () => {
       setAdminUsername(username);
 
       try {
-        // Fetch articles from backend API
+        // Fetch articles from backend API (public endpoint, no auth needed)
         let apiArticles = [];
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
 
           if (response.ok) {
             apiArticles = await response.json();
