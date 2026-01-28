@@ -17,6 +17,7 @@ export interface NewsItem {
   featured?: boolean; // Featured content for headlines
   author?: string; // Author information
   content?: string; // Full article content
+  externalLink?: string; // External video link for "See Full Video" button
 }
 
 export const latestStories: NewsItem[] = [];
