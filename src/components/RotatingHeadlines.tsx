@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Play, Pause } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import CategoryBadge from "@/components/CategoryBadge";
 import { CategoryType } from "@/data/newsData";
 
@@ -16,6 +16,7 @@ interface HeadlineItem {
   excerpt: string;
   featured: boolean;
   contentType: string;
+  externalLink?: string;
 }
 
 const RotatingHeadlines = () => {
@@ -115,27 +116,16 @@ const RotatingHeadlines = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-3xl font-bold">Featured Headlines</h2>
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="flex items-center gap-2"
-            >
-              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              {isPlaying ? "Pause" : "Play"}
-            </Button>
-            <div className="flex gap-2">
-              {headlines.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => goToHeadline(index)}
-                  className={`w-3 h-3 rounded-full transition-colors ${
-                    index === currentIndex ? 'bg-primary' : 'bg-gray-400'
-                  }`}
-                />
-              ))}
-            </div>
+          <div className="flex gap-2">
+            {headlines.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => goToHeadline(index)}
+                className={`w-3 h-3 rounded-full transition-colors ${
+                  index === currentIndex ? 'bg-primary' : 'bg-gray-400'
+                }`}
+              />
+            ))}
           </div>
         </div>
 
@@ -165,11 +155,25 @@ const RotatingHeadlines = () => {
               </p>
 
               <div className="flex items-center justify-between">
-                <Link to={`/article/${currentHeadline.id}`}>
-                  <Button variant="outline">
-                    Read Full Story
-                  </Button>
-                </Link>
+                <div className="flex gap-2">
+                  <Link to={`/article/${currentHeadline.id}`}>
+                    <Button variant="outline">
+                      Read Full Story
+                    </Button>
+                  </Link>
+                  
+                  {/* External Video Link Button */}
+                  {currentHeadline.externalLink && (
+                    <a
+                      href={currentHeadline.externalLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-md text-sm font-medium transition-colors"
+                    >
+                      🎬 See Full Video
+                    </a>
+                  )}
+                </div>
                 
                 <div className="flex gap-2">
                   <Button

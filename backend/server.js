@@ -246,6 +246,7 @@ app.post('/api/articles', (req, res) => {
     contentType: req.body.contentType || 'article', // New field for content type
     status: req.body.status || 'published', // New field for content status
     featured: req.body.featured || false, // New field for featured content
+    externalLink: req.body.externalLink || '', // New field for external video links
     date: new Date().toISOString()
   };
 

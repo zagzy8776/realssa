@@ -13,6 +13,7 @@ interface NewsCardProps {
   date: string;
   href?: string;
   id?: string;
+  externalLink?: string;
 }
 
 const NewsCard = ({
@@ -24,6 +25,7 @@ const NewsCard = ({
   date,
   href,
   id,
+  externalLink,
 }: NewsCardProps) => {
   // Use React Router Link if we have an ID, otherwise use regular link
   const linkTo = href || (id ? `/article/${id}` : "#");
@@ -64,6 +66,20 @@ const NewsCard = ({
               {date}
             </span>
           </div>
+
+          {/* External Video Link Button */}
+          {externalLink && (
+            <div className="mt-4">
+              <a
+                href={externalLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-md text-sm font-medium transition-colors"
+              >
+                🎬 See Full Video
+              </a>
+            </div>
+          )}
         </div>
       </Link>
     </article>

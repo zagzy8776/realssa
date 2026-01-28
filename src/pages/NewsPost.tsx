@@ -35,6 +35,7 @@ const NewsPost = () => {
     status: "published",
     featured: false,
     content: "",
+    externalLink: "",
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -315,6 +316,22 @@ const NewsPost = () => {
                   placeholder="Write the full article content here (optional, will use excerpt if empty)"
                   rows={6}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="externalLink" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  External Video Link (Optional)
+                </label>
+                <Input
+                  id="externalLink"
+                  name="externalLink"
+                  value={formData.externalLink}
+                  onChange={handleChange}
+                  placeholder="https://youtube.com/watch?v=... or any video URL"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Add a link to the original video (YouTube, Vimeo, etc.) for users to watch the full video
+                </p>
               </div>
 
               <div className="pt-4">
