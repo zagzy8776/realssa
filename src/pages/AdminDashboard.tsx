@@ -58,18 +58,8 @@ const AdminDashboard = () => {
         // Get user news from localStorage
         const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
 
-        // Import static data to show in admin dashboard
-        const { latestStories, nigeriaNews } = await import('@/data/newsData');
-
-        // Mark static articles with a special flag so admin knows they're static
-        const staticArticles = [...latestStories, ...nigeriaNews].map(article => ({
-          ...article,
-          isStatic: true,
-          source: 'static'
-        }));
-
         // Combine all articles, with admin articles first
-        const allArticles = [...apiArticles, ...userNews, ...staticArticles];
+        const allArticles = [...apiArticles, ...userNews];
 
         setArticles(allArticles);
       } catch (error) {
