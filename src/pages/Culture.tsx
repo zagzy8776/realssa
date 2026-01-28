@@ -3,8 +3,35 @@ import Footer from "@/components/Footer";
 import SocialButtons from "@/components/SocialButtons";
 import SectionHeader from "@/components/SectionHeader";
 import NewsCard from "@/components/NewsCard";
+import { useEffect, useState } from "react";
 
 const Culture = () => {
+  const [cultureArticles, setCultureArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCultureArticles = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
+        if (response.ok) {
+          const articles = await response.json();
+          // Filter for culture category articles
+          const cultureArticles = articles.filter(article => article.category === 'culture');
+          setCultureArticles(cultureArticles);
+        } else {
+          console.warn("Failed to fetch articles from API");
+        }
+      } catch (error) {
+        console.error("Error fetching culture articles:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCultureArticles();
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -25,10 +52,36 @@ const Culture = () => {
         <div className="container mx-auto px-4">
           <SectionHeader title="Culture News & Features" emoji="🎭" />
 
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">No culture news articles posted yet.</p>
-            <p className="text-sm text-muted-foreground mt-2">Admins can post culture-related content through the admin dashboard.</p>
-          </div>
+          {loading ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Loading culture articles...</p>
+            </div>
+          ) : cultureArticles.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {cultureArticles.map((article, index) => (
+                <div
+                  key={article.id}
+                  className="animate-fade-in"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <NewsCard
+                    title={article.title}
+                    excerpt={article.excerpt}
+                    category={article.category}
+                    image={article.image || "https://via.placeholder.com/400x250?text=Culture"}
+                    readTime={article.readTime || "5 min read"}
+                    date={article.date}
+                    id={article.id}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No culture news articles posted yet.</p>
+              <p className="text-sm text-muted-foreground mt-2">Admins can post culture-related content through the admin dashboard.</p>
+            </div>
+          )}
         </div>
       </section>
 
