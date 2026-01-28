@@ -9,7 +9,6 @@ import { NewsItem } from "@/data/newsData";
 import { useEffect, useState } from "react";
 
 const Index = () => {
-  const [userNews, setUserNews] = useState<NewsItem[]>([]);
   const [apiArticles, setApiArticles] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -17,17 +16,7 @@ const Index = () => {
     const fetchData = async () => {
       setLoading(true);
 
-      // Load user-posted news from localStorage
-      const storedNews = localStorage.getItem('userNews');
-      if (storedNews) {
-        try {
-          setUserNews(JSON.parse(storedNews));
-        } catch (error) {
-          console.error("Failed to parse user news:", error);
-        }
-      }
-
-      // Fetch articles from backend API
+      // Fetch articles from backend API ONLY - no localStorage fallback
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
         if (response.ok) {

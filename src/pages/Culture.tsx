@@ -16,7 +16,7 @@ const Culture = () => {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
         if (response.ok) {
           const articles = await response.json();
-          // Filter for culture category articles
+          // Filter for culture category articles - ONLY admin posted
           const cultureArticles = articles.filter(article => article.category === 'culture');
           setCultureArticles(cultureArticles);
         } else {
