@@ -18,6 +18,8 @@ const AdminDashboard = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [adminUsername, setAdminUsername] = useState("");
+  const [brokenLinks, setBrokenLinks] = useState<string[]>([]);
+  const [checkingLinks, setCheckingLinks] = useState(false);
   const navigate = useNavigate();
 
   // Check admin status and load articles
@@ -143,6 +145,52 @@ const AdminDashboard = () => {
     }
   };
 
+  // Check if a URL is valid
+  const checkUrl = async (url: string): Promise<boolean> => {
+    try {
+      // Use a simple HEAD request to check if the URL is accessible
+      const response = await fetch(url, {
+        method: 'HEAD',
+        mode: 'no-cors', // Allow CORS for external URLs
+      });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // Check all external links for broken links
+  const checkBrokenLinks = async () => {
+    setCheckingLinks(true);
+    const broken: string[] = [];
+    
+    for (const article of articles) {
+      if (article.externalLink) {
+        const isValid = await checkUrl(article.externalLink);
+        if (!isValid) {
+          broken.push(article.id);
+        }
+      }
+    }
+    
+    setBrokenLinks(broken);
+    setCheckingLinks(false);
+    
+    if (broken.length > 0) {
+      toast({
+        title: "Broken Links Found",
+        description: `${broken.length} broken external links detected. Articles with broken links are highlighted in red.`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "All Links Valid",
+        description: "No broken external links found.",
+        variant: "default",
+      });
+    }
+  };
+
   // Logout function
   const handleLogout = () => {
     localStorage.removeItem("isAdmin");
@@ -217,6 +265,13 @@ const AdminDashboard = () => {
                 <PlusCircle className="h-4 w-4" />
                 New Article
               </Link>
+            </Button>
+            <Button 
+              onClick={checkBrokenLinks} 
+              disabled={checkingLinks}
+              className="flex items-center gap-2"
+            >
+              🔗 Check Broken Links
             </Button>
           </div>
         </div>
