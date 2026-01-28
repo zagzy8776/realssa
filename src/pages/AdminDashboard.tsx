@@ -98,20 +98,35 @@ const AdminDashboard = () => {
           return;
         }
 
-        // Delete from backend API
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        // Check if this is a backend article (has numeric ID) or localStorage article
+        const article = articles.find(a => a.id === id || a.id.toString() === id);
+        const isBackendArticle = article && typeof article.id === 'string' && !isNaN(parseInt(article.id));
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to delete article');
+        let deleteSuccess = false;
+
+        // Try to delete from backend if it's a backend article
+        if (isBackendArticle) {
+          try {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/${article.id}`, {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            });
+
+            if (response.ok) {
+              deleteSuccess = true;
+            } else {
+              // Article might not exist in backend, but we'll still remove it from local state
+              console.warn(`Article ${article.id} not found in backend, removing from local state`);
+            }
+          } catch (apiError) {
+            console.warn("Backend delete failed:", apiError);
+            // Continue to remove from local state even if backend delete fails
+          }
         }
 
-        // Update local state
+        // Update local state - remove from both backend and localStorage articles
         const updatedArticles = articles.filter(article => article.id !== id && article.id.toString() !== id);
         setArticles(updatedArticles);
 
