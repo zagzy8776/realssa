@@ -44,12 +44,8 @@ const RotatingHeadlines = () => {
         // Get user news from localStorage as fallback
         const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
 
-        // Import static data as final fallback
-        const { latestStories, nigeriaNews } = await import('@/data/newsData');
-        const staticNews = [...latestStories, ...nigeriaNews];
-
         // Combine all sources and filter for featured content
-        const allArticles = [...apiArticles, ...userNews, ...staticNews];
+        const allArticles = [...apiArticles, ...userNews];
         const featuredArticles = allArticles
           .filter((article: HeadlineItem) => article.featured || article.contentType === 'headline')
           .slice(0, 5); // Limit to 5 headlines maximum

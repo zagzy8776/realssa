@@ -3,12 +3,8 @@ import Footer from "@/components/Footer";
 import SocialButtons from "@/components/SocialButtons";
 import SectionHeader from "@/components/SectionHeader";
 import NewsCard from "@/components/NewsCard";
-import { latestStories } from "@/data/newsData";
 
 const Culture = () => {
-  // Filter culture-related stories
-  const cultureStories = latestStories.filter(story => story.category === "culture");
-
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -29,24 +25,9 @@ const Culture = () => {
         <div className="container mx-auto px-4">
           <SectionHeader title="Culture News & Features" emoji="🎭" />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {cultureStories.map((story, index) => (
-              <div
-                key={story.id}
-                className="animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <NewsCard
-                  title={story.title}
-                  excerpt={story.excerpt}
-                  category={story.category}
-                  image={story.image}
-                  readTime={story.readTime}
-                  date={story.date}
-                  href="#"
-                />
-              </div>
-            ))}
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">No culture news articles posted yet.</p>
+            <p className="text-sm text-muted-foreground mt-2">Admins can post culture-related content through the admin dashboard.</p>
           </div>
         </div>
       </section>

@@ -63,13 +63,6 @@ const EditNewsPage = () => {
           foundArticle = userNews.find((item: NewsItem) => item.id === id);
         }
 
-        // If still not found, check static content
-        if (!foundArticle) {
-          const { latestStories, nigeriaNews } = await import('@/data/newsData');
-          const staticNews = [...latestStories, ...nigeriaNews];
-          foundArticle = staticNews.find((item: NewsItem) => item.id === id);
-        }
-
         if (foundArticle) {
           setArticle(foundArticle);
           setFormData({

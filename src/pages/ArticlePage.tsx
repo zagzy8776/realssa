@@ -41,16 +41,7 @@ const ArticlePage = () => {
         if (foundArticle) {
           setArticle(foundArticle);
         } else {
-          // If not found in admin content, try static content
-          const { latestStories, nigeriaNews } = await import('@/data/newsData');
-          const staticNews = [...latestStories, ...nigeriaNews];
-          const foundStaticArticle = staticNews.find((item: NewsItem) => item.id === id || item.id.toString() === id);
-          
-          if (foundStaticArticle) {
-            setArticle(foundStaticArticle);
-          } else {
-            setError("Article not found");
-          }
+          setError("Article not found");
         }
       } catch (err) {
         console.error("Error fetching article:", err);

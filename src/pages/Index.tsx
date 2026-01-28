@@ -5,7 +5,7 @@ import NewsCard from "@/components/NewsCard";
 import SectionHeader from "@/components/SectionHeader";
 import RotatingHeadlines from "@/components/RotatingHeadlines";
 import Footer from "@/components/Footer";
-import { latestStories, nigeriaNews, NewsItem } from "@/data/newsData";
+import { nigeriaNews, NewsItem } from "@/data/newsData";
 import { useEffect, useState } from "react";
 
 const Index = () => {
