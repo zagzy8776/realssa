@@ -1,8 +1,8 @@
-import { Clock, Calendar } from "lucide-react";
+import { Clock, Calendar, Bookmark } from "lucide-react";
 import { Link } from "react-router-dom";
 import CategoryBadge from "./CategoryBadge";
 
-type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music";
+type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "nollywood" | "lagos-fashion" | "nigerian-tech" | "entertainment" | "news" | "general";
 
 interface NewsCardProps {
   title: string;
@@ -14,6 +14,9 @@ interface NewsCardProps {
   href?: string;
   id?: string;
   externalLink?: string;
+  onRead?: (articleId: string) => void;
+  onBookmark?: (articleId: string) => void;
+  showBookmark?: boolean;
 }
 
 const NewsCard = ({
@@ -26,13 +29,30 @@ const NewsCard = ({
   href,
   id,
   externalLink,
+  onRead,
+  onBookmark,
+  showBookmark = false,
 }: NewsCardProps) => {
   // Use React Router Link if we have an ID, otherwise use regular link
   const linkTo = href || (id ? `/article/${id}` : "#");
   
+  const handleReadMore = () => {
+    if (onRead && id) {
+      onRead(id);
+    }
+  };
+
+  const handleBookmark = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onBookmark && id) {
+      onBookmark(id);
+    }
+  };
+
   return (
     <article className="group bg-card rounded-xl overflow-hidden border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-glow">
-      <Link to={linkTo} className="block">
+      <Link to={linkTo} className="block" onClick={handleReadMore}>
         {/* Image Container */}
         <div className="relative h-48 overflow-hidden">
           <img
@@ -44,6 +64,17 @@ const NewsCard = ({
           <div className="absolute top-3 left-3">
             <CategoryBadge category={category} />
           </div>
+          {showBookmark && (
+            <div className="absolute top-3 right-3">
+              <button
+                onClick={handleBookmark}
+                className="bg-white/90 text-gray-700 p-2 rounded-full hover:bg-white transition-colors shadow-sm"
+                title="Bookmark this article"
+              >
+                <Bookmark className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -67,17 +98,19 @@ const NewsCard = ({
             </span>
           </div>
 
-          {/* External Video Link Button */}
+          {/* External Video Link Button - Fixed to avoid nested links */}
           {externalLink && (
             <div className="mt-4">
-              <a
-                href={externalLink}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.open(externalLink, '_blank', 'noopener,noreferrer');
+                }}
                 className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-md text-sm font-medium transition-colors"
               >
                 🎬 See Full Video
-              </a>
+              </button>
             </div>
           )}
         </div>

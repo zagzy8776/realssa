@@ -9,14 +9,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/use-toast";
+import DarkModeToggle from "./DarkModeToggle";
 
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/nigeria", label: "Nigeria" },
   { href: "/culture", label: "Culture" },
+  { href: "/nigerian-news", label: "Nigerian News" },
+  { href: "/world-news", label: "🌍 World News" },
   { href: "/post-news", label: "Post News" },
   { href: "/admin-dashboard", label: "Dashboard", adminOnly: true },
 ];
+
 
 const libraryLinks = [
   { href: "/library/nigerian-manual", label: "THE NIGERIAN MANUAL" },
@@ -86,6 +90,9 @@ const Header = () => {
                 <LogOut size={16} /> Logout
               </button>
             )}
+            
+            {/* Dark Mode Toggle */}
+            <DarkModeToggle />
             
             {/* Library Dropdown */}
             <DropdownMenu>
