@@ -1,15 +1,18 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import CategoryBadge from "@/components/CategoryBadge";
+import NewsCard from "@/components/NewsCard";
 import { NewsItem } from "@/data/newsData";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Share2, Facebook, Twitter, Mail, Copy } from "lucide-react";
 
 const ArticlePage = () => {
   const { id } = useParams<{ id: string }>();
   const [article, setArticle] = useState<NewsItem | null>(null);
+  const [relatedArticles, setRelatedArticles] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,6 +43,11 @@ const ArticlePage = () => {
 
         if (foundArticle) {
           setArticle(foundArticle);
+          // Get related articles from same category (excluding current article)
+          const related = allNews
+            .filter((a: NewsItem) => a.category === foundArticle.category && a.id !== foundArticle.id)
+            .slice(0, 4);
+          setRelatedArticles(related);
         } else {
           setError("Article not found");
         }
@@ -53,6 +61,34 @@ const ArticlePage = () => {
 
     fetchArticle();
   }, [id]);
+
+  const handleShare = async (platform: string) => {
+    const currentUrl = window.location.href;
+    const title = encodeURIComponent(article?.title || '');
+    const text = encodeURIComponent(article?.excerpt || '');
+    
+    switch (platform) {
+      case 'facebook':
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${currentUrl}`, '_blank');
+        break;
+      case 'twitter':
+        window.open(`https://twitter.com/intent/tweet?url=${currentUrl}&text=${title}`, '_blank');
+        break;
+      case 'email':
+        window.location.href = `mailto:?subject=${title}&body=${text}%0A%0A${currentUrl}`;
+        break;
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -141,6 +177,83 @@ const ArticlePage = () => {
               </p>
             </div>
           </div>
+
+          {/* Social Sharing Section */}
+          <div className="mt-12 border-t border-border pt-8">
+            <h3 className="text-lg font-semibold mb-4">Share this article</h3>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                onClick={() => handleShare('facebook')}
+                className="flex items-center gap-2"
+              >
+                <Facebook className="h-4 w-4" />
+                Facebook
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleShare('twitter')}
+                className="flex items-center gap-2"
+              >
+                <Twitter className="h-4 w-4" />
+                Twitter
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleShare('email')}
+                className="flex items-center gap-2"
+              >
+                <Mail className="h-4 w-4" />
+                Email
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCopyLink}
+                className="flex items-center gap-2"
+              >
+                {copied ? (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy Link
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Related Articles Section */}
+          {relatedArticles.length > 0 && (
+            <div className="mt-16 border-t border-border pt-8">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Up Next</h2>
+                <Link to="/">
+                  <Button variant="ghost" className="text-primary hover:text-primary/80">
+                    View All Articles →
+                  </Button>
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {relatedArticles.map((relatedArticle, index) => (
+                  <NewsCard
+                    key={relatedArticle.id}
+                    title={relatedArticle.title}
+                    excerpt={relatedArticle.excerpt}
+                    category={relatedArticle.category}
+                    image={relatedArticle.image}
+                    readTime={relatedArticle.readTime}
+                    date={relatedArticle.date}
+                    id={relatedArticle.id}
+                    externalLink={relatedArticle.externalLink}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </article>
       </div>
     </div>
