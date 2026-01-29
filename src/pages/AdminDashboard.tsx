@@ -41,7 +41,7 @@ const AdminDashboard = () => {
       setAdminUsername(username);
 
       try {
-        // Fetch articles from backend API ONLY - no localStorage fallback
+        // Fetch articles from backend API
         let apiArticles = [];
         try {
           const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
@@ -55,8 +55,18 @@ const AdminDashboard = () => {
           console.error("API fetch failed:", apiError);
         }
 
-        // Set only backend articles - NO localStorage articles
-        setArticles(apiArticles);
+        // Get user news from localStorage as fallback
+        const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
+
+        // Combine API articles and user news (prioritize API articles)
+        const allArticles = [...apiArticles, ...userNews];
+
+        // Remove duplicates by ID (API articles take precedence)
+        const uniqueArticles = allArticles.filter((article, index, self) => 
+          index === self.findIndex(a => a.id === article.id)
+        );
+
+        setArticles(uniqueArticles);
       } catch (error) {
         console.error("Failed to load articles:", error);
         toast({
@@ -125,9 +135,14 @@ const AdminDashboard = () => {
           }
         }
 
-        // Update local state - remove from backend articles only
+        // Update local state - remove from both backend and localStorage articles
         const updatedArticles = articles.filter(article => article.id !== id && article.id.toString() !== id);
         setArticles(updatedArticles);
+
+        // Also remove from localStorage if it exists there
+        const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
+        const updatedUserNews = userNews.filter((article: NewsItem) => article.id !== id && article.id.toString() !== id);
+        localStorage.setItem('userNews', JSON.stringify(updatedUserNews));
 
         toast({
           title: "Article Deleted",

@@ -60,7 +60,7 @@ const EditNewsPage = () => {
         // If not found in API, check localStorage
         if (!foundArticle) {
           const userNews = JSON.parse(localStorage.getItem('userNews') || '[]');
-          foundArticle = userNews.find((item: NewsItem) => item.id === id);
+          foundArticle = userNews.find((item: NewsItem) => item.id === id || item.id.toString() === id);
         }
 
         if (foundArticle) {
