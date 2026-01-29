@@ -1,5 +1,5 @@
 
-export type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music";
+export type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "lagos-fashion" | "nigerian-tech" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "entertainment" | "news" | "general";
 
 export interface NewsItem {
   id: string;

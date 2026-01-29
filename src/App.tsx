@@ -19,6 +19,10 @@ import AdminLogin from "./pages/AdminLogin";
 import ArticlePage from "./pages/ArticlePage";
 import AdminDashboard from "./pages/AdminDashboard";
 import EditNewsPage from "./pages/EditNewsPage";
+import NigerianNews from "./pages/NigerianNews";
+import WorldNews from "./pages/WorldNews";
+import ForYou from "./pages/ForYou";
+
 
 const queryClient = new QueryClient();
 
@@ -44,6 +48,9 @@ const App = () => (
           <Route path="/edit-news/:id" element={<EditNewsPage />} />
           <Route path="/post-news" element={<NewsPost />} />
           <Route path="/article/:id" element={<ArticlePage />} />
+          <Route path="/nigerian-news" element={<NigerianNews />} />
+          <Route path="/world-news" element={<WorldNews />} />
+          <Route path="/for-you" element={<ForYou />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
