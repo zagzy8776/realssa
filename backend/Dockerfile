@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Set the working directory
 WORKDIR /app
@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy only the package files first (better for caching)
 COPY package*.json ./
 
-# Install dependencies
-RUN npm cache clean --force && npm ci --only=production
+# Clear npm cache and install dependencies
+RUN npm cache clean --force && npm install --no-cache --omit=dev
 
 # Copy the rest of your backend code
 COPY . .
