@@ -1126,279 +1126,145 @@ const getContentType = (title) => {
   return 'article';
 };
 
-// RSS Parser endpoint for Nigerian news (with /api/news/nigerian path)
-app.get('/api/news/nigerian', async (req, res) => {
-  try {
-    // All RSS feeds organized by category - Simplified to 3 per category for speed
-    const allFeeds = [
-      // Nigerian newspaper RSS feeds (3 most reliable)
-      'https://punchng.com/feed/',
-      'https://www.vanguardngr.com/feed/',
-      'https://www.thisdaylive.com/feed/',
-      
-      // World News RSS feeds (3 most reliable)
-      'http://feeds.bbci.co.uk/news/world/rss.xml',
-      'https://www.aljazeera.com/xml/rss/all.xml',
-      'https://www.espn.com/espn/rss/news',
-      
-      // International Entertainment RSS feeds (3 most reliable)
-      'https://variety.com/feed/',
-      'https://www.rollingstone.com/feed/',
-      'https://www.theverge.com/rss/index.xml',
-      
-      // Fashion & Lifestyle RSS feeds (3 most reliable)
-      'https://www.businessoffashion.com/feed',
-      'https://www.bellanaija.com/feed/',
-      'https://pulse.ng/rss/entertainment'
-    ];
+// RSS Feeds configuration object
+const FEEDS = {
+  nigerian: [
+    // Nigerian newspaper RSS feeds (3 most reliable)
+    'https://punchng.com/feed/',
+    'https://www.vanguardngr.com/feed/',
+    'https://www.thisdaylive.com/feed/',
     
-    const allArticles = [];
-    const sourceNames = {
-      // Nigerian News
-      'https://punchng.com/feed/': 'The Punch',
-      'https://www.vanguardngr.com/feed/': 'Vanguard',
-      'https://www.thisdaylive.com/feed/': 'ThisDay',
-      'https://www.premiumtimesng.com/feed': 'Premium Times',
-      'https://guardian.ng/feed': 'The Guardian Nigeria',
-      'https://www.thenationonlineng.net/feed': 'The Nation Online',
-      'https://www.sunnewsonline.com/feed': 'The Sun Nigeria',
-      'https://www.dailytrust.com/feed': 'Daily Trust',
-      'https://www.nairametrics.com/feed': 'Nairametrics',
-      'https://www.nigerianobservernews.com/feed': 'Nigerian Observer',
-      
-      // World News
-      'http://feeds.bbci.co.uk/news/world/rss.xml': 'BBC News',
-      'https://www.aljazeera.com/xml/rss/all.xml': 'Al Jazeera',
-      
-      // International Entertainment
-      'https://variety.com/feed/': 'Variety',
-      'https://www.rollingstone.com/feed/': 'Rolling Stone',
-      
-      // International Technology
-      'https://www.theverge.com/rss/index.xml': 'The Verge',
-      'https://www.wired.com/feed/rss': 'Wired',
-      
-      // Sports
-      'https://www.espn.com/espn/rss/news': 'ESPN',
-      
-      // Crypto & Finance
-      'https://www.coindesk.com/arc/outboundfeeds/rss/': 'CoinDesk',
-      'https://cointelegraph.com/rss': 'CoinTelegraph',
-      'https://bitcoinmagazine.com/.rss/full/': 'Bitcoin Magazine',
-      'https://techcabal.com/feed/': 'TechCabal',
-      
-      // Gaming
-      'https://feeds.feedburner.com/ign/all': 'IGN',
-      'https://www.gamespot.com/feeds/news/': 'GameSpot',
-      'https://www.pcgamer.com/rss/': 'PC Gamer',
-      'https://kotaku.com/rss': 'Kotaku',
-      
-      // Fashion & Lifestyle
-      'https://www.businessoffashion.com/feed': 'The Business of Fashion',
-      'https://fashionista.com/.rss/excerpt': 'Fashionista',
-      'https://wwd.com/feed/': 'WWD',
-      'https://feeds.feedburner.com/fibre2fashion/fashion-news': 'Fibre2Fashion',
-      
-      // Entertainment & Culture
-      'https://www.bellanaija.com/feed/': 'BellaNaija',
-      'https://pulse.ng/rss/entertainment': 'Pulse Nigeria',
-      'https://www.nollywoodforever.com/feed/': 'Nollywood Forever',
-      'https://www.nairaland.com/feeds/entertainment': 'Nairaland',
-      'https://www.ynaija.com/feed/': 'YNaija',
-      'https://www.nollywoodgists.com/feed/': 'Nollywood Gists',
-      'https://www.nollywoodnews.com/feed/': 'Nollywood News',
-      'https://www.360nobs.com/feed': '360 Nobs',
-      'https://www.naijaparty.com/feed': 'Naija Party',
-      'https://www.nigerianmusicblog.com/feed': 'Nigerian Music Blog',
-      'https://www.nigerianfilms.com/feed': 'Nigerian Films',
-      'https://www.nigeriancelebrities.com/feed': 'Nigerian Celebrities',
-      'https://www.nigerianlifestyle.com/feed': 'Nigerian Lifestyle',
-      'https://www.nigerianfashionblog.com/feed': 'Nigerian Fashion Blog',
-      
-      // Technology & Business
-      'https://www.nairatech.com/feed': 'Naira Tech',
-      'https://www.nigerianstartups.com/feed': 'Nigerian Startups',
-      'https://www.nigerianbusiness.com/feed': 'Nigerian Business',
-      'https://www.nigerianfinanceblog.com/feed': 'Nigerian Finance Blog',
-      'https://www.nigerianentrepreneur.com/feed': 'Nigerian Entrepreneur',
-      'https://www.nigerianinvestor.com/feed': 'Nigerian Investor',
-      'https://www.nigerianmarket.com/feed': 'Nigerian Market',
-      'https://www.nigerianecommerce.com/feed': 'Nigerian E-commerce',
-      'https://www.nigeriantechblog.com/feed': 'Nigerian Tech Blog'
-    };
+    // World News RSS feeds (3 most reliable)
+    'http://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://www.aljazeera.com/xml/rss/all.xml',
+    'https://www.espn.com/espn/rss/news',
     
-    // Process all feeds in parallel for better performance
-    const fetchPromises = allFeeds.map(async (feedUrl) => {
-      try {
-        // Check cache first
-        const cachedData = getCachedFeed(feedUrl);
-        if (cachedData) {
-          console.log(`Using cached data for: ${feedUrl}`);
-          return cachedData;
-        }
-        
-        console.log(`Fetching Nigerian RSS feed: ${feedUrl}`);
-        const feed = await parser.parseURL(feedUrl);
-        
-        // Process each item in the feed
-        const feedArticles = [];
-        for (const item of feed.items) {
-          // Extract image from RSS enclosure or media tags first
-          let imageUrl = '';
-          if (item.enclosure && item.enclosure.url) {
-            imageUrl = item.enclosure.url;
-          } else if (item['media:content'] && item['media:content'].url) {
-            imageUrl = item['media:content'].url;
-          } else if (item['media:thumbnail'] && item['media:thumbnail'].url) {
-            imageUrl = item['media:thumbnail'].url;
-          }
-          
-          // If no image found in RSS, try to extract from the article page using metascraper
-          if (!imageUrl && item.link) {
-            try {
-              console.log(`Extracting image from article: ${item.link}`);
-              const response = await axios.get(item.link, {
-                timeout: 8000, // Reduced timeout for faster response
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-              });
-              
-              const metadata = await scraper({
-                url: item.link,
-                html: response.data
-              });
-              
-              if (metadata.image) {
-                imageUrl = metadata.image;
-                console.log(`Found image via metascraper: ${imageUrl}`);
-              } else {
-                console.log(`No image found via metascraper for: ${item.link}`);
-              }
-            } catch (scrapeError) {
-              console.warn(`Failed to scrape image from ${item.link}:`, scrapeError.message);
-            }
-          }
-          
-          // Create human-readable summary
-          const humanSummary = createHumanSummary(item.contentSnippet || item.description || item.content || '');
-          
-          // Create article object in our format
-          const article = {
-            id: item.guid || item.link,
-            title: item.title || '',
-            excerpt: humanSummary,
-            content: item.content || item.description || '',
-            category: getArticleCategory(item.title || '', item.content || ''),
-            image: imageUrl || 'https://via.placeholder.com/400x250?text=Nigerian+News',
-            readTime: '3 min read',
-            author: sourceNames[feedUrl] || 'Nigerian News',
-            source: 'rss',
-            contentType: getContentType(item.title || ''),
-            status: 'published',
-            featured: false,
-            externalLink: item.link || '',
-            date: item.pubDate || new Date().toISOString()
-          };
-          
-          feedArticles.push(article);
-        }
-        
-        // Cache the results
-        setCachedFeed(feedUrl, feedArticles);
-        return feedArticles;
-      } catch (error) {
-        console.error(`Failed to fetch ${feedUrl}:`, error.message);
-        return [];
-      }
-    });
+    // International Entertainment RSS feeds (3 most reliable)
+    'https://variety.com/feed/',
+    'https://www.rollingstone.com/feed/',
+    'https://www.theverge.com/rss/index.xml',
     
-    // Wait for all feeds to complete
-    const results = await Promise.all(fetchPromises);
+    // Fashion & Lifestyle RSS feeds (3 most reliable)
+    'https://www.businessoffashion.com/feed',
+    'https://www.bellanaija.com/feed/',
+    'https://pulse.ng/rss/entertainment'
+  ],
+  world: [
+    // World News RSS feeds
+    'http://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://www.aljazeera.com/xml/rss/all.xml',
+    'https://www.espn.com/espn/rss/news',
     
-    // Flatten all articles
-    results.forEach(feedArticles => {
-      allArticles.push(...feedArticles);
-    });
+    // International Entertainment RSS feeds
+    'https://variety.com/feed/',
+    'https://www.rollingstone.com/feed/',
+    'https://www.theverge.com/rss/index.xml',
     
-    // Sort articles by date (newest first)
-    allArticles.sort((a, b) => new Date(b.date) - new Date(a.date));
+    // International Technology RSS feeds
+    'https://www.wired.com/feed/rss',
+    'https://www.coindesk.com/arc/outboundfeeds/rss/',
+    'https://cointelegraph.com/rss',
+    'https://bitcoinmagazine.com/.rss/full/',
+    'https://techcabal.com/feed/',
     
-    res.json(allArticles);
-  } catch (error) {
-    console.error('Error fetching Nigerian news:', error);
-    res.status(500).json({ error: 'Failed to fetch Nigerian news' });
-  }
-});
+    // International Gaming RSS feeds
+    'https://feeds.feedburner.com/ign/all',
+    'https://www.gamespot.com/feeds/news/',
+    'https://www.pcgamer.com/rss/',
+    'https://kotaku.com/rss',
+    
+    // International Fashion & Lifestyle RSS feeds
+    'https://www.businessoffashion.com/feed',
+    'https://fashionista.com/.rss/excerpt',
+    'https://wwd.com/feed/',
+    'https://feeds.feedburner.com/fibre2fashion/fashion-news'
+  ]
+};
 
-// RSS Parser endpoint for World news (international feeds only)
-app.get('/api/news/world', async (req, res) => {
+const SOURCE_NAMES = {
+  // Nigerian News
+  'https://punchng.com/feed/': 'The Punch',
+  'https://www.vanguardngr.com/feed/': 'Vanguard',
+  'https://www.thisdaylive.com/feed/': 'ThisDay',
+  'https://www.premiumtimesng.com/feed': 'Premium Times',
+  'https://guardian.ng/feed': 'The Guardian Nigeria',
+  'https://www.thenationonlineng.net/feed': 'The Nation Online',
+  'https://www.sunnewsonline.com/feed': 'The Sun Nigeria',
+  'https://www.dailytrust.com/feed': 'Daily Trust',
+  'https://www.nairametrics.com/feed': 'Nairametrics',
+  'https://www.nigerianobservernews.com/feed': 'Nigerian Observer',
+  
+  // World News
+  'http://feeds.bbci.co.uk/news/world/rss.xml': 'BBC News',
+  'https://www.aljazeera.com/xml/rss/all.xml': 'Al Jazeera',
+  
+  // International Entertainment
+  'https://variety.com/feed/': 'Variety',
+  'https://www.rollingstone.com/feed/': 'Rolling Stone',
+  'https://www.theverge.com/rss/index.xml': 'The Verge',
+  
+  // International Technology
+  'https://www.wired.com/feed/rss': 'Wired',
+  'https://www.coindesk.com/arc/outboundfeeds/rss/': 'CoinDesk',
+  'https://cointelegraph.com/rss': 'CoinTelegraph',
+  'https://bitcoinmagazine.com/.rss/full/': 'Bitcoin Magazine',
+  'https://techcabal.com/feed/': 'TechCabal',
+  
+  // Gaming
+  'https://feeds.feedburner.com/ign/all': 'IGN',
+  'https://www.gamespot.com/feeds/news/': 'GameSpot',
+  'https://www.pcgamer.com/rss/': 'PC Gamer',
+  'https://kotaku.com/rss': 'Kotaku',
+  
+  // Fashion & Lifestyle
+  'https://www.businessoffashion.com/feed': 'The Business of Fashion',
+  'https://fashionista.com/.rss/excerpt': 'Fashionista',
+  'https://wwd.com/feed/': 'WWD',
+  'https://feeds.feedburner.com/fibre2fashion/fashion-news': 'Fibre2Fashion',
+  
+  // Entertainment & Culture
+  'https://www.bellanaija.com/feed/': 'BellaNaija',
+  'https://pulse.ng/rss/entertainment': 'Pulse Nigeria',
+  'https://www.nollywoodforever.com/feed/': 'Nollywood Forever',
+  'https://www.nairaland.com/feeds/entertainment': 'Nairaland',
+  'https://www.ynaija.com/feed/': 'YNaija',
+  'https://www.nollywoodgists.com/feed/': 'Nollywood Gists',
+  'https://www.nollywoodnews.com/feed/': 'Nollywood News',
+  'https://www.360nobs.com/feed': '360 Nobs',
+  'https://www.naijaparty.com/feed': 'Naija Party',
+  'https://www.nigerianmusicblog.com/feed': 'Nigerian Music Blog',
+  'https://www.nigerianfilms.com/feed': 'Nigerian Films',
+  'https://www.nigeriancelebrities.com/feed': 'Nigerian Celebrities',
+  'https://www.nigerianlifestyle.com/feed': 'Nigerian Lifestyle',
+  'https://www.nigerianfashionblog.com/feed': 'Nigerian Fashion Blog',
+  
+  // Technology & Business
+  'https://www.nairatech.com/feed': 'Naira Tech',
+  'https://www.nigerianstartups.com/feed': 'Nigerian Startups',
+  'https://www.nigerianbusiness.com/feed': 'Nigerian Business',
+  'https://www.nigerianfinanceblog.com/feed': 'Nigerian Finance Blog',
+  'https://www.nigerianentrepreneur.com/feed': 'Nigerian Entrepreneur',
+  'https://www.nigerianinvestor.com/feed': 'Nigerian Investor',
+  'https://www.nigerianmarket.com/feed': 'Nigerian Market',
+  'https://www.nigerianecommerce.com/feed': 'Nigerian E-commerce',
+  'https://www.nigeriantechblog.com/feed': 'Nigerian Tech Blog'
+};
+
+// Dynamic RSS Parser endpoint for all categories
+app.get('/api/news/:category', async (req, res) => {
   try {
-    // International RSS feeds only
-    const worldFeeds = [
-      // World News RSS feeds
-      'http://feeds.bbci.co.uk/news/world/rss.xml',
-      'https://www.aljazeera.com/xml/rss/all.xml',
-      'https://www.espn.com/espn/rss/news',
-      
-      // International Entertainment RSS feeds
-      'https://variety.com/feed/',
-      'https://www.rollingstone.com/feed/',
-      'https://www.theverge.com/rss/index.xml',
-      
-      // International Technology RSS feeds
-      'https://www.wired.com/feed/rss',
-      'https://www.coindesk.com/arc/outboundfeeds/rss/',
-      'https://cointelegraph.com/rss',
-      'https://bitcoinmagazine.com/.rss/full/',
-      'https://techcabal.com/feed/',
-      
-      // International Gaming RSS feeds
-      'https://feeds.feedburner.com/ign/all',
-      'https://www.gamespot.com/feeds/news/',
-      'https://www.pcgamer.com/rss/',
-      'https://kotaku.com/rss',
-      
-      // International Fashion & Lifestyle RSS feeds
-      'https://www.businessoffashion.com/feed',
-      'https://fashionista.com/.rss/excerpt',
-      'https://wwd.com/feed/',
-      'https://feeds.feedburner.com/fibre2fashion/fashion-news'
-    ];
+    const category = req.params.category.toLowerCase();
     
+    // Check if category exists in our feeds configuration
+    if (!FEEDS[category]) {
+      return res.status(404).json({ error: `Category '${category}' not found. Available categories: ${Object.keys(FEEDS).join(', ')}` });
+    }
+    
+    const feeds = FEEDS[category];
     const allArticles = [];
-    const sourceNames = {
-      // World News
-      'http://feeds.bbci.co.uk/news/world/rss.xml': 'BBC News',
-      'https://www.aljazeera.com/xml/rss/all.xml': 'Al Jazeera',
-      
-      // International Entertainment
-      'https://variety.com/feed/': 'Variety',
-      'https://www.rollingstone.com/feed/': 'Rolling Stone',
-      'https://www.theverge.com/rss/index.xml': 'The Verge',
-      
-      // International Technology
-      'https://www.wired.com/feed/rss': 'Wired',
-      'https://www.coindesk.com/arc/outboundfeeds/rss/': 'CoinDesk',
-      'https://cointelegraph.com/rss': 'CoinTelegraph',
-      'https://bitcoinmagazine.com/.rss/full/': 'Bitcoin Magazine',
-      'https://techcabal.com/feed/': 'TechCabal',
-      
-      // Gaming
-      'https://feeds.feedburner.com/ign/all': 'IGN',
-      'https://www.gamespot.com/feeds/news/': 'GameSpot',
-      'https://www.pcgamer.com/rss/': 'PC Gamer',
-      'https://kotaku.com/rss': 'Kotaku',
-      
-      // Fashion & Lifestyle
-      'https://www.businessoffashion.com/feed': 'The Business of Fashion',
-      'https://fashionista.com/.rss/excerpt': 'Fashionista',
-      'https://wwd.com/feed/': 'WWD',
-      'https://feeds.feedburner.com/fibre2fashion/fashion-news': 'Fibre2Fashion'
-    };
     
     // Process all feeds in parallel for better performance
-    const fetchPromises = worldFeeds.map(async (feedUrl) => {
+    const fetchPromises = feeds.map(async (feedUrl) => {
       try {
         // Check cache first
         const cachedData = getCachedFeed(feedUrl);
@@ -1407,7 +1273,7 @@ app.get('/api/news/world', async (req, res) => {
           return cachedData;
         }
         
-        console.log(`Fetching World RSS feed: ${feedUrl}`);
+        console.log(`Fetching ${category} RSS feed: ${feedUrl}`);
         const feed = await parser.parseURL(feedUrl);
         
         // Process each item in the feed
@@ -1460,9 +1326,9 @@ app.get('/api/news/world', async (req, res) => {
             excerpt: humanSummary,
             content: item.content || item.description || '',
             category: getArticleCategory(item.title || '', item.content || ''),
-            image: imageUrl || 'https://via.placeholder.com/400x250?text=World+News',
+            image: imageUrl || `https://via.placeholder.com/400x250?text=${category}+News`,
             readTime: '3 min read',
-            author: sourceNames[feedUrl] || 'World News',
+            author: SOURCE_NAMES[feedUrl] || `${category.charAt(0).toUpperCase() + category.slice(1)} News`,
             source: 'rss',
             contentType: getContentType(item.title || ''),
             status: 'published',
@@ -1496,8 +1362,8 @@ app.get('/api/news/world', async (req, res) => {
     
     res.json(allArticles);
   } catch (error) {
-    console.error('Error fetching World news:', error);
-    res.status(500).json({ error: 'Failed to fetch World news' });
+    console.error(`Error fetching ${req.params.category} news:`, error);
+    res.status(500).json({ error: `Failed to fetch ${req.params.category} news` });
   }
 });
 
