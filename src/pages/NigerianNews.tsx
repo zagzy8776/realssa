@@ -36,7 +36,7 @@ const NigerianNews = () => {
     const fetchNigerianNews = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/nigerian-news`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/nigerian`);
         if (response.ok) {
           const data = await response.json();
           setArticles(data);

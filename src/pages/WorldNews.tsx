@@ -38,7 +38,7 @@ const WorldNews = () => {
     const fetchWorldNews = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/nigerian-news`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/world`);
         if (response.ok) {
           const data = await response.json();
           // Filter for international feeds only
