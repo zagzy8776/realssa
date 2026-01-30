@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy only the package files first (better for caching)
 COPY package*.json ./
 
-# Clear npm cache and install dependencies
-RUN npm cache clean --force && npm install --no-cache --omit=dev
+# Clear npm cache and install dependencies without cache or integrity checks
+RUN npm cache clean --force && npm install --no-cache --omit=dev --no-audit --ignore-scripts
 
 # Copy the rest of your backend code
 COPY . .
