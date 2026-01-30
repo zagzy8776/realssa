@@ -1,24 +1,18 @@
 FROM node:18-alpine
+
+# Set the working directory
 WORKDIR /app
+
+# Copy only the package files first (better for caching)
 COPY package*.json ./
+COPY yarn.lock ./
 
-# Install yarn and clear cache
-RUN npm install -g yarn && \
-    npm cache clean --force && \
-    yarn config set network-timeout 600000
-
-# Install dependencies with retry mechanism using yarn
+# Install dependencies
 RUN apk add --no-cache curl && \
-    for i in {1..3}; do \
-        if yarn install --production --frozen-lockfile; then \
-            echo "Dependencies installed successfully"; \
-            break; \
-        else \
-            echo "Attempt $i failed, retrying..."; \
-            sleep 5; \
-        fi; \
-    done
+    yarn install --production --frozen-lockfile
 
+# Copy the rest of your backend code
 COPY . .
-EXPOSE 3000
+
+# Start the app
 CMD ["node", "server.js"]
