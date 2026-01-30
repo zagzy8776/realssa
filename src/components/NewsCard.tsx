@@ -59,6 +59,8 @@ const NewsCard = ({
             src={image}
             alt={title}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            loading="lazy"
+            decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-card" />
           <div className="absolute top-3 left-3">

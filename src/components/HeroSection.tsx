@@ -55,6 +55,8 @@ const HeroSection = () => {
           onError={(e) => {
             e.currentTarget.src = 'https://via.placeholder.com/1920x1080?text=Nigerian+News';
           }}
+          loading="eager"
+          decoding="async"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/80 via-red-500/80 to-yellow-500/80" />
         <div className="absolute inset-0 bg-background/60" />
