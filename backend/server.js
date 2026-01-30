@@ -1126,6 +1126,176 @@ const getContentType = (title) => {
   return 'article';
 };
 
+// RSS Parser endpoint for World news (international feeds only)
+app.get('/api/news/world', async (req, res) => {
+  try {
+    // International RSS feeds only
+    const worldFeeds = [
+      // World News RSS feeds
+      'http://feeds.bbci.co.uk/news/world/rss.xml',
+      'https://www.aljazeera.com/xml/rss/all.xml',
+      'https://www.espn.com/espn/rss/news',
+      
+      // International Entertainment RSS feeds
+      'https://variety.com/feed/',
+      'https://www.rollingstone.com/feed/',
+      'https://www.theverge.com/rss/index.xml',
+      
+      // International Technology RSS feeds
+      'https://www.wired.com/feed/rss',
+      'https://www.coindesk.com/arc/outboundfeeds/rss/',
+      'https://cointelegraph.com/rss',
+      'https://bitcoinmagazine.com/.rss/full/',
+      'https://techcabal.com/feed/',
+      
+      // International Gaming RSS feeds
+      'https://feeds.feedburner.com/ign/all',
+      'https://www.gamespot.com/feeds/news/',
+      'https://www.pcgamer.com/rss/',
+      'https://kotaku.com/rss',
+      
+      // International Fashion & Lifestyle RSS feeds
+      'https://www.businessoffashion.com/feed',
+      'https://fashionista.com/.rss/excerpt',
+      'https://wwd.com/feed/',
+      'https://feeds.feedburner.com/fibre2fashion/fashion-news'
+    ];
+    
+    const allArticles = [];
+    const sourceNames = {
+      // World News
+      'http://feeds.bbci.co.uk/news/world/rss.xml': 'BBC News',
+      'https://www.aljazeera.com/xml/rss/all.xml': 'Al Jazeera',
+      
+      // International Entertainment
+      'https://variety.com/feed/': 'Variety',
+      'https://www.rollingstone.com/feed/': 'Rolling Stone',
+      'https://www.theverge.com/rss/index.xml': 'The Verge',
+      
+      // International Technology
+      'https://www.wired.com/feed/rss': 'Wired',
+      'https://www.coindesk.com/arc/outboundfeeds/rss/': 'CoinDesk',
+      'https://cointelegraph.com/rss': 'CoinTelegraph',
+      'https://bitcoinmagazine.com/.rss/full/': 'Bitcoin Magazine',
+      'https://techcabal.com/feed/': 'TechCabal',
+      
+      // Gaming
+      'https://feeds.feedburner.com/ign/all': 'IGN',
+      'https://www.gamespot.com/feeds/news/': 'GameSpot',
+      'https://www.pcgamer.com/rss/': 'PC Gamer',
+      'https://kotaku.com/rss': 'Kotaku',
+      
+      // Fashion & Lifestyle
+      'https://www.businessoffashion.com/feed': 'The Business of Fashion',
+      'https://fashionista.com/.rss/excerpt': 'Fashionista',
+      'https://wwd.com/feed/': 'WWD',
+      'https://feeds.feedburner.com/fibre2fashion/fashion-news': 'Fibre2Fashion'
+    };
+    
+    // Process all feeds in parallel for better performance
+    const fetchPromises = worldFeeds.map(async (feedUrl) => {
+      try {
+        // Check cache first
+        const cachedData = getCachedFeed(feedUrl);
+        if (cachedData) {
+          console.log(`Using cached data for: ${feedUrl}`);
+          return cachedData;
+        }
+        
+        console.log(`Fetching World RSS feed: ${feedUrl}`);
+        const feed = await parser.parseURL(feedUrl);
+        
+        // Process each item in the feed
+        const feedArticles = [];
+        for (const item of feed.items) {
+          // Extract image from RSS enclosure or media tags first
+          let imageUrl = '';
+          if (item.enclosure && item.enclosure.url) {
+            imageUrl = item.enclosure.url;
+          } else if (item['media:content'] && item['media:content'].url) {
+            imageUrl = item['media:content'].url;
+          } else if (item['media:thumbnail'] && item['media:thumbnail'].url) {
+            imageUrl = item['media:thumbnail'].url;
+          }
+          
+          // If no image found in RSS, try to extract from the article page using metascraper
+          if (!imageUrl && item.link) {
+            try {
+              console.log(`Extracting image from article: ${item.link}`);
+              const response = await axios.get(item.link, {
+                timeout: 8000, // Reduced timeout for faster response
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+              });
+              
+              const metadata = await scraper({
+                url: item.link,
+                html: response.data
+              });
+              
+              if (metadata.image) {
+                imageUrl = metadata.image;
+                console.log(`Found image via metascraper: ${imageUrl}`);
+              } else {
+                console.log(`No image found via metascraper for: ${item.link}`);
+              }
+            } catch (scrapeError) {
+              console.warn(`Failed to scrape image from ${item.link}:`, scrapeError.message);
+            }
+          }
+          
+          // Create human-readable summary
+          const humanSummary = createHumanSummary(item.contentSnippet || item.description || item.content || '');
+          
+          // Create article object in our format
+          const article = {
+            id: item.guid || item.link,
+            title: item.title || '',
+            excerpt: humanSummary,
+            content: item.content || item.description || '',
+            category: getArticleCategory(item.title || '', item.content || ''),
+            image: imageUrl || 'https://via.placeholder.com/400x250?text=World+News',
+            readTime: '3 min read',
+            author: sourceNames[feedUrl] || 'World News',
+            source: 'rss',
+            contentType: getContentType(item.title || ''),
+            status: 'published',
+            featured: false,
+            externalLink: item.link || '',
+            date: item.pubDate || new Date().toISOString()
+          };
+          
+          feedArticles.push(article);
+        }
+        
+        // Cache the results
+        setCachedFeed(feedUrl, feedArticles);
+        return feedArticles;
+      } catch (error) {
+        console.error(`Failed to fetch ${feedUrl}:`, error.message);
+        return [];
+      }
+    });
+    
+    // Wait for all feeds to complete
+    const results = await Promise.all(fetchPromises);
+    
+    // Flatten all articles
+    results.forEach(feedArticles => {
+      allArticles.push(...feedArticles);
+    });
+    
+    // Sort articles by date (newest first)
+    allArticles.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    res.json(allArticles);
+  } catch (error) {
+    console.error('Error fetching World news:', error);
+    res.status(500).json({ error: 'Failed to fetch World news' });
+  }
+});
+
 // Start server
 const port = process.env.PORT || 3001;
 app.listen(port, '0.0.0.0', () => {
