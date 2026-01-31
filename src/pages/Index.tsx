@@ -28,6 +28,11 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [readingHistory, setReadingHistory] = useState<string[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  
+  // Holographic Depth State
+  const [gyroData, setGyroData] = useState({ beta: 0, gamma: 0, alpha: 0 });
+  const [isGyroSupported, setIsGyroSupported] = useState(false);
+  const [breakingNewsAlert, setBreakingNewsAlert] = useState(false);
 
   // Load reading history from localStorage
   useEffect(() => {
@@ -118,8 +123,66 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Holographic Depth Effects
+  useEffect(() => {
+    // Check for gyroscope support
+    if (window.DeviceOrientationEvent && 'ontouchstart' in window) {
+      setIsGyroSupported(true);
+      
+      const handleOrientation = (event: DeviceOrientationEvent) => {
+        const { beta, gamma, alpha } = event;
+        if (beta !== null && gamma !== null) {
+          setGyroData({
+            beta: beta,
+            gamma: gamma,
+            alpha: alpha || 0
+          });
+        }
+      };
+
+      window.addEventListener('deviceorientation', handleOrientation);
+      
+      // Simulate breaking news alert every 30 seconds
+      const alertInterval = setInterval(() => {
+        setBreakingNewsAlert(true);
+        setTimeout(() => setBreakingNewsAlert(false), 3000);
+      }, 30000);
+
+      return () => {
+        window.removeEventListener('deviceorientation', handleOrientation);
+        clearInterval(alertInterval);
+      };
+    }
+  }, []);
+
+  // Calculate holographic depth transforms
+  const getHolographicTransform = () => {
+    if (!isGyroSupported) return {};
+    
+    const { beta, gamma } = gyroData;
+    const tiltX = (gamma / 45) * 10; // Max 10px tilt
+    const tiltY = (beta / 45) * 10;  // Max 10px tilt
+    const depth = Math.min(Math.max((beta + 45) / 90, 0), 1); // 0 to 1 depth
+    
+    return {
+      transform: `translate3d(${tiltX}px, ${tiltY}px, 0) scale(${0.98 + (depth * 0.02)})`,
+      filter: `blur(${(1 - depth) * 0.5}px)`,
+      transition: 'transform 0.1s ease-out, filter 0.1s ease-out'
+    };
+  };
+
+  // Get breaking news animation class
+  const getBreakingNewsClass = () => {
+    return breakingNewsAlert 
+      ? 'animate-pulse shadow-[0_0_20px_rgba(255,0,0,0.5)] scale-105' 
+      : 'shadow-lg';
+  };
+
   return (
-    <div className="min-h-screen bg-white">
+    <div 
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100"
+      style={getHolographicTransform()}
+    >
       <Header />
       <SocialButtons />
       <HeroSection />
@@ -141,7 +204,7 @@ const Index = () => {
             </div>
             
             {/* Rotating Headlines Display */}
-            <div className="bg-white rounded-2xl p-8 shadow-2xl">
+            <div className={`bg-white/95 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20 ${getBreakingNewsClass()}`}>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Main Headline */}
                 <div className="lg:col-span-1">
@@ -185,7 +248,7 @@ const Index = () => {
                   {nigerianNews.slice(1, 4).map((article, index) => (
                     <div 
                       key={`trusted-${article.id}`}
-                      className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors cursor-pointer"
+                      className="bg-white/90 backdrop-blur-sm rounded-xl p-6 hover:bg-white/95 transition-all duration-300 cursor-pointer border border-white/30 shadow-lg hover:shadow-xl transform hover:scale-105"
                       onClick={() => window.open(article.externalLink, '_blank')}
                     >
                       <div className="flex items-start gap-4">
@@ -325,7 +388,7 @@ const Index = () => {
                   {nigerianNews.slice(1, 4).map((article, index) => (
                     <div 
                       key={`nigerian-${article.id}`}
-                      className="cursor-pointer bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+                      className="cursor-pointer bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-white/30 hover:border-orange-200 transform hover:scale-105"
                       onClick={() => window.open(article.externalLink, '_blank')}
                     >
                       <div className="relative overflow-hidden rounded-lg mb-4">
@@ -381,7 +444,7 @@ const Index = () => {
                 {worldNews.slice(0, 6).map((article, index) => (
                   <div 
                     key={`world-${article.id}`} 
-                    className="cursor-pointer bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+                    className="cursor-pointer bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-white/30 hover:border-blue-200 transform hover:scale-105"
                     onClick={() => window.open(article.externalLink, '_blank')}
                   >
                     <div className="relative overflow-hidden rounded-lg mb-4">
@@ -438,7 +501,7 @@ const Index = () => {
               {getContinueReading().map((article, index) => (
                 <div 
                   key={`continue-${article.id}`}
-                  className="cursor-pointer bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+                  className="cursor-pointer bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-white/30 hover:border-purple-200 transform hover:scale-105"
                 >
                   <div className="relative overflow-hidden rounded-lg mb-4">
                     <img 
@@ -492,7 +555,7 @@ const Index = () => {
             {getRecommendations().map((article, index) => (
               <div 
                 key={`recommend-${article.id}`}
-                className="cursor-pointer bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+                className="cursor-pointer bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-white/30 hover:border-green-200 transform hover:scale-105"
               >
                 <div className="relative overflow-hidden rounded-lg mb-4">
                   <img 
