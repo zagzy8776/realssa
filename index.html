@@ -30,6 +30,20 @@
     
     <!-- Monetag Integration -->
     <meta name="monetag" content="5b770aa9f1229df6c3e92a0f64dabbd3">
+    
+    <!-- Monetag MultiTag Script -->
+    <script>
+      window.monetag = window.monetag || [];
+      window.monetag.push(function() {
+        monetag.init({
+          siteId: '5b770aa9f1229df6c3e92a0f64dabbd3',
+          autoDetect: true,
+          enableLazyLoad: true,
+          enableSticky: true,
+          enableInvisible: true
+        });
+      });
+    </script>
   </head>
 
   <body>
