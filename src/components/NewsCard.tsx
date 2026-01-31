@@ -36,8 +36,18 @@ const NewsCard = ({
   // Use React Router Link if we have an ID, otherwise use regular link
   const linkTo = href || (id ? `/article/${id}` : "#");
   
-  const handleReadMore = () => {
-    if (onRead && id) {
+  // For external links, we want to show a preview page first
+  const handleReadMore = (e: React.MouseEvent) => {
+    if (externalLink) {
+      e.preventDefault();
+      // For external RSS articles, navigate to article page first
+      if (id) {
+        window.location.href = `/article/${id}`;
+      } else {
+        // Fallback to external link
+        window.open(externalLink, '_blank', 'noopener,noreferrer');
+      }
+    } else if (onRead && id) {
       onRead(id);
     }
   };

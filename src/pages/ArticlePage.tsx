@@ -2,11 +2,22 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import CategoryBadge from "@/components/CategoryBadge";
 import NewsCard from "@/components/NewsCard";
+import RSSArticlePreview from "@/components/RSSArticlePreview";
+import ExternalArticleComments from "@/components/ExternalArticleComments";
 import { NewsItem } from "@/data/newsData";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Share2, Facebook, Twitter, Mail, Copy, Heart, MessageCircle, Send } from "lucide-react";
+
+interface Comment {
+  id: string;
+  articleId: string;
+  author: string;
+  content: string;
+  date: string;
+  likes: number;
+}
 
 const ArticlePage = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,10 +26,11 @@ const ArticlePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [comments, setComments] = useState<any[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [userHasCommented, setUserHasCommented] = useState(false);
   const navigate = useNavigate();
 
   // Fetch article data
@@ -300,87 +312,14 @@ const ArticlePage = () => {
 
           {/* Comments Section */}
           <div className="mt-12 border-t border-border pt-8">
-            <div className="flex items-center gap-2 mb-6">
-              <MessageCircle className="h-5 w-5" />
-              <h3 className="text-lg font-semibold">Comments ({comments.length})</h3>
-            </div>
-
-            {/* Comment Form */}
-            <form onSubmit={handleSubmitComment} className="mb-8">
-              <div className="space-y-4">
-                <Input
-                  placeholder="Your name"
-                  value={commentAuthor}
-                  onChange={(e) => setCommentAuthor(e.target.value)}
-                  className="max-w-sm"
-                  required
-                />
-                <Textarea
-                  placeholder="Share your thoughts about this article..."
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  rows={3}
-                  required
-                />
-                <Button
-                  type="submit"
-                  disabled={submittingComment || !newComment.trim() || !commentAuthor.trim()}
-                  className="flex items-center gap-2"
-                >
-                  {submittingComment ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Posting...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Post Comment
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-
-            {/* Comments List */}
-            <div className="space-y-6">
-              {comments.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No comments yet. Be the first to share your thoughts!</p>
-                </div>
-              ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="border border-border rounded-lg p-4 bg-card/50">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-medium text-primary">
-                            {comment.author.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">{comment.author}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(comment.date).toLocaleDateString()} at {new Date(comment.date).toLocaleTimeString()}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleLikeComment(comment.id)}
-                        className="flex items-center gap-1 text-muted-foreground hover:text-red-500"
-                      >
-                        <Heart className="h-4 w-4" />
-                        <span className="text-xs">{comment.likes || 0}</span>
-                      </Button>
-                    </div>
-                    <p className="text-sm leading-relaxed">{comment.content}</p>
-                  </div>
-                ))
-              )}
-            </div>
+            <ExternalArticleComments
+              articleId={article.id}
+              articleTitle={article.title}
+              onCommentPosted={() => {
+                // Refresh comments after posting
+                fetchComments(article.id);
+              }}
+            />
           </div>
 
           {/* Related Articles Section */}
