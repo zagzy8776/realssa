@@ -37,21 +37,21 @@ const EnhancedImage: React.FC<EnhancedImageProps> = ({
   // Default fallback images based on content type
   const getDefaultFallback = () => {
     if (alt.toLowerCase().includes('news') || alt.toLowerCase().includes('article')) {
-      return 'https://via.placeholder.com/400x250?text=News+Image';
+      return 'https://picsum.photos/seed/news/400/250';
     }
     if (alt.toLowerCase().includes('music') || alt.toLowerCase().includes('artist')) {
-      return 'https://via.placeholder.com/400x250?text=Music+Artist';
+      return 'https://picsum.photos/seed/music/400/250';
     }
     if (alt.toLowerCase().includes('movie') || alt.toLowerCase().includes('film')) {
-      return 'https://via.placeholder.com/400x250?text=Movie+Poster';
+      return 'https://picsum.photos/seed/movie/400/250';
     }
     if (alt.toLowerCase().includes('celebrity') || alt.toLowerCase().includes('person')) {
-      return 'https://via.placeholder.com/400x250?text=Person+Image';
+      return 'https://picsum.photos/seed/person/400/250';
     }
     if (alt.toLowerCase().includes('nigeria') || alt.toLowerCase().includes('ghana')) {
-      return 'https://via.placeholder.com/400x250?text=African+Content';
+      return 'https://picsum.photos/seed/africa/400/250';
     }
-    return 'https://via.placeholder.com/400x250?text=Content+Image';
+    return 'https://picsum.photos/seed/content/400/250';
   };
 
   const handleError = () => {
