@@ -201,6 +201,186 @@ app.delete('/api/articles/:id', (req, res) => {
   res.json({ message: 'Article deleted' });
 });
 
+// RSS Feed endpoints
+const parser = new Parser({
+  customFields: {
+    item: [
+      ['media:content', 'media:content'],
+      ['media:thumbnail', 'media:thumbnail'],
+      ['enclosure', 'enclosure']
+    ]
+  }
+});
+
+// Nigerian News RSS feeds
+const nigerianFeeds = [
+  'https://www.premiumtimesng.com/rss.xml',
+  'https://www.vanguardngr.com/feed/',
+  'https://punchng.com/feed/',
+  'https://guardian.ng/feed/',
+  'https://www.thisdaylive.com/feed/',
+  'https://www.thecable.ng/feed/',
+  'https://www.channelstv.com/feed/',
+  'https://www.dailytrust.com.ng/feed/',
+  'https://www.sunnewsonline.com/feed/',
+  'https://www.tribuneonlineng.com/feed/'
+];
+
+// World News RSS feeds
+const worldFeeds = [
+  'http://feeds.bbci.co.uk/news/world/rss.xml',
+  'https://www.aljazeera.com/xml/rss/all.xml',
+  'https://variety.com/feed/',
+  'https://www.rollingstone.com/feed/',
+  'https://www.theverge.com/rss/index.xml',
+  'https://www.wired.com/feed/rss',
+  'https://www.espn.com/espn/rss/news',
+  'https://www.coindesk.com/arc/outboundfeeds/rss/',
+  'https://cointelegraph.com/rss',
+  'https://feeds.feedburner.com/ign/all',
+  'https://www.gamespot.com/feeds/news/',
+  'https://www.pcgamer.com/rss/',
+  'https://kotaku.com/rss',
+  'https://www.businessoffashion.com/feed',
+  'https://fashionista.com/.rss/excerpt',
+  'https://wwd.com/feed/'
+];
+
+// Helper function to fetch RSS feeds
+const fetchRSSFeeds = async (feeds) => {
+  const allArticles = [];
+  const parser = new Parser();
+
+  for (const feedUrl of feeds) {
+    try {
+      console.log(`Fetching RSS feed: ${feedUrl}`);
+      const feed = await parser.parseURL(feedUrl);
+
+      feed.items.forEach(item => {
+        const article = {
+          id: item.guid || item.link || Math.random().toString(36).substr(2, 9),
+          title: item.title || 'No title',
+          excerpt: item.contentSnippet || item.summary || item.title || 'No content',
+          content: item.content || item.summary || item.contentSnippet || '',
+          category: 'news',
+          image: extractImageFromItem(item),
+          readTime: '5 min read',
+          author: feed.title || 'Unknown Source',
+          source: 'rss',
+          externalLink: item.link,
+          date: item.pubDate || new Date().toISOString(),
+          contentType: 'article',
+          status: 'published',
+          featured: false
+        };
+        allArticles.push(article);
+      });
+    } catch (error) {
+      console.error(`Error fetching RSS feed ${feedUrl}:`, error.message);
+    }
+  }
+
+  // Sort by date (newest first) and limit to 50 articles
+  return allArticles
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 50);
+};
+
+// Helper function to extract image from RSS item
+const extractImageFromItem = (item) => {
+  // Try different image sources
+  if (item.enclosure && item.enclosure.url) {
+    return item.enclosure.url;
+  }
+  if (item['media:content'] && item['media:content'].$.url) {
+    return item['media:content'].$.url;
+  }
+  if (item['media:thumbnail'] && item['media:thumbnail'].$.url) {
+    return item['media:thumbnail'].$.url;
+  }
+
+  // Extract from content if available
+  if (item.content) {
+    const imgMatch = item.content.match(/<img[^>]+src="([^">]+)"/);
+    if (imgMatch) {
+      return imgMatch[1];
+    }
+  }
+
+  // Default placeholder
+  return 'https://via.placeholder.com/400x250?text=News+Image';
+};
+
+// Get Nigerian news
+app.get('/api/news/nigerian', async (req, res) => {
+  try {
+    console.log('Fetching Nigerian news feeds...');
+    const articles = await fetchRSSFeeds(nigerianFeeds);
+    console.log(`Fetched ${articles.length} Nigerian articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching Nigerian news:', error);
+    res.status(500).json({ error: 'Failed to fetch Nigerian news' });
+  }
+});
+
+// Get World news
+app.get('/api/news/world', async (req, res) => {
+  try {
+    console.log('Fetching World news feeds...');
+    const articles = await fetchRSSFeeds(worldFeeds);
+    console.log(`Fetched ${articles.length} World articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching World news:', error);
+    res.status(500).json({ error: 'Failed to fetch World news' });
+  }
+});
+
+// Comments endpoint
+app.get('/api/comments', (req, res) => {
+  const { articleId } = req.query;
+  const comments = readJsonFile(commentsFilePath);
+  const filteredComments = articleId
+    ? comments.filter(comment => comment.articleId === articleId)
+    : comments;
+  res.json(filteredComments);
+});
+
+app.post('/api/comments', (req, res) => {
+  const { articleId, author, content } = req.body;
+  if (!articleId || !author || !content) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const comments = readJsonFile(commentsFilePath);
+  const newComment = {
+    id: Date.now().toString(),
+    articleId,
+    author,
+    content,
+    date: new Date().toISOString(),
+    likes: 0
+  };
+
+  comments.push(newComment);
+  writeJsonFile(commentsFilePath, comments);
+  res.status(201).json(newComment);
+});
+
+app.post('/api/comments/:id/like', (req, res) => {
+  const comments = readJsonFile(commentsFilePath);
+  const comment = comments.find(c => c.id === req.params.id);
+
+  if (!comment) {
+    return res.status(404).json({ error: 'Comment not found' });
+  }
+
+  comment.likes = (comment.likes || 0) + 1;
+  writeJsonFile(commentsFilePath, comments);
+  res.json(comment);
+});
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
