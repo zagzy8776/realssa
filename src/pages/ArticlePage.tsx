@@ -4,8 +4,9 @@ import CategoryBadge from "@/components/CategoryBadge";
 import NewsCard from "@/components/NewsCard";
 import { NewsItem } from "@/data/newsData";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Share2, Facebook, Twitter, Mail, Copy, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Share2, Facebook, Twitter, Mail, Copy, Heart, MessageCircle, Send } from "lucide-react";
 
 const ArticlePage = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,9 +16,9 @@ const ArticlePage = () => {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [userLiked, setUserLiked] = useState<string[]>([]);
-  const toast = useToast();
+  const [newComment, setNewComment] = useState('');
+  const [commentAuthor, setCommentAuthor] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
   const navigate = useNavigate();
 
   // Fetch article data
@@ -54,6 +55,9 @@ const ArticlePage = () => {
             .filter((a: NewsItem) => a.category === foundArticle.category && a.id !== foundArticle.id)
             .slice(0, 4);
           setRelatedArticles(related);
+
+          // Fetch comments for this article
+          fetchComments(foundArticle.id);
         } else {
           setError("Article not found");
         }
@@ -68,78 +72,65 @@ const ArticlePage = () => {
     fetchArticle();
   }, [id]);
 
-  // Fetch comments
-  useEffect(() => {
-    const fetchComments = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments/${id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setComments(data);
-        }
-      } catch (error) {
-        console.error("Error fetching comments:", error);
-      }
-    };
-
-    fetchComments();
-  }, [id]);
-
-  // Post new comment
-  const postComment = async () => {
-    if (!newComment.trim()) {
-      toast.error("Comment cannot be empty");
-      return;
-    }
-
+  const fetchComments = async (articleId: string) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
-        },
-        body: JSON.stringify({
-          articleId: id,
-          commentText: newComment.trim()
-        })
-      });
-
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments?articleId=${articleId}`);
       if (response.ok) {
-        const data = await response.json();
-        setComments(prev => [data, ...prev]);
-        setNewComment("");
-        toast.success("Comment posted successfully");
-      } else {
-        toast.error("Failed to post comment");
+        const commentsData = await response.json();
+        setComments(commentsData);
       }
-    } catch (error) {
-      console.error("Error posting comment:", error);
-      toast.error("Failed to post comment");
+    } catch (err) {
+      console.warn("Failed to fetch comments:", err);
     }
   };
 
-  // Like comment
-  const likeComment = async (commentId: string) => {
+  const handleSubmitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim() || !commentAuthor.trim() || !article) return;
+
+    setSubmittingComment(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments/${commentId}/like`, {
-        method: "POST",
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments`, {
+        method: 'POST',
         headers: {
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
-        }
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          articleId: article.id,
+          author: commentAuthor.trim(),
+          content: newComment.trim(),
+        }),
       });
 
       if (response.ok) {
-        setComments(prev =>
-          prev.map(comment =>
-            comment.id === commentId
-              ? { ...comment, likes: (comment.likes || 0) + 1 }
-              : comment
-          )
-        );
+        const newCommentData = await response.json();
+        setComments(prev => [newCommentData, ...prev]);
+        setNewComment('');
+        setCommentAuthor('');
+      } else {
+        console.error('Failed to submit comment');
       }
-    } catch (error) {
-      console.error("Error liking comment:", error);
+    } catch (err) {
+      console.error('Error submitting comment:', err);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleLikeComment = async (commentId: string) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments/${commentId}/like`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const updatedComment = await response.json();
+        setComments(prev => prev.map(comment =>
+          comment.id === commentId ? updatedComment : comment
+        ));
+      }
+    } catch (err) {
+      console.error('Error liking comment:', err);
     }
   };
 
@@ -309,55 +300,87 @@ const ArticlePage = () => {
 
           {/* Comments Section */}
           <div className="mt-12 border-t border-border pt-8">
-            <h3 className="text-2xl font-bold mb-4">Comments ({comments.length})</h3>
-            <div className="mb-6">
-              <textarea
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Write a comment..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                rows={3}
-              />
-              <Button className="mt-3" onClick={postComment}>
-                Post Comment
-              </Button>
+            <div className="flex items-center gap-2 mb-6">
+              <MessageCircle className="h-5 w-5" />
+              <h3 className="text-lg font-semibold">Comments ({comments.length})</h3>
             </div>
 
-            {/* Comments List */}
-            {comments.map((comment: any) => (
-              <div key={comment.id} className="mb-4 p-4 border rounded-lg">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                      <span className="text-primary font-semibold">
-                        {comment.username.charAt(0)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-semibold">{comment.username}</p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(comment.timestamp).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => likeComment(comment.id)}>
-                    <ThumbUp className="h-4 w-4" />
-                    {comment.likes || 0}
-                  </Button>
-                </div>
-                <p className="text-gray-700">{comment.commentText}</p>
-                {comment.replies && comment.replies.length > 0 && (
-                  <div className="mt-3 p-3 bg-gray-50 rounded">
-                    {comment.replies.map((reply: any) => (
-                      <div key={reply.id} className="mb-2 p-2 bg-white rounded">
-                        <p className="font-semibold text-sm">{reply.username}</p>
-                        <p className="text-sm text-gray-700">{reply.replyText}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            {/* Comment Form */}
+            <form onSubmit={handleSubmitComment} className="mb-8">
+              <div className="space-y-4">
+                <Input
+                  placeholder="Your name"
+                  value={commentAuthor}
+                  onChange={(e) => setCommentAuthor(e.target.value)}
+                  className="max-w-sm"
+                  required
+                />
+                <Textarea
+                  placeholder="Share your thoughts about this article..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  rows={3}
+                  required
+                />
+                <Button
+                  type="submit"
+                  disabled={submittingComment || !newComment.trim() || !commentAuthor.trim()}
+                  className="flex items-center gap-2"
+                >
+                  {submittingComment ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Posting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Post Comment
+                    </>
+                  )}
+                </Button>
               </div>
-            ))}
+            </form>
+
+            {/* Comments List */}
+            <div className="space-y-6">
+              {comments.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No comments yet. Be the first to share your thoughts!</p>
+                </div>
+              ) : (
+                comments.map((comment) => (
+                  <div key={comment.id} className="border border-border rounded-lg p-4 bg-card/50">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-primary">
+                            {comment.author.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{comment.author}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(comment.date).toLocaleDateString()} at {new Date(comment.date).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleLikeComment(comment.id)}
+                        className="flex items-center gap-1 text-muted-foreground hover:text-red-500"
+                      >
+                        <Heart className="h-4 w-4" />
+                        <span className="text-xs">{comment.likes || 0}</span>
+                      </Button>
+                    </div>
+                    <p className="text-sm leading-relaxed">{comment.content}</p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           {/* Related Articles Section */}
