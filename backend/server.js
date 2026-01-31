@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
+const Parser = require('rss-parser');
 
 // Initialize Express app
 const app = express();
