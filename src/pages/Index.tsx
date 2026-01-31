@@ -6,6 +6,7 @@ import NewsCardSkeleton from "@/components/NewsCardSkeleton";
 import SectionHeader from "@/components/SectionHeader";
 import RotatingHeadlines from "@/components/RotatingHeadlines";
 import Footer from "@/components/Footer";
+import LazyAd from "@/components/LazyAd";
 import { NewsItem, CategoryType } from "@/data/newsData";
 import { useEffect, useState } from "react";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
@@ -310,6 +311,11 @@ const Index = () => {
       {/* News Feed Section with Selectors */}
       <section className="py-16">
         <div className="container mx-auto px-4">
+          {/* Top Banner Ad */}
+          <div className="mb-8">
+            <LazyAd adType="banner" />
+          </div>
+
           {/* News Feed Header with Selectors */}
           <div className="text-center mb-12">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">📰 Latest News Feed</h2>
