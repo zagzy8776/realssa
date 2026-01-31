@@ -131,6 +131,115 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Nigeria's Most Trusted News Sources - Rotating Headlines */}
+      {nigerianNews.length > 0 && (
+        <section className="py-16 bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-8">
+              <h2 className="text-4xl font-bold text-white mb-4">🇳🇬 Nigeria's Most Trusted News Sources</h2>
+              <p className="text-xl text-white/90 mb-8">Breaking headlines from Nigeria's leading news outlets</p>
+            </div>
+            
+            {/* Rotating Headlines Display */}
+            <div className="bg-white rounded-2xl p-8 shadow-2xl">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Main Headline */}
+                <div className="lg:col-span-1">
+                  <div className="relative overflow-hidden rounded-xl h-64 lg:h-96">
+                    <img 
+                      src={nigerianNews[0].image} 
+                      alt={nigerianNews[0].title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://via.placeholder.com/600x400?text=Nigerian+News+Headline';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
+                    <div className="absolute bottom-6 left-6 right-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="bg-white text-orange-600 px-4 py-2 rounded-full font-bold text-sm">
+                          {nigerianNews[0].author}
+                        </span>
+                        <span className="text-white/80 text-sm">
+                          {new Date(nigerianNews[0].date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <h3 className="text-white text-2xl lg:text-3xl font-bold leading-tight line-clamp-3">
+                        {nigerianNews[0].title}
+                      </h3>
+                      <p className="text-white/90 text-sm mt-2 line-clamp-2">
+                        {nigerianNews[0].excerpt}
+                      </p>
+                      <button 
+                        className="mt-4 bg-orange-500 text-white px-6 py-2 rounded-full font-semibold hover:bg-orange-600 transition-colors"
+                        onClick={() => window.open(nigerianNews[0].externalLink, '_blank')}
+                      >
+                        Read Full Story →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Secondary Headlines */}
+                <div className="lg:col-span-1 space-y-6">
+                  {nigerianNews.slice(1, 4).map((article, index) => (
+                    <div 
+                      key={`trusted-${article.id}`}
+                      className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors cursor-pointer"
+                      onClick={() => window.open(article.externalLink, '_blank')}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 w-20 h-16 bg-gray-300 rounded-lg overflow-hidden">
+                          <img 
+                            src={article.image} 
+                            alt={article.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = 'https://via.placeholder.com/80x64?text=News';
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-full text-xs font-semibold">
+                              {article.author}
+                            </span>
+                            <span className="text-gray-500 text-xs">
+                              {new Date(article.date).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-gray-900 text-lg line-clamp-2 mb-2">
+                            {article.title}
+                          </h4>
+                          <p className="text-gray-600 text-sm line-clamp-2">
+                            {article.excerpt}
+                          </p>
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-orange-500 text-sm font-semibold">Read More →</span>
+                            <span className="text-gray-400 text-xs">{article.readTime}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* News Source Badges */}
+            <div className="text-center mt-8">
+              <div className="flex flex-wrap justify-center gap-4">
+                {['Premium Times', 'Vanguard', 'Punch', 'Guardian', 'ThisDay', 'The Cable'].map((source, index) => (
+                  <span key={source} className="bg-white/20 text-white px-4 py-2 rounded-full text-sm font-medium">
+                    {source}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* News Feed Section with Selectors */}
       <section className="py-16">
         <div className="container mx-auto px-4">
