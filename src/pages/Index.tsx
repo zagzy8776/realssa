@@ -351,7 +351,7 @@ const Index = () => {
                 </a>
               </div>
               
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Main Story */}
                 <div className="lg:col-span-2 cursor-pointer" onClick={() => window.open(nigerianNews[0].externalLink, '_blank')}>
                   <div className="relative overflow-hidden rounded-xl">
@@ -450,7 +450,7 @@ const Index = () => {
                 </a>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {worldNews.slice(0, 6).map((article, index) => (
                   <div 
                     key={`world-${article.id}`} 
@@ -507,7 +507,7 @@ const Index = () => {
               <p className="text-xl text-gray-600">Stories you might have missed</p>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getContinueReading().map((article, index) => (
                 <div 
                   key={`continue-${article.id}`}
@@ -561,7 +561,7 @@ const Index = () => {
             <p className="text-xl text-gray-600">Personalized recommendations just for you</p>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {getRecommendations().map((article, index) => (
               <div 
                 key={`recommend-${article.id}`}

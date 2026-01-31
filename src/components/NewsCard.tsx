@@ -61,10 +61,10 @@ const NewsCard = ({
   };
 
   return (
-    <article className="group bg-card rounded-xl overflow-hidden border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-glow">
+    <article className="group bg-card dark:bg-zinc-900 border border-border dark:border-zinc-800 rounded-xl overflow-hidden hover:border-primary/50 transition-all duration-300 hover:shadow-glow flex flex-col h-full">
       <Link to={linkTo} className="block" onClick={handleReadMore}>
-        {/* Image Container */}
-        <div className="relative h-48 overflow-hidden">
+        {/* 1. Image with Fixed Aspect Ratio */}
+        <div className="aspect-video w-full overflow-hidden bg-zinc-100">
           <img
             src={image}
             alt={title}
@@ -89,37 +89,40 @@ const NewsCard = ({
           )}
         </div>
 
-        {/* Content */}
-        <div className="p-5">
-          <h3 className="font-display text-lg font-semibold text-card-foreground line-clamp-2 mb-2 group-hover:text-primary transition-colors">
+        {/* 2. Text Content Box */}
+        <div className="p-4 flex flex-col flex-grow">
+          {/* Headline: Max 2 lines, then ... */}
+          <h3 className="font-display text-sm font-bold leading-tight text-card-foreground dark:text-zinc-100 line-clamp-2 mb-2 h-[2.5rem] group-hover:text-primary transition-colors">
             {title}
           </h3>
           
-          <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+          {/* Summary: Max 3 lines, then ... */}
+          <p className="text-xs text-muted-foreground dark:text-zinc-400 line-clamp-3 mb-4 flex-grow">
             {excerpt}
           </p>
 
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          {/* Bottom Metadata */}
+          <div className="mt-auto flex justify-between items-center text-[10px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
-              <Clock size={12} />
+              <Clock size={10} />
               {readTime}
             </span>
             <span className="inline-flex items-center gap-1">
-              <Calendar size={12} />
+              <Calendar size={10} />
               {date}
             </span>
           </div>
 
           {/* External Video Link Button - Fixed to avoid nested links */}
           {externalLink && (
-            <div className="mt-4">
+            <div className="mt-3">
               <button
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   window.open(externalLink, '_blank', 'noopener,noreferrer');
                 }}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-md text-sm font-medium transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-md text-xs font-medium transition-colors"
               >
                 🎬 See Full Video
               </button>
