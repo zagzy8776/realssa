@@ -16,6 +16,7 @@ app.use(express.json());
 // Database file paths
 const usersFilePath = path.join(__dirname, 'data', 'users.json');
 const articlesFilePath = path.join(__dirname, 'data', 'articles.json');
+const commentsFilePath = path.join(__dirname, 'data', 'comments.json');
 
 // Ensure data directory exists
 const dataDir = path.join(__dirname, 'data');
