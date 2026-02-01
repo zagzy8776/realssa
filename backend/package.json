@@ -29,6 +29,7 @@
     "metascraper-description": "^5.49.21",
     "metascraper-image": "^5.49.21",
     "metascraper-title": "^5.49.21",
+    "pg": "^8.11.3",
     "rss-parser": "^3.13.0"
   }
 }
