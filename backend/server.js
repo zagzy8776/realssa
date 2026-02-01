@@ -165,32 +165,39 @@ app.get('/api/articles', async (req, res) => {
 });
 
 // Get featured articles
-app.get('/api/articles/featured', (req, res) => {
-  const articles = readJsonFile(articlesFilePath);
-  const featuredArticles = articles.filter(article =>
-    article.featured === true || article.contentType === 'headline'
-  );
+app.get('/api/articles/featured', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM articles WHERE featured = true OR content_type = $1 ORDER BY date DESC',
+      ['headline']
+    );
 
-  // Temporary dummy data for testing
-  if (featuredArticles.length === 0) {
-    featuredArticles.push({
-      id: "1",
-      title: "Investigative: New Audit reveals 'Audio Projects' in Kagini",
-      excerpt: "Realssa investigators uncover the truth behind recent budget allocations.",
-      content: "Realssa investigators uncover the truth behind recent budget allocations.",
-      category: "politics",
-      image: "https://placehold.co/600x400",
-      readTime: "5 min read",
-      author: "Realssa Team",
-      source: "static",
-      date: new Date().toISOString(),
-      featured: true,
-      contentType: "article",
-      status: "published"
-    });
+    let featuredArticles = result.rows;
+
+    // Temporary dummy data for testing if no featured articles exist
+    if (featuredArticles.length === 0) {
+      featuredArticles.push({
+        id: 1,
+        title: "Investigative: New Audit reveals 'Audio Projects' in Kagini",
+        excerpt: "Realssa investigators uncover the truth behind recent budget allocations.",
+        content: "Realssa investigators uncover the truth behind recent budget allocations.",
+        category: "politics",
+        image: "https://placehold.co/600x400",
+        read_time: "5 min read",
+        author: "Realssa Team",
+        source: "static",
+        date: new Date().toISOString(),
+        featured: true,
+        content_type: "article",
+        status: "published"
+      });
+    }
+
+    res.json(featuredArticles);
+  } catch (error) {
+    console.error('Error fetching featured articles:', error);
+    res.status(500).json({ message: 'Server error' });
   }
-
-  res.json(featuredArticles);
 });
 
 // Create new article
