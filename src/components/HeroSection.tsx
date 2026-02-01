@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "./CategoryBadge";
-import EnhancedImage from "./EnhancedImage";
+import SimpleImage from "./SimpleImage";
 import { useEffect, useState } from "react";
 
 interface NigerianNewsItem {
@@ -49,7 +49,7 @@ const HeroSection = () => {
     <section className="relative overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0">
-        <EnhancedImage
+        <SimpleImage
           src={heroImage}
           alt={breakingNews?.title || "Nigerian news"}
           className="w-full h-full object-cover transition-all duration-1000"

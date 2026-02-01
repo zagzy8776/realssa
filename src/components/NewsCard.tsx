@@ -1,6 +1,7 @@
 import { Clock, Calendar, Bookmark } from "lucide-react";
 import { Link } from "react-router-dom";
 import CategoryBadge from "./CategoryBadge";
+import EnhancedImage from "./EnhancedImage";
 
 type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "nollywood" | "lagos-fashion" | "nigerian-tech" | "entertainment" | "news" | "general";
 
