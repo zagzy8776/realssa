@@ -64,13 +64,13 @@ const NewsCard = ({
     <article className="group bg-card dark:bg-zinc-900 border border-border dark:border-zinc-800 rounded-xl overflow-hidden hover:border-primary/50 transition-all duration-300 hover:shadow-glow flex flex-col h-full">
       <Link to={linkTo} className="block" onClick={handleReadMore}>
         {/* 1. Image with Fixed Aspect Ratio */}
-        <div className="aspect-video w-full overflow-hidden bg-zinc-100">
-          <img
+        <div className="aspect-video w-full overflow-hidden bg-zinc-100 relative">
+          <EnhancedImage
             src={image}
             alt={title}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
             loading="lazy"
-            decoding="async"
+            fallback="https://via.placeholder.com/400x250?text=EntertainmentGHC"
           />
           <div className="absolute inset-0 bg-gradient-card" />
           <div className="absolute top-3 left-3">

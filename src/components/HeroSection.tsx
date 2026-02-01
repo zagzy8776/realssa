@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "./CategoryBadge";
+import EnhancedImage from "./EnhancedImage";
 import { useEffect, useState } from "react";
 
 interface NigerianNewsItem {
@@ -48,15 +49,12 @@ const HeroSection = () => {
     <section className="relative overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0">
-        <img
+        <EnhancedImage
           src={heroImage}
           alt={breakingNews?.title || "Nigerian news"}
           className="w-full h-full object-cover transition-all duration-1000"
-          onError={(e) => {
-            e.currentTarget.src = 'https://placehold.co/1920x1080/FFA500/000000?text=Nigerian+News';
-          }}
+          fallback="https://placehold.co/1920x1080/FFA500/000000?text=Nigerian+News"
           loading="eager"
-          decoding="async"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/80 via-red-500/80 to-yellow-500/80" />
         <div className="absolute inset-0 bg-background/60" />
