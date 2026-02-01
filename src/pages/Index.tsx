@@ -1,6 +1,5 @@
 import Header from "@/components/Header";
 import SocialButtons from "@/components/SocialButtons";
-import SocialBar from "@/components/SocialBar";
 import HeroSection from "@/components/HeroSection";
 import NewsCard from "@/components/NewsCard";
 import NewsCardSkeleton from "@/components/NewsCardSkeleton";
@@ -8,11 +7,8 @@ import SectionHeader from "@/components/SectionHeader";
 import RotatingHeadlines from "@/components/RotatingHeadlines";
 import Footer from "@/components/Footer";
 import LazyAd from "@/components/LazyAd";
-import SearchBar from "@/components/SearchBar";
-import { NewsItem, CategoryType } from "@/data/newsData";
+import { NewsItem } from "@/data/newsData";
 import { useEffect, useState } from "react";
-import { usePullToRefresh } from "@/hooks/usePullToRefresh";
-import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import ReadProgressBar from "@/components/ReadProgressBar";
 
 const Index = () => {
@@ -40,12 +36,6 @@ const Index = () => {
     }
   };
 
-  const { refreshTriggered, pullDistance } = usePullToRefresh(fetchNews);
-
-  const { loadMore, hasMore, loading: infiniteLoading } = useInfiniteScroll(() => {
-    // Implement load more logic if needed
-  });
-
   return (
     <div className="min-h-screen bg-background">
       <ReadProgressBar />
@@ -54,14 +44,12 @@ const Index = () => {
 
       <main>
         <HeroSection />
-        <SearchBar />
 
         {/* Latest Stories Section */}
         <section className="py-12 md:py-16">
           <div className="container mx-auto px-4">
             <SectionHeader
               title="Latest Stories"
-              subtitle="Stay updated with the latest entertainment news from Ghana and Africa"
             />
 
             {loading ? (
