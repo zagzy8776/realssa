@@ -1,9 +1,17 @@
+require('dotenv').config();
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 const Parser = require('rss-parser');
+
+// Initialize PostgreSQL connection pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // Required for Railway/Heroku connections
+  }
+});
 
 // Initialize Express app
 const app = express();
@@ -18,71 +26,70 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Database file paths
-const usersFilePath = path.join(__dirname, 'data', 'users.json');
-const articlesFilePath = path.join(__dirname, 'data', 'articles.json');
-const commentsFilePath = path.join(__dirname, 'data', 'comments.json');
-
-// Ensure data directory exists
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// Initialize data files with default content if they don't exist
-const initializeDataFiles = () => {
-  // Create default users file if it doesn't exist
-  if (!fs.existsSync(usersFilePath)) {
-    const defaultUsers = [
-      {
-        id: '1',
-        username: 'admin',
-        password: bcrypt.hashSync('admin123', 10), // Default password
-        isAdmin: true
-      }
-    ];
-    fs.writeFileSync(usersFilePath, JSON.stringify(defaultUsers, null, 2));
-  }
-
-  // Create default articles file if it doesn't exist
-  if (!fs.existsSync(articlesFilePath)) {
-    const defaultArticles = [
-      {
-        id: '1',
-        title: 'Welcome to EntertainmentGHC',
-        excerpt: 'Discover the latest in African entertainment and culture',
-        content: '<p>Welcome to our platform where we showcase the best of African entertainment...</p>',
-        category: 'general',
-        date: new Date().toISOString(),
-        author: 'Admin',
-        source: 'static'
-      }
-    ];
-    fs.writeFileSync(articlesFilePath, JSON.stringify(defaultArticles, null, 2));
-  }
-};
-
-initializeDataFiles();
-
-// Helper function to read JSON file
-const readJsonFile = (filePath) => {
+// Initialize database tables
+const initializeDatabase = async () => {
   try {
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch (err) {
-    console.error(`Error reading ${path.basename(filePath)}:`, err);
-    return [];
+    // Create users table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        is_admin BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create articles table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS articles (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        excerpt TEXT,
+        content TEXT,
+        category TEXT,
+        image TEXT,
+        read_time TEXT,
+        author TEXT,
+        source TEXT,
+        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        featured BOOLEAN DEFAULT FALSE,
+        content_type TEXT DEFAULT 'article',
+        status TEXT DEFAULT 'published'
+      )
+    `);
+
+    // Create comments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS comments (
+        id SERIAL PRIMARY KEY,
+        article_id INTEGER REFERENCES articles(id),
+        author TEXT NOT NULL,
+        content TEXT NOT NULL,
+        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        likes INTEGER DEFAULT 0
+      )
+    `);
+
+    // Insert default admin user if not exists
+    const adminExists = await pool.query('SELECT id FROM users WHERE username = $1', ['admin']);
+    if (adminExists.rows.length === 0) {
+      const hashedPassword = bcrypt.hashSync('admin123', 10);
+      await pool.query(
+        'INSERT INTO users (username, password, is_admin) VALUES ($1, $2, $3)',
+        ['admin', hashedPassword, true]
+      );
+      console.log('Default admin user created');
+    }
+
+    console.log('Database initialized successfully');
+  } catch (error) {
+    console.error('Error initializing database:', error);
   }
 };
 
-// Helper function to write JSON file
-const writeJsonFile = (filePath, data) => {
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error(`Error writing to ${path.basename(filePath)}:`, err);
-  }
-};
+// Initialize database on startup
+initializeDatabase();
 
 // Authentication middleware
 const authenticate = (req, res, next) => {
@@ -116,72 +123,105 @@ app.get('/', (req, res) => {
   res.json({ message: 'EntertainmentGHC API Server', status: 'running' });
 });
 
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  const users = readJsonFile(usersFilePath);
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
 
-  const user = users.find(u => u.username === username);
-  if (!user) {
-    return res.status(400).json({ message: 'Invalid credentials' });
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    const user = result.rows[0];
+    const isMatch = bcrypt.compareSync(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    if (!user.is_admin) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'default_secret', {
+      expiresIn: '1h'
+    });
+
+    res.json({ token });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
-
-  const isMatch = bcrypt.compareSync(password, user.password);
-  if (!isMatch) {
-    return res.status(400).json({ message: 'Invalid credentials' });
-  }
-
-  if (!user.isAdmin) {
-    return res.status(403).json({ message: 'Admin access required' });
-  }
-
-  const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'default_secret', {
-    expiresIn: '1h'
-  });
-
-  res.json({ token });
 });
 
 // Get all articles (public route - no authentication needed)
-app.get('/api/articles', (req, res) => {
-  const articles = readJsonFile(articlesFilePath);
-  res.json(articles);
+app.get('/api/articles', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM articles ORDER BY date DESC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching articles:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 // Get featured articles
 app.get('/api/articles/featured', (req, res) => {
   const articles = readJsonFile(articlesFilePath);
-  const featuredArticles = articles.filter(article => 
+  const featuredArticles = articles.filter(article =>
     article.featured === true || article.contentType === 'headline'
   );
+
+  // Temporary dummy data for testing
+  if (featuredArticles.length === 0) {
+    featuredArticles.push({
+      id: "1",
+      title: "Investigative: New Audit reveals 'Audio Projects' in Kagini",
+      excerpt: "Realssa investigators uncover the truth behind recent budget allocations.",
+      content: "Realssa investigators uncover the truth behind recent budget allocations.",
+      category: "politics",
+      image: "https://placehold.co/600x400",
+      readTime: "5 min read",
+      author: "Realssa Team",
+      source: "static",
+      date: new Date().toISOString(),
+      featured: true,
+      contentType: "article",
+      status: "published"
+    });
+  }
+
   res.json(featuredArticles);
 });
 
 // Create new article
-app.post('/api/articles', (req, res) => {
-  const articles = readJsonFile(articlesFilePath);
+app.post('/api/articles', async (req, res) => {
+  try {
+    const { title, excerpt, content, category, image, readTime, author, source, featured, contentType, status } = req.body;
 
-  // Generate new ID
-  const newId = articles.length > 0
-    ? Math.max(...articles.map(a => parseInt(a.id))) + 1
-    : 1;
+    const result = await pool.query(
+      `INSERT INTO articles (title, excerpt, content, category, image, read_time, author, source, featured, content_type, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [
+        title || '',
+        excerpt || '',
+        content || excerpt || '',
+        category || 'afrobeats',
+        image || 'https://via.placeholder.com/400x250?text=EntertainmentGHC',
+        readTime || '5 min read',
+        author || 'Admin',
+        source || 'user',
+        featured || false,
+        contentType || 'article',
+        status || 'published'
+      ]
+    );
 
-  // Create new article with proper structure
-  const newArticle = {
-    id: newId.toString(), // Ensure ID is string
-    title: req.body.title || '',
-    excerpt: req.body.excerpt || '',
-    content: req.body.content || req.body.excerpt || '',
-    category: req.body.category || 'afrobeats',
-    image: req.body.image || 'https://via.placeholder.com/400x250?text=EntertainmentGHC',
-    readTime: req.body.readTime || '5 min read',
-    author: req.body.author || 'Admin',
-    source: req.body.source || 'user',
-    date: new Date().toISOString()
-  };
-
-  articles.push(newArticle);
-  writeJsonFile(articlesFilePath, articles);
-  res.status(201).json(newArticle);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating article:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 // Update article
