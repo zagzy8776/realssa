@@ -377,6 +377,20 @@ const fetchRSSFeeds = async (feeds) => {
     .slice(0, 50);
 };
 
+// Helper function to get proper image URL from RSS item
+const getProperImage = (item) => {
+  // 1. Check for standard RSS enclosure
+  let url = item.enclosure?.url ||
+            item.mediaContent?.$?.url ||
+            item.content?.match(/src="([^"]+)"/)?.[1];
+
+  // 2. Fix missing "https:"
+  if (url && url.startsWith('//')) url = 'https:' + url;
+
+  // 3. If still nothing, use a high-quality fallback based on category
+  return url || `https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop`;
+};
+
 // Helper function to extract image from RSS item
 const extractImageFromItem = (item) => {
   // Helper function to check if URL is a logo or placeholder
@@ -421,23 +435,8 @@ const extractImageFromItem = (item) => {
     return item.enclosure.url;
   }
 
-  // Generate a more relevant placeholder based on content
-  const title = item.title || '';
-  const content = item.contentSnippet || item.summary || '';
-  const text = (title + ' ' + content).toLowerCase();
-  
-  let category = 'news';
-  if (text.includes('sports') || text.includes('football') || text.includes('soccer')) {
-    category = 'sports';
-  } else if (text.includes('politics') || text.includes('government') || text.includes('election')) {
-    category = 'politics';
-  } else if (text.includes('business') || text.includes('economy') || text.includes('finance')) {
-    category = 'business';
-  } else if (text.includes('entertainment') || text.includes('music') || text.includes('movie')) {
-    category = 'entertainment';
-  }
-
-  return `https://picsum.photos/seed/${encodeURIComponent(title.substring(0, 20))}/600/400?category=${category}`;
+  // Use the improved getProperImage function as fallback
+  return getProperImage(item);
 };
 
 // Get Nigerian news
@@ -463,6 +462,45 @@ app.get('/api/news/world', async (req, res) => {
   } catch (error) {
     console.error('Error fetching World news:', error);
     res.status(500).json({ error: 'Failed to fetch World news' });
+  }
+});
+
+// Homepage aggregator - combines Nigerian and World news
+app.get('/api/news/homepage', async (req, res) => {
+  try {
+    console.log('Fetching aggregated homepage news feeds...');
+
+    // Fetch from both Nigerian and World feeds
+    const [nigerianArticles, worldArticles] = await Promise.all([
+      fetchRSSFeeds(nigerianFeeds),
+      fetchRSSFeeds(worldFeeds)
+    ]);
+
+    // Map Nigerian articles with proper category
+    const nigerianMapped = nigerianArticles.map(item => ({
+      ...item,
+      category: 'Nigeria'
+    }));
+
+    // Map World articles with proper category
+    const worldMapped = worldArticles.map(item => ({
+      ...item,
+      category: 'World'
+    }));
+
+    // Combine all articles
+    const combined = [...nigerianMapped, ...worldMapped];
+
+    // Sort by date (newest first) and limit to top 20 stories
+    const sorted = combined
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 20);
+
+    console.log(`Fetched ${sorted.length} aggregated articles for homepage`);
+    res.json(sorted);
+  } catch (error) {
+    console.error('Error fetching aggregated homepage news:', error);
+    res.status(500).json({ error: 'Failed to load aggregated news' });
   }
 });
 
