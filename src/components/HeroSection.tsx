@@ -21,7 +21,7 @@ const HeroSection = () => {
   useEffect(() => {
     const fetchBreakingNews = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/nigerian-news`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/nigerian`);
         if (response.ok) {
           const news = await response.json();
           if (news.length > 0) {
@@ -42,7 +42,7 @@ const HeroSection = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const heroImage = breakingNews?.image || "https://via.placeholder.com/1920x1080?text=Nigerian+News";
+  const heroImage = breakingNews?.image || "https://placehold.co/1920x1080/FFA500/000000?text=Nigerian+News";
 
   return (
     <section className="relative overflow-hidden">
@@ -53,7 +53,7 @@ const HeroSection = () => {
           alt={breakingNews?.title || "Nigerian news"}
           className="w-full h-full object-cover transition-all duration-1000"
           onError={(e) => {
-            e.currentTarget.src = 'https://via.placeholder.com/1920x1080?text=Nigerian+News';
+            e.currentTarget.src = 'https://placehold.co/1920x1080/FFA500/000000?text=Nigerian+News';
           }}
           loading="eager"
           decoding="async"

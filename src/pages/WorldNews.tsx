@@ -238,7 +238,7 @@ const WorldNews = () => {
                   alt={article.title}
                   className="w-full h-48 object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = 'https://via.placeholder.com/400x250?text=World+News';
+                    e.currentTarget.src = 'https://placehold.co/400x250/FFA500/000000?text=World+News';
                   }}
                 />
                 <CardHeader>
