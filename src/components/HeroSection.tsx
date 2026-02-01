@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "./CategoryBadge";
+import EnhancedImage from "./EnhancedImage";
 import { useEffect, useState } from "react";
 
 interface NigerianNewsItem {

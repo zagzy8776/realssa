@@ -304,13 +304,17 @@ const nigerianFeeds = [
   'https://www.premiumtimesng.com/rss.xml',
   'https://www.vanguardngr.com/feed/',
   'https://punchng.com/feed/',
-  'https://guardian.ng/feed/',
   'https://www.thisdaylive.com/feed/',
   'https://www.thecable.ng/feed/',
   'https://www.channelstv.com/feed/',
   'https://www.dailytrust.com.ng/feed/',
   'https://www.sunnewsonline.com/feed/',
-  'https://www.tribuneonlineng.com/feed/'
+  'https://www.tribuneonlineng.com/feed/',
+  'https://www.nairametrics.com/feed/',
+  'https://businessday.ng/feed/',
+  'https://www.nigerianobservernews.com/feed/',
+  'https://thenationonlineng.net/feed/',
+  'https://www.premiumtimesng.com/feed/'
 ];
 
 // World News RSS feeds
@@ -375,27 +379,65 @@ const fetchRSSFeeds = async (feeds) => {
 
 // Helper function to extract image from RSS item
 const extractImageFromItem = (item) => {
-  // Try different image sources
-  if (item.enclosure && item.enclosure.url) {
-    return item.enclosure.url;
-  }
-  if (item['media:content'] && item['media:content'].$.url) {
-    return item['media:content'].$.url;
-  }
-  if (item['media:thumbnail'] && item['media:thumbnail'].$.url) {
-    return item['media:thumbnail'].$.url;
-  }
+  // Helper function to check if URL is a logo or placeholder
+  const isLogoOrPlaceholder = (url) => {
+    if (!url) return true;
+    const lowerUrl = url.toLowerCase();
+    // Check for common logo patterns
+    if (lowerUrl.includes('logo') || lowerUrl.includes('icon') || lowerUrl.includes('avatar')) {
+      return true;
+    }
+    // Check for placeholder services
+    if (lowerUrl.includes('placehold') || lowerUrl.includes('placeholder') || lowerUrl.includes('dummy')) {
+      return true;
+    }
+    // Check for very small images (likely icons)
+    if (lowerUrl.includes('50x50') || lowerUrl.includes('100x100') || lowerUrl.includes('179')) {
+      return true;
+    }
+    return false;
+  };
 
-  // Extract from content if available
+  // Extract from content first (highest priority for actual article images)
   if (item.content) {
     const imgMatch = item.content.match(/<img[^>]+src="([^">]+)"/);
-    if (imgMatch) {
+    if (imgMatch && !isLogoOrPlaceholder(imgMatch[1])) {
       return imgMatch[1];
     }
   }
 
-  // Default placeholder
-  return 'https://via.placeholder.com/400x250?text=News+Image';
+  // Try media thumbnail (second priority)
+  if (item['media:thumbnail'] && item['media:thumbnail'].$.url && !isLogoOrPlaceholder(item['media:thumbnail'].$.url)) {
+    return item['media:thumbnail'].$.url;
+  }
+
+  // Try media content (third priority)
+  if (item['media:content'] && item['media:content'].$.url && !isLogoOrPlaceholder(item['media:content'].$.url)) {
+    return item['media:content'].$.url;
+  }
+
+  // Try enclosure last (lowest priority - often contains logos)
+  if (item.enclosure && item.enclosure.url && !isLogoOrPlaceholder(item.enclosure.url)) {
+    return item.enclosure.url;
+  }
+
+  // Generate a more relevant placeholder based on content
+  const title = item.title || '';
+  const content = item.contentSnippet || item.summary || '';
+  const text = (title + ' ' + content).toLowerCase();
+  
+  let category = 'news';
+  if (text.includes('sports') || text.includes('football') || text.includes('soccer')) {
+    category = 'sports';
+  } else if (text.includes('politics') || text.includes('government') || text.includes('election')) {
+    category = 'politics';
+  } else if (text.includes('business') || text.includes('economy') || text.includes('finance')) {
+    category = 'business';
+  } else if (text.includes('entertainment') || text.includes('music') || text.includes('movie')) {
+    category = 'entertainment';
+  }
+
+  return `https://picsum.photos/seed/${encodeURIComponent(title.substring(0, 20))}/600/400?category=${category}`;
 };
 
 // Get Nigerian news
