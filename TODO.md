@@ -1,24 +1,24 @@
-# Fix News API 502 Bad Gateway Issue
+# Implementation Plan for Ads, Database, and Mobile Fit
 
-## Information Gathered
-- Production server at https://realssa-production.up.railway.app has /api/news/world and /api/news/nigerian routes
-- These routes are failing with 502 Bad Gateway error
-- The backend/server.js file is corrupted with UTF-16 characters
-- RSS feeds from external sources (BBC, Al Jazeera, etc.) are being fetched but likely timing out or failing
-- Frontend expects specific article data structure with fields like id, title, excerpt, category, image, readTime, author, source, date
+## Phase 1: Ads Integration ✅
+- [x] Complete Monetag script in index.html with proper CDN script tag
+- [x] Create src/components/SocialBar.tsx with Breaking News banner and SmartLink fallback
+- [x] Integrate SocialBar into main layout
 
-## Plan
-- [ ] Create new backend/server.js with proper RSS news fetching routes
-- [ ] Add error handling and timeouts for RSS feed fetching
-- [ ] Include fallback/cached data when feeds fail
-- [ ] Ensure data structure matches frontend expectations
-- [ ] Test locally before deployment
+## Phase 2: Database Migration
+- [ ] Add pg to backend/package.json
+- [ ] Create backend/migration.js script for fact_checks table with 10 dummy investigative stories
+- [ ] Update backend/server.js to add PostgreSQL connection and /api/fact-check endpoint
+- [ ] Create src/components/SearchBar.tsx component
+- [ ] Connect SearchBar to /api/fact-check endpoint
 
-## Dependent Files
-- backend/server.js (create new)
+## Phase 3: Mobile Styling
+- [ ] Update NewsCard.tsx to ensure object-fit: cover on all thumbnails
+- [ ] Add explicit overflow-hidden and text-overflow: ellipsis to text containers
+- [ ] Ensure consistent card heights
 
 ## Followup Steps
-- [ ] Test new server locally
-- [ ] Deploy to Railway
-- [ ] Verify World News and Nigerian News pages work
-- [ ] Monitor for any remaining issues
+- [ ] Install backend dependencies
+- [ ] Run migration script
+- [ ] Test all endpoints and components
+- [ ] Verify mobile responsiveness
