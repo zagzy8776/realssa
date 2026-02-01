@@ -398,7 +398,7 @@ const extractImageFromItem = (item) => {
     if (!url) return true;
     const lowerUrl = url.toLowerCase();
     // Check for common logo patterns
-    if (lowerUrl.includes('logo') || lowerUrl.includes('icon') || lowerUrl.includes('avatar')) {
+    if (lowerUrl.includes('logo') || lowerUrl.includes('icon') || lowerUrl.includes('avatar') || lowerUrl.includes('favicon')) {
       return true;
     }
     // Check for placeholder services
@@ -406,37 +406,131 @@ const extractImageFromItem = (item) => {
       return true;
     }
     // Check for very small images (likely icons)
-    if (lowerUrl.includes('50x50') || lowerUrl.includes('100x100') || lowerUrl.includes('179')) {
+    if (lowerUrl.includes('50x50') || lowerUrl.includes('100x100') || lowerUrl.includes('179') ||
+        lowerUrl.includes('32x32') || lowerUrl.includes('64x64') || lowerUrl.includes('128x128')) {
+      return true;
+    }
+    // Check for social media profile images
+    if (lowerUrl.includes('profile') || lowerUrl.includes('twitter') || lowerUrl.includes('facebook')) {
       return true;
     }
     return false;
   };
 
-  // Extract from content first (highest priority for actual article images)
-  if (item.content) {
-    const imgMatch = item.content.match(/<img[^>]+src="([^">]+)"/);
-    if (imgMatch && !isLogoOrPlaceholder(imgMatch[1])) {
-      return imgMatch[1];
+  // Helper function to validate image URL
+  const isValidImageUrl = (url) => {
+    if (!url) return false;
+    try {
+      const parsedUrl = new URL(url.startsWith('//') ? 'https:' + url : url);
+      // Check for common image extensions
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+      const hasImageExtension = imageExtensions.some(ext => parsedUrl.pathname.toLowerCase().includes(ext));
+      return hasImageExtension || parsedUrl.pathname.includes('image') || parsedUrl.pathname.includes('photo');
+    } catch {
+      return false;
+    }
+  };
+
+  // Helper function to fix relative URLs
+  const fixUrl = (url, baseUrl) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('//')) return 'https:' + url;
+    if (url.startsWith('/')) {
+      try {
+        const base = new URL(baseUrl);
+        return base.origin + url;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  let imageUrl = null;
+
+  // 1. Extract from content/description (highest priority for actual article images)
+  if (item.content || item.description || item.summary) {
+    const content = item.content || item.description || item.summary;
+    // Look for img tags
+    const imgMatches = content.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi);
+    if (imgMatches) {
+      for (const imgTag of imgMatches) {
+        const srcMatch = imgTag.match(/src=["']([^"']+)["']/);
+        if (srcMatch) {
+          const url = fixUrl(srcMatch[1], item.link);
+          if (url && isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
+            imageUrl = url;
+            break; // Take the first valid image
+          }
+        }
+      }
     }
   }
 
-  // Try media thumbnail (second priority)
-  if (item['media:thumbnail'] && item['media:thumbnail'].$.url && !isLogoOrPlaceholder(item['media:thumbnail'].$.url)) {
-    return item['media:thumbnail'].$.url;
+  // 2. Try media:thumbnail (second priority)
+  if (!imageUrl && item['media:thumbnail']) {
+    const thumbnails = Array.isArray(item['media:thumbnail']) ? item['media:thumbnail'] : [item['media:thumbnail']];
+    for (const thumb of thumbnails) {
+      const url = thumb.$?.url || thumb.url;
+      if (url && isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
+        imageUrl = fixUrl(url, item.link);
+        break;
+      }
+    }
   }
 
-  // Try media content (third priority)
-  if (item['media:content'] && item['media:content'].$.url && !isLogoOrPlaceholder(item['media:content'].$.url)) {
-    return item['media:content'].$.url;
+  // 3. Try media:content (third priority)
+  if (!imageUrl && item['media:content']) {
+    const contents = Array.isArray(item['media:content']) ? item['media:content'] : [item['media:content']];
+    for (const content of contents) {
+      const url = content.$?.url || content.url;
+      if (url && isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
+        imageUrl = fixUrl(url, item.link);
+        break;
+      }
+    }
   }
 
-  // Try enclosure last (lowest priority - often contains logos)
-  if (item.enclosure && item.enclosure.url && !isLogoOrPlaceholder(item.enclosure.url)) {
-    return item.enclosure.url;
+  // 4. Try enclosure (fourth priority - often contains images)
+  if (!imageUrl && item.enclosure && item.enclosure.url) {
+    const url = item.enclosure.url;
+    if (isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
+      imageUrl = fixUrl(url, item.link);
+    }
   }
 
-  // Use the improved getProperImage function as fallback
-  return getProperImage(item);
+  // 5. Try custom fields or other media fields
+  if (!imageUrl) {
+    const possibleFields = ['image', 'media', 'picture', 'photo', 'thumbnail'];
+    for (const field of possibleFields) {
+      if (item[field] && typeof item[field] === 'string' && isValidImageUrl(item[field]) && !isLogoOrPlaceholder(item[field])) {
+        imageUrl = fixUrl(item[field], item.link);
+        break;
+      }
+    }
+  }
+
+  // 6. Use fallback if no image found
+  if (!imageUrl) {
+    // Use a high-quality fallback based on content
+    const title = (item.title || '').toLowerCase();
+    if (title.includes('nigeria') || title.includes('africa')) {
+      imageUrl = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=800&auto=format&fit=crop';
+    } else if (title.includes('music') || title.includes('artist') || title.includes('entertainment')) {
+      imageUrl = 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=800&auto=format&fit=crop';
+    } else if (title.includes('politics') || title.includes('government')) {
+      imageUrl = 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?q=80&w=800&auto=format&fit=crop';
+    } else if (title.includes('business') || title.includes('economy')) {
+      imageUrl = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop';
+    } else if (title.includes('sports') || title.includes('football')) {
+      imageUrl = 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=800&auto=format&fit=crop';
+    } else {
+      imageUrl = 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop';
+    }
+  }
+
+  return imageUrl;
 };
 
 // Get Nigerian news
