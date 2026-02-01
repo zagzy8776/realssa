@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import SocialButtons from "@/components/SocialButtons";
 import HeroSection from "@/components/HeroSection";
+import { SearchBar } from "@/components/SearchBar";
 import NewsCard from "@/components/NewsCard";
 import NewsCardSkeleton from "@/components/NewsCardSkeleton";
 import SectionHeader from "@/components/SectionHeader";
