@@ -16,10 +16,21 @@ const Index = () => {
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
     fetchNews();
   }, []);
+
+  // Auto-rotate featured stories every 5 seconds
+  useEffect(() => {
+    if (newsItems.length > 0) {
+      const timer = setInterval(() => {
+        setCurrentIndex((prev) => (prev + 1) % newsItems.length);
+      }, 5000);
+      return () => clearInterval(timer);
+    }
+  }, [newsItems]);
 
   const fetchNews = async () => {
     try {

@@ -294,7 +294,8 @@ const parser = new Parser({
     item: [
       ['media:content', 'media:content'],
       ['media:thumbnail', 'media:thumbnail'],
-      ['enclosure', 'enclosure']
+      ['enclosure', 'enclosure'],
+      ['media:group', 'media:group']
     ]
   }
 });

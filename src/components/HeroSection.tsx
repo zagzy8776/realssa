@@ -79,39 +79,52 @@ const HeroSection = () => {
               <div className="h-6 bg-white/20 rounded-lg mb-4 animate-pulse w-3/4"></div>
               <div className="h-6 bg-white/20 rounded-lg mb-4 animate-pulse w-1/2"></div>
             </div>
-          ) : breakingNews ? (
+          ) : currentStory ? (
             <>
               <h1 className="font-display text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-tight mb-6 line-clamp-3">
-                {breakingNews.title}
+                {currentStory.title}
               </h1>
-              
+
               <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl line-clamp-3">
-                {breakingNews.excerpt}
+                {currentStory.excerpt || currentStory.content?.substring(0, 150) + '...'}
               </p>
-              
+
               <div className="flex flex-wrap items-center gap-6 text-sm text-white/80 mb-10">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{breakingNews.author}</span>
+                  <span>{currentStory.category || 'Featured'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{new Date(breakingNews.date).toLocaleDateString()}</span>
+                  <span>{new Date(currentStory.date).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{breakingNews.readTime}</span>
+                  <span>{currentStory.readTime || '5 min read'}</span>
                 </div>
+              </div>
+
+              {/* Slider indicators */}
+              <div className="flex gap-2 mb-6">
+                {featuredStories.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentIndex(index)}
+                    className={`w-3 h-3 rounded-full transition-colors ${
+                      index === currentIndex ? 'bg-white' : 'bg-white/50'
+                    }`}
+                  />
+                ))}
               </div>
             </>
           ) : (
             <div>
               <h1 className="font-display text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-tight mb-6">
-                Nigeria's Most Trusted News Source
+                EntertainmentGHC News
               </h1>
-              
+
               <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl">
-                Stay informed with the latest breaking news, politics, business, sports, and entertainment from across Nigeria. Real-time updates, in-depth analysis, and trusted reporting.
+                Your ultimate destination for African entertainment news, culture, and lifestyle. Stay informed with the latest stories from across the continent.
               </p>
             </div>
           )}
