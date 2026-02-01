@@ -11,7 +11,11 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 const cors = require('cors');
-app.use(cors());
+app.use(cors({
+  origin: ['https://realssa.vercel.app', 'http://localhost:5173', 'http://localhost:8080'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Database file paths
@@ -141,6 +145,15 @@ app.post('/api/auth/login', (req, res) => {
 app.get('/api/articles', (req, res) => {
   const articles = readJsonFile(articlesFilePath);
   res.json(articles);
+});
+
+// Get featured articles
+app.get('/api/articles/featured', (req, res) => {
+  const articles = readJsonFile(articlesFilePath);
+  const featuredArticles = articles.filter(article => 
+    article.featured === true || article.contentType === 'headline'
+  );
+  res.json(featuredArticles);
 });
 
 // Create new article
