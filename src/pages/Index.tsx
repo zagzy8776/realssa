@@ -44,6 +44,7 @@ const Index = () => {
 
       <main>
         <HeroSection />
+        <SearchBar />
 
         {/* Latest Stories Section */}
         <section className="py-12 md:py-16">
