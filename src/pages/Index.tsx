@@ -48,6 +48,9 @@ const Index = () => {
     }
   };
 
+  // Get current story for main display
+  const currentStory = newsItems[currentIndex];
+
   return (
     <div className="min-h-screen bg-background">
       <ReadProgressBar />

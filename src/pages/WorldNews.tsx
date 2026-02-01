@@ -234,11 +234,15 @@ const WorldNews = () => {
             {filteredArticles.map((article, index) => (
               <Card key={article.id || index} className="hover:shadow-lg transition-shadow">
                 <img
-                  src={article.image}
+                  src={article.image || 'https://placehold.co/400x250/FFA500/000000?text=World+News'}
                   alt={article.title}
                   className="w-full h-48 object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = 'https://placehold.co/400x250/FFA500/000000?text=World+News';
+                    // Try to get image from enclosure field if available
+                    const fallbackImage = article.externalLink ? 
+                      `https://images.weserv.nl/?url=${encodeURIComponent(article.externalLink)}&w=400&h=250&fit=cover` :
+                      'https://placehold.co/400x250/FFA500/000000?text=World+News';
+                    e.currentTarget.src = fallbackImage;
                   }}
                 />
                 <CardHeader>
