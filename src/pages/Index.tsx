@@ -24,7 +24,7 @@ const Index = () => {
   const fetchNews = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/articles');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/featured`);
       if (!response.ok) {
         throw new Error('Failed to fetch news');
       }
