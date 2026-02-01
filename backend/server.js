@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const Parser = require('rss-parser');
+const fs = require('fs');
+const path = require('path');
 
 // Initialize PostgreSQL connection pool
 const pool = new Pool({
@@ -92,7 +94,7 @@ const initializeDatabase = async () => {
 initializeDatabase();
 
 // Authentication middleware
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
 
   if (!token) {
@@ -101,13 +103,15 @@ const authenticate = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret');
-    const user = readJsonFile(usersFilePath).find(u => u.id === decoded.id);
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.id]);
 
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (!user.isAdmin) {
+    const user = result.rows[0];
+
+    if (!user.is_admin) {
       return res.status(403).json({ message: 'Admin access required' });
     }
 
@@ -232,35 +236,56 @@ app.post('/api/articles', async (req, res) => {
 });
 
 // Update article
-app.put('/api/articles/:id', (req, res) => {
-  const articles = readJsonFile(articlesFilePath);
-  const article = articles.find(a => a.id === req.params.id);
+app.put('/api/articles/:id', async (req, res) => {
+  try {
+    const { title, excerpt, content, category, image, readTime, author, source, featured, contentType, status } = req.body;
 
-  if (!article) {
-    return res.status(404).json({ message: 'Article not found' });
+    const result = await pool.query(
+      `UPDATE articles SET
+        title = $1, excerpt = $2, content = $3, category = $4, image = $5,
+        read_time = $6, author = $7, source = $8, featured = $9, content_type = $10, status = $11
+       WHERE id = $12 RETURNING *`,
+      [
+        title,
+        excerpt,
+        content,
+        category,
+        image,
+        readTime,
+        author,
+        source,
+        featured,
+        contentType,
+        status,
+        req.params.id
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Article not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating article:', error);
+    res.status(500).json({ message: 'Server error' });
   }
-
-  const updatedArticle = { ...article, ...req.body };
-  const updatedArticles = articles.map(a =>
-    a.id === req.params.id ? updatedArticle : a
-  );
-
-  writeJsonFile(articlesFilePath, updatedArticles);
-  res.json(updatedArticle);
 });
 
 // Delete article
-app.delete('/api/articles/:id', (req, res) => {
-  const articles = readJsonFile(articlesFilePath);
-  const articleIndex = articles.findIndex(a => a.id === req.params.id);
+app.delete('/api/articles/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM articles WHERE id = $1 RETURNING *', [req.params.id]);
 
-  if (articleIndex === -1) {
-    return res.status(404).json({ message: 'Article not found' });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Article not found' });
+    }
+
+    res.json({ message: 'Article deleted' });
+  } catch (error) {
+    console.error('Error deleting article:', error);
+    res.status(500).json({ message: 'Server error' });
   }
-
-  const updatedArticles = articles.filter(a => a.id !== req.params.id);
-  writeJsonFile(articlesFilePath, updatedArticles);
-  res.json({ message: 'Article deleted' });
 });
 
 // RSS Feed endpoints
