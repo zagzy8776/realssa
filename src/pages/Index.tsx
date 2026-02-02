@@ -2,9 +2,6 @@ import Header from "@/components/Header";
 import SocialButtons from "@/components/SocialButtons";
 import HeroSection from "@/components/HeroSection";
 import { SearchBar } from "@/components/SearchBar";
-import NewsCard from "@/components/NewsCard";
-import NewsCardSkeleton from "@/components/NewsCardSkeleton";
-import SectionHeader from "@/components/SectionHeader";
 import Footer from "@/components/Footer";
 import LazyAd from "@/components/LazyAd";
 import { NewsItem } from "@/data/newsData";
@@ -12,7 +9,7 @@ import { useEffect, useState } from "react";
 import ReadProgressBar from "@/components/ReadProgressBar";
 
 const Index = () => {
-  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
+  const [stories, setStories] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -21,26 +18,26 @@ const Index = () => {
     fetchNews();
   }, []);
 
-  // Auto-rotate featured stories every 5 seconds
+  // Auto-rotate stories every 5 seconds
   useEffect(() => {
-    if (newsItems.length > 0) {
+    if (stories?.length > 0) {
       const timer = setInterval(() => {
-        setCurrentIndex((prev) => (prev + 1) % newsItems.length);
+        setCurrentIndex((prev) => (prev + 1) % stories.length);
       }, 5000);
       return () => clearInterval(timer);
     }
-  }, [newsItems]);
+  }, [stories]);
 
   const fetchNews = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/featured`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/featured`);
       if (!response.ok) {
         throw new Error('Failed to fetch news');
       }
       const data = await response.json();
-      setNewsItems(data);
+      setStories(data || []);
     } catch (err) {
       console.error('Error fetching news:', err);
       setError('News temporarily unavailable');
@@ -50,27 +47,16 @@ const Index = () => {
   };
 
   // Get current story for main display
-  const currentStory = newsItems[currentIndex] || {
-    id: 'fallback',
-    title: 'News temporarily unavailable',
-    excerpt: 'Please try again in a moment.',
-    category: 'news',
-    image: 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop',
-    readTime: '1 min read',
-    author: 'Realssa',
-    date: new Date().toISOString(),
-    href: '#',
-    externalLink: '#'
-  };
+  const currentStory = stories?.[currentIndex];
 
   // Fallback image function
-  const getFallbackImage = (item: NewsItem) => {
-    if (item.image && item.image !== 'https://placehold.co/600x400') {
-      return item.image;
+  const getImageUrl = (story?: NewsItem) => {
+    if (story?.image && story.image !== 'https://placehold.co/600x400') {
+      return story.image;
     }
-    
+
     // Generate category-specific fallback images
-    const title = (item.title || '').toLowerCase();
+    const title = (story?.title || '').toLowerCase();
     if (title.includes('nigeria') || title.includes('africa')) {
       return 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=800&auto=format&fit=crop';
     } else if (title.includes('music') || title.includes('artist') || title.includes('entertainment')) {
@@ -114,23 +100,23 @@ const Index = () => {
                   Try Again
                 </button>
               </div>
-            ) : newsItems.length > 0 ? (
+            ) : stories?.length > 0 ? (
               <div className="relative">
                 {/* Current Story Display */}
                 <div className="bg-white rounded-lg shadow-lg overflow-hidden">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="relative h-64 md:h-auto">
                       <img
-                        src={getFallbackImage(currentStory)}
-                        alt={currentStory.title}
+                        src={getImageUrl(currentStory)}
+                        alt={currentStory?.title || 'News story'}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          e.currentTarget.src = getFallbackImage(currentStory);
+                          e.currentTarget.src = 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop';
                         }}
                       />
                       <div className="absolute top-4 left-4">
                         <span className="bg-black/70 text-white px-2 py-1 text-sm rounded">
-                          {currentStory.category}
+                          {currentStory?.category || 'News'}
                         </span>
                       </div>
                     </div>
@@ -147,16 +133,10 @@ const Index = () => {
                       </div>
                       <div className="flex gap-4">
                         <button
-                          onClick={() => window.open(currentStory.externalLink || `/article/${currentStory.id}`, '_blank')}
+                          onClick={() => window.open(currentStory?.externalLink || `/article/${currentStory?.id}`, '_blank')}
                           className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
                         >
                           Read Full Story
-                        </button>
-                        <button
-                          onClick={() => setCurrentIndex((prev) => (prev + 1) % newsItems.length)}
-                          className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                        >
-                          Next Story
                         </button>
                       </div>
                     </div>
@@ -165,7 +145,7 @@ const Index = () => {
 
                 {/* Story Navigation */}
                 <div className="flex justify-center mt-6 space-x-2">
-                  {newsItems.map((_, index) => (
+                  {stories.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentIndex(index)}

@@ -168,17 +168,45 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
-// Get featured articles
+// Get featured articles - combines internal articles with World news
 app.get('/api/articles/featured', async (req, res) => {
   try {
-    const result = await pool.query(
+    // 1. Get internal featured articles from database
+    const localResult = await pool.query(
       'SELECT * FROM articles WHERE featured = true OR content_type = $1 ORDER BY date DESC',
       ['headline']
     );
 
-    let featuredArticles = result.rows;
+    let featuredArticles = localResult.rows;
 
-    // Temporary dummy data for testing if no featured articles exist
+    // 2. Get World News RSS (e.g., BBC) for homepage rotation
+    try {
+      const worldFeed = await parser.parseURL('http://feeds.bbci.co.uk/news/world/rss.xml');
+      const worldStories = worldFeed.items.slice(0, 5).map(item => ({
+        id: 'world-' + (item.guid || item.link || Math.random().toString(36).substr(2, 9)),
+        title: item.title,
+        excerpt: item.contentSnippet || item.summary || item.title,
+        content: item.content || item.summary || '',
+        category: 'World News',
+        image: item.enclosure?.url || item['media:content']?.$?.url || null,
+        readTime: '5 min read',
+        author: 'BBC News',
+        source: 'rss',
+        externalLink: item.link,
+        date: item.pubDate || new Date().toISOString(),
+        contentType: 'article',
+        status: 'published',
+        featured: true
+      }));
+
+      // 3. Combine internal articles with World news
+      featuredArticles = [...featuredArticles, ...worldStories];
+    } catch (rssError) {
+      console.error('Error fetching World news for featured:', rssError.message);
+      // Continue with just local articles if RSS fails
+    }
+
+    // 4. If no articles exist, provide fallback
     if (featuredArticles.length === 0) {
       featuredArticles.push({
         id: 1,
