@@ -50,7 +50,18 @@ const Index = () => {
   };
 
   // Get current story for main display
-  const currentStory = newsItems[currentIndex];
+  const currentStory = newsItems[currentIndex] || {
+    id: 'fallback',
+    title: 'News temporarily unavailable',
+    excerpt: 'Please try again in a moment.',
+    category: 'news',
+    image: 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop',
+    readTime: '1 min read',
+    author: 'Realssa',
+    date: new Date().toISOString(),
+    href: '#',
+    externalLink: '#'
+  };
 
   // Fallback image function
   const getFallbackImage = (item: NewsItem) => {
