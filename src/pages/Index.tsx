@@ -120,7 +120,7 @@ const Index = () => {
       <SocialButtons />
 
       <main>
-        <HeroSection />
+        <HeroSection currentStory={currentStory} />
         <SearchBar />
 
         {/* Auto-Rotating Hero Slider */}

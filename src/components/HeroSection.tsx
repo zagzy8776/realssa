@@ -13,9 +13,14 @@ interface NigerianNewsItem {
   author: string;
   date: string;
   externalLink: string;
+  content?: string;
 }
 
-const HeroSection = () => {
+interface HeroSectionProps {
+  currentStory?: NigerianNewsItem;
+}
+
+const HeroSection = ({ currentStory }: HeroSectionProps) => {
   const [breakingNews, setBreakingNews] = useState<NigerianNewsItem | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -104,18 +109,7 @@ const HeroSection = () => {
                 </div>
               </div>
 
-              {/* Slider indicators */}
-              <div className="flex gap-2 mb-6">
-                {featuredStories.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentIndex(index)}
-                    className={`w-3 h-3 rounded-full transition-colors ${
-                      index === currentIndex ? 'bg-white' : 'bg-white/50'
-                    }`}
-                  />
-                ))}
-              </div>
+
             </>
           ) : (
             <div>
