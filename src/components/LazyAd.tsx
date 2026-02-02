@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 
+// Type declarations for window properties
+declare global {
+  interface Window {
+    monetag?: { queue: any[] };
+    adsbygoogle?: any[];
+  }
+}
+
 interface LazyAdProps {
   adType?: 'banner' | 'sidebar' | 'inline' | 'sticky';
   className?: string;
