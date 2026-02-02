@@ -136,14 +136,14 @@ const Index = () => {
                     </div>
                     <div className="p-6">
                       <h2 className="text-2xl font-bold mb-4 line-clamp-3">
-                        {currentStory.title}
+                        {currentStory?.title || 'News temporarily unavailable'}
                       </h2>
                       <p className="text-muted-foreground mb-6 line-clamp-4">
-                        {currentStory.excerpt}
+                        {currentStory?.excerpt || 'Please try again in a moment.'}
                       </p>
                       <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-                        <span>{currentStory.author || 'Realssa'}</span>
-                        <span>{new Date(currentStory.date).toLocaleDateString()}</span>
+                        <span>{currentStory?.author || 'Realssa'}</span>
+                        <span>{currentStory?.date ? new Date(currentStory.date).toLocaleDateString() : 'Unknown date'}</span>
                       </div>
                       <div className="flex gap-4">
                         <button
