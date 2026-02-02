@@ -58,6 +58,8 @@ const App = () => (
           <Route path="/nigerian-news" element={<NigerianNews />} />
           <Route path="/world-news" element={<WorldNews />} />
           <Route path="/for-you" element={<ForYou />} />
+          <Route path="/crypto" element={<CryptoNews />} />
+          <Route path="/sports" element={<Sports />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -23,49 +23,83 @@ const Sports = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate fetching sports news
     const fetchSportsNews = async () => {
       setLoading(true);
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Use AbortController for timeout and cleanup
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+        // Fetch sports news from backend RSS feeds with caching
+        const response = await fetch('/api/sports-news', {
+          signal: controller.signal,
+          headers: {
+            'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
+          }
+        });
         
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Transform backend data to match our interface
+        const sportsNewsItems: SportsNewsItem[] = data.map((item: { id?: string; link?: string; title?: string; excerpt?: string; description?: string; contentSnippet?: string; image?: string; author?: string; creator?: string; date?: string; pubDate?: string; content?: string }) => ({
+          id: item.id || item.link || crypto.randomUUID(),
+          title: item.title || "Untitled",
+          excerpt: item.excerpt || item.description || item.contentSnippet || "",
+          category: "nigerian-sports", // Default category for sports content
+          image: item.image || "https://images.unsplash.com/photo-1543993512-0075cdb9b40e?w=800",
+          readTime: "5 min read", // Estimate
+          author: item.author || item.creator || "Unknown",
+          date: item.date || item.pubDate || new Date().toISOString(),
+          externalLink: item.link || "#",
+          content: item.content || item.description || ""
+        }));
+        
+        setSportsNews(sportsNewsItems);
+        clearTimeout(timeoutId);
+      } catch (error) {
+        console.error("Error fetching sports news:", error);
+        // Fallback to mock data if backend fails
         const mockSportsNews: SportsNewsItem[] = [
           {
             id: "sports-1",
-            title: "Nigerian Football Team Advances in Continental Competition",
-            excerpt: "The Super Eagles secure a crucial victory in their quest for continental glory.",
+            title: "Super Eagles Beat Ghana in AFCON Qualifier Thriller",
+            excerpt: "Victor Osimhen scores late winner in dramatic 2-1 victory that keeps Nigeria's hopes alive.",
             category: "nigerian-sports",
-            image: "https://images.unsplash.com/photo-1543113853-25e39c370c76?w=800",
-            readTime: "4 min read",
-            author: "Sports Reporter",
+            image: "https://images.unsplash.com/photo-1543993512-0075cdb9b40e?w=800",
+            readTime: "5 min read",
+            author: "Sports Editor",
             date: new Date().toISOString(),
-            externalLink: "#",
-            content: "Nigerian football continues to inspire fans across the continent."
+            externalLink: "https://www.pulsesports.ng/football/super-eagles-news",
+            content: "The Super Eagles secured a crucial victory in their AFCON qualifying campaign."
           },
           {
             id: "sports-2",
-            title: "African Athletes Shine at International Events",
-            excerpt: "Track and field stars from across Africa set new records and achieve podium finishes.",
+            title: "NPFL Returns After Long Hiatus",
+            excerpt: "Domestic league kicks off with renewed energy and improved organization.",
             category: "nigerian-sports",
-            image: "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800",
-            readTime: "3 min read",
-            author: "Sports Editor",
+            image: "https://images.unsplash.com/photo-1518606372695-6e028572c4b7?w=800",
+            readTime: "4 min read",
+            author: "Football Reporter",
             date: new Date().toISOString(),
-            externalLink: "#",
-            content: "African athletes continue to make their mark on the global stage."
+            externalLink: "https://www.sports247.ng/npfl/news",
+            content: "The Nigerian Professional Football League is back and better than ever."
           }
         ];
-        
         setSportsNews(mockSportsNews);
-      } catch (error) {
-        console.error("Error fetching sports news:", error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchSportsNews();
+
+    // Refresh every 10 minutes for fresh sports content
+    const interval = setInterval(fetchSportsNews, 10 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
