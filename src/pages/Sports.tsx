@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
+import Parser from 'rss-parser';
 import CategoryBadge from "../components/CategoryBadge";
 import SimpleImage from "../components/SimpleImage";
 
@@ -21,75 +22,79 @@ interface SportsNewsItem {
 const Sports = () => {
   const [sportsNews, setSportsNews] = useState<SportsNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const parser = new Parser();
+
+    const RSS_FEEDS = [
+      // Start with these 8–10 strong ones (Nigerian + global football focus)
+      "https://www.pulsesports.ng/feed",
+      "https://www.goal.com/en-ng/rss",
+      "https://www.sports247.ng/feed",
+      "https://www.completesports.com/feed/",
+      "https://guardian.ng/feed/?cat=football",
+      "https://dailypost.ng/category/sports/feed/",
+      "https://feeds.bbci.co.uk/sport/football/rss.xml",
+      "https://www.espn.com/espn/rss/soccer/news",
+      "https://www.skysports.com/rss/11095", // Sky Sports Football
+      "https://www.goal.com/en/rss", // Global Goal
+    ];
+
     const fetchSportsNews = async () => {
       setLoading(true);
-      try {
-        // Use AbortController for timeout and cleanup
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      setError(null);
+      const allItems: SportsNewsItem[] = [];
 
-        // Fetch sports news from backend RSS feeds with caching
-        const response = await fetch('/api/news/sports', {
-          signal: controller.signal,
-          headers: {
-            'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
+      try {
+        for (const url of RSS_FEEDS) {
+          try {
+            const feed = await parser.parseURL(url);
+            feed.items?.slice(0, 4).forEach((item, index) => { // Limit 4 per feed to avoid overload
+              const title = item.title || "Untitled";
+              const excerpt = item.contentSnippet || item.description || "";
+
+              // Simple category inference — improve as needed
+              let category: CategoryType = "nigerian-sports";
+              if (title.toLowerCase().includes("super eagles") ||
+                  title.toLowerCase().includes("npfl") ||
+                  title.toLowerCase().includes("nigeria") ||
+                  title.toLowerCase().includes("afcon")) {
+                category = "nigerian-sports";
+              } else if (excerpt.toLowerCase().includes("premier league") ||
+                         title.toLowerCase().includes("champions league")) {
+                category = "general"; // or add more categories
+              }
+
+              allItems.push({
+                id: item.guid || item.link || `sports-${url}-${index}`,
+                title,
+                excerpt,
+                category,
+                // Image: try to extract from content (basic regex) or use fallback
+                image: extractImageFromContent(item.content || item.description || "") ||
+                       "https://images.unsplash.com/photo-1543113853-25e39c370c76?w=800",
+                readTime: "5 min read", // Can estimate later
+                author: item.creator || feed.title || "Unknown",
+                date: item.isoDate || item.pubDate || new Date().toISOString(),
+                externalLink: item.link || "#",
+              });
+            });
+          } catch (feedErr) {
+            console.warn(`Failed to parse feed ${url}:`, feedErr);
+            // Continue to next feed — don't crash whole page
           }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
-        const data = await response.json();
-        
-        // Transform backend data to match our interface
-        const sportsNewsItems: SportsNewsItem[] = data.map((item: { id?: string; link?: string; title?: string; excerpt?: string; description?: string; contentSnippet?: string; image?: string; author?: string; creator?: string; date?: string; pubDate?: string; content?: string }) => ({
-          id: item.id || item.link || crypto.randomUUID(),
-          title: item.title || "Untitled",
-          excerpt: item.excerpt || item.description || item.contentSnippet || "",
-          category: "nigerian-sports", // Default category for sports content
-          image: item.image || "https://images.unsplash.com/photo-1543993512-0075cdb9b40e?w=800",
-          readTime: "5 min read", // Estimate
-          author: item.author || item.creator || "Unknown",
-          date: item.date || item.pubDate || new Date().toISOString(),
-          externalLink: item.link || "#",
-          content: item.content || item.description || ""
-        }));
-        
-        setSportsNews(sportsNewsItems);
-        clearTimeout(timeoutId);
-      } catch (error) {
-        console.error("Error fetching sports news:", error);
-        // Fallback to mock data if backend fails
-        const mockSportsNews: SportsNewsItem[] = [
-          {
-            id: "sports-1",
-            title: "Super Eagles Beat Ghana in AFCON Qualifier Thriller",
-            excerpt: "Victor Osimhen scores late winner in dramatic 2-1 victory that keeps Nigeria's hopes alive.",
-            category: "nigerian-sports",
-            image: "https://images.unsplash.com/photo-1543993512-0075cdb9b40e?w=800",
-            readTime: "5 min read",
-            author: "Sports Editor",
-            date: new Date().toISOString(),
-            externalLink: "https://www.pulsesports.ng/football/super-eagles-news",
-            content: "The Super Eagles secured a crucial victory in their AFCON qualifying campaign."
-          },
-          {
-            id: "sports-2",
-            title: "NPFL Returns After Long Hiatus",
-            excerpt: "Domestic league kicks off with renewed energy and improved organization.",
-            category: "nigerian-sports",
-            image: "https://images.unsplash.com/photo-1518606372695-6e028572c4b7?w=800",
-            readTime: "4 min read",
-            author: "Football Reporter",
-            date: new Date().toISOString(),
-            externalLink: "https://www.sports247.ng/npfl/news",
-            content: "The Nigerian Professional Football League is back and better than ever."
-          }
-        ];
-        setSportsNews(mockSportsNews);
+
+        // Sort newest first, take top 10–15
+        const sorted = allItems
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 12);
+
+        setSportsNews(sorted.length > 0 ? sorted : []); // fallback empty if all failed
+      } catch (err) {
+        console.error("RSS fetch error:", err);
+        setError("Failed to load sports news. Check your connection or try later.");
       } finally {
         setLoading(false);
       }
@@ -97,10 +102,16 @@ const Sports = () => {
 
     fetchSportsNews();
 
-    // Refresh every 10 minutes for fresh sports content
-    const interval = setInterval(fetchSportsNews, 10 * 60 * 1000);
+    // Optional: auto-refresh every 30 minutes
+    const interval = setInterval(fetchSportsNews, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Helper to extract first image from RSS content HTML (basic)
+  const extractImageFromContent = (content: string) => {
+    const match = content.match(/<img[^>]+src=["'](.*?)["']/i);
+    return match ? match[1] : null;
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -124,10 +135,8 @@ const Sports = () => {
               <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg">
                 <span className="text-2xl font-bold">⚽</span>
               </div>
-              <div>
-                <CategoryBadge category="nigerian-sports" className="mb-2" />
-                <span className="text-sm text-white/80 font-medium">SPORTS NEWS</span>
-              </div>
+              <CategoryBadge category="nigerian-sports" className="mb-2" />
+              <span className="text-sm text-white/80 font-medium">SPORTS NEWS</span>
             </div>
 
             <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
@@ -163,6 +172,19 @@ const Sports = () => {
           <h2 className="text-2xl md:text-3xl font-bold">Latest Sports News</h2>
           <CategoryBadge category="nigerian-sports" />
         </div>
+
+        {error && (
+          <div className="text-center py-8 text-red-600">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && sportsNews.length === 0 && (
+          <div className="text-center py-12">
+            <h3 className="text-xl font-bold mb-2">No Sports News Right Now</h3>
+            <p className="text-muted-foreground">We're pulling the latest from Pulse, Goal, BBC and more. Check back soon!</p>
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

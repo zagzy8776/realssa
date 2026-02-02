@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Sports API Fetch</title>
+</head>
+<body>
+    <h1>Testing Sports API Fetch</h1>
+    <div id="result"></div>
+
+    <script>
+        async function testFetch() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing fetch to /api/news/sports...';
+
+            try {
+                console.log('Starting fetch test...');
+                const response = await fetch('/api/news/sports');
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Fetched data:', data.length, 'items');
+                console.log('Sample data:', data[0]);
+
+                resultDiv.innerHTML = `
+                    <p style="color: green;">✅ SUCCESS!</p>
+                    <p>Fetched ${data.length} sports articles</p>
+                    <p>Sample article: ${data[0]?.title || 'No title'}</p>
+                `;
+            } catch (error) {
+                console.error('Fetch error:', error);
+                resultDiv.innerHTML = `
+                    <p style="color: red;">❌ ERROR!</p>
+                    <p>${error.message}</p>
+                    <p>Check browser console for details</p>
+                `;
+            }
+        }
+
+        // Run test when page loads
+        testFetch();
+    </script>
+</body>
+</html>
