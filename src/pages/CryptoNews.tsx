@@ -18,54 +18,126 @@ interface CryptoNewsItem {
   content?: string;
 }
 
+// RSS feeds for crypto news
+const RSS_FEEDS = [
+  // Global / high-quality
+  "https://cointelegraph.com/rss",
+  "https://www.coindesk.com/arc/outboundfeeds/rss/",
+  "https://cryptopotato.com/feed/",
+  "https://cryptoslate.com/feed/",
+  "https://news.bitcoin.com/feed/",
+  "https://decrypt.co/feed",
+
+  // Nigeria / Africa focused
+  "https://nairametrics.com/category/cryptocurrency/feed/",
+  "https://zycrypto.com/feed/",
+  "https://blockvila.com/blog/feed/",
+  "https://feeds.feedburner.com/nigeriabitcoincommunity",
+  "https://sec.gov.ng/feeds/fintech-news.rss",
+  "https://thecryptobasic.com/feed/"
+];
+
+// Helper function to infer category based on content
+const inferCategory = (content: string): CategoryType => {
+  const text = content.toLowerCase();
+  if (text.includes("nigeria") || text.includes("nigerian") || text.includes("lagos") || text.includes("abuja")) {
+    return "crypto-nigeria";
+  }
+  if (text.includes("bitcoin") || text.includes("btc")) {
+    return "crypto-nigeria"; // Could be separate category if needed
+  }
+  if (text.includes("ethereum") || text.includes("eth")) {
+    return "crypto-nigeria"; // Could be separate category if needed
+  }
+  return "crypto-nigeria"; // Default to crypto-nigeria for crypto content
+};
+
+// Helper function to extract image from content
+const extractImage = (content: string): string | null => {
+  const imgMatch = content.match(/<img[^>]+src="([^">]+)"/);
+  if (imgMatch) {
+    return imgMatch[1];
+  }
+  return null;
+};
+
+// Helper function to estimate read time
+const calculateReadTime = (content: string): string => {
+  const wordCount = content.split(/\s+/).length;
+  const minutes = Math.ceil(wordCount / 200); // Average reading speed
+  return `${minutes} min read`;
+};
+
 const CryptoNews = () => {
   const [cryptoNews, setCryptoNews] = useState<CryptoNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate fetching crypto news
     const fetchCryptoNews = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const mockCryptoNews: CryptoNewsItem[] = [
-          {
-            id: "crypto-1",
-            title: "Bitcoin Reaches New All-Time High",
-            excerpt: "The leading cryptocurrency breaks through key resistance levels, sparking renewed investor interest.",
-            category: "crypto-nigeria",
-            image: "https://images.unsplash.com/photo-1664575602540-9972445ad3bf?w=800",
-            readTime: "5 min read",
-            author: "Crypto Reporter",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "Bitcoin's latest rally signals growing institutional adoption."
-          },
-          {
-            id: "crypto-2",
-            title: "Nigerian Crypto Market Shows Resilience",
-            excerpt: "Despite regulatory challenges, Nigerian crypto adoption continues to grow with innovative local solutions.",
-            category: "crypto-nigeria",
-            image: "https://images.unsplash.com/photo-1639762681057-47a944f0bda7?w=800",
-            readTime: "4 min read",
-            author: "Finance Editor",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "Nigeria remains one of the world's leading crypto markets."
+        const allItems: CryptoNewsItem[] = [];
+
+        // Fetch from RSS feeds
+        for (const url of RSS_FEEDS) {
+          try {
+            const response = await fetch(`/api/rss?url=${encodeURIComponent(url)}`);
+            if (!response.ok) continue;
+
+            const feed = await response.json();
+            
+            feed.items?.slice(0, 3).forEach((item: { title?: string; content?: string; description?: string; creator?: string; guid?: string; link?: string; isoDate?: string; pubDate?: string }) => {
+              const title = item.title || "Untitled";
+              const content = item.content || item.description || "";
+              const excerpt = content.replace(/<[^>]*>/g, "").substring(0, 150) + "...";
+              const category = inferCategory(title + " " + content);
+              const image = extractImage(content) || "https://images.unsplash.com/photo-1664575602540-9972445ad3bf?w=800";
+              const readTime = calculateReadTime(content);
+              const author = item.creator || feed.title || "Unknown";
+              const date = item.isoDate || item.pubDate || new Date().toISOString();
+
+              allItems.push({
+                id: item.guid || item.link || crypto.randomUUID(),
+                title,
+                excerpt,
+                category,
+                image,
+                readTime,
+                author,
+                date,
+                externalLink: item.link || "#",
+                content
+              });
+            });
+          } catch (feedError) {
+            console.warn(`Failed to fetch feed ${url}:`, feedError);
           }
-        ];
-        
-        setCryptoNews(mockCryptoNews);
-      } catch (error) {
-        console.error("Error fetching crypto news:", error);
+        }
+
+        // Sort by date, dedupe, and take top 10
+        const sorted = allItems
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .filter((item, index, arr) => 
+            arr.findIndex(t => t.title === item.title) === index // Remove duplicates
+          )
+          .slice(0, 10);
+
+        setCryptoNews(sorted);
+      } catch (err) {
+        console.error("RSS fetch failed:", err);
+        setError("Failed to load crypto news. Please try again later.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchCryptoNews();
+
+    // Refresh every 15 minutes
+    const interval = setInterval(fetchCryptoNews, 15 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -123,6 +195,13 @@ const CryptoNews = () => {
         </div>
       </section>
 
+      {/* Error Message */}
+      {error && (
+        <div className="mb-8 p-4 bg-red-500/10 border border-red-500/50 rounded-lg">
+          <p className="text-red-500">{error}</p>
+        </div>
+      )}
+
       {/* Latest News Grid */}
       <section id="latest" className="mb-12">
         <div className="flex items-center justify-between mb-8">
@@ -132,7 +211,7 @@ const CryptoNews = () => {
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {[...Array(2)].map((_, index) => (
+            {[...Array(4)].map((_, index) => (
               <div key={index} className="bg-card rounded-lg p-6 shadow-lg animate-pulse">
                 <div className="h-48 bg-gray-300 rounded-lg mb-4"></div>
                 <div className="h-6 bg-gray-300 rounded mb-2"></div>
@@ -140,6 +219,10 @@ const CryptoNews = () => {
                 <div className="h-4 bg-gray-300 rounded w-3/4"></div>
               </div>
             ))}
+          </div>
+        ) : cryptoNews.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">No crypto news available at the moment. Please check back later.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -169,6 +252,8 @@ const CryptoNews = () => {
                   <span className="text-sm text-muted-foreground">{news.readTime}</span>
                   <a
                     href={news.externalLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-medium"
                   >
                     Read Full Story
