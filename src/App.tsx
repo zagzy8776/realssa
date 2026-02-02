@@ -22,6 +22,13 @@ import EditNewsPage from "./pages/EditNewsPage";
 import NigerianNews from "./pages/NigerianNews";
 import WorldNews from "./pages/WorldNews";
 import ForYou from "./pages/ForYou";
+import CryptoNews from "./pages/CryptoNews";
+import Sports from "./pages/Sports";
+import Ghana from "./pages/Ghana";
+import Kenya from "./pages/Kenya";
+import SouthAfrica from "./pages/SouthAfrica";
+import UK from "./pages/UK";
+import USA from "./pages/USA";
 
 
 const queryClient = new QueryClient();
