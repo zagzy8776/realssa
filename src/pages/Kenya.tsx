@@ -1,51 +1,65 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Search, ExternalLink, Clock, Calendar, MapPin } from "lucide-react";
-import CategoryBadge from "@/components/CategoryBadge";
-import NewsCard from "@/components/NewsCard";
+import { ArrowRight } from "lucide-react";
+import CategoryBadge from "../components/CategoryBadge";
+import SimpleImage from "../components/SimpleImage";
 
-interface Article {
+type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "breaking" | "news" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "lagos-fashion" | "nigerian-tech" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "entertainment" | "general";
+
+interface KenyaNewsItem {
   id: string;
   title: string;
   excerpt: string;
-  content: string;
-  category: string;
+  category: CategoryType;
   image: string;
   readTime: string;
   author: string;
-  source: string;
-  contentType: string;
-  status: string;
-  featured: boolean;
-  externalLink: string;
   date: string;
+  externalLink: string;
+  content?: string;
 }
 
 const Kenya = () => {
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [kenyaNews, setKenyaNews] = useState<KenyaNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedSource, setSelectedSource] = useState("all");
 
   useEffect(() => {
+    // Simulate fetching Kenya news
     const fetchKenyaNews = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/kenya`);
-        if (response.ok) {
-          const data = await response.json();
-          setArticles(data);
-        } else {
-          setError("Failed to fetch Kenya news");
-        }
-      } catch (err) {
-        console.error("Error fetching Kenya news:", err);
-        setError("Network error while fetching news");
+        // Simulate API call delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const mockKenyaNews: KenyaNewsItem[] = [
+          {
+            id: "kenya-1",
+            title: "Kenya's Tech Hub Continues to Innovate",
+            excerpt: "Nairobi remains a center for technological innovation in East Africa, with startups gaining international attention.",
+            category: "tech",
+            image: "https://images.unsplash.com/photo-1523800503107-5bc3ba2a6f81?w=800",
+            readTime: "5 min read",
+            author: "Tech Reporter",
+            date: new Date().toISOString(),
+            externalLink: "#",
+            content: "Kenya's tech ecosystem continues to thrive with innovative solutions."
+          },
+          {
+            id: "kenya-2",
+            title: "Nairobi Fashion Week Celebrates African Design",
+            excerpt: "Designers from across Africa showcase their collections, highlighting the continent's rich textile heritage.",
+            category: "fashion",
+            image: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800",
+            readTime: "4 min read",
+            author: "Fashion Editor",
+            date: new Date().toISOString(),
+            externalLink: "#",
+            content: "Nairobi Fashion Week continues to be a platform for African creativity."
+          }
+        ];
+        
+        setKenyaNews(mockKenyaNews);
+      } catch (error) {
+        console.error("Error fetching Kenya news:", error);
       } finally {
         setLoading(false);
       }
@@ -54,134 +68,118 @@ const Kenya = () => {
     fetchKenyaNews();
   }, []);
 
-  const filteredArticles = articles.filter(article => {
-    const matchesSearch = article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         article.excerpt.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || article.category === selectedCategory;
-    const matchesSource = selectedSource === "all" || article.author === selectedSource;
-
-    return matchesSearch && matchesCategory && matchesSource;
-  });
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p>Loading Kenya news...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <div className="text-6xl mb-4">⚠️</div>
-            <h3 className="text-xl font-semibold mb-2">Error Loading News</h3>
-            <p className="text-muted-foreground mb-6">{error}</p>
-            <Button onClick={() => window.location.reload()}>
-              Try Again
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <MapPin className="h-8 w-8 text-green-500" />
-            <h1 className="text-4xl font-bold">Kenya News</h1>
-          </div>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Get the latest news from Kenya covering politics, economy, technology, and cultural developments.
-          </p>
+    <div className="container mx-auto px-4 py-8">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden mb-12">
+        <div className="absolute inset-0">
+          <SimpleImage
+            src="https://images.unsplash.com/photo-1523800503107-5bc3ba2a6f81?w=1920"
+            alt="Kenya News"
+            className="w-full h-full object-cover"
+            fallback="https://placehold.co/1920x1080/000000/ffffff?text=Kenya+News"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-red-500/80 to-green-500/80" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80" />
+          <div className="absolute inset-0 bg-background/60" />
         </div>
 
-        {/* Search and Filters */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search Kenya news..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <div className="relative container mx-auto px-4 py-16 md:py-24">
+          <div className="max-w-4xl">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-2xl font-bold">🇰🇪</span>
+              </div>
+              <div>
+                <CategoryBadge category="news" className="mb-2" />
+                <span className="text-sm text-white/80 font-medium">KENYA NEWS</span>
+              </div>
+            </div>
+
+            <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
+              Kenyan Stories
+            </h1>
+
+            <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl">
+              Your gateway to the latest news, technology, and culture from Kenya.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+              <a
+                href="#latest"
+                className="inline-flex items-center gap-3 px-8 py-4 bg-white text-gray-900 font-bold rounded-full hover:shadow-xl transition-all duration-300 hover:scale-105 group"
+              >
+                Read Latest News
+                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </a>
+              <a
+                href="/nigerian-news"
+                className="inline-flex items-center gap-3 px-8 py-4 border-2 border-white text-white font-bold rounded-full hover:bg-white hover:text-gray-900 transition-all duration-300"
+              >
+                View All News
+              </a>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Articles Grid */}
-        {filteredArticles.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredArticles.map((article) => (
-              <Card key={article.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start mb-2">
-                    <CategoryBadge category={article.category} />
-                    <Badge variant="secondary" className="text-xs">
-                      {article.author}
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-lg line-clamp-2">{article.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {article.excerpt}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(article.date).toLocaleDateString()}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-3 w-3" />
-                      {article.readTime}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.open(article.externalLink, '_blank')}
-                      className="flex items-center gap-2"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Read Full Article
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+      {/* Latest News Grid */}
+      <section id="latest" className="mb-12">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold">Latest Kenya News</h2>
+          <CategoryBadge category="news" />
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {[...Array(2)].map((_, index) => (
+              <div key={index} className="bg-card rounded-lg p-6 shadow-lg animate-pulse">
+                <div className="h-48 bg-gray-300 rounded-lg mb-4"></div>
+                <div className="h-6 bg-gray-300 rounded mb-2"></div>
+                <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+              </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">🇰🇪</div>
-            <h3 className="text-xl font-semibold mb-2">No Kenya articles found</h3>
-            <p className="text-muted-foreground mb-6">
-              Try adjusting your search terms or filters to find what you're looking for.
-            </p>
-            <Button onClick={() => {
-              setSearchTerm("");
-              setSelectedCategory("all");
-              setSelectedSource("all");
-            }}>
-              Clear Filters
-            </Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {kenyaNews.map((news) => (
+              <article key={news.id} className="bg-card rounded-lg p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <div className="relative mb-4">
+                  <SimpleImage
+                    src={news.image}
+                    alt={news.title}
+                    className="w-full h-48 object-cover rounded-lg"
+                    fallback="https://placehold.co/400x200/000000/ffffff?text=Kenya+News"
+                  />
+                  <div className="absolute top-4 left-4">
+                    <CategoryBadge category={news.category} />
+                  </div>
+                </div>
+
+                <h3 className="text-xl font-bold mb-2 line-clamp-2">{news.title}</h3>
+                <p className="text-muted-foreground mb-4 line-clamp-3">{news.excerpt}</p>
+
+                <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
+                  <span>{news.author}</span>
+                  <span>{new Date(news.date).toLocaleDateString()}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">{news.readTime}</span>
+                  <a
+                    href={news.externalLink}
+                    className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-medium"
+                  >
+                    Read Full Story
+                    <ArrowRight size={16} />
+                  </a>
+                </div>
+              </article>
+            ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };

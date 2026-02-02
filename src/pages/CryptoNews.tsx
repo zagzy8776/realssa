@@ -33,27 +33,27 @@ const CryptoNews = () => {
         const mockCryptoNews: CryptoNewsItem[] = [
           {
             id: "crypto-1",
-            title: "Bitcoin Surges Past $50,000 as Institutional Adoption Grows",
-            excerpt: "Major financial institutions continue to embrace cryptocurrency, driving Bitcoin to new heights in the global market.",
+            title: "Bitcoin Reaches New All-Time High",
+            excerpt: "The leading cryptocurrency breaks through key resistance levels, sparking renewed investor interest.",
             category: "crypto-nigeria",
-            image: "https://images.unsplash.com/photo-1661749711934-c50059c85c47?w=800",
+            image: "https://images.unsplash.com/photo-1664575602540-9972445ad3bf?w=800",
             readTime: "5 min read",
-            author: "Crypto Analyst",
+            author: "Crypto Reporter",
             date: new Date().toISOString(),
             externalLink: "#",
-            content: "Bitcoin has broken through the $50,000 resistance level, marking a significant milestone in its adoption journey."
+            content: "Bitcoin's latest rally signals growing institutional adoption."
           },
           {
             id: "crypto-2",
-            title: "Nigerian Crypto Market Shows Resilience Amid Regulatory Challenges",
-            excerpt: "Despite regulatory headwinds, Nigerian cryptocurrency adoption continues to grow, driven by innovative fintech solutions.",
+            title: "Nigerian Crypto Market Shows Resilience",
+            excerpt: "Despite regulatory challenges, Nigerian crypto adoption continues to grow with innovative local solutions.",
             category: "crypto-nigeria",
-            image: "https://images.unsplash.com/photo-1611974765270-ca1429cca518?w=800",
+            image: "https://images.unsplash.com/photo-1639762681057-47a944f0bda7?w=800",
             readTime: "4 min read",
-            author: "Financial Reporter",
+            author: "Finance Editor",
             date: new Date().toISOString(),
             externalLink: "#",
-            content: "The Nigerian crypto market has shown remarkable resilience, with trading volumes remaining strong despite regulatory challenges."
+            content: "Nigeria remains one of the world's leading crypto markets."
           }
         ];
         
@@ -74,7 +74,7 @@ const CryptoNews = () => {
       <section className="relative overflow-hidden mb-12">
         <div className="absolute inset-0">
           <SimpleImage
-            src="https://images.unsplash.com/photo-1661749711934-c50059c85c47?w=1920"
+            src="https://images.unsplash.com/photo-1664575602540-9972445ad3bf?w=1920"
             alt="Crypto News"
             className="w-full h-full object-cover"
             fallback="https://placehold.co/1920x1080/000000/ffffff?text=Crypto+News"
@@ -92,16 +92,16 @@ const CryptoNews = () => {
               </div>
               <div>
                 <CategoryBadge category="crypto-nigeria" className="mb-2" />
-                <span className="text-sm text-white/80 font-medium">CRYPTOCURRENCY NEWS</span>
+                <span className="text-sm text-white/80 font-medium">CRYPTO NEWS</span>
               </div>
             </div>
 
             <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
-              Stay Ahead in Crypto
+              Crypto Stories
             </h1>
 
             <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl">
-              Your trusted source for cryptocurrency news, market analysis, and blockchain technology updates from Nigeria and around the world.
+              Your gateway to the latest cryptocurrency news, market analysis, and blockchain developments.
             </p>
 
             <div className="flex flex-wrap gap-4">
@@ -116,7 +116,7 @@ const CryptoNews = () => {
                 href="/nigerian-news"
                 className="inline-flex items-center gap-3 px-8 py-4 border-2 border-white text-white font-bold rounded-full hover:bg-white hover:text-gray-900 transition-all duration-300"
               >
-                View All News
+                View All Crypto
               </a>
             </div>
           </div>

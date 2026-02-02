@@ -1,50 +1,65 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Search, ExternalLink, Clock, Calendar, MapPin, Users, Building } from "lucide-react";
-import CategoryBadge from "@/components/CategoryBadge";
+import { ArrowRight } from "lucide-react";
+import CategoryBadge from "../components/CategoryBadge";
+import SimpleImage from "../components/SimpleImage";
 
-interface Article {
+type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "breaking" | "news" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "lagos-fashion" | "nigerian-tech" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "entertainment" | "general";
+
+interface USANewsItem {
   id: string;
   title: string;
   excerpt: string;
-  content: string;
-  category: string;
+  category: CategoryType;
   image: string;
   readTime: string;
   author: string;
-  source: string;
-  contentType: string;
-  status: string;
-  featured: boolean;
-  externalLink: string;
   date: string;
+  externalLink: string;
+  content?: string;
 }
 
 const USA = () => {
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [usaNews, setUsaNews] = useState<USANewsItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedSource, setSelectedSource] = useState("all");
 
   useEffect(() => {
+    // Simulate fetching USA news
     const fetchUSANews = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/usa`);
-        if (response.ok) {
-          const data = await response.json();
-          setArticles(data);
-        } else {
-          setError("Failed to fetch USA news");
-        }
-      } catch (err) {
-        console.error("Error fetching USA news:", err);
-        setError("Network error while fetching news");
+        // Simulate API call delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const mockUSANews: USANewsItem[] = [
+          {
+            id: "usa-1",
+            title: "Silicon Valley Continues Tech Innovation",
+            excerpt: "American technology companies are pushing boundaries in artificial intelligence, space exploration, and renewable energy.",
+            category: "tech",
+            image: "https://images.unsplash.com/photo-1486312338219-ceba24ccdd79?w=800",
+            readTime: "6 min read",
+            author: "Tech Reporter",
+            date: new Date().toISOString(),
+            externalLink: "#",
+            content: "The US tech industry remains at the forefront of global innovation."
+          },
+          {
+            id: "usa-2",
+            title: "New York Fashion Week Sets Global Trends",
+            excerpt: "Designers showcase cutting-edge collections that influence fashion worldwide.",
+            category: "fashion",
+            image: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800",
+            readTime: "4 min read",
+            author: "Fashion Editor",
+            date: new Date().toISOString(),
+            externalLink: "#",
+            content: "NYFW continues to be a major influence on global fashion."
+          }
+        ];
+        
+        setUsaNews(mockUSANews);
+      } catch (error) {
+        console.error("Error fetching USA news:", error);
       } finally {
         setLoading(false);
       }
@@ -53,229 +68,118 @@ const USA = () => {
     fetchUSANews();
   }, []);
 
-  const filteredArticles = articles.filter(article => {
-    const matchesSearch = article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         article.excerpt.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || article.category === selectedCategory;
-    const matchesSource = selectedSource === "all" || article.author === selectedSource;
-    return matchesSearch && matchesCategory && matchesSource;
-  });
-
-  const uniqueCategories = Array.from(new Set(articles.map(article => article.category))).filter(Boolean);
-  const uniqueSources = Array.from(new Set(articles.map(article => article.author))).filter(Boolean);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Fetching latest USA news...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-4 text-red-600">Error Loading News</h2>
-            <p className="text-muted-foreground mb-6">{error}</p>
-            <Button onClick={() => window.location.reload()}>
-              Try Again
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (articles.length === 0) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-4 text-red-600">No USA Articles Found</h2>
-            <p className="text-muted-foreground mb-6">
-              The API returned data but no articles match the USA feeds filter.
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Refresh Page
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">🇺🇸 USA News</h1>
-          <p className="text-muted-foreground">Latest news and updates from the United States</p>
+    <div className="container mx-auto px-4 py-8">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden mb-12">
+        <div className="absolute inset-0">
+          <SimpleImage
+            src="https://images.unsplash.com/photo-1486312338219-ceba24ccdd79?w=1920"
+            alt="USA News"
+            className="w-full h-full object-cover"
+            fallback="https://placehold.co/1920x1080/000000/ffffff?text=USA+News"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/80 via-white/80 to-red-500/80" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80" />
+          <div className="absolute inset-0 bg-background/60" />
         </div>
 
-        {/* Search and Filter */}
-        <div className="flex flex-col md:flex-row gap-4 mb-8">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search USA news..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant={selectedCategory === "all" ? "default" : "outline"}
-              onClick={() => setSelectedCategory("all")}
-            >
-              All Categories
-            </Button>
-            {uniqueCategories.map(category => (
-              <Button
-                key={category}
-                variant={selectedCategory === category ? "default" : "outline"}
-                onClick={() => setSelectedCategory(category)}
-                className="text-xs"
+        <div className="relative container mx-auto px-4 py-16 md:py-24">
+          <div className="max-w-4xl">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-2xl font-bold">🇺🇸</span>
+              </div>
+              <div>
+                <CategoryBadge category="news" className="mb-2" />
+                <span className="text-sm text-white/80 font-medium">USA NEWS</span>
+              </div>
+            </div>
+
+            <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
+              American Stories
+            </h1>
+
+            <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl">
+              Your gateway to the latest technology, fashion, and culture from the United States.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+              <a
+                href="#latest"
+                className="inline-flex items-center gap-3 px-8 py-4 bg-white text-gray-900 font-bold rounded-full hover:shadow-xl transition-all duration-300 hover:scale-105 group"
               >
-                {category.replace('-', ' ')}
-              </Button>
-            ))}
+                Read Latest News
+                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </a>
+              <a
+                href="/nigerian-news"
+                className="inline-flex items-center gap-3 px-8 py-4 border-2 border-white text-white font-bold rounded-full hover:bg-white hover:text-gray-900 transition-all duration-300"
+              >
+                View All News
+              </a>
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* Source Filter */}
-        <div className="flex flex-wrap gap-2 mb-8">
-          <Button
-            variant={selectedSource === "all" ? "default" : "outline"}
-            onClick={() => setSelectedSource("all")}
-          >
-            All Sources
-          </Button>
-          {uniqueSources.map(source => (
-            <Button
-              key={source}
-              variant={selectedSource === source ? "default" : "outline"}
-              onClick={() => setSelectedSource(source)}
-              className="text-xs"
-            >
-              {source}
-            </Button>
-          ))}
+      {/* Latest News Grid */}
+      <section id="latest" className="mb-12">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold">Latest USA News</h2>
+          <CategoryBadge category="news" />
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <MapPin className="h-8 w-8 text-blue-500" />
-                <div>
-                  <div className="text-sm text-muted-foreground">Total Articles</div>
-                  <div className="text-2xl font-bold">{articles.length}</div>
-                </div>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {[...Array(2)].map((_, index) => (
+              <div key={index} className="bg-card rounded-lg p-6 shadow-lg animate-pulse">
+                <div className="h-48 bg-gray-300 rounded-lg mb-4"></div>
+                <div className="h-6 bg-gray-300 rounded mb-2"></div>
+                <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                <div className="h-4 bg-gray-300 rounded w-3/4"></div>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Building className="h-8 w-8 text-red-500" />
-                <div>
-                  <div className="text-sm text-muted-foreground">Categories</div>
-                  <div className="text-2xl font-bold">{uniqueCategories.length}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Users className="h-8 w-8 text-green-500" />
-                <div>
-                  <div className="text-sm text-muted-foreground">Sources</div>
-                  <div className="text-2xl font-bold">{uniqueSources.length}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Articles Grid */}
-        {filteredArticles.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredArticles.map((article, index) => (
-              <Card key={article.id || index} className="hover:shadow-lg transition-shadow">
-                <img
-                  src={article.image || 'https://placehold.co/400x250/FFA500/000000?text=USA+News'}
-                  alt={article.title}
-                  className="w-full h-48 object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = 'https://placehold.co/400x250/FFA500/000000?text=USA+News';
-                  }}
-                />
-                <CardHeader>
-                  <div className="flex justify-between items-start mb-2">
-                    <CategoryBadge category="general" />
-                    <Badge variant="secondary" className="text-xs">
-                      {article.author}
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-lg line-clamp-2">{article.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {article.excerpt}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(article.date).toLocaleDateString()}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-3 w-3" />
-                      {article.readTime}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.open(article.externalLink, '_blank')}
-                      className="flex items-center gap-2"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Read Full Article
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">🇺🇸</div>
-            <h3 className="text-xl font-semibold mb-2">No USA articles found</h3>
-            <p className="text-muted-foreground mb-6">
-              Try adjusting your search terms or filters to find what you're looking for.
-            </p>
-            <Button onClick={() => {
-              setSearchTerm("");
-              setSelectedCategory("all");
-              setSelectedSource("all");
-            }}>
-              Clear Filters
-            </Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {usaNews.map((news) => (
+              <article key={news.id} className="bg-card rounded-lg p-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <div className="relative mb-4">
+                  <SimpleImage
+                    src={news.image}
+                    alt={news.title}
+                    className="w-full h-48 object-cover rounded-lg"
+                    fallback="https://placehold.co/400x200/000000/ffffff?text=USA+News"
+                  />
+                  <div className="absolute top-4 left-4">
+                    <CategoryBadge category={news.category} />
+                  </div>
+                </div>
+
+                <h3 className="text-xl font-bold mb-2 line-clamp-2">{news.title}</h3>
+                <p className="text-muted-foreground mb-4 line-clamp-3">{news.excerpt}</p>
+
+                <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
+                  <span>{news.author}</span>
+                  <span>{new Date(news.date).toLocaleDateString()}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">{news.readTime}</span>
+                  <a
+                    href={news.externalLink}
+                    className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-medium"
+                  >
+                    Read Full Story
+                    <ArrowRight size={16} />
+                  </a>
+                </div>
+              </article>
+            ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };
