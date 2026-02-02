@@ -86,28 +86,28 @@ const HeroSection = ({ stories }: HeroSectionProps) => {
               <div className="h-6 bg-white/20 rounded-lg mb-4 animate-pulse w-3/4"></div>
               <div className="h-6 bg-white/20 rounded-lg mb-4 animate-pulse w-1/2"></div>
             </div>
-          ) : currentStory ? (
+          ) : breakingNews ? (
             <>
               <h1 className="font-display text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-tight mb-6 line-clamp-3">
-                {currentStory.title}
+                {breakingNews.title}
               </h1>
 
               <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl line-clamp-3">
-                {currentStory.excerpt || currentStory.content?.substring(0, 150) + '...'}
+                {breakingNews.excerpt || breakingNews.content?.substring(0, 150) + '...'}
               </p>
 
               <div className="flex flex-wrap items-center gap-6 text-sm text-white/80 mb-10">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{currentStory.category || 'Featured'}</span>
+                  <span>{breakingNews.category || 'Featured'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{new Date(currentStory.date).toLocaleDateString()}</span>
+                  <span>{new Date(breakingNews.date).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{currentStory.readTime || '5 min read'}</span>
+                  <span>{breakingNews.readTime || '5 min read'}</span>
                 </div>
               </div>
 

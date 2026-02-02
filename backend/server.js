@@ -206,24 +206,8 @@ app.get('/api/articles/featured', async (req, res) => {
       // Continue with just local articles if RSS fails
     }
 
-    // 4. If no articles exist, provide fallback
-    if (featuredArticles.length === 0) {
-      featuredArticles.push({
-        id: 1,
-        title: "Investigative: New Audit reveals 'Audio Projects' in Kagini",
-        excerpt: "Realssa investigators uncover the truth behind recent budget allocations.",
-        content: "Realssa investigators uncover the truth behind recent budget allocations.",
-        category: "politics",
-        image: "https://placehold.co/600x400",
-        read_time: "5 min read",
-        author: "Realssa Team",
-        source: "static",
-        date: new Date().toISOString(),
-        featured: true,
-        content_type: "article",
-        status: "published"
-      });
-    }
+    // 4. If no articles exist, return empty array (no dummy articles)
+    // The frontend will handle empty states gracefully
 
     res.json(featuredArticles);
   } catch (error) {

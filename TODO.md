@@ -1,12 +1,13 @@
-# Cleanup Index.tsx Task
+# TODO: Implement Rotating News Headlines in SearchBar
 
-## Steps to Complete:
-- [ ] Remove currentIndex state and related useEffects from Index.tsx
-- [ ] Remove currentStory variable and debug logging from Index.tsx
-- [ ] Remove the entire "Auto-Rotating Hero Slider" section from Index.tsx
-- [ ] Update HeroSection props to accept stories array instead of currentStory
-- [ ] Update Index.tsx to pass stories to HeroSection
-- [ ] Ensure HeroSection uses stories?.[0] with optional chaining
-- [ ] Add bg-gradient-to-t from-black/80 for text readability in HeroSection
-- [ ] Set default news image if story.image is null in HeroSection
-- [ ] Test the changes to ensure no ReferenceError and proper hero display
+## Tasks
+- [ ] Modify SearchBar.tsx to fetch articles from both world and Nigerian news APIs
+- [ ] Combine and mix articles from both sources
+- [ ] Implement rotating display showing one headline at a time
+- [ ] Set rotation interval to 6 seconds
+- [ ] Make headlines clickable to open external article links
+- [ ] Handle loading states and errors gracefully
+- [ ] Ensure continuous cycling through all available headlines
+- [ ] Test rotation timing and smooth transitions
+- [ ] Verify articles from both sources are properly mixed and displayed
+- [ ] Handle cases where API calls fail or return no data

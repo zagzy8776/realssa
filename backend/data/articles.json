@@ -1,14 +1,2 @@
-[
-  {
-    "id": "2",
-    "title": "Test Article from Admin",
-    "excerpt": "This is a test article posted via the admin interface",
-    "content": "This is a test article posted via the admin interface",
-    "category": "afrobeats",
-    "image": "https://via.placeholder.com/400x250?text=Test+Article",
-    "readTime": "3 min read",
-    "author": "Admin",
-    "source": "user",
-    "date": "2026-01-28T12:56:15.517Z"
-  }
-]
+
+[]
