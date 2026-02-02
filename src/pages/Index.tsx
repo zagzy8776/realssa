@@ -46,8 +46,26 @@ const Index = () => {
     }
   };
 
+  // Reset currentIndex if out of bounds
+  useEffect(() => {
+    if (stories?.length > 0 && currentIndex >= stories.length) {
+      setCurrentIndex(0);
+    }
+  }, [stories, currentIndex]);
+
   // Get current story for main display
-  const currentStory = stories?.[currentIndex];
+  const currentStory = stories && stories.length > 0 ? stories[Math.min(currentIndex, stories.length - 1)] : {
+    id: 'fallback',
+    title: 'News temporarily unavailable',
+    excerpt: 'Please try again in a moment.',
+    category: 'news',
+    image: 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop',
+    readTime: '1 min read',
+    author: 'Realssa',
+    date: new Date().toISOString(),
+    href: '#',
+    externalLink: '#'
+  };
 
   // Fallback image function
   const getImageUrl = (story?: NewsItem) => {
