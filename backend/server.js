@@ -354,6 +354,31 @@ const worldFeeds = [
   'https://wwd.com/feed/'
 ];
 
+// Sports RSS feeds (Nigerian/African + Global)
+const sportsFeeds = [
+  // Nigerian Sports
+  'https://www.pulsesports.ng/feed',
+  'https://www.sports247.ng/feed',
+  'https://guardian.ng/feed/?cat=football',
+  'https://dailypost.ng/category/sports/feed/',
+  'https://www.completesports.com/feed/',
+  'https://www.legit.ng/sports/feed/',
+  'https://www.premiumtimesng.com/sports/feed',
+  
+  // Global Sports
+  'https://www.skysports.com/rss/12040',
+  'https://www.espn.com/espn/rss/news',
+  'https://feeds.bbci.co.uk/sport/rss.xml',
+  'https://www.goal.com/en/rss',
+  'https://www.sportingnews.com/us/rss',
+  'https://sports.yahoo.com/rss/',
+  'https://www.si.com/.rss',
+  'https://www.cbssports.com/rss/headlines/',
+  'https://bleacherreport.com/articles/feed',
+  'https://www.marca.com/rss/futbol.html',
+  'https://as.com/rss/futbol/portada.xml'
+];
+
 // Helper function to fetch RSS feeds
 const fetchRSSFeeds = async (feeds) => {
   const allArticles = [];
@@ -573,6 +598,19 @@ app.get('/api/news/world', async (req, res) => {
   } catch (error) {
     console.error('Error fetching World news:', error);
     res.status(500).json({ error: 'Failed to fetch World news' });
+  }
+});
+
+// Get Sports news
+app.get('/api/news/sports', async (req, res) => {
+  try {
+    console.log('Fetching Sports news feeds...');
+    const articles = await fetchRSSFeeds(sportsFeeds);
+    console.log(`Fetched ${articles.length} Sports articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching Sports news:', error);
+    res.status(500).json({ error: 'Failed to fetch Sports news' });
   }
 });
 

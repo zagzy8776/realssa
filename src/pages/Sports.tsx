@@ -31,7 +31,7 @@ const Sports = () => {
         const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
         // Fetch sports news from backend RSS feeds with caching
-        const response = await fetch('/api/sports-news', {
+        const response = await fetch('/api/news/sports', {
           signal: controller.signal,
           headers: {
             'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
