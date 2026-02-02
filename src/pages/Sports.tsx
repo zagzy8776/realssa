@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "../components/CategoryBadge";
 import SimpleImage from "../components/SimpleImage";
+import { fetchRSSFeed, parseRSSXML } from "../lib/rss-api";
 
 type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "breaking" | "news" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "lagos-fashion" | "nigerian-tech" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "entertainment" | "general";
 
@@ -21,45 +22,37 @@ interface SportsNewsItem {
 const Sports = () => {
   const [sportsNews, setSportsNews] = useState<SportsNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate fetching sports news
     const fetchSportsNews = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const mockSportsNews: SportsNewsItem[] = [
-          {
-            id: "sports-1",
-            title: "Nigerian Football Team Advances in Continental Competition",
-            excerpt: "The Super Eagles secure a crucial victory in their quest for continental glory.",
-            category: "nigerian-sports",
-            image: "https://images.unsplash.com/photo-1543113853-25e39c370c76?w=800",
-            readTime: "4 min read",
-            author: "Sports Reporter",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "Nigerian football continues to inspire fans across the continent."
-          },
-          {
-            id: "sports-2",
-            title: "African Athletes Shine at International Events",
-            excerpt: "Track and field stars from across Africa set new records and achieve podium finishes.",
-            category: "nigerian-sports",
-            image: "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800",
-            readTime: "3 min read",
-            author: "Sports Editor",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "African athletes continue to make their mark on the global stage."
-          }
-        ];
-        
-        setSportsNews(mockSportsNews);
+        const rssUrl = "https://rss.app/feeds/Xw0L1vN2.xml"; // Nigerian sports news RSS feed
+        const rssXml = await fetchRSSFeed(rssUrl);
+        if (!rssXml) {
+          throw new Error("Failed to fetch RSS feed");
+        }
+
+        const parsedFeed = parseRSSXML(rssXml);
+const sportsItems = parsedFeed.items.map((item, index) => ({
+          id: `sports-${index + 1}`,
+          title: item.title,
+          excerpt: item.description || item.content || "Read more...",
+          category: "nigerian-sports" as CategoryType,
+          image: "https://images.unsplash.com/photo-1543113853-25e39c370c76?w=800", // Default sports image
+          readTime: "2-5 min read",
+          author: item.author || "Sports Reporter",
+          date: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
+          externalLink: item.link,
+          content: item.content
+        }));
+
+        setSportsNews(sportsItems);
       } catch (error) {
         console.error("Error fetching sports news:", error);
+        setError("Failed to load sports news. Please try again later.");
       } finally {
         setLoading(false);
       }
@@ -130,7 +123,7 @@ const Sports = () => {
           <CategoryBadge category="nigerian-sports" />
         </div>
 
-        {loading ? (
+{loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {[...Array(2)].map((_, index) => (
               <div key={index} className="bg-card rounded-lg p-6 shadow-lg animate-pulse">
@@ -140,6 +133,10 @@ const Sports = () => {
                 <div className="h-4 bg-gray-300 rounded w-3/4"></div>
               </div>
             ))}
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-red-600 text-center">
+            <p className="font-medium">{error}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
