@@ -17,10 +17,10 @@ interface NigerianNewsItem {
 }
 
 interface HeroSectionProps {
-  currentStory?: NigerianNewsItem;
+  stories?: NigerianNewsItem[];
 }
 
-const HeroSection = ({ currentStory }: HeroSectionProps) => {
+const HeroSection = ({ stories }: HeroSectionProps) => {
   const [breakingNews, setBreakingNews] = useState<NigerianNewsItem | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +48,8 @@ const HeroSection = ({ currentStory }: HeroSectionProps) => {
     return () => clearInterval(interval);
   }, []);
 
-  const heroImage = breakingNews?.image || "https://placehold.co/1920x1080/FFA500/000000?text=Nigerian+News";
+  const latestStory = stories?.[0];
+  const heroImage = latestStory?.image || "https://images.unsplash.com/photo-1504711432869-001077659a9a?w=800";
 
   return (
     <section className="relative overflow-hidden">
@@ -62,6 +63,7 @@ const HeroSection = ({ currentStory }: HeroSectionProps) => {
           loading="eager"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/80 via-red-500/80 to-yellow-500/80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80" />
         <div className="absolute inset-0 bg-background/60" />
       </div>
 

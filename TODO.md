@@ -1,13 +1,12 @@
-# Add Gradient Overlay to Slider Image
+# Cleanup Index.tsx Task
 
-## Tasks
-- [ ] Modify the slider image container in src/pages/Index.tsx to add a gradient overlay
-- [ ] Wrap the image in a container with bg-gradient-to-t from-black/90 to-transparent
-- [ ] Ensure the gradient improves text readability
-
-## Implementation Details
-- Located the image div in the slider section
-- Added a relative container around the image
-- Added an absolute overlay div with the gradient class: bg-gradient-to-t from-black/90 to-transparent
-- The gradient goes from black (90% opacity) at the bottom to transparent at the top
-- This should improve readability of the white text over the image
+## Steps to Complete:
+- [ ] Remove currentIndex state and related useEffects from Index.tsx
+- [ ] Remove currentStory variable and debug logging from Index.tsx
+- [ ] Remove the entire "Auto-Rotating Hero Slider" section from Index.tsx
+- [ ] Update HeroSection props to accept stories array instead of currentStory
+- [ ] Update Index.tsx to pass stories to HeroSection
+- [ ] Ensure HeroSection uses stories?.[0] with optional chaining
+- [ ] Add bg-gradient-to-t from-black/80 for text readability in HeroSection
+- [ ] Set default news image if story.image is null in HeroSection
+- [ ] Test the changes to ensure no ReferenceError and proper hero display
