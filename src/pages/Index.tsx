@@ -93,24 +93,16 @@ const Index = () => {
   // Fallback image function
   const getFallbackImage = (item) => {
     if (item.image && item.image !== 'https://placehold.co/600x400') {
-      return item.image;
+      // Fix URLs that start with "//" by prepending "https:"
+      let imageUrl = item.image;
+      if (imageUrl.startsWith('//')) {
+        imageUrl = 'https:' + imageUrl;
+      }
+      return imageUrl;
     }
-    
-    // Generate category-specific fallback images
-    const title = (item.title || '').toLowerCase();
-    if (title.includes('nigeria') || title.includes('africa')) {
-      return 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=800&auto=format&fit=crop';
-    } else if (title.includes('music') || title.includes('artist') || title.includes('entertainment')) {
-      return 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=800&auto=format&fit=crop';
-    } else if (title.includes('politics') || title.includes('government')) {
-      return 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?q=80&w=800&auto=format&fit=crop';
-    } else if (title.includes('business') || title.includes('economy')) {
-      return 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop';
-    } else if (title.includes('sports') || title.includes('football')) {
-      return 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=800&auto=format&fit=crop';
-    } else {
-      return 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop';
-    }
+
+    // Use the specified fallback image
+    return 'https://images.unsplash.com/photo-1504711432869-001077659a9a?w=800';
   };
 
   return (
@@ -162,10 +154,10 @@ const Index = () => {
                       </div>
                     </div>
                     <div className="p-6">
-                      <h2 className="text-2xl font-bold mb-4 line-clamp-3">
+                      <h2 className="text-2xl font-bold mb-4 line-clamp-3 text-white drop-shadow-md">
                         {currentStory?.title || 'News temporarily unavailable'}
                       </h2>
-                      <p className="text-muted-foreground mb-6 line-clamp-4">
+                      <p className="text-white/90 mb-6 line-clamp-4 drop-shadow-sm">
                         {currentStory?.excerpt || 'Please try again in a moment.'}
                       </p>
                       <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
