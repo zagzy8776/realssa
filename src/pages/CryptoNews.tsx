@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "../components/CategoryBadge";
 import SimpleImage from "../components/SimpleImage";
+import { fetchMultipleRSSFeeds } from "../lib/rss-api";
 
 type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "breaking" | "news" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "lagos-fashion" | "nigerian-tech" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "entertainment" | "general";
 
@@ -80,15 +81,12 @@ const CryptoNews = () => {
       try {
         const allItems: CryptoNewsItem[] = [];
 
-        // Fetch from RSS feeds
-        for (const url of RSS_FEEDS) {
-          try {
-            const response = await fetch(`/api/rss?url=${encodeURIComponent(url)}`);
-            if (!response.ok) continue;
-
-            const feed = await response.json();
-            
-            feed.items?.slice(0, 3).forEach((item: { title?: string; content?: string; description?: string; creator?: string; guid?: string; link?: string; isoDate?: string; pubDate?: string }) => {
+        // Fetch from RSS feeds using the new RSS API
+        const feeds = await fetchMultipleRSSFeeds(RSS_FEEDS);
+        
+        feeds.forEach((feed) => {
+          if (feed && feed.items) {
+            feed.items.slice(0, 3).forEach((item: { title?: string; content?: string; description?: string; creator?: string; guid?: string; link?: string; isoDate?: string; pubDate?: string }) => {
               const title = item.title || "Untitled";
               const content = item.content || item.description || "";
               const excerpt = content.replace(/<[^>]*>/g, "").substring(0, 150) + "...";
@@ -111,10 +109,8 @@ const CryptoNews = () => {
                 content
               });
             });
-          } catch (feedError) {
-            console.warn(`Failed to fetch feed ${url}:`, feedError);
           }
-        }
+        });
 
         // Sort by date, dedupe, and take top 10
         const sorted = allItems
