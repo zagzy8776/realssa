@@ -11,10 +11,28 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll([
         '/',
-        '/index.html',
-        '/assets/index-*.js', // Vite build files will be cached dynamically
-        '/assets/index-*.css'
+        '/index.html'
       ]);
+    }).then(() => {
+      // Skip waiting to activate immediately
+      return self.skipWaiting();
+    })
+  );
+});
+
+// Activate event - clean up old caches
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME && cacheName !== DATA_CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => {
+      return self.clients.claim();
     })
   );
 });

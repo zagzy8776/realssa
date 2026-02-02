@@ -10,7 +10,11 @@ const PORT = process.env.PORT || 5001;
 
 // Middleware
 const cors = require('cors');
-app.use(cors());
+app.use(cors({
+  origin: ['https://realssa.vercel.app', 'http://localhost:5173', 'http://localhost:8080'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Database file paths
