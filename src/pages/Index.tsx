@@ -137,7 +137,7 @@ const Index = () => {
               <div className="relative">
                 {/* Current Story Display */}
                 <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-                  <div className="grid md:grid-cols-2 gap-6">
+                  <div className="grid md:grid-cols-2 gap-0">
                     <div className="relative h-64 md:h-auto">
                       <img
                         src={getFallbackImage(currentStory)}
@@ -147,17 +147,18 @@ const Index = () => {
                           e.currentTarget.src = getFallbackImage(currentStory);
                         }}
                       />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent"></div>
                       <div className="absolute top-4 left-4">
                         <span className="bg-black/70 text-white px-2 py-1 text-sm rounded">
                           {currentStory?.category || 'news'}
                         </span>
                       </div>
                     </div>
-                    <div className="p-6">
-                      <h2 className="text-2xl font-bold mb-4 line-clamp-3 text-white drop-shadow-md">
+                    <div className="p-6 flex flex-col justify-center">
+                      <h2 className="text-2xl font-bold mb-4 line-clamp-3">
                         {currentStory?.title || 'News temporarily unavailable'}
                       </h2>
-                      <p className="text-white/90 mb-6 line-clamp-4 drop-shadow-sm">
+                      <p className="text-muted-foreground mb-6 line-clamp-4">
                         {currentStory?.excerpt || 'Please try again in a moment.'}
                       </p>
                       <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">

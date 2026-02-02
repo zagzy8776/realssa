@@ -1,28 +1,13 @@
-# Implementation Plan for Ads, Database, and Mobile Fit
+# Add Gradient Overlay to Slider Image
 
-## Phase 1: Ads Integration ✅
-- [x] Complete Monetag script in index.html with proper CDN script tag
-- [x] Create src/components/SocialBar.tsx with Breaking News banner and SmartLink fallback
-- [x] Integrate SocialBar into main layout
+## Tasks
+- [ ] Modify the slider image container in src/pages/Index.tsx to add a gradient overlay
+- [ ] Wrap the image in a container with bg-gradient-to-t from-black/90 to-transparent
+- [ ] Ensure the gradient improves text readability
 
-## Phase 2: Database Migration ✅
-- [x] Add pg to backend/package.json
-- [x] Create backend/migration.js script for fact_checks table with 10 dummy investigative stories
-- [x] Update backend/server.js to add PostgreSQL connection and /api/fact-check endpoint
-- [x] Create src/components/SearchBar.tsx component
-- [x] Connect SearchBar to /api/fact-check endpoint
-
-## Phase 3: Mobile Styling ✅
-- [x] Update NewsCard.tsx to ensure object-fit: cover on thumbnails
-- [x] Add explicit overflow-hidden and text-overflow ellipsis to text containers
-- [x] Ensure consistent card heights
-
-## Deployment Fixes ✅
-- [x] Remove merge conflict markers from src/pages/Index.tsx
-- [x] Clean up import statements for successful Vercel build
-
-## Followup Steps
-- [ ] Install backend dependencies
-- [ ] Run migration script
-- [ ] Test all endpoints and components
-- [ ] Verify mobile responsiveness
+## Implementation Details
+- Located the image div in the slider section
+- Added a relative container around the image
+- Added an absolute overlay div with the gradient class: bg-gradient-to-t from-black/90 to-transparent
+- The gradient goes from black (90% opacity) at the bottom to transparent at the top
+- This should improve readability of the white text over the image
