@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
-import Parser from 'rss-parser';
 import CategoryBadge from "../components/CategoryBadge";
 import SimpleImage from "../components/SimpleImage";
 
@@ -19,82 +18,74 @@ interface SportsNewsItem {
   content?: string;
 }
 
+interface ApiSportsItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  category: string;
+  image: string;
+  readTime: string;
+  author: string;
+  date: string;
+  externalLink: string;
+  content?: string;
+}
+
 const Sports = () => {
   const [sportsNews, setSportsNews] = useState<SportsNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const parser = new Parser();
-
-    const RSS_FEEDS = [
-      // Start with these 8–10 strong ones (Nigerian + global football focus)
-      "https://www.pulsesports.ng/feed",
-      "https://www.goal.com/en-ng/rss",
-      "https://www.sports247.ng/feed",
-      "https://www.completesports.com/feed/",
-      "https://guardian.ng/feed/?cat=football",
-      "https://dailypost.ng/category/sports/feed/",
-      "https://feeds.bbci.co.uk/sport/football/rss.xml",
-      "https://www.espn.com/espn/rss/soccer/news",
-      "https://www.skysports.com/rss/11095", // Sky Sports Football
-      "https://www.goal.com/en/rss", // Global Goal
-    ];
-
     const fetchSportsNews = async () => {
       setLoading(true);
-      setError(null);
-      const allItems: SportsNewsItem[] = [];
-
       try {
-        for (const url of RSS_FEEDS) {
-          try {
-            const feed = await parser.parseURL(url);
-            feed.items?.slice(0, 4).forEach((item, index) => { // Limit 4 per feed to avoid overload
-              const title = item.title || "Untitled";
-              const excerpt = item.contentSnippet || item.description || "";
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/sports`);
+        if (response.ok) {
+          const data = await response.json();
 
-              // Simple category inference — improve as needed
-              let category: CategoryType = "nigerian-sports";
-              if (title.toLowerCase().includes("super eagles") ||
-                  title.toLowerCase().includes("npfl") ||
-                  title.toLowerCase().includes("nigeria") ||
-                  title.toLowerCase().includes("afcon")) {
-                category = "nigerian-sports";
-              } else if (excerpt.toLowerCase().includes("premier league") ||
-                         title.toLowerCase().includes("champions league")) {
-                category = "general"; // or add more categories
-              }
+          // Map API response to component's expected format
+          const mappedData: SportsNewsItem[] = data.map((item: any) => {
+            // Category inference based on content
+            let category: CategoryType = "nigerian-sports";
+            const title = item.title || "";
+            const excerpt = item.excerpt || "";
 
-              allItems.push({
-                id: item.guid || item.link || `sports-${url}-${index}`,
-                title,
-                excerpt,
-                category,
-                // Image: try to extract from content (basic regex) or use fallback
-                image: extractImageFromContent(item.content || item.description || "") ||
-                       "https://images.unsplash.com/photo-1543113853-25e39c370c76?w=800",
-                readTime: "5 min read", // Can estimate later
-                author: item.creator || feed.title || "Unknown",
-                date: item.isoDate || item.pubDate || new Date().toISOString(),
-                externalLink: item.link || "#",
-              });
-            });
-          } catch (feedErr) {
-            console.warn(`Failed to parse feed ${url}:`, feedErr);
-            // Continue to next feed — don't crash whole page
-          }
+            if (title.toLowerCase().includes("super eagles") ||
+                title.toLowerCase().includes("npfl") ||
+                title.toLowerCase().includes("nigeria") ||
+                title.toLowerCase().includes("afcon") ||
+                item.author?.toLowerCase().includes("nigeria")) {
+              category = "nigerian-sports";
+            } else if (excerpt.toLowerCase().includes("premier league") ||
+                       title.toLowerCase().includes("champions league") ||
+                       title.toLowerCase().includes("manchester") ||
+                       title.toLowerCase().includes("chelsea") ||
+                       title.toLowerCase().includes("liverpool")) {
+              category = "general";
+            }
+
+            return {
+              id: item.id,
+              title: item.title,
+              excerpt: item.excerpt,
+              category,
+              image: item.image,
+              readTime: item.readTime || "5 min read",
+              author: item.author,
+              date: item.date,
+              externalLink: item.externalLink,
+              content: item.content
+            };
+          });
+
+          setSportsNews(mappedData);
+        } else {
+          setError("Failed to fetch sports news");
         }
-
-        // Sort newest first, take top 10–15
-        const sorted = allItems
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 12);
-
-        setSportsNews(sorted.length > 0 ? sorted : []); // fallback empty if all failed
       } catch (err) {
-        console.error("RSS fetch error:", err);
-        setError("Failed to load sports news. Check your connection or try later.");
+        console.error("Error fetching sports news:", err);
+        setError("Network error while fetching news");
       } finally {
         setLoading(false);
       }
@@ -107,11 +98,7 @@ const Sports = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Helper to extract first image from RSS content HTML (basic)
-  const extractImageFromContent = (content: string) => {
-    const match = content.match(/<img[^>]+src=["'](.*?)["']/i);
-    return match ? match[1] : null;
-  };
+
 
   return (
     <div className="container mx-auto px-4 py-8">
