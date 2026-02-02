@@ -188,7 +188,7 @@ app.get('/api/articles/featured', async (req, res) => {
         excerpt: item.contentSnippet || item.summary || item.title,
         content: item.content || item.summary || '',
         category: 'World News',
-        image: item.enclosure?.url || item['media:content']?.$?.url || null,
+        image: extractImageFromItem(item),
         readTime: '5 min read',
         author: 'BBC News',
         source: 'rss',
@@ -325,6 +325,10 @@ const parser = new Parser({
       ['enclosure', 'enclosure'],
       ['media:group', 'media:group']
     ]
+  },
+  xml2js: {
+    strict: false,
+    cdata: true
   }
 });
 
