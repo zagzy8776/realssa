@@ -60,7 +60,7 @@ const Index = () => {
     }
   };
 
-  // Get current story for main display
+  // Get current story for main display - ensure it's always defined
   const currentStory = stories[currentIndex] || {
     id: 'fallback',
     title: 'Stories temporarily unavailable',
@@ -73,6 +73,14 @@ const Index = () => {
     href: '#',
     externalLink: '#'
   };
+
+  // Debug logging to help identify issues
+  console.log('Index.tsx debug:', {
+    storiesLength: stories.length,
+    currentIndex,
+    currentStory: currentStory?.title || 'undefined',
+    stories: stories.map(s => s.title).slice(0, 3)
+  });
 
   // Fallback image function
   const getFallbackImage = (item) => {
