@@ -38,7 +38,15 @@ const Index = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/featured`);
+      
+      // Fallback API URL if environment variable is not set
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://realssa-production.up.railway.app';
+      
+      if (!apiUrl) {
+        throw new Error('API URL not configured');
+      }
+      
+      const response = await fetch(`${apiUrl}/api/articles/featured`);
       if (!response.ok) {
         throw new Error('Failed to fetch stories');
       }
