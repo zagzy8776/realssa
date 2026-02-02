@@ -155,13 +155,13 @@ const Index = () => {
                       </div>
                     </div>
                     <div className="p-6 flex flex-col justify-center">
-                      <h2 className="text-2xl font-bold mb-4 line-clamp-3">
+                      <h2 className="text-2xl font-bold text-black mb-4 line-clamp-3">
                         {currentStory?.title || 'News temporarily unavailable'}
                       </h2>
-                      <p className="text-muted-foreground mb-6 line-clamp-4">
+                      <p className="text-black/80 mb-6 line-clamp-4">
                         {currentStory?.excerpt || 'Please try again in a moment.'}
                       </p>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
+                      <div className="flex items-center justify-between text-sm text-black/70 mb-4">
                         <span>{currentStory?.author || 'Realssa'}</span>
                         <span>{currentStory?.date ? new Date(currentStory.date).toLocaleDateString() : 'Unknown date'}</span>
                       </div>
