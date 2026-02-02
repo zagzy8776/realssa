@@ -21,32 +21,14 @@ interface HeroSectionProps {
 }
 
 const HeroSection = ({ stories }: HeroSectionProps) => {
-  const [breakingNews, setBreakingNews] = useState<NigerianNewsItem | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchBreakingNews = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/nigerian`);
-        if (response.ok) {
-          const news = await response.json();
-          if (news.length > 0) {
-            setBreakingNews(news[0]); // Use the most recent story as breaking news
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching breaking news:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBreakingNews();
-
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchBreakingNews, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    // Set loading to false once stories are available
+    if (stories && stories.length > 0) {
+      setLoading(false);
+    }
+  }, [stories]);
 
   const latestStory = stories?.[0];
   const heroImage = latestStory?.image || "https://images.unsplash.com/photo-1504711432869-001077659a9a?w=800";
@@ -57,7 +39,7 @@ const HeroSection = ({ stories }: HeroSectionProps) => {
       <div className="absolute inset-0">
         <SimpleImage
           src={heroImage}
-          alt={breakingNews?.title || "Nigerian news"}
+          alt={latestStory?.title || "Nigerian news"}
           className="w-full h-full object-cover transition-all duration-1000"
           fallback="https://placehold.co/1920x1080/FFA500/000000?text=Nigerian+News"
           loading="eager"
@@ -86,28 +68,28 @@ const HeroSection = ({ stories }: HeroSectionProps) => {
               <div className="h-6 bg-white/20 rounded-lg mb-4 animate-pulse w-3/4"></div>
               <div className="h-6 bg-white/20 rounded-lg mb-4 animate-pulse w-1/2"></div>
             </div>
-          ) : currentStory ? (
+          ) : latestStory ? (
             <>
               <h1 className="font-display text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-tight mb-6 line-clamp-3">
-                {currentStory.title}
+                {latestStory.title}
               </h1>
 
               <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl line-clamp-3">
-                {currentStory.excerpt || currentStory.content?.substring(0, 150) + '...'}
+                {latestStory.excerpt || latestStory.content?.substring(0, 150) + '...'}
               </p>
 
               <div className="flex flex-wrap items-center gap-6 text-sm text-white/80 mb-10">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{currentStory.category || 'Featured'}</span>
+                  <span>{latestStory.category || 'Featured'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{new Date(currentStory.date).toLocaleDateString()}</span>
+                  <span>{new Date(latestStory.date).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{currentStory.readTime || '5 min read'}</span>
+                  <span>{latestStory.readTime || '5 min read'}</span>
                 </div>
               </div>
 
@@ -127,12 +109,12 @@ const HeroSection = ({ stories }: HeroSectionProps) => {
           
           <div className="flex flex-wrap gap-4">
             <a
-              href={breakingNews?.externalLink || "/nigerian-news"}
-              target={breakingNews ? "_blank" : "_self"}
-              rel={breakingNews ? "noopener noreferrer" : ""}
+              href={latestStory?.externalLink || "/nigerian-news"}
+              target={latestStory ? "_blank" : "_self"}
+              rel={latestStory ? "noopener noreferrer" : ""}
               className="inline-flex items-center gap-3 px-8 py-4 bg-white text-gray-900 font-bold rounded-full hover:shadow-xl transition-all duration-300 hover:scale-105 group"
             >
-              {breakingNews ? "Read Full Story" : "Read Latest News"}
+              {latestStory ? "Read Full Story" : "Read Latest News"}
               <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </a>
             <a

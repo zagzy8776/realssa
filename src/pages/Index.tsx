@@ -28,7 +28,7 @@ const Index = () => {
         throw new Error('API URL not configured');
       }
       
-      const response = await fetch(`${apiUrl}/api/articles/featured`);
+      const response = await fetch(`${apiUrl}/api/news/homepage`);
       if (!response.ok) {
         throw new Error('Failed to fetch stories');
       }
@@ -49,42 +49,7 @@ const Index = () => {
     disabled: loading
   });
 
-  // Get current story for main display - ensure it's always defined
-  const currentStory = stories[currentIndex] || {
-    id: 'fallback',
-    title: 'Stories temporarily unavailable',
-    excerpt: 'Please try again in a moment.',
-    category: 'news',
-    image: 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop',
-    readTime: '1 min read',
-    author: 'Realssa',
-    date: new Date().toISOString(),
-    href: '#',
-    externalLink: '#'
-  };
 
-  // Debug logging to help identify issues
-  console.log('Index.tsx debug:', {
-    storiesLength: stories.length,
-    currentIndex,
-    currentStory: currentStory?.title || 'undefined',
-    stories: stories.map(s => s.title).slice(0, 3)
-  });
-
-  // Fallback image function
-  const getFallbackImage = (item) => {
-    if (item.image && item.image !== 'https://placehold.co/600x400') {
-      // Fix URLs that start with "//" by prepending "https:"
-      let imageUrl = item.image;
-      if (imageUrl.startsWith('//')) {
-        imageUrl = 'https:' + imageUrl;
-      }
-      return imageUrl;
-    }
-
-    // Use the specified fallback image
-    return 'https://images.unsplash.com/photo-1504711432869-001077659a9a?w=800';
-  };
 
   return (
     <div className="min-h-screen bg-background">
