@@ -17,6 +17,7 @@ const navLinks = [
   { href: "/culture", label: "Culture" },
   { href: "/nigerian-news", label: "Nigerian News" },
   { href: "/world-news", label: "🌍 World News" },
+  { href: "/crypto", label: "₿ Crypto" },
   { href: "/post-news", label: "Post News" },
   { href: "/admin-dashboard", label: "Dashboard", adminOnly: true },
 ];

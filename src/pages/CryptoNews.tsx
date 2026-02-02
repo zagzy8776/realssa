@@ -23,13 +23,34 @@ const CryptoNews = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate fetching crypto news
     const fetchCryptoNews = async () => {
       setLoading(true);
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Fetch crypto news from backend RSS feeds
+        const response = await fetch('/api/crypto-news');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
         
+        // Transform backend data to match our interface
+        const cryptoNewsItems: CryptoNewsItem[] = data.map((item: { id?: string; link?: string; title?: string; excerpt?: string; description?: string; contentSnippet?: string; image?: string; author?: string; creator?: string; date?: string; pubDate?: string; content?: string }) => ({
+          id: item.id || item.link || crypto.randomUUID(),
+          title: item.title || "Untitled",
+          excerpt: item.excerpt || item.description || item.contentSnippet || "",
+          category: "crypto-nigeria", // Default category for crypto content
+          image: item.image || "https://images.unsplash.com/photo-1664575602540-9972445ad3bf?w=800",
+          readTime: "5 min read", // Estimate
+          author: item.author || item.creator || "Unknown",
+          date: item.date || item.pubDate || new Date().toISOString(),
+          externalLink: item.link || "#",
+          content: item.content || item.description || ""
+        }));
+        
+        setCryptoNews(cryptoNewsItems);
+      } catch (error) {
+        console.error("Error fetching crypto news:", error);
+        // Fallback to mock data if backend fails
         const mockCryptoNews: CryptoNewsItem[] = [
           {
             id: "crypto-1",
@@ -56,16 +77,17 @@ const CryptoNews = () => {
             content: "Nigeria remains one of the world's leading crypto markets."
           }
         ];
-        
         setCryptoNews(mockCryptoNews);
-      } catch (error) {
-        console.error("Error fetching crypto news:", error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchCryptoNews();
+
+    // Refresh every 15 minutes to get fresh RSS content
+    const interval = setInterval(fetchCryptoNews, 15 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
