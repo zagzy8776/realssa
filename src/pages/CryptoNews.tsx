@@ -26,11 +26,22 @@ const CryptoNews = () => {
     const fetchCryptoNews = async () => {
       setLoading(true);
       try {
-        // Fetch crypto news from backend RSS feeds
-        const response = await fetch('/api/crypto-news');
+        // Use AbortController for timeout and cleanup
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+        // Fetch crypto news from backend RSS feeds with caching
+        const response = await fetch('/api/crypto-news', {
+          signal: controller.signal,
+          headers: {
+            'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
+          }
+        });
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
         const data = await response.json();
         
         // Transform backend data to match our interface
@@ -48,6 +59,7 @@ const CryptoNews = () => {
         }));
         
         setCryptoNews(cryptoNewsItems);
+        clearTimeout(timeoutId);
       } catch (error) {
         console.error("Error fetching crypto news:", error);
         // Fallback to mock data if backend fails
@@ -85,8 +97,8 @@ const CryptoNews = () => {
 
     fetchCryptoNews();
 
-    // Refresh every 15 minutes to get fresh RSS content
-    const interval = setInterval(fetchCryptoNews, 15 * 60 * 1000);
+    // Refresh every 10 minutes instead of 15 for better performance
+    const interval = setInterval(fetchCryptoNews, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 

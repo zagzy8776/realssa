@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SimpleImageProps {
   src: string;
@@ -7,6 +7,7 @@ interface SimpleImageProps {
   style?: React.CSSProperties;
   fallback?: string;
   loading?: 'lazy' | 'eager';
+  priority?: boolean;
 }
 
 const SimpleImage: React.FC<SimpleImageProps> = ({
@@ -15,14 +16,23 @@ const SimpleImage: React.FC<SimpleImageProps> = ({
   className,
   style,
   fallback,
-  loading = 'lazy'
+  loading = 'lazy',
+  priority = false
 }) => {
   const [imageSrc, setImageSrc] = useState(src);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setImageSrc(src);
+    setIsLoaded(false);
+    setHasError(false);
+  }, [src]);
 
   const handleError = () => {
     const fallbackImage = fallback || 'https://picsum.photos/seed/news/400/250';
     setImageSrc(fallbackImage);
+    setHasError(true);
   };
 
   const handleLoad = () => {
@@ -41,9 +51,12 @@ const SimpleImage: React.FC<SimpleImageProps> = ({
         transition: 'opacity 0.3s ease-in-out',
         opacity: isLoaded ? 1 : 0,
         display: 'block',
+        filter: hasError ? 'grayscale(100%)' : 'none',
         ...style
       }}
-      loading={loading}
+      loading={priority ? 'eager' : loading}
+      decoding="async"
+      fetchPriority={priority ? 'high' : 'auto'}
       onLoad={handleLoad}
       onError={handleError}
     />
