@@ -98,11 +98,11 @@ const HeroSection = ({ stories }: HeroSectionProps) => {
           ) : (
             <div>
               <h1 className="font-display text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-tight mb-6">
-                EntertainmentGHC News
+                EntertainmentGHC Global News
               </h1>
 
               <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl">
-                Your ultimate destination for African entertainment news, culture, and lifestyle. Stay informed with the latest stories from across the continent.
+                Your ultimate destination for global entertainment news, culture, and lifestyle. Stay informed with the latest stories from around the world - from crypto trends to sports highlights, African culture to international entertainment.
               </p>
             </div>
           )}

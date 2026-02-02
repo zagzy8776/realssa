@@ -1,12 +1,18 @@
-# Cleanup Index.tsx Task
+# RSS Feed Expansion Task
 
-## Steps to Complete:
-- [ ] Remove currentIndex state and related useEffects from Index.tsx
-- [ ] Remove currentStory variable and debug logging from Index.tsx
-- [ ] Remove the entire "Auto-Rotating Hero Slider" section from Index.tsx
-- [ ] Update HeroSection props to accept stories array instead of currentStory
-- [ ] Update Index.tsx to pass stories to HeroSection
-- [ ] Ensure HeroSection uses stories?.[0] with optional chaining
-- [ ] Add bg-gradient-to-t from-black/80 for text readability in HeroSection
-- [ ] Set default news image if story.image is null in HeroSection
-- [ ] Test the changes to ensure no ReferenceError and proper hero display
+## Backend Changes
+- [x] Add new RSS feed arrays for crypto, sports, and country-specific feeds
+- [x] Create new API endpoints: /api/news/crypto, /api/news/sports, /api/news/ghana, /api/news/kenya, /api/news/south-africa, /api/news/uk, /api/news/usa
+- [x] Update homepage aggregator to include diverse global content
+
+## Frontend Changes
+- [x] Create new page components: Crypto.tsx, Sports.tsx, Ghana.tsx, Kenya.tsx, SouthAfrica.tsx, UK.tsx, USA.tsx
+- [x] Add routes in App.tsx for all new pages
+- [ ] Update Header.tsx navigation to include new categories
+- [ ] Modify HeroSection to show global content instead of Nigeria-centric
+- [ ] Update homepage to aggregate from all categories
+
+## Testing
+- [ ] Test new RSS feeds and endpoints
+- [ ] Verify navigation works
+- [ ] Check homepage diversity

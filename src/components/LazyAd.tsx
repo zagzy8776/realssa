@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 
+// Type declarations for window properties
+declare global {
+  interface Window {
+    monetag?: { queue: any[] };
+    adsbygoogle?: any[];
+  }
+}
+
 interface LazyAdProps {
   adType?: 'banner' | 'sidebar' | 'inline' | 'sticky';
   className?: string;
@@ -69,9 +77,9 @@ const LazyAd: React.FC<LazyAdProps> = ({
     switch (adType) {
       case 'banner':
         return (
-          <div 
+          <div
             className={`lazy-ad-banner ${className || ''}`}
-            style={{ 
+            style={{
               ...style,
               minHeight: '90px',
               backgroundColor: '#f3f4f6',
@@ -89,12 +97,24 @@ const LazyAd: React.FC<LazyAdProps> = ({
                 <div className="ad-label" style={{ fontSize: '10px', color: '#9ca3af', marginBottom: '4px' }}>
                   Advertisement
                 </div>
-                <div style={{ fontWeight: 'bold', color: '#374151' }}>
-                  Sponsored Content
-                </div>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                  Relevant ads help support our platform
-                </div>
+                <a
+                  href="https://otieu.com/4/10551313"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    display: 'block',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', color: '#374151' }}>
+                    Trending Now 🔥
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    Click for exclusive content
+                  </div>
+                </a>
               </div>
             ) : (
               <div className="ad-loading" style={{ color: '#9ca3af' }}>

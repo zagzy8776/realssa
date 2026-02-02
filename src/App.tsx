@@ -22,6 +22,13 @@ import EditNewsPage from "./pages/EditNewsPage";
 import NigerianNews from "./pages/NigerianNews";
 import WorldNews from "./pages/WorldNews";
 import ForYou from "./pages/ForYou";
+import CryptoNews from "./pages/CryptoNews";
+import Sports from "./pages/Sports";
+import Ghana from "./pages/Ghana";
+import Kenya from "./pages/Kenya";
+import SouthAfrica from "./pages/SouthAfrica";
+import UK from "./pages/UK";
+import USA from "./pages/USA";
 
 
 const queryClient = new QueryClient();
@@ -51,6 +58,13 @@ const App = () => (
           <Route path="/nigerian-news" element={<NigerianNews />} />
           <Route path="/world-news" element={<WorldNews />} />
           <Route path="/for-you" element={<ForYou />} />
+          <Route path="/crypto" element={<CryptoNews />} />
+          <Route path="/sports" element={<Sports />} />
+          <Route path="/ghana" element={<Ghana />} />
+          <Route path="/kenya" element={<Kenya />} />
+          <Route path="/south-africa" element={<SouthAfrica />} />
+          <Route path="/uk" element={<UK />} />
+          <Route path="/usa" element={<USA />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

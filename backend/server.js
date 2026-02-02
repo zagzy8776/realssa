@@ -342,9 +342,6 @@ const worldFeeds = [
   'https://www.rollingstone.com/feed/',
   'https://www.theverge.com/rss/index.xml',
   'https://www.wired.com/feed/rss',
-  'https://www.espn.com/espn/rss/news',
-  'https://www.coindesk.com/arc/outboundfeeds/rss/',
-  'https://cointelegraph.com/rss',
   'https://feeds.feedburner.com/ign/all',
   'https://www.gamespot.com/feeds/news/',
   'https://www.pcgamer.com/rss/',
@@ -352,6 +349,74 @@ const worldFeeds = [
   'https://www.businessoffashion.com/feed',
   'https://fashionista.com/.rss/excerpt',
   'https://wwd.com/feed/'
+];
+
+// Crypto News RSS feeds
+const cryptoFeeds = [
+  'https://www.coindesk.com/arc/outboundfeeds/rss/',
+  'https://cointelegraph.com/rss',
+  'https://bitcoinmagazine.com/feed/',
+  'https://www.theblock.co/rss.xml',
+  'https://decrypt.co/feed',
+  'https://www.coinmarketcap.com/headlines/news/',
+  'https://www.binance.com/en/rss'
+];
+
+// Sports News RSS feeds
+const sportsFeeds = [
+  'https://www.espn.com/espn/rss/news',
+  'https://www.bbc.co.uk/sport/rss.xml',
+  'https://www.skysports.com/rss/12040',
+  'https://www.theguardian.com/sport/rss',
+  'https://www.cbssports.com/rss/headlines/',
+  'https://www.nfl.com/rss/xml/gen.aspx?mask=1FF00',
+  'https://www.premierleague.com/rss.xml'
+];
+
+// Ghana News RSS feeds
+const ghanaFeeds = [
+  'https://www.ghanaweb.com/GhanaHomePage/rss',
+  'https://www.myjoyonline.com/rss.xml',
+  'https://www.graphic.com.gh/rss.xml',
+  'https://www.dailyguidenetwork.com/rss.xml',
+  'https://www.ghanaiantimes.com.gh/rss.xml'
+];
+
+// Kenya News RSS feeds
+const kenyaFeeds = [
+  'https://www.nation.co.ke/rss',
+  'https://www.standardmedia.co.ke/rss',
+  'https://www.the-star.co.ke/rss',
+  'https://www.businessdailyafrica.com/rss',
+  'https://www.capitalfm.co.ke/rss/'
+];
+
+// South Africa News RSS feeds
+const southAfricaFeeds = [
+  'https://www.news24.com/rss',
+  'https://www.timeslive.co.za/rss',
+  'https://www.iol.co.za/rss',
+  'https://www.businessday.co.za/rss',
+  'https://www.citizen.co.za/rss'
+];
+
+// UK News RSS feeds
+const ukFeeds = [
+  'http://feeds.bbci.co.uk/news/uk/rss.xml',
+  'https://www.theguardian.com/uk/rss',
+  'https://www.independent.co.uk/rss',
+  'https://www.dailymail.co.uk/home/index.rss',
+  'https://www.telegraph.co.uk/rss.xml'
+];
+
+// USA News RSS feeds
+const usaFeeds = [
+  'http://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
+  'https://www.nytimes.com/rss',
+  'https://www.washingtonpost.com/rss',
+  'https://www.cnn.com/rss',
+  'https://www.foxnews.com/rss',
+  'https://www.reuters.com/rss/us'
 ];
 
 // Helper function to fetch RSS feeds
@@ -408,18 +473,20 @@ const getProperImage = (item) => {
   return url || `https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop`;
 };
 
-// Helper function to extract image from RSS item
+// Helper function to extract image from RSS item - Enhanced Version
 const extractImageFromItem = (item) => {
   // Helper function to check if URL is a logo or placeholder
   const isLogoOrPlaceholder = (url) => {
     if (!url) return true;
     const lowerUrl = url.toLowerCase();
     // Check for common logo patterns
-    if (lowerUrl.includes('logo') || lowerUrl.includes('icon') || lowerUrl.includes('avatar') || lowerUrl.includes('favicon')) {
+    if (lowerUrl.includes('logo') || lowerUrl.includes('icon') || lowerUrl.includes('avatar') ||
+        lowerUrl.includes('favicon') || lowerUrl.includes('brand')) {
       return true;
     }
     // Check for placeholder services
-    if (lowerUrl.includes('placehold') || lowerUrl.includes('placeholder') || lowerUrl.includes('dummy')) {
+    if (lowerUrl.includes('placehold') || lowerUrl.includes('placeholder') ||
+        lowerUrl.includes('dummy') || lowerUrl.includes('picsum')) {
       return true;
     }
     // Check for very small images (likely icons)
@@ -428,24 +495,42 @@ const extractImageFromItem = (item) => {
       return true;
     }
     // Check for social media profile images
-    if (lowerUrl.includes('profile') || lowerUrl.includes('twitter') || lowerUrl.includes('facebook')) {
+    if (lowerUrl.includes('profile') || lowerUrl.includes('twitter') || lowerUrl.includes('facebook') ||
+        lowerUrl.includes('instagram') || lowerUrl.includes('linkedin')) {
       return true;
     }
     return false;
   };
 
-  // Helper function to validate image URL
+  // Helper function to validate image URL and check quality
   const isValidImageUrl = (url) => {
     if (!url) return false;
     try {
       const parsedUrl = new URL(url.startsWith('//') ? 'https:' + url : url);
       // Check for common image extensions
-      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
       const hasImageExtension = imageExtensions.some(ext => parsedUrl.pathname.toLowerCase().includes(ext));
       return hasImageExtension || parsedUrl.pathname.includes('image') || parsedUrl.pathname.includes('photo');
     } catch {
       return false;
     }
+  };
+
+  // Helper function to get image quality score (prefer larger images)
+  const getImageQualityScore = (url) => {
+    if (!url) return 0;
+    let score = 1;
+
+    // Prefer larger images
+    if (url.includes('800') || url.includes('1000') || url.includes('1200')) score += 3;
+    else if (url.includes('600') || url.includes('700')) score += 2;
+    else if (url.includes('400') || url.includes('500')) score += 1;
+
+    // Prefer certain domains known for good images
+    if (url.includes('bbc') || url.includes('reuters') || url.includes('apnews') ||
+        url.includes('bloomberg') || url.includes('variety')) score += 2;
+
+    return score;
   };
 
   // Helper function to fix relative URLs
@@ -464,12 +549,12 @@ const extractImageFromItem = (item) => {
     return null;
   };
 
-  let imageUrl = null;
+  let bestImage = { url: null, score: 0 };
 
   // 1. Extract from content/description (highest priority for actual article images)
   if (item.content || item.description || item.summary) {
     const content = item.content || item.description || item.summary;
-    // Look for img tags
+    // Look for img tags with better regex
     const imgMatches = content.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi);
     if (imgMatches) {
       for (const imgTag of imgMatches) {
@@ -477,77 +562,122 @@ const extractImageFromItem = (item) => {
         if (srcMatch) {
           const url = fixUrl(srcMatch[1], item.link);
           if (url && isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
-            imageUrl = url;
-            break; // Take the first valid image
+            const score = getImageQualityScore(url);
+            if (score > bestImage.score) {
+              bestImage = { url, score };
+            }
           }
         }
       }
     }
   }
 
-  // 2. Try media:thumbnail (second priority)
-  if (!imageUrl && item['media:thumbnail']) {
-    const thumbnails = Array.isArray(item['media:thumbnail']) ? item['media:thumbnail'] : [item['media:thumbnail']];
-    for (const thumb of thumbnails) {
-      const url = thumb.$?.url || thumb.url;
-      if (url && isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
-        imageUrl = fixUrl(url, item.link);
-        break;
-      }
-    }
-  }
-
-  // 3. Try media:content (third priority)
-  if (!imageUrl && item['media:content']) {
+  // 2. Try media:content (often has high-quality images)
+  if (item['media:content']) {
     const contents = Array.isArray(item['media:content']) ? item['media:content'] : [item['media:content']];
     for (const content of contents) {
       const url = content.$?.url || content.url;
       if (url && isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
-        imageUrl = fixUrl(url, item.link);
-        break;
+        const score = getImageQualityScore(url);
+        if (score > bestImage.score) {
+          bestImage = { url: fixUrl(url, item.link), score };
+        }
       }
     }
   }
 
-  // 4. Try enclosure (fourth priority - often contains images)
-  if (!imageUrl && item.enclosure && item.enclosure.url) {
+  // 3. Try media:thumbnail (good quality thumbnails)
+  if (item['media:thumbnail']) {
+    const thumbnails = Array.isArray(item['media:thumbnail']) ? item['media:thumbnail'] : [item['media:thumbnail']];
+    for (const thumb of thumbnails) {
+      const url = thumb.$?.url || thumb.url;
+      if (url && isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
+        const score = getImageQualityScore(url);
+        if (score > bestImage.score) {
+          bestImage = { url: fixUrl(url, item.link), score };
+        }
+      }
+    }
+  }
+
+  // 4. Try enclosure (often contains images)
+  if (item.enclosure && item.enclosure.url) {
     const url = item.enclosure.url;
     if (isValidImageUrl(url) && !isLogoOrPlaceholder(url)) {
-      imageUrl = fixUrl(url, item.link);
+      const score = getImageQualityScore(url);
+      if (score > bestImage.score) {
+        bestImage = { url: fixUrl(url, item.link), score };
+      }
     }
   }
 
   // 5. Try custom fields or other media fields
-  if (!imageUrl) {
+  if (!bestImage.url) {
     const possibleFields = ['image', 'media', 'picture', 'photo', 'thumbnail'];
     for (const field of possibleFields) {
       if (item[field] && typeof item[field] === 'string' && isValidImageUrl(item[field]) && !isLogoOrPlaceholder(item[field])) {
-        imageUrl = fixUrl(item[field], item.link);
-        break;
+        const score = getImageQualityScore(item[field]);
+        if (score > bestImage.score) {
+          bestImage = { url: fixUrl(item[field], item.link), score };
+        }
       }
     }
   }
 
-  // 6. Use fallback if no image found
-  if (!imageUrl) {
-    // Use a high-quality fallback based on content
+  // 6. Use intelligent fallback based on content analysis
+  if (!bestImage.url) {
     const title = (item.title || '').toLowerCase();
-    if (title.includes('nigeria') || title.includes('africa')) {
-      imageUrl = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=800&auto=format&fit=crop';
-    } else if (title.includes('music') || title.includes('artist') || title.includes('entertainment')) {
-      imageUrl = 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=800&auto=format&fit=crop';
-    } else if (title.includes('politics') || title.includes('government')) {
-      imageUrl = 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?q=80&w=800&auto=format&fit=crop';
-    } else if (title.includes('business') || title.includes('economy')) {
-      imageUrl = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop';
-    } else if (title.includes('sports') || title.includes('football')) {
-      imageUrl = 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=800&auto=format&fit=crop';
-    } else {
-      imageUrl = 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop';
+    const content = (item.content || item.summary || '').toLowerCase();
+    const combinedText = title + ' ' + content;
+
+    // BBC-specific fallbacks
+    if (item.link && item.link.includes('bbc.co.uk')) {
+      if (combinedText.includes('sport') || combinedText.includes('football')) {
+        bestImage.url = 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=800&auto=format&fit=crop';
+      } else if (combinedText.includes('politics') || combinedText.includes('government')) {
+        bestImage.url = 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?q=80&w=800&auto=format&fit=crop';
+      } else if (combinedText.includes('business') || combinedText.includes('economy')) {
+        bestImage.url = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop';
+      } else {
+        bestImage.url = 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop';
+      }
+    }
+    // Nigerian news fallbacks
+    else if (combinedText.includes('nigeria') || combinedText.includes('africa') || item.link?.includes('ng.com')) {
+      bestImage.url = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=800&auto=format&fit=crop';
+    }
+    // Entertainment/music fallbacks
+    else if (combinedText.includes('music') || combinedText.includes('artist') || combinedText.includes('entertainment') ||
+             combinedText.includes('celebrity') || combinedText.includes('movie') || combinedText.includes('film')) {
+      bestImage.url = 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=800&auto=format&fit=crop';
+    }
+    // Tech/gaming fallbacks
+    else if (combinedText.includes('tech') || combinedText.includes('technology') || combinedText.includes('gaming') ||
+             combinedText.includes('game') || combinedText.includes('software')) {
+      bestImage.url = 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?q=80&w=800&auto=format&fit=crop';
+    }
+    // Sports fallbacks
+    else if (combinedText.includes('sport') || combinedText.includes('football') || combinedText.includes('soccer') ||
+             combinedText.includes('basketball') || combinedText.includes('tennis')) {
+      bestImage.url = 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=800&auto=format&fit=crop';
+    }
+    // Politics/government fallbacks
+    else if (combinedText.includes('politics') || combinedText.includes('government') || combinedText.includes('election') ||
+             combinedText.includes('president') || combinedText.includes('minister')) {
+      bestImage.url = 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?q=80&w=800&auto=format&fit=crop';
+    }
+    // Business/finance fallbacks
+    else if (combinedText.includes('business') || combinedText.includes('economy') || combinedText.includes('finance') ||
+             combinedText.includes('market') || combinedText.includes('company')) {
+      bestImage.url = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop';
+    }
+    // Default fallback
+    else {
+      bestImage.url = 'https://images.unsplash.com/photo-1504711432869-001077659a9a?q=80&w=800&auto=format&fit=crop';
     }
   }
 
-  return imageUrl;
+  return bestImage.url;
 };
 
 // Get Nigerian news
@@ -576,38 +706,64 @@ app.get('/api/news/world', async (req, res) => {
   }
 });
 
-// Homepage aggregator - combines Nigerian and World news
+// Homepage aggregator - combines all news categories for global diversity
 app.get('/api/news/homepage', async (req, res) => {
   try {
-    console.log('Fetching aggregated homepage news feeds...');
+    console.log('Fetching aggregated homepage news feeds from all categories...');
 
-    // Fetch from both Nigerian and World feeds
-    const [nigerianArticles, worldArticles] = await Promise.all([
+    // Fetch from all news categories
+    const [
+      nigerianArticles,
+      worldArticles,
+      cryptoArticles,
+      sportsArticles,
+      ghanaArticles,
+      kenyaArticles,
+      southAfricaArticles,
+      ukArticles,
+      usaArticles
+    ] = await Promise.all([
       fetchRSSFeeds(nigerianFeeds),
-      fetchRSSFeeds(worldFeeds)
+      fetchRSSFeeds(worldFeeds),
+      fetchRSSFeeds(cryptoFeeds),
+      fetchRSSFeeds(sportsFeeds),
+      fetchRSSFeeds(ghanaFeeds),
+      fetchRSSFeeds(kenyaFeeds),
+      fetchRSSFeeds(southAfricaFeeds),
+      fetchRSSFeeds(ukFeeds),
+      fetchRSSFeeds(usaFeeds)
     ]);
 
-    // Map Nigerian articles with proper category
-    const nigerianMapped = nigerianArticles.map(item => ({
-      ...item,
-      category: 'Nigeria'
-    }));
-
-    // Map World articles with proper category
-    const worldMapped = worldArticles.map(item => ({
-      ...item,
-      category: 'World'
-    }));
+    // Map articles with proper categories
+    const nigerianMapped = nigerianArticles.map(item => ({ ...item, category: 'Nigeria' }));
+    const worldMapped = worldArticles.map(item => ({ ...item, category: 'World' }));
+    const cryptoMapped = cryptoArticles.map(item => ({ ...item, category: 'Crypto' }));
+    const sportsMapped = sportsArticles.map(item => ({ ...item, category: 'Sports' }));
+    const ghanaMapped = ghanaArticles.map(item => ({ ...item, category: 'Ghana' }));
+    const kenyaMapped = kenyaArticles.map(item => ({ ...item, category: 'Kenya' }));
+    const southAfricaMapped = southAfricaArticles.map(item => ({ ...item, category: 'South Africa' }));
+    const ukMapped = ukArticles.map(item => ({ ...item, category: 'UK' }));
+    const usaMapped = usaArticles.map(item => ({ ...item, category: 'USA' }));
 
     // Combine all articles
-    const combined = [...nigerianMapped, ...worldMapped];
+    const combined = [
+      ...nigerianMapped,
+      ...worldMapped,
+      ...cryptoMapped,
+      ...sportsMapped,
+      ...ghanaMapped,
+      ...kenyaMapped,
+      ...southAfricaMapped,
+      ...ukMapped,
+      ...usaMapped
+    ];
 
-    // Sort by date (newest first) and limit to top 20 stories
+    // Sort by date (newest first) and limit to top 30 stories for more diversity
     const sorted = combined
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 20);
+      .slice(0, 30);
 
-    console.log(`Fetched ${sorted.length} aggregated articles for homepage`);
+    console.log(`Fetched ${sorted.length} aggregated articles from ${combined.length} total articles for homepage`);
     res.json(sorted);
   } catch (error) {
     console.error('Error fetching aggregated homepage news:', error);
