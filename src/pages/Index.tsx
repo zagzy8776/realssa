@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import LazyAd from "@/components/LazyAd";
 import { useEffect, useState } from "react";
 import ReadProgressBar from "@/components/ReadProgressBar";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
 const Index = () => {
   const [stories, setStories] = useState([]);
@@ -59,6 +60,13 @@ const Index = () => {
       setLoading(false);
     }
   };
+
+  // Initialize pull-to-refresh functionality
+  usePullToRefresh({
+    onRefresh: fetchStories,
+    threshold: 100,
+    disabled: loading
+  });
 
   // Get current story for main display - ensure it's always defined
   const currentStory = stories[currentIndex] || {
