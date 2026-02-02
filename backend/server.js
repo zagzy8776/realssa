@@ -356,27 +356,31 @@ const worldFeeds = [
 
 // Sports RSS feeds (Nigerian/African + Global)
 const sportsFeeds = [
-  // Nigerian Sports
-  'https://www.pulsesports.ng/feed',
-  'https://www.sports247.ng/feed',
-  'https://guardian.ng/feed/?cat=football',
-  'https://dailypost.ng/category/sports/feed/',
-  'https://www.completesports.com/feed/',
-  'https://www.legit.ng/sports/feed/',
-  'https://www.premiumtimesng.com/sports/feed',
-  
-  // Global Sports
-  'https://www.skysports.com/rss/12040',
-  'https://www.espn.com/espn/rss/news',
-  'https://feeds.bbci.co.uk/sport/rss.xml',
-  'https://www.goal.com/en/rss',
-  'https://www.sportingnews.com/us/rss',
-  'https://sports.yahoo.com/rss/',
-  'https://www.si.com/.rss',
-  'https://www.cbssports.com/rss/headlines/',
-  'https://bleacherreport.com/articles/feed',
-  'https://www.marca.com/rss/futbol.html',
-  'https://as.com/rss/futbol/portada.xml'
+  // Global / International Sports (broad + football-heavy)
+  'https://www.skysports.com/rss/12040', // Sky Sports (general)
+  'https://api.foxsports.com/v2/content/optimized-rss?partnerKey=MB0Wehpmuj2lUhuRhQaafhBjAJqaPU244mlTDK1i&size=30', // FOX Sports (optimized RSS)
+  'https://www.espn.com/espn/rss/news', // ESPN Top News
+  'https://feeds.bbci.co.uk/sport/rss.xml', // BBC Sport
+  'https://www.goal.com/en/rss', // Goal.com Global Football
+  'https://www.sportingnews.com/us/rss', // The Sporting News
+  'https://sports.yahoo.com/rss/', // Yahoo Sports News
+  'https://www.reuters.com/arc/outboundfeeds/rss/category/sports/', // Reuters Sports
+  'https://feeds.abcnews.com/abcnews/sportsheadlines', // ABC News Sports
+  'https://www.cbssports.com/rss/headlines/', // CBS Sports
+  'https://bleacherreport.com/articles/feed', // Bleacher Report
+  'https://www.si.com/.rss', // Sports Illustrated
+  'https://globalnews.ca/sports/feed/', // Global News Sports (Canada but broad)
+
+  // Nigerian / African / Home-base (Super Eagles, NPFL, AFCON, local football)
+  'https://www.pulsesports.ng/feed', // Pulse Sports Nigeria (great for NPFL, Super Eagles)
+  'https://www.completesports.com/feed/', // Complete Sports Nigeria
+  'https://www.sports247.ng/feed', // Sports247 Nigeria
+  'https://www.goal.com/en-ng/rss', // Goal.com Nigeria (Super Eagles focus)
+  'https://guardian.ng/feed/?cat=football', // Guardian Nigeria Sports/Football
+  'https://dailypost.ng/category/sports/feed/', // Daily Post Nigeria Sports
+  'https://www.premiumtimesng.com/sports/feed', // Premium Times Sports
+  'https://www.legit.ng/sports/feed/', // Legit.ng Sports
+  'https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf', // AllAfrica Nigeria Sports
 ];
 
 // Helper function to fetch RSS feeds
