@@ -34,6 +34,7 @@ interface ApiKenyaItem {
 const Kenya = () => {
   const [kenyaNews, setKenyaNews] = useState<KenyaNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchKenyaNews = async () => {
