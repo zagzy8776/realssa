@@ -48,7 +48,6 @@ const USA = () => {
   const [usaNews, setUsaNews] = useState<USANewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUSANews = async () => {
