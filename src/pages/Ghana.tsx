@@ -34,6 +34,7 @@ interface ApiGhanaItem {
 const Ghana = () => {
   const [ghanaNews, setGhanaNews] = useState<GhanaNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchGhanaNews = async () => {

@@ -31,55 +31,100 @@ interface ApiUSAItem {
   content?: string;
 }
 
+interface ApiUSAItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  category: string;
+  image: string;
+  readTime: string;
+  author: string;
+  date: string;
+  externalLink: string;
+  content?: string;
+}
+
 const USA = () => {
   const [usaNews, setUsaNews] = useState<USANewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate fetching USA news
     const fetchUSANews = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const mockUSANews: USANewsItem[] = [
-          {
-            id: "usa-1",
-            title: "Silicon Valley Continues Tech Innovation",
-            excerpt: "American technology companies are pushing boundaries in artificial intelligence, space exploration, and renewable energy.",
-            category: "tech",
-            image: "https://images.unsplash.com/photo-1486312338219-ceba24ccdd79?w=800",
-            readTime: "6 min read",
-            author: "Tech Reporter",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "The US tech industry remains at the forefront of global innovation."
-          },
-          {
-            id: "usa-2",
-            title: "New York Fashion Week Sets Global Trends",
-            excerpt: "Designers showcase cutting-edge collections that influence fashion worldwide.",
-            category: "fashion",
-            image: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800",
-            readTime: "4 min read",
-            author: "Fashion Editor",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "NYFW continues to be a major influence on global fashion."
-          }
-        ];
-        
-        setUsaNews(mockUSANews);
-      } catch (error) {
-        console.error("Error fetching USA news:", error);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/usa`);
+        if (response.ok) {
+          const data = await response.json();
+
+          // Map API response to component's expected format
+          const mappedData: USANewsItem[] = data.map((item: ApiUSAItem) => {
+            // Category inference based on content
+            let category: CategoryType = "news";
+            const title = item.title || "";
+            const excerpt = item.excerpt || "";
+
+            if (title.toLowerCase().includes("music") ||
+                title.toLowerCase().includes("artist") ||
+                title.toLowerCase().includes("band") ||
+                excerpt.toLowerCase().includes("music")) {
+              category = "music";
+            } else if (title.toLowerCase().includes("fashion") ||
+                       title.toLowerCase().includes("style") ||
+                       excerpt.toLowerCase().includes("fashion")) {
+              category = "fashion";
+            } else if (title.toLowerCase().includes("tech") ||
+                       title.toLowerCase().includes("technology") ||
+                       title.toLowerCase().includes("silicon valley") ||
+                       title.toLowerCase().includes("startup") ||
+                       excerpt.toLowerCase().includes("tech")) {
+              category = "tech";
+            } else if (title.toLowerCase().includes("culture") ||
+                       title.toLowerCase().includes("traditional") ||
+                       excerpt.toLowerCase().includes("culture")) {
+              category = "culture";
+            } else if (title.toLowerCase().includes("sports") ||
+                       title.toLowerCase().includes("football") ||
+                       title.toLowerCase().includes("nfl") ||
+                       title.toLowerCase().includes("basketball") ||
+                       title.toLowerCase().includes("nba") ||
+                       excerpt.toLowerCase().includes("sports")) {
+              category = "general";
+            }
+
+            return {
+              id: item.id,
+              title: item.title,
+              excerpt: item.excerpt,
+              category,
+              image: item.image,
+              readTime: item.readTime || "5 min read",
+              author: item.author,
+              date: item.date,
+              externalLink: item.externalLink,
+              content: item.content
+            };
+          });
+
+          setUsaNews(mappedData);
+        } else {
+          setError("Failed to fetch USA news");
+        }
+      } catch (err) {
+        console.error("Error fetching USA news:", err);
+        setError("Network error while fetching news");
       } finally {
         setLoading(false);
       }
     };
 
     fetchUSANews();
+
+    // Optional: auto-refresh every 30 minutes
+    const interval = setInterval(fetchUSANews, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
