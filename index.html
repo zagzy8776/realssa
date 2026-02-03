@@ -1,11 +1,17 @@
-<!-- Service Worker for caching (if implemented) -->
-    <!-- <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
-        });
-      }
-    </script> -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RealSSA - African News & Entertainment</title>
+    <meta name="description" content="Your gateway to African news, entertainment, and culture from around the continent." />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
     <!-- Service Worker for caching and performance -->
     <script>
       if ('serviceWorker' in navigator) {
@@ -20,3 +26,5 @@
         });
       }
     </script>
+  </body>
+</html>
