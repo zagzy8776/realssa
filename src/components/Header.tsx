@@ -13,12 +13,18 @@ import DarkModeToggle from "./DarkModeToggle";
 
 const navLinks = [
   { href: "/", label: "Home" },
-  { href: "/nigeria", label: "Nigeria" },
+  { href: "/nigeria", label: "🇳🇬 Nigeria" },
+  { href: "/ghana", label: "🇬🇭 Ghana" },
   { href: "/culture", label: "Culture" },
   { href: "/nigerian-news", label: "Nigerian News" },
   { href: "/world-news", label: "🌍 World News" },
+  { href: "/kenya", label: "🇰🇪 Kenya" },
+  { href: "/south-africa", label: "🇿🇦 South Africa" },
+  { href: "/uk", label: "🇬🇧 UK" },
+  { href: "/usa", label: "🇺🇸 USA" },
   { href: "/crypto", label: "₿ Crypto" },
   { href: "/sports", label: "⚽ Sports" },
+  { href: "/for-you", label: "🎯 For You" },
   { href: "/post-news", label: "Post News" },
   { href: "/admin-dashboard", label: "Dashboard", adminOnly: true },
 ];
