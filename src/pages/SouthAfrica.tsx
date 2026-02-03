@@ -21,51 +21,77 @@ interface SouthAfricaNewsItem {
 const SouthAfrica = () => {
   const [southAfricaNews, setSouthAfricaNews] = useState<SouthAfricaNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate fetching South Africa news
     const fetchSouthAfricaNews = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const mockSouthAfricaNews: SouthAfricaNewsItem[] = [
-          {
-            id: "sa-1",
-            title: "South Africa's Music Scene Gains Global Recognition",
-            excerpt: "South African artists are making international waves with their unique blend of traditional and modern sounds.",
-            category: "music",
-            image: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800",
-            readTime: "4 min read",
-            author: "Music Reporter",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "South Africa's diverse music scene continues to captivate global audiences."
-          },
-          {
-            id: "sa-2",
-            title: "Cape Town Fashion Week Highlights African Creativity",
-            excerpt: "Designers showcase innovative collections that blend African heritage with contemporary style.",
-            category: "fashion",
-            image: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800",
-            readTime: "3 min read",
-            author: "Fashion Editor",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "Cape Town Fashion Week continues to be a platform for African creativity."
-          }
-        ];
-        
-        setSouthAfricaNews(mockSouthAfricaNews);
-      } catch (error) {
-        console.error("Error fetching South Africa news:", error);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/south-africa`);
+        if (response.ok) {
+          const data = await response.json();
+
+          // Map API response to component's expected format
+          const mappedData: SouthAfricaNewsItem[] = data.map((item: ApiSouthAfricaItem) => {
+            // Category inference based on content
+            let category: CategoryType = "news";
+            const title = item.title || "";
+            const excerpt = item.excerpt || "";
+
+            if (title.toLowerCase().includes("music") ||
+                title.toLowerCase().includes("artist") ||
+                title.toLowerCase().includes("hip hop") ||
+                title.toLowerCase().includes("kwaito") ||
+                title.toLowerCase().includes("amapiano") ||
+                excerpt.toLowerCase().includes("music")) {
+              category = "afrobeats";
+            } else if (title.toLowerCase().includes("fashion") ||
+                       title.toLowerCase().includes("style") ||
+                       excerpt.toLowerCase().includes("fashion")) {
+              category = "fashion";
+            } else if (title.toLowerCase().includes("tech") ||
+                       title.toLowerCase().includes("technology") ||
+                       title.toLowerCase().includes("startup") ||
+                       excerpt.toLowerCase().includes("tech")) {
+              category = "tech";
+            } else if (title.toLowerCase().includes("culture") ||
+                       title.toLowerCase().includes("traditional") ||
+                       excerpt.toLowerCase().includes("culture")) {
+              category = "culture";
+            }
+
+            return {
+              id: item.id,
+              title: item.title,
+              excerpt: item.excerpt,
+              category,
+              image: item.image,
+              readTime: item.readTime || "5 min read",
+              author: item.author,
+              date: item.date,
+              externalLink: item.externalLink,
+              content: item.content
+            };
+          });
+
+          setSouthAfricaNews(mappedData);
+        } else {
+          setError("Failed to fetch South Africa news");
+        }
+      } catch (err) {
+        console.error("Error fetching South Africa news:", err);
+        setError("Network error while fetching news");
       } finally {
         setLoading(false);
       }
     };
 
     fetchSouthAfricaNews();
+
+    // Optional: auto-refresh every 30 minutes
+    const interval = setInterval(fetchSouthAfricaNews, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -129,6 +155,19 @@ const SouthAfrica = () => {
           <h2 className="text-2xl md:text-3xl font-bold">Latest South Africa News</h2>
           <CategoryBadge category="news" />
         </div>
+
+        {error && (
+          <div className="text-center py-8 text-red-600">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && southAfricaNews.length === 0 && (
+          <div className="text-center py-12">
+            <h3 className="text-xl font-bold mb-2">No South Africa News Right Now</h3>
+            <p className="text-muted-foreground">We're pulling the latest from News24, IOL, and more. Check back soon!</p>
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

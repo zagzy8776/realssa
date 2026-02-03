@@ -60,6 +60,11 @@ const App = () => (
           <Route path="/for-you" element={<ForYou />} />
           <Route path="/crypto" element={<CryptoNews />} />
           <Route path="/sports" element={<Sports />} />
+          <Route path="/ghana" element={<Ghana />} />
+          <Route path="/kenya" element={<Kenya />} />
+          <Route path="/south-africa" element={<SouthAfrica />} />
+          <Route path="/uk" element={<UK />} />
+          <Route path="/usa" element={<USA />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

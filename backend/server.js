@@ -383,6 +383,104 @@ const sportsFeeds = [
   'https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf', // AllAfrica Nigeria Sports
 ];
 
+// Ghana RSS feeds (News, Culture, Entertainment, Sports)
+const ghanaFeeds = [
+  // Major Ghana News Sources
+  'https://www.graphic.com.gh/rss.xml', // Graphic Online (major Ghana news)
+  'https://www.myjoyonline.com/feed/', // Joy Online (comprehensive Ghana news)
+  'https://citinewsroom.com/feed/', // Citi FM/Newsroom (breaking news)
+  'https://www.ghanaweb.com/GhanaHomePage/rss.php', // GhanaWeb (extensive coverage)
+  'https://3news.com/feed/', // 3News (TV news network)
+  'https://www.pulse.com.gh/rss', // Pulse Ghana (entertainment & lifestyle)
+  'https://yen.com.gh/feed/', // Yen.com.gh (youth-focused news)
+  'https://www.thefinderonline.com/feed/', // The Finder (investigative journalism)
+  'https://www.ghanaiannews.ca/feed/', // Ghanaian News (diaspora focus)
+  'https://www.ghanaguardian.com/feed/', // Ghana Guardian
+
+  // Culture & Entertainment
+  'https://www.ghanaianmusic.com/feed/', // Ghanaian Music (if available)
+  'https://www.celebgist.com/feed/', // Celeb Gist (entertainment)
+  'https://www.ghanaweekend.com/feed/', // Ghana Weekend (lifestyle)
+
+  // Sports (Ghana-focused)
+  'https://www.goal.com/en-gh/rss', // Goal.com Ghana
+  'https://sports.myjoyonline.com/feed/', // Joy Sports
+  'https://www.ghanasoccernet.com/feed/', // Ghana Soccer Net
+  'https://www.pulse.com.gh/sports/rss', // Pulse Sports Ghana
+
+  // Business & Economy
+  'https://www.businessghana.com/rss.xml', // Business Ghana
+  'https://www.bftonline.com.gh/feed/', // Business Financial Times
+];
+
+// Kenya RSS feeds (Entertainment, Music, Culture, Fashion + News)
+const kenyaFeeds = [
+  // Major Kenya News & Entertainment Sources
+  'https://nation.africa/kenya/rss', // Nation Africa (broad Kenyan news, entertainment, culture, lifestyle)
+  'https://www.standardmedia.co.ke/rss/entertainment.php', // The Standard Entertainment
+  'https://www.kenyans.co.ke/rss.xml', // Kenyans.co.ke (breaking news, entertainment, gossip, celebrity)
+  'https://www.ghafla.co.ke/ke/feed', // Ghafla Kenya (entertainment, celebrity gossip, music, fashion)
+  'https://www.mpasho.co.ke/feed', // Mpasho (entertainment, lifestyle, music, videos, celebrity news)
+  'https://nairobiwire.com/feed', // Nairobi Wire (Kenya breaking news, entertainment, politics, lifestyle)
+  'https://www.capitalfm.co.ke/feed', // Capital FM Kenya (news, music, entertainment)
+  'https://www.pulse.ng/rss', // Pulse Kenya (entertainment, music, fashion, celebrity)
+
+  // Additional Entertainment & Culture
+  'https://www.standardmedia.co.ke/rss/headlines.php', // The Standard General (fallback)
+  'https://www.the-star.co.ke/rss', // The Star Kenya (entertainment focus)
+];
+
+// South Africa RSS feeds (Entertainment, Music, Culture, Fashion + News)
+const southAfricaFeeds = [
+  // Major South Africa News & Entertainment Sources
+  'https://www.news24.com/news24/rss', // News24 (broad SA news, entertainment section)
+  'https://www.iol.co.za/rss/iol/entertainment', // IOL Entertainment
+  'https://www.timeslive.co.za/rss', // TimesLIVE / Sunday Times (SA news, entertainment, lifestyle)
+  'https://www.thesouthafrican.com/feed', // The South African (entertainment, music, culture, lifestyle)
+  'https://sahiphopmag.co.za/feed', // SA Hip Hop Mag (South African hip hop, music, urban culture)
+  'https://samusicnews.co.za/feed', // SA Music News & Entertainment
+  'https://undergroundpress.co.za/feed', // Underground Press (music, film, TV, comedy, events)
+  'https://www.bizcommunity.com/rss', // Bizcommunity (business + entertainment/lifestyle in SA)
+
+  // Additional Entertainment Feeds
+  'https://www.news24.com/entertainment/rss', // News24 Entertainment specific
+  'https://www.iol.co.za/rss/iol/entertainment/music', // IOL Music specific
+];
+
+// UK RSS feeds (Entertainment, Music, Fashion, Celebrity + News)
+const ukFeeds = [
+  // Major UK News & Entertainment Sources
+  'https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml', // BBC News Entertainment & Arts
+  'https://www.theguardian.com/uk/entertainment/rss', // The Guardian Entertainment
+  'https://metro.co.uk/entertainment/showbiz/feed/', // Metro UK Showbiz
+  'https://www.dailymail.co.uk/tvshowbiz/index.rss', // Daily Mail TV & Showbiz
+  'https://www.independent.co.uk/arts-entertainment/rss', // The Independent Entertainment
+  'https://www.nme.com/rss', // NME (music, entertainment, culture)
+  'https://www.vogue.co.uk/feed/rss', // Vogue UK (fashion, style, culture)
+  'https://www.hellomagazine.com/rss/', // Hello! Magazine (celebrity, fashion, entertainment)
+
+  // Additional UK Entertainment
+  'https://www.sky.com/rss/entertainment', // Sky Entertainment (if available)
+  'https://www.itv.com/rss/entertainment', // ITV Entertainment (if available)
+];
+
+// USA RSS feeds (Entertainment, Music, Fashion, Celebrity + News)
+const usaFeeds = [
+  // Major USA News & Entertainment Sources
+  'https://rss.nytimes.com/services/xml/rss/nyt/Arts.xml', // NYTimes Entertainment
+  'https://rss.cnn.com/rss/edition_entertainment.rss', // CNN Entertainment
+  'https://www.buzzfeed.com/entertainment.xml', // BuzzFeed Entertainment
+  'https://www.billboard.com/feed/', // Billboard (music industry, charts, news)
+  'https://www.vogue.com/feed/rss', // Vogue US (fashion, style, celebrity)
+  'https://people.com/feed/', // People Magazine (celebrity, entertainment, music)
+  'https://ew.com/feed/', // Entertainment Weekly
+  'https://variety.com/feed/', // Variety (entertainment, film, music, TV)
+
+  // Additional USA Entertainment
+  'https://rss.nytimes.com/services/xml/rss/nyt/Movies.xml', // NYTimes Movies
+  'https://www.hollywoodreporter.com/feed/', // Hollywood Reporter
+];
+
 // Helper function to fetch RSS feeds
 const fetchRSSFeeds = async (feeds) => {
   const allArticles = [];
@@ -615,6 +713,71 @@ app.get('/api/news/sports', async (req, res) => {
   } catch (error) {
     console.error('Error fetching Sports news:', error);
     res.status(500).json({ error: 'Failed to fetch Sports news' });
+  }
+});
+
+// Get Ghana news
+app.get('/api/news/ghana', async (req, res) => {
+  try {
+    console.log('Fetching Ghana news feeds...');
+    const articles = await fetchRSSFeeds(ghanaFeeds);
+    console.log(`Fetched ${articles.length} Ghana articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching Ghana news:', error);
+    res.status(500).json({ error: 'Failed to fetch Ghana news' });
+  }
+});
+
+// Get Kenya news
+app.get('/api/news/kenya', async (req, res) => {
+  try {
+    console.log('Fetching Kenya news feeds...');
+    const articles = await fetchRSSFeeds(kenyaFeeds);
+    console.log(`Fetched ${articles.length} Kenya articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching Kenya news:', error);
+    res.status(500).json({ error: 'Failed to fetch Kenya news' });
+  }
+});
+
+// Get South Africa news
+app.get('/api/news/south-africa', async (req, res) => {
+  try {
+    console.log('Fetching South Africa news feeds...');
+    const articles = await fetchRSSFeeds(southAfricaFeeds);
+    console.log(`Fetched ${articles.length} South Africa articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching South Africa news:', error);
+    res.status(500).json({ error: 'Failed to fetch South Africa news' });
+  }
+});
+
+// Get UK news
+app.get('/api/news/uk', async (req, res) => {
+  try {
+    console.log('Fetching UK news feeds...');
+    const articles = await fetchRSSFeeds(ukFeeds);
+    console.log(`Fetched ${articles.length} UK articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching UK news:', error);
+    res.status(500).json({ error: 'Failed to fetch UK news' });
+  }
+});
+
+// Get USA news
+app.get('/api/news/usa', async (req, res) => {
+  try {
+    console.log('Fetching USA news feeds...');
+    const articles = await fetchRSSFeeds(usaFeeds);
+    console.log(`Fetched ${articles.length} USA articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching USA news:', error);
+    res.status(500).json({ error: 'Failed to fetch USA news' });
   }
 });
 

@@ -18,54 +18,91 @@ interface GhanaNewsItem {
   content?: string;
 }
 
+interface ApiGhanaItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  category: string;
+  image: string;
+  readTime: string;
+  author: string;
+  date: string;
+  externalLink: string;
+  content?: string;
+}
+
 const Ghana = () => {
   const [ghanaNews, setGhanaNews] = useState<GhanaNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate fetching Ghana news
     const fetchGhanaNews = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const mockGhanaNews: GhanaNewsItem[] = [
-          {
-            id: "ghana-1",
-            title: "Ghana's Music Industry Gains International Recognition",
-            excerpt: "Ghanaian artists are making waves globally, with Afrobeats and Highlife music gaining popularity across continents.",
-            category: "afrobeats",
-            image: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=800",
-            readTime: "4 min read",
-            author: "Music Reporter",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "Ghana's vibrant music scene continues to captivate audiences worldwide."
-          },
-          {
-            id: "ghana-2",
-            title: "Accra Fashion Week Showcases Local Talent",
-            excerpt: "Local designers present their latest collections, blending traditional Ghanaian elements with modern fashion trends.",
-            category: "fashion",
-            image: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800",
-            readTime: "3 min read",
-            author: "Fashion Editor",
-            date: new Date().toISOString(),
-            externalLink: "#",
-            content: "Accra Fashion Week continues to be a platform for emerging Ghanaian designers."
-          }
-        ];
-        
-        setGhanaNews(mockGhanaNews);
-      } catch (error) {
-        console.error("Error fetching Ghana news:", error);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/ghana`);
+        if (response.ok) {
+          const data = await response.json();
+
+          // Map API response to component's expected format
+          const mappedData: GhanaNewsItem[] = data.map((item: ApiGhanaItem) => {
+            // Category inference based on content
+            let category: CategoryType = "news";
+            const title = item.title || "";
+            const excerpt = item.excerpt || "";
+
+            if (title.toLowerCase().includes("music") ||
+                title.toLowerCase().includes("artist") ||
+                title.toLowerCase().includes("afrobeats") ||
+                title.toLowerCase().includes("highlife") ||
+                excerpt.toLowerCase().includes("music")) {
+              category = "afrobeats";
+            } else if (title.toLowerCase().includes("fashion") ||
+                       title.toLowerCase().includes("style") ||
+                       excerpt.toLowerCase().includes("fashion")) {
+              category = "fashion";
+            } else if (title.toLowerCase().includes("culture") ||
+                       title.toLowerCase().includes("traditional") ||
+                       excerpt.toLowerCase().includes("culture")) {
+              category = "culture";
+            } else if (title.toLowerCase().includes("sports") ||
+                       title.toLowerCase().includes("football") ||
+                       title.toLowerCase().includes("soccer") ||
+                       excerpt.toLowerCase().includes("sports")) {
+              category = "general";
+            }
+
+            return {
+              id: item.id,
+              title: item.title,
+              excerpt: item.excerpt,
+              category,
+              image: item.image,
+              readTime: item.readTime || "5 min read",
+              author: item.author,
+              date: item.date,
+              externalLink: item.externalLink,
+              content: item.content
+            };
+          });
+
+          setGhanaNews(mappedData);
+        } else {
+          setError("Failed to fetch Ghana news");
+        }
+      } catch (err) {
+        console.error("Error fetching Ghana news:", err);
+        setError("Network error while fetching news");
       } finally {
         setLoading(false);
       }
     };
 
     fetchGhanaNews();
+
+    // Optional: auto-refresh every 30 minutes
+    const interval = setInterval(fetchGhanaNews, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -129,6 +166,19 @@ const Ghana = () => {
           <h2 className="text-2xl md:text-3xl font-bold">Latest Ghana News</h2>
           <CategoryBadge category="news" />
         </div>
+
+        {error && (
+          <div className="text-center py-8 text-red-600">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && ghanaNews.length === 0 && (
+          <div className="text-center py-12">
+            <h3 className="text-xl font-bold mb-2">No Ghana News Right Now</h3>
+            <p className="text-muted-foreground">We're pulling the latest from Graphic, Joy Online, Citi FM and more. Check back soon!</p>
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

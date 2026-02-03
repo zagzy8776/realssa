@@ -18,9 +18,23 @@ interface USANewsItem {
   content?: string;
 }
 
+interface ApiUSAItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  category: string;
+  image: string;
+  readTime: string;
+  author: string;
+  date: string;
+  externalLink: string;
+  content?: string;
+}
+
 const USA = () => {
   const [usaNews, setUsaNews] = useState<USANewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Simulate fetching USA news
@@ -129,6 +143,19 @@ const USA = () => {
           <h2 className="text-2xl md:text-3xl font-bold">Latest USA News</h2>
           <CategoryBadge category="news" />
         </div>
+
+        {error && (
+          <div className="text-center py-8 text-red-600">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && usaNews.length === 0 && (
+          <div className="text-center py-12">
+            <h3 className="text-xl font-bold mb-2">No USA News Right Now</h3>
+            <p className="text-muted-foreground">We're pulling the latest from CNN, NYTimes, and more. Check back soon!</p>
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
