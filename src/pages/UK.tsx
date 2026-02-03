@@ -34,6 +34,7 @@ interface ApiUKItem {
 const UK = () => {
   const [ukNews, setUkNews] = useState<UKNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUKNews = async () => {
