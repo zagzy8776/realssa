@@ -24,7 +24,6 @@ const navLinks = [
   { href: "/usa", label: "🇺🇸 USA" },
   { href: "/crypto", label: "₿ Crypto" },
   { href: "/sports", label: "⚽ Sports" },
-  { href: "/for-you", label: "🎯 For You" },
   { href: "/post-news", label: "Post News" },
   { href: "/admin-dashboard", label: "Dashboard", adminOnly: true },
 ];
