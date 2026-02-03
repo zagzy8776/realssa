@@ -133,7 +133,7 @@ const Header = () => {
         <nav
           className={cn(
             "md:hidden overflow-hidden transition-all duration-300",
-            isMenuOpen ? "max-h-96 pb-4" : "max-h-0"
+            isMenuOpen ? "max-h-[600px] pb-4" : "max-h-0"
           )}
         >
           <div className="flex flex-col gap-3">
