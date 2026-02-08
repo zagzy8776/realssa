@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "../components/CategoryBadge";
 import SimpleImage from "../components/SimpleImage";
+import LiveScores from "../components/LiveScores";
 
 type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "breaking" | "news" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "lagos-fashion" | "nigerian-tech" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "entertainment" | "general";
 
@@ -151,6 +152,11 @@ const Sports = () => {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Live Scores Section */}
+      <section className="mb-8">
+        <LiveScores />
       </section>
 
       {/* Latest News Grid */}

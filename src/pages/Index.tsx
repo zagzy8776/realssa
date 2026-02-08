@@ -4,6 +4,7 @@ import HeroSection from "@/components/HeroSection";
 import { SearchBar } from "@/components/SearchBar";
 import Footer from "@/components/Footer";
 import LazyAd from "@/components/LazyAd";
+import LiveScores from "@/components/LiveScores";
 import { useEffect, useState } from "react";
 import ReadProgressBar from "@/components/ReadProgressBar";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
@@ -73,6 +74,11 @@ const Index = () => {
       <main>
         <HeroSection stories={stories} />
         <SearchBar />
+
+        {/* Live Scores Section */}
+        <section className="container mx-auto px-4 mt-6">
+          <LiveScores />
+        </section>
 
         {/* Advertisement */}
         <section className="py-8 md:py-12">
