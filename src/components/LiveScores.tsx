@@ -1,53 +1,39 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, ExternalLink, Trophy, Clock } from 'lucide-react';
 
-interface Match {
-  fixture: {
-    id: number;
-    status: {
-      elapsed: number;
-      short: string;
-    };
-  };
-  league: {
-    id: number;
-    name: string;
-    country: string;
-    logo: string;
-  };
-  teams: {
-    home: {
-      id: number;
-      name: string;
-      logo: string;
-    };
-    away: {
-      id: number;
-      name: string;
-      logo: string;
-    };
-  };
-  goals: {
-    home: number | null;
-    away: number | null;
-  };
+interface SportMonksMatch {
+  id: number;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+  minute: number;
+  status: string; // LIVE, FT, HT, SCHEDULED
+  league: string;
+  country: string;
+  homeLogo?: string;
+  awayLogo?: string;
+  startingAt?: string;
 }
 
-interface LiveScoresResponse {
-  response: Match[];
+interface SportMonksResponse {
+  status: string;
+  source: string;
+  response: SportMonksMatch[];
   timestamp: number;
   server: string;
+  liveCount: number;
 }
 
 const LiveScores = () => {
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [matches, setMatches] = useState<SportMonksMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Filter to show only important leagues
-  const importantLeagues = ['Premier League', 'NPFL', 'Ligue 1', 'La Liga', 'Serie A', 'Bundesliga', 'Champions League', 'Europa League'];
+  const importantLeagues = ['Premier League', 'NPFL', 'Ligue 1', 'La Liga', 'Serie A', 'Bundesliga', 'Champions League', 'Europa League', 'EFL Cup', 'FA Cup'];
 
   const fetchScores = async () => {
     try {
@@ -58,7 +44,12 @@ const LiveScores = () => {
         throw new Error('Failed to fetch scores');
       }
 
-      const data: LiveScoresResponse = await response.json();
+      const data: SportMonksResponse = await response.json();
+      
+      if (data.status === 'error') {
+        throw new Error(data.message || 'API Error');
+      }
+
       setMatches(data.response || []);
       setLastUpdated(new Date());
       setError(null);
@@ -73,32 +64,35 @@ const LiveScores = () => {
 
   useEffect(() => {
     fetchScores();
-    const interval = setInterval(fetchScores, 60000); // Refresh every 60 seconds
+    const interval = setInterval(fetchScores, 120000); // Refresh every 2 minutes
     return () => clearInterval(interval);
   }, []);
 
   // Filter matches by important leagues
   const filteredMatches = matches.filter(m => 
-    importantLeagues.some(l => m.league.name.includes(l))
+    importantLeagues.some(l => m.league?.toLowerCase().includes(l.toLowerCase())) ||
+    m.country?.toLowerCase().includes('england') ||
+    m.country?.toLowerCase().includes('nigeria')
   );
 
-  // Group matches by league
-  const matchesByLeague = filteredMatches.reduce((acc, match) => {
-    const leagueName = match.league.name;
-    if (!acc[leagueName]) {
-      acc[leagueName] = [];
-    }
-    acc[leagueName].push(match);
-    return acc;
-  }, {} as Record<string, Match[]>);
-
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status.toUpperCase()) {
       case 'LIVE': return 'text-green-600 bg-green-100';
       case 'HT': return 'text-yellow-600 bg-yellow-100';
       case 'FT': return 'text-gray-600 bg-gray-100';
       case 'PEN': return 'text-purple-600 bg-purple-100';
+      case 'SCHEDULED': return 'text-blue-600 bg-blue-100';
       default: return 'text-blue-600 bg-blue-100';
+    }
+  };
+
+  const formatTime = (startingAt?: string) => {
+    if (!startingAt) return '';
+    try {
+      const date = new Date(startingAt);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
     }
   };
 
@@ -168,26 +162,28 @@ const LiveScores = () => {
       {/* Match Count */}
       <div className="flex items-center gap-2 mb-4 text-sm">
         <Trophy size={14} />
-        <span>{matches.length} live matches • {filteredMatches.length} tracked</span>
+        <span>{matches.length} matches tracked</span>
       </div>
 
       {/* Matches Grid */}
-      {matches.length > 0 ? (
+      {filteredMatches.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredMatches.slice(0, 6).map(match => (
             <div 
-              key={match.fixture.id}
+              key={match.id}
               className="bg-white/10 backdrop-blur rounded-lg p-4 hover:bg-white/20 transition cursor-pointer"
             >
-              {/* League */}
+              {/* League & Country */}
               <div className="flex items-center gap-2 mb-2 text-xs text-white/70">
-                <img 
-                  src={match.league.logo} 
-                  alt={match.league.name}
-                  className="w-4 h-4 rounded-full"
-                  onError={(e) => e.currentTarget.style.display = 'none'}
-                />
-                <span>{match.league.name}</span>
+                {match.homeLogo && (
+                  <img 
+                    src={match.homeLogo} 
+                    alt={match.league}
+                    className="w-4 h-4 rounded-full"
+                    onError={(e) => e.currentTarget.style.display = 'none'}
+                  />
+                )}
+                <span>{match.league || 'Unknown League'}</span>
               </div>
 
               {/* Teams & Score */}
@@ -195,40 +191,46 @@ const LiveScores = () => {
                 {/* Home Team */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <img 
-                      src={match.teams.home.logo} 
-                      alt={match.teams.home.name}
-                      className="w-5 h-5"
-                      onError={(e) => e.currentTarget.style.display = 'none'}
-                    />
+                    {match.homeLogo && (
+                      <img 
+                        src={match.homeLogo} 
+                        alt={match.homeTeam}
+                        className="w-5 h-5"
+                        onError={(e) => e.currentTarget.style.display = 'none'}
+                      />
+                    )}
                     <span className="font-medium text-sm truncate max-w-[100px]">
-                      {match.teams.home.name}
+                      {match.homeTeam || 'TBD'}
                     </span>
                   </div>
-                  <span className="font-bold text-lg">{match.goals.home ?? '-'}</span>
+                  <span className="font-bold text-lg">{match.homeScore ?? '-'}</span>
                 </div>
 
                 {/* Away Team */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <img 
-                      src={match.teams.away.logo} 
-                      alt={match.teams.away.name}
-                      className="w-5 h-5"
-                      onError={(e) => e.currentTarget.style.display = 'none'}
-                    />
+                    {match.awayLogo && (
+                      <img 
+                        src={match.awayLogo} 
+                        alt={match.awayTeam}
+                        className="w-5 h-5"
+                        onError={(e) => e.currentTarget.style.display = 'none'}
+                      />
+                    )}
                     <span className="font-medium text-sm truncate max-w-[100px]">
-                      {match.teams.away.name}
+                      {match.awayTeam || 'TBD'}
                     </span>
                   </div>
-                  <span className="font-bold text-lg">{match.goals.away ?? '-'}</span>
+                  <span className="font-bold text-lg">{match.awayScore ?? '-'}</span>
                 </div>
               </div>
 
               {/* Match Time/Status */}
               <div className="mt-3 pt-2 border-t border-white/20 flex items-center justify-between">
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(match.fixture.status.short)}`}>
-                  {match.fixture.status.short === 'LIVE' ? `${match.fixture.status.elapsed}'` : match.fixture.status.short}
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(match.status)}`}>
+                  {match.status === 'LIVE' ? `${match.minute}'` : 
+                   match.status === 'SCHEDULED' ? formatTime(match.startingAt) : 
+                   match.status}
                 </span>
                 <ExternalLink size={12} className="text-white/50" />
               </div>
@@ -238,8 +240,13 @@ const LiveScores = () => {
       ) : (
         <div className="text-center py-8 text-white/70">
           <span className="text-4xl mb-2 block">😴</span>
-          <p>No major league matches live right now</p>
+          <p>No major league matches</p>
           <p className="text-sm text-white/50">Check back during match hours</p>
+          {matches.length > 0 && (
+            <p className="text-xs text-white/50 mt-2">
+              {matches.length} other matches available
+            </p>
+          )}
         </div>
       )}
 
