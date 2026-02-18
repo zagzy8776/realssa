@@ -1,323 +1,376 @@
-import { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Globe, Trophy } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Globe, Trophy } from 'lucide-react';
 
-// League interface
 interface League {
   id: string;
   name: string;
   country: string;
-  logo: string;
+  flag: string;
   widgetId: string;
   widgetUrl: string;
 }
 
-// League data
-const LEAGUES: League[] = [
-  // Top Tier European Leagues
+interface LeagueGroup {
+  label: string;
+  emoji: string;
+  leagues: League[];
+}
+
+const LEAGUE_GROUPS: LeagueGroup[] = [
   {
-    id: 'epl',
-    name: 'Premier League',
-    country: 'England',
-    logo: 'https://resources.premierleague.com/premierleague/badges/t3.png',
-    widgetId: 'widget-i12hmls3aqaq',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232265abf1fa71a672159ec?widgetId=i12hmls3aqaq&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
+    label: 'African',
+    emoji: '🌍',
+    leagues: [
+      {
+        id: 'npfl',
+        name: 'NPFL',
+        country: 'Nigeria',
+        flag: '🇳🇬',
+        widgetId: 'widget-jvyjmlsdhqze',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232328281a87a6b7041ee10?widgetId=jvyjmlsdhqze&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'ghana-pl',
+        name: 'Ghana Premier League',
+        country: 'Ghana',
+        flag: '🇬🇭',
+        widgetId: 'widget-rznvmlsdgncg',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232373c075e5774a244b1ba?widgetId=rznvmlsdgncg&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'caf-cl',
+        name: 'CAF Champions League',
+        country: 'Africa',
+        flag: '🌍',
+        widgetId: 'widget-q4whmlsdcfj8',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232327b81a87a6b7041ed3a?widgetId=q4whmlsdcfj8&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'afcon',
+        name: 'AFCON',
+        country: 'Africa',
+        flag: '🏆',
+        widgetId: 'widget-lpyhmlsd79s2',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62327c7198b2e367f650e4d4?widgetId=lpyhmlsd79s2&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'wc-qual-caf',
+        name: 'WC Qualification CAF',
+        country: 'Africa',
+        flag: '🌍',
+        widgetId: 'widget-z0lhmlsdaj8g',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/623237858afe7e403066ced4?widgetId=z0lhmlsdaj8g&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+    ],
   },
   {
-    id: 'laliga',
-    name: 'La Liga',
-    country: 'Spain',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/0/0a/LaLiga_Santander_logo.svg/1200px-LaLiga_Santander_logo.svg.png',
-    widgetId: 'widget-dl0mmls3rkz4',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232267fbf1fa71a67215dfc?widgetId=dl0mmls3rkz4&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
+    label: 'European Cups',
+    emoji: '🏆',
+    leagues: [
+      {
+        id: 'ucl',
+        name: 'Champions League',
+        country: 'Europe',
+        flag: '⭐',
+        widgetId: 'widget-oingmlsce8u7',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232267fbf1fa71a67215dfc?widgetId=oingmlsce8u7&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'uel',
+        name: 'Europa League',
+        country: 'Europe',
+        flag: '🟠',
+        widgetId: 'widget-6vqbmlscfbio',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322bf0ea44793ec978b7a6?widgetId=6vqbmlscfbio&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'uecl',
+        name: 'Conference League',
+        country: 'Europe',
+        flag: '🟢',
+        widgetId: 'widget-g8f9mlscg4q6',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232378fe960277cec5c28b0?widgetId=g8f9mlscg4q6&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+    ],
   },
   {
-    id: 'seriea',
-    name: 'Serie A',
-    country: 'Italy',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/0/0b/Serie_A_logo.svg/1200px-Serie_A_logo.svg.png',
-    widgetId: 'widget-r9m8mls3sdv6',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322bf0ea44793ec978b7a6?widgetId=r9m8mls3sdv6&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
+    label: 'British',
+    emoji: '🇬🇧',
+    leagues: [
+      {
+        id: 'epl',
+        name: 'Premier League',
+        country: 'England',
+        flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+        widgetId: 'widget-y8v8mlscgyyw',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232265abf1fa71a672159ec?widgetId=y8v8mlscgyyw&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'fa-cup',
+        name: 'FA Cup',
+        country: 'England',
+        flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+        widgetId: 'widget-6v8nmlscrc85',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322dbb9062081f1515ee9c?widgetId=6v8nmlscrc85&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'welsh-pl',
+        name: 'Welsh Premier League',
+        country: 'Wales',
+        flag: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+        widgetId: 'widget-t40rmlscxdzn',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232383faa372f03a16c7a4e?widgetId=t40rmlscxdzn&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'scottish',
+        name: 'Scottish Premiership',
+        country: 'Scotland',
+        flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+        widgetId: 'widget-s3ndmlscwonb',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322ba3946b336c466ab6f2?widgetId=s3ndmlscwonb&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+    ],
   },
   {
-    id: 'bundesliga',
-    name: 'Bundesliga',
-    country: 'Germany',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/3/33/Bundesliga_logo_%282017%29.svg/1200px-Bundesliga_logo_%282017%29.svg.png',
-    widgetId: 'widget-mtekmls3swu4',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232378fe960277cec5c28b0?widgetId=mtekmls3swu4&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
+    label: 'Top European',
+    emoji: '⚽',
+    leagues: [
+      {
+        id: 'laliga',
+        name: 'La Liga',
+        country: 'Spain',
+        flag: '🇪🇸',
+        widgetId: 'widget-6nw3mlschro2',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322c053617da0b83221cc6?widgetId=6nw3mlschro2&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'bundesliga',
+        name: 'Bundesliga',
+        country: 'Germany',
+        flag: '🇩🇪',
+        widgetId: 'widget-0oo3mlsckbby',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62321f50f7016c22d3650732?widgetId=0oo3mlsckbby&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'ligue1',
+        name: 'Ligue 1',
+        country: 'France',
+        flag: '🇫🇷',
+        widgetId: 'widget-t7scmlscq8hj',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322b4efd209951602c9096?widgetId=t7scmlscq8hj&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'seriea',
+        name: 'Serie A',
+        country: 'Italy',
+        flag: '🇮🇹',
+        widgetId: 'widget-43ilmlscqrvp',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322b827aee66235a2be718?widgetId=43ilmlscqrvp&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+    ],
   },
   {
-    id: 'ligue1',
-    name: 'Ligue 1',
-    country: 'France',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/9/9a/Ligue_1_Logo.svg/1200px-Ligue_1_Logo.svg.png',
-    widgetId: 'widget-hngwmls3tdka',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322c053617da0b83221cc6?widgetId=hngwmls3tdka&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
+    label: 'International',
+    emoji: '🌐',
+    leagues: [
+      {
+        id: 'world-cup',
+        name: 'World Cup',
+        country: 'International',
+        flag: '🌍',
+        widgetId: 'widget-q9xrmlsd0462',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322bfa75414360044d5ca4?widgetId=q9xrmlsd0462&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'nations-league',
+        name: 'UEFA Nations League A',
+        country: 'Europe',
+        flag: '🇪🇺',
+        widgetId: 'widget-wfn6mlsd0ymv',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232371247e10a66b322d10c?widgetId=wfn6mlsd0ymv&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'wc-qual-uefa',
+        name: 'WC Qualification UEFA',
+        country: 'Europe',
+        flag: '🇪🇺',
+        widgetId: 'widget-y3bbmlsd8rj7',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62323781eb82e258154aaeea?widgetId=y3bbmlsd8rj7&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'wc-qual-conmebol',
+        name: 'WC Qualification CONMEBOL',
+        country: 'South America',
+        flag: '🌎',
+        widgetId: 'widget-4ki9mlsd9xh2',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322af863d26f367f7a05ec?widgetId=4ki9mlsd9xh2&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+      {
+        id: 'wc-qual-afc',
+        name: 'WC Qualification AFC',
+        country: 'Asia',
+        flag: '🌏',
+        widgetId: 'widget-zm2cmlsdbaeq',
+        widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/623237838afe7e403066ceaa?widgetId=zm2cmlsdbaeq&lang=en&teamLogo=1&tableLines=0&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd',
+      },
+    ],
   },
-  
-  // International Competitions
-  {
-    id: 'champions',
-    name: 'Champions League',
-    country: 'Europe',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/6/67/UEFA_Champions_League.svg/1200px-UEFA_Champions_League.svg.png',
-    widgetId: 'widget-geflmls3u5gk',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62321f50f7016c22d3650732?widgetId=geflmls3u5gk&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
-  },
-  {
-    id: 'europa',
-    name: 'Europa League',
-    country: 'Europe',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/5/5a/UEFA_Europa_League.svg/1200px-UEFA_Europa_League.svg.png',
-    widgetId: 'widget-1d6imls3umxe',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322b4efd209951602c9096?widgetId=1d6imls3umxe&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
-  },
-  {
-    id: 'conference',
-    name: 'Conference League',
-    country: 'Europe',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/0/0b/UEFA_Europa_Conference_League.svg/1200px-UEFA_Europa_Conference_League.svg.png',
-    widgetId: 'widget-d7phmls3v5e4',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322b827aee66235a2be718?widgetId=d7phmls3v5e4&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
-  },
-  
-  // Other European Leagues
-  {
-    id: 'eredivisie',
-    name: 'Eredivisie',
-    country: 'Netherlands',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/2/2d/Eredivisie_logo.svg/1200px-Eredivisie_logo.svg.png',
-    widgetId: 'widget-cm28mls3vja4',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322dbb9062081f1515ee9c?widgetId=cm28mls3vja4&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
-  },
-  {
-    id: 'primeira',
-    name: 'Primeira Liga',
-    country: 'Portugal',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/4/4d/Liga_Portugal_Logo.svg/1200px-Liga_Portugal_Logo.svg.png',
-    widgetId: 'widget-aluqmls3wb67',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62327c6198b2e367f650e2c2?widgetId=aluqmls3wb67&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
-  },
-  {
-    id: 'scottish',
-    name: 'Scottish Premiership',
-    country: 'Scotland',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/5/5c/Scottish_Premiership_logo.svg/1200px-Scottish_Premiership_logo.svg.png',
-    widgetId: 'widget-21dfmls3wpa2',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322ba3946b336c466ab6f2?widgetId=21dfmls3wpa2&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
-  },
-  {
-    id: 'belgian',
-    name: 'Belgian Pro League',
-    country: 'Belgium',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/5/5d/Belgian_Pro_League_logo.svg/1200px-Belgian_Pro_League_logo.svg.png',
-    widgetId: 'widget-e6hcmls3xts8',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/6232383faa372f03a16c7a4e?widgetId=e6hcmls3xts8&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
-  },
-  {
-    id: 'superlig',
-    name: 'Süper Lig',
-    country: 'Turkey',
-    logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/0/0a/Super_Lig_logo.svg/1200px-Super_Lig_logo.svg.png',
-    widgetId: 'widget-qrl5mls3ylia',
-    widgetUrl: 'https://widgets.scoreaxis.com/api/football/league-table/62322ce38fd98d1a724b9bb4?widgetId=qrl5mls3ylia&lang=en&teamLogo=1&tableLines=1&homeAway=1&header=1&position=1&goals=1&gamesCount=1&diff=1&winCount=1&drawCount=1&loseCount=1&lastGames=1&points=1&teamsLimit=all&links=1&font=heebo&fontSize=14&rowDensity=100&widgetWidth=auto&widgetHeight=auto&bodyColor=%23ffffff&textColor=%23141416&linkColor=%23141416&borderColor=%23ecf1f7&tabColor=%23f3f8fd'
-  }
 ];
 
 const SportsLeagueTables = () => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [widgetLoaded, setWidgetLoaded] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [activeGroupIndex, setActiveGroupIndex] = useState(0);
+  const [activeLeagueId, setActiveLeagueId] = useState(LEAGUE_GROUPS[0].leagues[0].id);
+  const [isLoading, setIsLoading] = useState(true);
   const widgetContainerRef = useRef<HTMLDivElement>(null);
+  const scriptRef = useRef<HTMLScriptElement | null>(null);
 
-  // Auto-scroll functionality
+  const activeGroup = LEAGUE_GROUPS[activeGroupIndex];
+  const activeLeague = activeGroup.leagues.find((l) => l.id === activeLeagueId) || activeGroup.leagues[0];
+
+  // Load the Scoreaxis widget script properly
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isTransitioning) {
-        nextLeague();
-      }
-    }, 15000); // Change league every 15 seconds
+    setIsLoading(true);
 
-    return () => clearInterval(interval);
-  }, [currentIndex, isTransitioning]);
+    // Remove previous script if any
+    if (scriptRef.current && scriptRef.current.parentNode) {
+      scriptRef.current.parentNode.removeChild(scriptRef.current);
+      scriptRef.current = null;
+    }
 
-  const nextLeague = () => {
-    if (isTransitioning) return;
-    setIsTransitioning(true);
-    setWidgetLoaded(false);
-    
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % LEAGUES.length);
-      setIsTransitioning(false);
-      setWidgetLoaded(true);
-    }, 300);
+    // Clear the widget container content (keep attribution)
+    const container = widgetContainerRef.current;
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Small delay to allow DOM to clear
+    const timer = setTimeout(() => {
+      const script = document.createElement('script');
+      script.src = activeLeague.widgetUrl;
+      script.async = true;
+      script.onload = () => setIsLoading(false);
+      script.onerror = () => setIsLoading(false);
+      container.appendChild(script);
+      scriptRef.current = script;
+
+      // Fallback: hide loader after 5s even if onload doesn't fire
+      setTimeout(() => setIsLoading(false), 5000);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [activeLeague.widgetUrl]);
+
+  const handleGroupChange = (groupIndex: number) => {
+    setActiveGroupIndex(groupIndex);
+    setActiveLeagueId(LEAGUE_GROUPS[groupIndex].leagues[0].id);
   };
 
-  const prevLeague = () => {
-    if (isTransitioning) return;
-    setIsTransitioning(true);
-    setWidgetLoaded(false);
-    
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev - 1 + LEAGUES.length) % LEAGUES.length);
-      setIsTransitioning(false);
-      setWidgetLoaded(true);
-    }, 300);
+  const handleLeagueChange = (leagueId: string) => {
+    setActiveLeagueId(leagueId);
   };
-
-  const goToLeague = (index: number) => {
-    if (index === currentIndex || isTransitioning) return;
-    setIsTransitioning(true);
-    setWidgetLoaded(false);
-    
-    setTimeout(() => {
-      setCurrentIndex(index);
-      setIsTransitioning(false);
-      setWidgetLoaded(true);
-    }, 300);
-  };
-
-  const currentLeague = LEAGUES[currentIndex];
 
   return (
-    <div className="bg-gradient-to-br from-green-600 via-green-700 to-emerald-800 rounded-2xl p-6 mb-8 text-white shadow-2xl">
+    <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 mb-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg">
-            <div className="w-8 h-8 bg-green-700 rounded-full"></div>
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold">Football League Tables</h2>
-            <p className="text-sm text-white/80 flex items-center gap-2 mt-1">
-              <Globe size={14} />
-              {currentLeague.country} • {currentLeague.name}
-            </p>
-          </div>
+      <div className="bg-gradient-to-r from-green-700 to-emerald-600 px-6 py-4 flex items-center gap-3">
+        <span className="text-3xl">⚽</span>
+        <div>
+          <h2 className="text-xl font-bold text-white leading-tight">Football League Tables</h2>
+          <p className="text-green-100 text-sm flex items-center gap-1 mt-0.5">
+            <Globe size={12} />
+            Live standings from around the world
+          </p>
         </div>
-        
-        <div className="flex gap-2">
-          <button
-            onClick={prevLeague}
-            disabled={isTransitioning}
-            className="p-3 bg-white/20 rounded-full hover:bg-white/30 transition disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm"
-          >
-            <ChevronLeft size={22} />
-          </button>
-          <button
-            onClick={nextLeague}
-            disabled={isTransitioning}
-            className="p-3 bg-white/20 rounded-full hover:bg-white/30 transition disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm"
-          >
-            <ChevronRight size={22} />
-          </button>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full backdrop-blur-sm">
+            Live Data
+          </span>
         </div>
       </div>
 
-      {/* League Carousel */}
-      <div className="mb-6 relative">
-        <div 
-          ref={containerRef}
-          className="flex overflow-hidden gap-3 pb-2"
-          style={{ 
-            transform: `translateX(-${currentIndex * (100 / 5)}%)`,
-            transition: isTransitioning ? 'transform 0.3s ease-in-out' : 'none'
-          }}
-        >
-          {LEAGUES.map((league, index) => (
-            <button
-              key={league.id}
-              onClick={() => goToLeague(index)}
-              disabled={isTransitioning}
-              className={`flex-shrink-0 w-1/5 p-3 rounded-xl transition-all duration-300 ${
-                index === currentIndex
-                  ? 'bg-white text-green-700 shadow-lg scale-105'
-                  : 'bg-white/10 hover:bg-white/20 backdrop-blur-sm'
-              } ${isTransitioning ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-            >
-              <div className="flex flex-col items-center gap-2">
-                <img
-                  src={league.logo}
-                  alt={league.name}
-                  className="w-12 h-12 object-contain"
-                  onError={(e) => {
-                    e.currentTarget.src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Flat_tick_icon.svg/1200px-Flat_tick_icon.svg.png';
-                  }}
-                />
-                <div className="text-center">
-                  <p className="font-semibold text-sm truncate w-full">{league.name}</p>
-                  <p className="text-xs opacity-80">{league.country}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-        
-        {/* Scroll indicators */}
-        <div className="absolute top-0 left-0 w-10 h-full bg-gradient-to-r from-green-700 to-transparent pointer-events-none" />
-        <div className="absolute top-0 right-0 w-10 h-full bg-gradient-to-l from-green-700 to-transparent pointer-events-none" />
+      {/* Category Group Tabs */}
+      <div className="flex overflow-x-auto border-b border-gray-200 bg-gray-50 scrollbar-hide">
+        {LEAGUE_GROUPS.map((group, index) => (
+          <button
+            key={group.label}
+            onClick={() => handleGroupChange(index)}
+            className={`flex-shrink-0 flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-all duration-200 border-b-2 whitespace-nowrap ${
+              index === activeGroupIndex
+                ? 'border-green-600 text-green-700 bg-white'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span>{group.emoji}</span>
+            {group.label}
+          </button>
+        ))}
       </div>
 
-      {/* Widget Container */}
-      <div className="bg-white rounded-2xl p-4 shadow-xl">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <Trophy size={20} className="text-green-600" />
-            <span className="font-bold text-gray-800">{currentLeague.name}</span>
-            <span className="text-sm text-gray-500">({currentLeague.country})</span>
-          </div>
-          <div className="flex gap-2">
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
-              Live Data
-            </span>
-            <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">
-              Scoreaxis
-            </span>
-          </div>
+      {/* League Tabs within selected group */}
+      <div className="flex flex-wrap gap-2 px-4 py-3 bg-white border-b border-gray-100">
+        {activeGroup.leagues.map((league) => (
+          <button
+            key={league.id}
+            onClick={() => handleLeagueChange(league.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+              league.id === activeLeague.id
+                ? 'bg-green-600 text-white shadow-md'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <span className="text-base leading-none">{league.flag}</span>
+            {league.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Active League Info Bar */}
+      <div className="flex items-center justify-between px-5 py-2.5 bg-green-50 border-b border-green-100">
+        <div className="flex items-center gap-2">
+          <Trophy size={16} className="text-green-600" />
+          <span className="font-semibold text-gray-800 text-sm">{activeLeague.name}</span>
+          <span className="text-gray-400 text-sm">·</span>
+          <span className="text-gray-500 text-sm">{activeLeague.country}</span>
         </div>
-        
-        <div 
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          <span className="text-xs text-green-700 font-medium">Live</span>
+        </div>
+      </div>
+
+      {/* Widget Area */}
+      <div className="relative bg-white min-h-[300px]">
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-10 gap-3">
+            <div className="w-10 h-10 border-4 border-green-200 border-t-green-600 rounded-full animate-spin"></div>
+            <p className="text-sm text-gray-500 font-medium">Loading {activeLeague.name} table...</p>
+          </div>
+        )}
+
+        {/* Scoreaxis Widget Mount Point */}
+        <div
           ref={widgetContainerRef}
-          className="scoreaxis-widget"
+          className="scoreaxis-widget w-full"
           style={{
-            width: 'auto',
-            height: 'auto',
             fontSize: '14px',
             backgroundColor: '#ffffff',
             color: '#141416',
-            border: '1px solid',
-            borderColor: '#ecf1f7',
-            overflow: 'auto'
+            overflow: 'auto',
           }}
-        >
-          {widgetLoaded && (
-            <script
-              src={currentLeague.widgetUrl}
-              async
-              onLoad={() => setWidgetLoaded(true)}
-            />
-          )}
-          <div className="widget-main-link" style={{ padding: '6px 12px', fontWeight: 500 }}>
-            Live data by <a href="https://www.scoreaxis.com/" style={{ color: 'inherit' }}>Scoreaxis</a>
-          </div>
-        </div>
-      </div>
+        />
 
-      {/* Navigation Dots */}
-      <div className="flex justify-center gap-2 mt-4">
-        {LEAGUES.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => goToLeague(index)}
-            disabled={isTransitioning}
-            className={`w-3 h-3 rounded-full transition-all ${
-              index === currentIndex
-                ? 'bg-white scale-125'
-                : 'bg-white/50 hover:bg-white/75'
-            } ${isTransitioning ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-          />
-        ))}
+        {/* Attribution */}
+        <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-400 text-right">
+          Live data by{' '}
+          <a
+            href="https://www.scoreaxis.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-green-600 hover:underline font-medium"
+          >
+            Scoreaxis
+          </a>
+        </div>
       </div>
     </div>
   );
