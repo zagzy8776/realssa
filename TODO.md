@@ -1,46 +1,37 @@
-# Newssection Refactor TODO
+# SportsLeagueTables Update - FootyStats Integration
 
-## Tasks:
+## Steps to Complete
 
-### 1. Update Header Component (Mobile Layout)
-- [x] Move PushNotificationManager and DarkModeToggle to top of mobile header
-- [x] Position them before the hamburger menu button
+### 1. Update SportsLeagueTables.tsx
+- [x] Replace LEAGUE_GROUPS data with FootyStats league IDs
+- [x] Remove iframe-based widget rendering
+- [x] Implement dynamic script injection using useEffect and useRef
+- [x] Add proper cleanup when switching leagues
+- [x] Keep existing UI structure (tabs, headers, loading states)
+- [x] Add error handling and retry logic
 
-
-### 2. Refactor Newssection.tsx
-- [x] Add hero section with gradient overlay (news-themed colors)
-- [x] Replace EnhancedImage with SimpleImage for faster loading
-- [x] Change from 3-column to clean 2-column grid layout
-- [x] Remove infinite scroll complexity (IntersectionObserver, pagination states)
-- [x] Simplify card design to match Ghana.tsx style
-- [x] Add category inference logic from article titles
-- [x] Improve error and empty state messaging
-- [x] Add auto-refresh every 30 minutes
-- [x] Ensure backend images and RSS feed images display properly
-- [x] Add proper image fallbacks
-
+### 2. League Mapping
+- [x] Map all provided FootyStats leagues:
+  - Premier League (15050)
+  - Championship (14930)
+  - League One (14934)
+  - League Two (14935)
+  - Bundesliga (14968)
+  - Serie A (15068)
+  - La Liga (14956)
+  - Ligue 1 (14932)
+  - J1 League (16242)
+  - Premiership (15000)
+  - Super League (16789)
+- [x] Reorganized into 3 groups: British, Top European, More Leagues
 
 ### 3. Testing
-- [x] Test news loading from backend
-- [x] Test RSS feed image display
-- [x] Test mobile layout with notification/dark toggle at top
+- [x] Test league switching functionality
+- [x] Verify widgets load correctly
+- [x] Check for script loading conflicts
 - [x] Test error states
-- [x] Verify fast loading performance
 
-## Summary of Changes
-
-### Header Component (src/components/Header.tsx)
-- Moved PushNotificationManager and DarkModeToggle to the top of mobile header
-- Positioned before the hamburger menu button for easy access
-- Removed duplicate settings section from mobile menu
-
-### Newssection Page (src/pages/Newssection.tsx)
-- **Hero Section**: Added clean hero with blue-purple-pink gradient overlay, newspaper icon, and clear CTAs
-- **Image Loading**: Replaced EnhancedImage with SimpleImage for faster loading
-- **Layout**: Changed from 3-column to clean 2-column grid (better readability)
-- **Simplified State**: Removed infinite scroll, IntersectionObserver, and complex pagination
-- **Smart Categories**: Added category inference based on article title/content
-- **Better Error Handling**: Improved error and empty state messaging
-- **Auto-refresh**: Added 30-minute auto-refresh interval
-- **Image Handling**: Proper support for backend and RSS feed images with fallbacks
-- **Performance**: Faster load times with simplified component structure
+## Progress
+- [x] Plan created and approved
+- [x] Implementation completed
+- [x] Testing completed - Dev server running at http://localhost:8080/

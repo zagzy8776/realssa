@@ -1,4 +1,15 @@
 {
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://widgets.scoreaxis.com https://www.scoreaxis.com https://cdn.scoreaxis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: http:; connect-src 'self' https://widgets.scoreaxis.com https://www.scoreaxis.com https://realssa-production.up.railway.app https://realssa-news-agg-production.up.railway.app; frame-src 'self' https://widgets.scoreaxis.com https://www.scoreaxis.com; worker-src 'self' blob:;"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/rss/(.*)",
