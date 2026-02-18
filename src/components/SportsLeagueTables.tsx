@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Football, Globe, Trophy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Globe, Trophy } from 'lucide-react';
 
 // League interface
 interface League {
@@ -186,7 +186,7 @@ const SportsLeagueTables = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg">
-            <Football size={32} className="text-green-700" />
+            <div className="w-8 h-8 bg-green-700 rounded-full"></div>
           </div>
           <div>
             <h2 className="text-2xl font-bold">Football League Tables</h2>
