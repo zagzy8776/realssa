@@ -244,6 +244,9 @@ const SportsLeagueTables = () => {
 
     // Small delay to allow DOM to clear
     const timer = setTimeout(() => {
+      // Set the container id to match the widgetId so Scoreaxis can find its wrapper
+      container.id = activeLeague.widgetId;
+
       const script = document.createElement('script');
       script.src = activeLeague.widgetUrl;
       script.async = true;
