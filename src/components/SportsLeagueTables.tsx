@@ -322,12 +322,14 @@ const SportsLeagueTables = () => {
           </div>
         )}
 
-        {/* Scoreaxis Widget — rendered as raw HTML so the script runs correctly */}
-        <div
+        {/* Scoreaxis Widget — iframe isolates the script so it executes correctly */}
+        <iframe
           key={`${activeLeague.widgetId}-${widgetKey}`}
-          dangerouslySetInnerHTML={{
-            __html: `<div id="${activeLeague.widgetId}" class="scoreaxis-widget" style="width:auto;height:auto;font-size:14px;background-color:#ffffff;color:#141416;overflow:auto;"><script src="${activeLeague.widgetUrl}" async><\/script></div>`,
-          }}
+          srcDoc={`<!DOCTYPE html><html><head><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Heebo',sans-serif;background:#fff;}</style><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600&display=swap" rel="stylesheet"></head><body><div id="${activeLeague.widgetId}" class="scoreaxis-widget" style="width:auto;height:auto;font-size:14px;background-color:#ffffff;color:#141416;overflow:auto;"><script src="${activeLeague.widgetUrl}" async><\/script></div></body></html>`}
+          style={{ width: '100%', border: 'none', minHeight: '420px' }}
+          scrolling="no"
+          title={`${activeLeague.name} League Table`}
+          onLoad={() => setIsLoading(false)}
         />
 
         {/* Attribution */}
