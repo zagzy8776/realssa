@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Globe, Trophy } from 'lucide-react';
 
 interface League {
@@ -221,46 +221,17 @@ const SportsLeagueTables = () => {
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
   const [activeLeagueId, setActiveLeagueId] = useState(LEAGUE_GROUPS[0].leagues[0].id);
   const [isLoading, setIsLoading] = useState(true);
-  const widgetContainerRef = useRef<HTMLDivElement>(null);
-  const scriptRef = useRef<HTMLScriptElement | null>(null);
+  const [widgetKey, setWidgetKey] = useState(0);
 
   const activeGroup = LEAGUE_GROUPS[activeGroupIndex];
   const activeLeague = activeGroup.leagues.find((l) => l.id === activeLeagueId) || activeGroup.leagues[0];
 
-  // Load the Scoreaxis widget script properly
+  // Show loader briefly when league changes
   useEffect(() => {
     setIsLoading(true);
-
-    // Remove previous script if any
-    if (scriptRef.current && scriptRef.current.parentNode) {
-      scriptRef.current.parentNode.removeChild(scriptRef.current);
-      scriptRef.current = null;
-    }
-
-    // Clear the widget container content (keep attribution)
-    const container = widgetContainerRef.current;
-    if (!container) return;
-    container.innerHTML = '';
-
-    // Small delay to allow DOM to clear
-    const timer = setTimeout(() => {
-      // Set the container id to match the widgetId so Scoreaxis can find its wrapper
-      container.id = activeLeague.widgetId;
-
-      const script = document.createElement('script');
-      script.src = activeLeague.widgetUrl;
-      script.async = true;
-      script.onload = () => setIsLoading(false);
-      script.onerror = () => setIsLoading(false);
-      container.appendChild(script);
-      scriptRef.current = script;
-
-      // Fallback: hide loader after 5s even if onload doesn't fire
-      setTimeout(() => setIsLoading(false), 5000);
-    }, 100);
-
+    const timer = setTimeout(() => setIsLoading(false), 4000);
     return () => clearTimeout(timer);
-  }, [activeLeague.widgetUrl]);
+  }, [activeLeague.widgetId]);
 
   const handleGroupChange = (groupIndex: number) => {
     setActiveGroupIndex(groupIndex);
@@ -269,6 +240,7 @@ const SportsLeagueTables = () => {
 
   const handleLeagueChange = (leagueId: string) => {
     setActiveLeagueId(leagueId);
+    setWidgetKey((k) => k + 1);
   };
 
   return (
@@ -340,7 +312,7 @@ const SportsLeagueTables = () => {
         </div>
       </div>
 
-      {/* Widget Area */}
+        {/* Widget Area */}
       <div className="relative bg-white min-h-[300px]">
         {/* Loading Overlay */}
         {isLoading && (
@@ -350,15 +322,11 @@ const SportsLeagueTables = () => {
           </div>
         )}
 
-        {/* Scoreaxis Widget Mount Point */}
+        {/* Scoreaxis Widget — rendered as raw HTML so the script runs correctly */}
         <div
-          ref={widgetContainerRef}
-          className="scoreaxis-widget w-full"
-          style={{
-            fontSize: '14px',
-            backgroundColor: '#ffffff',
-            color: '#141416',
-            overflow: 'auto',
+          key={`${activeLeague.widgetId}-${widgetKey}`}
+          dangerouslySetInnerHTML={{
+            __html: `<div id="${activeLeague.widgetId}" class="scoreaxis-widget" style="width:auto;height:auto;font-size:14px;background-color:#ffffff;color:#141416;overflow:auto;"><script src="${activeLeague.widgetUrl}" async><\/script></div>`,
           }}
         />
 
