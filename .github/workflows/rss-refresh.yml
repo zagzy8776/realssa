@@ -1,0 +1,62 @@
+name: Auto-Refresh RSS Feeds
+
+on:
+  schedule:
+    - cron: '0 */1 * * *'     # Runs every hour on the hour
+  workflow_dispatch:          # Allows manual run from GitHub
+
+permissions:
+  contents: write             # Required to commit and push changes
+
+jobs:
+  build-and-update:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup MSVC compiler
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Setup vcpkg
+        shell: cmd
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          cd C:\vcpkg
+          bootstrap-vcpkg.bat
+          vcpkg integrate install
+
+      - name: Install libraries
+        shell: cmd
+        run: |
+          C:\vcpkg\vcpkg install curl:x64-windows --triplet x64-windows
+          C:\vcpkg\vcpkg install pugixml:x64-windows --triplet x64-windows
+          C:\vcpkg\vcpkg install nlohmann-json:x64-windows --triplet x64-windows
+
+      - name: Build RSS Grabber
+        shell: cmd
+        run: |
+          cl /EHsc /std:c++20 /I"C:\vcpkg\installed\x64-windows\include" ^
+            main.cpp ^
+            /link /LIBPATH:"C:\vcpkg\installed\x64-windows\lib" ^
+            libcurl.lib pugixml.lib ^
+            ws2_32.lib crypt32.lib ^
+            /OUT:rss_grabber.exe
+
+      - name: Run the grabber
+        shell: cmd
+        run: rss_grabber.exe
+
+      - name: Commit and push updated JSON
+        shell: pwsh
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add public/data/feeds/combined.json || echo "No JSON to add"
+          git commit -m "🔄 Auto-update RSS feeds $(Get-Date -Format 'yyyy-MM-dd HH:mm')" --allow-empty || echo "No changes to commit"
+          git push

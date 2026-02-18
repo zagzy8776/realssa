@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/rss/(.*)",
+      "destination": "https://realssa-production.up.railway.app/rss/$1"
+    },
+    {
+      "source": "/news-feed",
+      "destination": "https://realssa-news-agg-production.up.railway.app/news-feed"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "https://realssa-production.up.railway.app/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

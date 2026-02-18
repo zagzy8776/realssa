@@ -1,0 +1,291 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* EntertainmentGHC Design System - African Entertainment News Portal */
+
+@layer base {
+  :root {
+    /* Light Mode - Core backgrounds */
+    --background: 0 0% 100%;
+    --foreground: 30 10% 10%;
+    
+    /* Cards & Surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 30 10% 10%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 10% 10%;
+    
+    /* Brand Gold - Primary */
+    --primary: 43 96% 56%;
+    --primary-foreground: 30 10% 6%;
+    
+    /* Coral Accent - Secondary */
+    --secondary: 15 80% 55%;
+    --secondary-foreground: 0 0% 100%;
+    
+    /* Muted tones */
+    --muted: 30 10% 96%;
+    --muted-foreground: 30 10% 45%;
+
+    
+    /* Accent - Warm amber */
+    --accent: 35 90% 50%;
+    --accent-foreground: 30 10% 6%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 30 10% 90%;
+    --input: 30 10% 90%;
+    --ring: 43 96% 56%;
+    
+    --radius: 0.75rem;
+    
+    /* Category colors */
+    --afrobeats: 43 96% 50%;
+    --nollywood: 0 75% 55%;
+    --culture: 280 60% 55%;
+    --fashion: 330 70% 55%;
+    --tech: 200 80% 55%;
+    --music: 150 60% 45%;
+    
+    /* Gradients */
+    --gradient-gold: linear-gradient(135deg, hsl(43 96% 56%), hsl(35 90% 50%));
+    --gradient-hero: linear-gradient(180deg, transparent 0%, hsl(0 0% 100% / 0.9) 100%);
+    --gradient-card: linear-gradient(180deg, transparent 50%, hsl(0 0% 100% / 0.95) 100%);
+    
+    /* Shadows */
+    --shadow-glow: 0 0 40px hsl(43 96% 56% / 0.2);
+    --shadow-card: 0 10px 30px -10px hsl(0 0% 0% / 0.1);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 30 10% 10%;
+    --sidebar-primary: 43 96% 56%;
+    --sidebar-primary-foreground: 30 10% 6%;
+    --sidebar-accent: 30 10% 96%;
+    --sidebar-accent-foreground: 30 10% 10%;
+    --sidebar-border: 30 10% 90%;
+    --sidebar-ring: 43 96% 56%;
+  }
+
+  .dark {
+    /* Dark Mode - Core backgrounds */
+    --background: 30 10% 6%;
+    --foreground: 40 30% 95%;
+    --card: 30 8% 10%;
+    --card-foreground: 40 30% 95%;
+    --popover: 30 8% 12%;
+    --popover-foreground: 40 30% 95%;
+    --primary: 43 96% 56%;
+    --primary-foreground: 30 10% 6%;
+    --secondary: 15 80% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 30 8% 18%;
+    --muted-foreground: 30 15% 80%;
+    --accent: 35 90% 50%;
+    --accent-foreground: 30 10% 6%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 10% 20%;
+    --input: 30 10% 15%;
+    --ring: 43 96% 56%;
+    --gradient-hero: linear-gradient(180deg, transparent 0%, hsl(30 10% 6% / 0.9) 100%);
+    --gradient-card: linear-gradient(180deg, transparent 50%, hsl(30 10% 6% / 0.95) 100%);
+    --shadow-card: 0 10px 30px -10px hsl(0 0% 0% / 0.5);
+    --sidebar-background: 30 8% 8%;
+    --sidebar-foreground: 40 30% 95%;
+    --sidebar-primary: 43 96% 56%;
+    --sidebar-primary-foreground: 30 10% 6%;
+    --sidebar-accent: 30 8% 15%;
+    --sidebar-accent-foreground: 40 30% 95%;
+    --sidebar-border: 30 10% 20%;
+    --sidebar-ring: 43 96% 56%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply transition-colors duration-300;
+    /* Smooth scrolling for the whole page */
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground transition-colors duration-300;
+    font-family: 'Inter', sans-serif;
+    /* Better touch scrolling */
+    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+  }
+
+  /* Remove tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Better touch targets on mobile */
+  button, a {
+    touch-action: manipulation;
+  }
+}
+
+@layer utilities {
+  .text-gradient-gold {
+    background: linear-gradient(135deg, hsl(43 96% 56%), hsl(35 90% 50%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .bg-gradient-hero {
+    background: linear-gradient(180deg, transparent 0%, hsl(30 10% 6% / 0.9) 100%);
+  }
+  
+  .bg-gradient-card {
+    background: linear-gradient(180deg, transparent 50%, hsl(30 10% 6% / 0.95) 100%);
+  }
+  
+  .shadow-glow {
+    box-shadow: 0 0 40px hsl(43 96% 56% / 0.2);
+  }
+
+  /* Smooth scroll container */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Performance optimization */
+  .will-change-transform {
+    will-change: transform;
+  }
+
+  /* GPU acceleration for animations */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
+/* Animations */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+  
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Reduce animations on mobile for performance */
+  .animate-marquee {
+    animation-duration: 20s;
+  }
+
+  /* Better touch feedback */
+  button:active, a:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+
+  /* Card tap effects */
+  .card-tap-effect:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+}
+
+/* Pull-to-refresh indicator */
+.pull-to-refresh {
+  transform: translateY(-60px);
+  transition: transform 0.3s ease;
+}
+
+.pull-to-refresh.active {
+  transform: translateY(0);
+}
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(0 0% 90%) 25%,
+    hsl(0 0% 95%) 50%,
+    hsl(0 0% 90%) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(30 8% 20%) 25%,
+    hsl(30 8% 25%) 50%,
+    hsl(30 8% 20%) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

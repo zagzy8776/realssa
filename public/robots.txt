@@ -1,0 +1,43 @@
+# Robots.txt for Realssa Entertainment News
+# Allow all search engines to crawl the site
+
+User-agent: *
+Allow: /
+
+# Block admin and sensitive routes
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /login/
+Disallow: /edit/
+
+# Crawl delay to be respectful to servers
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://realssa.vercel.app/sitemap.xml
+
+# Google AdsBot - allow but with restrictions
+User-agent: AdsBot-Google
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+# Bing Bot
+User-agent: bingbot
+Allow: /
+Crawl-delay: 1
+
+# Yandex Bot
+User-agent: YandexBot
+Allow: /
+Crawl-delay: 1
+
+# Baidu Bot
+User-agent: Baiduspider
+Allow: /
+Crawl-delay: 1
+
+# Sitemap for different search engines
+Sitemap: https://realssa.vercel.app/sitemap.xml
