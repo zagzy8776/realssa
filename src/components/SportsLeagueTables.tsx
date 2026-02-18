@@ -242,14 +242,15 @@ const SportsLeagueTables = () => {
       </div>
 
       {/* Widget Area - Using iframe for isolation */}
-      <div className="bg-white min-h-[420px]">
+      <div className="bg-white">
         <iframe
           key={activeLeague.leagueID}
           srcDoc={generateWidgetHtml(activeLeague.leagueID)}
           title={`${activeLeague.name} Standings`}
           className="w-full border-0"
-          style={{ minHeight: '450px', height: 'auto' }}
+          style={{ height: '600px' }}
           loading="lazy"
+          sandbox="allow-scripts allow-same-origin"
         />
       </div>
 
