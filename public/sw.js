@@ -55,8 +55,11 @@ self.addEventListener('fetch', (event) => {
     'www.scoreaxis.com',
     'cdn.scoreaxis.com',
     'cdn.footystats.org',
-    'footystats.org'
+    'footystats.org',
+    'images.unsplash.com',
+    'placehold.co'
   ];
+
   
   // Only handle same-origin or explicitly allowed external resources
   const isAllowed = url.origin === self.location.origin || 
