@@ -280,6 +280,77 @@ const nigerianFeeds = [
   'https://www.tribuneonlineng.com/feed/'
 ];
 
+// Ghana News RSS feeds
+const ghanaFeeds = [
+  'https://www.graphic.com.gh/rss.xml',
+  'https://www.ghanaweb.com/GhanaHomePage/rss.xml',
+  'https://www.myjoyonline.com/feed/',
+  'https://www.citi.com.gh/feed/',
+  'https://www.ghanatodaynews.com/feed/',
+  'https://www.yen.com.gh/feed/',
+  'https://www.ghanaweb.com/GhanaHomePage/NewsArchive/rss.xml',
+  'https://www.ghanatv.com.gh/feed/',
+  'https://www.ghananewsagency.org/feed/',
+  'https://www.ghanatoday.com/feed/'
+];
+
+// Kenya News RSS feeds
+const kenyaFeeds = [
+  'https://www.nation.co.ke/rss.xml',
+  'https://www.standardmedia.co.ke/rss/kenya.php',
+  'https://www.the-star.co.ke/rss.xml',
+  'https://www.capitalfm.co.ke/feed/',
+  'https://www.kenyanews.go.ke/feed/',
+  'https://nairobiwire.com/feed/',
+  'https://www.kenyans.co.ke/feed/',
+  'https://www.tuko.co.ke/feed/',
+  'https://www.pulselive.co.ke/feed/',
+  'https://www.k24tv.co.ke/feed/'
+];
+
+// South Africa News RSS feeds
+const southAfricaFeeds = [
+  'https://www.news24.com/rss.xml',
+  'https://www.iol.co.za/rss.xml',
+  'https://www.timeslive.co.za/rss.xml',
+  'https://www.sowetanlive.co.za/rss.xml',
+  'https://www.dispatchlive.co.za/rss.xml',
+  'https://www.heraldlive.co.za/rss.xml',
+  'https://www.citizen.co.za/rss.xml',
+  'https://www.dailymaverick.co.za/rss.xml',
+  'https://www.enca.com/rss.xml',
+  'https://www.sabcnews.com/sabcnews/feed/'
+];
+
+// UK News RSS feeds
+const ukFeeds = [
+  'http://feeds.bbci.co.uk/news/uk/rss.xml',
+  'https://www.theguardian.com/uk/rss',
+  'https://www.telegraph.co.uk/rss.xml',
+  'https://www.independent.co.uk/rss.xml',
+  'https://www.mirror.co.uk/rss.xml',
+  'https://www.dailymail.co.uk/uk/index.rss',
+  'https://www.express.co.uk/rss.xml',
+  'https://www.standard.co.uk/rss.xml',
+  'https://www.ft.com/rss.xml',
+  'https://www.thesun.co.uk/rss.xml'
+];
+
+// Sports News RSS feeds
+const sportsFeeds = [
+  'https://www.espn.com/espn/rss/news',
+  'https://www.goal.com/en/feeds/news',
+  'https://www.bbc.co.uk/sport/rss.xml',
+  'https://www.skysports.com/rss/12040',
+  'https://www.premierleague.com/rss.xml',
+  'https://www.transfermarkt.com/rss/news',
+  'https://www.fourfourtwo.com/rss.xml',
+  'https://www.sportingnews.com/rss.xml',
+  'https://www.bleacherreport.com/rss.xml',
+  'https://www.goal.com/en-us/feeds/news'
+];
+
+
 // World News RSS feeds
 const worldFeeds = [
   'http://feeds.bbci.co.uk/news/world/rss.xml',
@@ -378,6 +449,72 @@ app.get('/api/news/nigerian', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch Nigerian news' });
   }
 });
+
+// Get Ghana news
+app.get('/api/news/ghana', async (req, res) => {
+  try {
+    console.log('Fetching Ghana news feeds...');
+    const articles = await fetchRSSFeeds(ghanaFeeds);
+    console.log(`Fetched ${articles.length} Ghana articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching Ghana news:', error);
+    res.status(500).json({ error: 'Failed to fetch Ghana news' });
+  }
+});
+
+// Get Kenya news
+app.get('/api/news/kenya', async (req, res) => {
+  try {
+    console.log('Fetching Kenya news feeds...');
+    const articles = await fetchRSSFeeds(kenyaFeeds);
+    console.log(`Fetched ${articles.length} Kenya articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching Kenya news:', error);
+    res.status(500).json({ error: 'Failed to fetch Kenya news' });
+  }
+});
+
+// Get South Africa news
+app.get('/api/news/south-africa', async (req, res) => {
+  try {
+    console.log('Fetching South Africa news feeds...');
+    const articles = await fetchRSSFeeds(southAfricaFeeds);
+    console.log(`Fetched ${articles.length} South Africa articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching South Africa news:', error);
+    res.status(500).json({ error: 'Failed to fetch South Africa news' });
+  }
+});
+
+// Get UK news
+app.get('/api/news/uk', async (req, res) => {
+  try {
+    console.log('Fetching UK news feeds...');
+    const articles = await fetchRSSFeeds(ukFeeds);
+    console.log(`Fetched ${articles.length} UK articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching UK news:', error);
+    res.status(500).json({ error: 'Failed to fetch UK news' });
+  }
+});
+
+// Get Sports news
+app.get('/api/news/sports', async (req, res) => {
+  try {
+    console.log('Fetching Sports news feeds...');
+    const articles = await fetchRSSFeeds(sportsFeeds);
+    console.log(`Fetched ${articles.length} Sports articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching Sports news:', error);
+    res.status(500).json({ error: 'Failed to fetch Sports news' });
+  }
+});
+
 
 // Get World news
 app.get('/api/news/world', async (req, res) => {
