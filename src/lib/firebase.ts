@@ -1,18 +1,37 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging';
 
-// Firebase configuration from environment variables
+// Firebase configuration - check env vars first, fallback to hardcoded for testing
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBFc-_uR8Ivp9a1RZrbnu9CuEGuZVlWLbA",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "realssa-news.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "realssa-news",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "realssa-news.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "530170821780",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:530170821780:web:d56dd3f571d32a99b7c881",
 };
+
+// Debug logging
+console.log('Firebase Config (keys only):', {
+  apiKey: firebaseConfig.apiKey ? '✓ set' : '✗ missing',
+  authDomain: firebaseConfig.authDomain ? '✓ set' : '✗ missing',
+  projectId: firebaseConfig.projectId ? '✓ set' : '✗ missing',
+  messagingSenderId: firebaseConfig.messagingSenderId ? '✓ set' : '✗ missing',
+  appId: firebaseConfig.appId ? '✓ set' : '✗ missing',
+});
+
+// Validate config
+const missingKeys = Object.entries(firebaseConfig)
+  .filter(([_, value]) => !value)
+  .map(([key]) => key);
+
+if (missingKeys.length > 0) {
+  console.error('Missing Firebase config keys:', missingKeys);
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
 
 // Initialize Firebase Cloud Messaging
 let messaging: Messaging | null = null;

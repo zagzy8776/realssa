@@ -1,73 +1,5 @@
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBFc-_uR8Ivp9a1RZrbnu9CuEGuZVlWLbA",
-  authDomain: "realssa-news.firebaseapp.com",
-  projectId: "realssa-news",
-  storageBucket: "realssa-news.firebasestorage.app",
-  messagingSenderId: "530170821780",
-  appId: "1:530170821780:web:d56dd3f571d32a99b7c881"
-};
-
-firebase.initializeApp(firebaseConfig);
-const messaging = firebase.messaging();
-
-// Handle background notifications
-messaging.onBackgroundMessage((payload) => {
-  console.log('Received background message:', payload);
-  
-  const notificationTitle = payload.notification?.title || 'RealSSA News';
-  const notificationOptions = {
-    body: payload.notification?.body || 'New update available',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
-    tag: payload.data?.category || 'news',
-    requireInteraction: true,
-    actions: [
-      {
-        action: 'open',
-        title: 'Open Article',
-        icon: '/favicon.ico'
-      },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/favicon.ico'
-      }
-    ],
-    data: {
-      url: payload.data?.url || '/',
-      newsId: payload.data?.newsId
-    }
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  
-  if (event.action === 'open' || !event.action) {
-    const urlToOpen = event.notification.data?.url || '/';
-    
-    event.waitUntil(
-      clients.matchAll({ type: 'window' }).then((clientList) => {
-        for (const client of clientList) {
-          if (client.url === urlToOpen && 'focus' in client) {
-            return client.focus();
-          }
-        }
-        if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
-        }
-      })
-    );
-  }
-});
-
 // Service Worker for Realssa News Aggregator
-// Caches last 20 articles for offline reading
+// Handles push notifications and offline caching
 
 const CACHE_NAME = 'realssa-v1';
 const DATA_CACHE_NAME = 'realssa-data-v1';
@@ -93,11 +25,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME && cacheName !== DATA_CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
+        cacheNames
+          .filter((name) => name !== CACHE_NAME && name !== DATA_CACHE_NAME)
+          .map((name) => caches.delete(name))
       );
     }).then(() => {
       return self.clients.claim();
@@ -105,121 +35,131 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - handle API requests and offline caching
+// Fetch event - serve from cache or network
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') return;
   
-  // Skip caching for API requests - let them go directly to network
-  // The Vercel proxy will handle routing to the backend
-  if (url.pathname.includes('/news-feed') || 
-      url.pathname.includes('/api/') ||
-      url.hostname.includes('railway.app')) {
-    // Don't intercept API requests - let browser handle them normally
-    return;
-  }
+  // Skip API calls
+  if (event.request.url.includes('/api/')) return;
   
-  // Handle other requests with cache-first strategy
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      return cachedResponse || fetch(request).then((networkResponse) => {
-        // Only cache successful GET requests for static assets
-        if (request.method === 'GET' && networkResponse.ok) {
-          return caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, networkResponse.clone());
-            return networkResponse;
-          });
+    caches.match(event.request).then((response) => {
+      // Return cached version or fetch from network
+      return response || fetch(event.request).then((fetchResponse) => {
+        // Don't cache non-successful responses
+        if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
+          return fetchResponse;
         }
-        return networkResponse;
+        
+        // Cache successful responses
+        const responseToCache = fetchResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+        
+        return fetchResponse;
       });
-    }).catch(() => {
-      // Return offline fallback for navigation requests
-      if (request.mode === 'navigate') {
-        return caches.match('/index.html');
-      }
-      // For other requests, just fail silently
-      return new Response('Network error', { status: 408, statusText: 'Network error' });
     })
   );
 });
 
-
-// Handle external Railway API requests
-async function handleExternalNewsApiRequest(request) {
+// Handle push notifications from FCM
+self.addEventListener('push', (event) => {
+  console.log('Push received:', event);
+  
+  let payload;
   try {
-    // Try to fetch from Railway API
-    const networkResponse = await fetch(request);
+    payload = event.data ? event.data.json() : {};
+  } catch (e) {
+    payload = {
+      notification: {
+        title: 'RealSSA News',
+        body: event.data ? event.data.text() : 'New update available'
+      }
+    };
+  }
+  
+  const title = payload.notification?.title || 'RealSSA News';
+  const options = {
+    body: payload.notification?.body || 'New update available',
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
+    tag: payload.data?.category || 'news',
+    requireInteraction: true,
+    actions: [
+      {
+        action: 'open',
+        title: 'Open Article',
+        icon: '/favicon.ico'
+      },
+      {
+        action: 'close',
+        title: 'Close',
+        icon: '/favicon.ico'
+      }
+    ],
+    data: {
+      url: payload.data?.url || '/',
+      newsId: payload.data?.newsId
+    }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+// Handle notification clicks
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  
+  if (event.action === 'open' || !event.action) {
+    const urlToOpen = event.notification.data?.url || '/';
     
-    if (networkResponse.ok) {
-      // Cache the response for offline use
-      const responseClone = networkResponse.clone();
-      const data = await responseClone.json();
-      
-      // Store in IndexedDB for offline access
+    event.waitUntil(
+      clients.matchAll({ type: 'window' }).then((clientList) => {
+        for (const client of clientList) {
+          if (client.url === urlToOpen && 'focus' in client) {
+            return client.focus();
+          }
+        }
+        if (clients.openWindow) {
+          return clients.openWindow(urlToOpen);
+        }
+      })
+    );
+  }
+});
+
+// Background sync for data updates
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'background-sync-news') {
+    event.waitUntil(syncNewsData());
+  }
+});
+
+async function syncNewsData() {
+  try {
+    const response = await fetch('/api/articles');
+    if (response.ok) {
+      const data = await response.json();
+      // Store in IndexedDB
       await storeNewsData(data);
-      
-      return networkResponse;
     }
   } catch (error) {
-    console.log('Railway API failed, trying cache:', error);
+    console.error('Background sync failed:', error);
   }
-
-  // Fallback to cached data
-  const cachedData = await getCachedNewsData();
-  if (cachedData) {
-    return new Response(JSON.stringify(cachedData), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  // Return empty response if no cache available
-  return new Response(JSON.stringify([]), {
-    headers: { 'Content-Type': 'application/json' }
-  });
 }
 
-// Handle news API requests with offline support
-async function handleNewsApiRequest(request) {
-  try {
-    // Try to fetch from network first
-    const networkResponse = await fetch(request);
-    
-    if (networkResponse.ok) {
-      // Cache the response for offline use
-      const responseClone = networkResponse.clone();
-      const data = await responseClone.json();
-      
-      // Store in IndexedDB for offline access
-      await storeNewsData(data);
-      
-      return networkResponse;
-    }
-  } catch (error) {
-    console.log('Network failed, trying cache:', error);
-  }
-
-  // Fallback to cached data
-  const cachedData = await getCachedNewsData();
-  if (cachedData) {
-    return new Response(JSON.stringify(cachedData), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  // Return empty response if no cache available
-  return new Response(JSON.stringify([]), {
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
-
-// Store news data in IndexedDB
+// IndexedDB helpers
 async function storeNewsData(data) {
   try {
     const db = await openDatabase();
     const tx = db.transaction(['news'], 'readwrite');
     const store = tx.objectStore('news');
     
-    // Clear old data if we exceed limit
+    // Limit cache size
     const count = await store.count();
     if (count >= MAX_CACHE_SIZE) {
       const firstKey = await store.openKeyCursor();
@@ -238,14 +178,12 @@ async function storeNewsData(data) {
   }
 }
 
-// Get cached news data from IndexedDB
 async function getCachedNewsData() {
   try {
     const db = await openDatabase();
     const tx = db.transaction(['news'], 'readonly');
     const store = tx.objectStore('news');
     
-    // Get the most recent cached data
     const request = store.openCursor(null, 'prev');
     const result = await new Promise((resolve) => {
       request.onsuccess = (event) => {
@@ -265,7 +203,6 @@ async function getCachedNewsData() {
   }
 }
 
-// Open IndexedDB
 function openDatabase() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('realssa-offline', 1);
@@ -283,41 +220,4 @@ function openDatabase() {
   });
 }
 
-// Handle background sync for data updates
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'background-sync-news') {
-    event.waitUntil(syncNewsData());
-  }
-});
-
-async function syncNewsData() {
-  try {
-    const response = await fetch('/api/articles');
-    if (response.ok) {
-      const data = await response.json();
-      await storeNewsData(data);
-    }
-  } catch (error) {
-    console.error('Background sync failed:', error);
-  }
-}
-
-// Handle push notifications (optional future feature)
-self.addEventListener('push', (event) => {
-  if (event.data) {
-    const options = {
-      body: event.data.text(),
-      icon: '/icon-192x192.png',
-      badge: '/badge-72x72.png',
-      vibrate: [100, 50, 100],
-      data: {
-        dateOfArrival: Date.now(),
-        primaryKey: 1
-      }
-    };
-    
-    event.waitUntil(
-      self.registration.showNotification('Realssa News', options)
-    );
-  }
-});
+console.log('Service Worker loaded - RealSSA News');
