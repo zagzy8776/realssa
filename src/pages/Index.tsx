@@ -5,7 +5,7 @@ import { SearchBar } from "@/components/SearchBar";
 import Footer from "@/components/Footer";
 import LazyAd from "@/components/LazyAd";
 import LiveScores from "@/components/LiveScores";
-import ScorebatEmbed from "@/components/ScorebatEmbed";
+import ScoremerWidget from "@/components/ScoremerWidget";
 import SportsLeagueTables from "@/components/SportsLeagueTables";
 import { useEffect, useState } from "react";
 import ReadProgressBar from "@/components/ReadProgressBar";
@@ -89,9 +89,9 @@ const Index = () => {
           <LiveScores />
         </section>
 
-        {/* Scorebat Live Sports Embed */}
+        {/* Scoremer Live Sports Widget */}
         <section className="container mx-auto px-4 mb-8">
-          <ScorebatEmbed />
+          <ScoremerWidget />
         </section>
 
         {/* Sports League Tables Section */}
