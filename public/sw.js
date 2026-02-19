@@ -57,7 +57,8 @@ self.addEventListener('fetch', (event) => {
     'cdn.footystats.org',
     'footystats.org',
     'images.unsplash.com',
-    'placehold.co'
+    'placehold.co',
+    'otieu.com'
   ];
 
   
