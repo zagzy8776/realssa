@@ -261,7 +261,9 @@ const parser = new Parser({
     item: [
       ['media:content', 'media:content'],
       ['media:thumbnail', 'media:thumbnail'],
-      ['enclosure', 'enclosure']
+      ['enclosure', 'enclosure'],
+      ['content:encoded', 'content:encoded'],
+      ['description', 'description']
     ]
   }
 });
@@ -371,6 +373,80 @@ const worldFeeds = [
   'https://wwd.com/feed/'
 ];
 
+// Helper function to extract image from RSS item - IMPROVED VERSION
+const extractImageFromItem = (item) => {
+  // Try different image sources in order of preference
+  
+  // 1. Check for media:content with url attribute
+  if (item['media:content'] && item['media:content'].$ && item['media:content'].$.url) {
+    return item['media:content'].$.url;
+  }
+  
+  // 2. Check for media:thumbnail
+  if (item['media:thumbnail'] && item['media:thumbnail'].$ && item['media:thumbnail'].$.url) {
+    return item['media:thumbnail'].$.url;
+  }
+  
+  // 3. Check for enclosure (common in podcasts and some news feeds)
+  if (item.enclosure && item.enclosure.url) {
+    return item.enclosure.url;
+  }
+  
+  // 4. Check for enclosure as array
+  if (item.enclosure && Array.isArray(item.enclosure) && item.enclosure[0] && item.enclosure[0].url) {
+    return item.enclosure[0].url;
+  }
+
+  // 5. Extract from content:encoded if available (WordPress feeds)
+  if (item['content:encoded']) {
+    const imgMatch = item['content:encoded'].match(/<img[^>]+src=["']([^"'>]+)["']/i);
+    if (imgMatch && imgMatch[1]) {
+      // Make sure it's an absolute URL
+      if (imgMatch[1].startsWith('http')) {
+        return imgMatch[1];
+      }
+    }
+  }
+
+  // 6. Extract from description/summary if available
+  if (item.description || item.summary || item.contentSnippet) {
+    const content = item.description || item.summary || item.contentSnippet;
+    const imgMatch = content.match(/<img[^>]+src=["']([^"'>]+)["']/i);
+    if (imgMatch && imgMatch[1]) {
+      if (imgMatch[1].startsWith('http')) {
+        return imgMatch[1];
+      }
+    }
+  }
+
+  // 7. Extract from content if available
+  if (item.content) {
+    const imgMatch = item.content.match(/<img[^>]+src=["']([^"'>]+)["']/i);
+    if (imgMatch && imgMatch[1]) {
+      if (imgMatch[1].startsWith('http')) {
+        return imgMatch[1];
+      }
+    }
+  }
+  
+  // 8. Check for itunes:image (podcast feeds)
+  if (item['itunes:image'] && item['itunes:image'].href) {
+    return item['itunes:image'].href;
+  }
+
+  // 9. Default placeholder with category-based images
+  const categoryImages = {
+    'news': 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&h=250&fit=crop',
+    'sports': 'https://images.unsplash.com/photo-1461896836934- voices-of-the-game?w=400&h=250&fit=crop',
+    'tech': 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&h=250&fit=crop',
+    'entertainment': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=250&fit=crop',
+    'default': 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&h=250&fit=crop'
+  };
+  
+  return categoryImages.default;
+
+};
+
 // Helper function to fetch RSS feeds
 const fetchRSSFeeds = async (feeds) => {
   const allArticles = [];
@@ -409,32 +485,6 @@ const fetchRSSFeeds = async (feeds) => {
   return allArticles
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 50);
-};
-
-// Helper function to extract image from RSS item
-const extractImageFromItem = (item) => {
-  // Try different image sources
-  if (item.enclosure && item.enclosure.url) {
-    return item.enclosure.url;
-  }
-  if (item['media:content'] && item['media:content'].$ && item['media:content'].$.url) {
-    return item['media:content'].$.url;
-  }
-  if (item['media:thumbnail'] && item['media:thumbnail'].$ && item['media:thumbnail'].$.url) {
-    return item['media:thumbnail'].$.url;
-  }
-
-  // Extract from content if available
-  if (item.content) {
-    const imgMatch = item.content.match(/<img[^>]+src="([^">]+)"/);
-    if (imgMatch) {
-      return imgMatch[1];
-    }
-  }
-
-  // Default placeholder
-  return 'https://placehold.co/400x250?text=News+Image';
-
 };
 
 // Get Nigerian news
