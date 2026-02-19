@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 interface ScorebatEmbedProps {
   token?: string;
@@ -7,40 +7,40 @@ interface ScorebatEmbedProps {
   className?: string;
 }
 
-// Extend Window interface to include our custom property
-declare global {
-  interface Window {
-    scorebatEmbedLoaded?: boolean;
-  }
-}
-
 const ScorebatEmbed = ({ 
   token = "Mjc3MzMxXzE3NzE1MzMzMjJfNGU5YmVkZmI0OTkyN2E3ZWMwNTRkMmY3MWI3YTRlNzQxYTU3MTljZA==",
-  width = "600",
+  width = "100%",
   height = "760",
   className = ""
 }: ScorebatEmbedProps) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  
+  // Load Scorebat embed script
   useEffect(() => {
-    // Only load the script if it hasn't been loaded already
-    if (typeof window !== 'undefined' && !window.scorebatEmbedLoaded) {
-      const script = document.createElement('script');
-      script.src = 'https://www.scorebat.com/embed/embed.js?v=arrv';
-      script.async = true;
-      script.id = 'scorebat-jssdk';
-      
-      document.body.appendChild(script);
-      window.scorebatEmbedLoaded = true;
-
-      // Clean up script on component unmount
-      return () => {
-        const existingScript = document.getElementById('scorebat-jssdk');
-        if (existingScript) {
-          existingScript.remove();
-        }
-        window.scorebatEmbedLoaded = false;
-      };
+    // Check if script is already loaded
+    if (document.getElementById('scorebat-jssdk')) {
+      setIsLoaded(true);
+      return;
     }
+    
+    // Create and load the script
+    const script = document.createElement('script');
+    script.id = 'scorebat-jssdk';
+    script.src = 'https://www.scorebat.com/embed/embed.js?v=arrv';
+    script.async = true;
+    
+    script.onload = () => {
+      setIsLoaded(true);
+    };
+    
+    document.body.appendChild(script);
+    
+    return () => {
+      // Don't remove script on unmount to prevent reloading issues
+    };
   }, []);
+
+  const embedUrl = `https://www.scorebat.com/embed/livescore/?token=${token}`;
 
   return (
     <div className={`scorebat-embed-container ${className}`}>
@@ -55,66 +55,24 @@ const ScorebatEmbed = ({
           </span>
         </div>
         
-        <div className="border border-gray-200 rounded-lg overflow-hidden relative">
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
           <iframe 
-            src={`https://www.scorebat.com/embed/livescore/?token=${token}`}
+            src={embedUrl}
             frameBorder="0"
-            width={width}
+            width="100%"
             height={height}
             allowFullScreen
             allow="autoplay; fullscreen"
             style={{
               width: '100%',
-              height: typeof height === 'number' ? `${height}px` : height,
+              height: '760px',
               overflow: 'hidden',
               display: 'block'
             }}
-            className="_scorebatEmbeddedPlayer_"
-            title="Live Sports"
+            title="Live Sports Scores"
           />
         </div>
-        
-        {/* Removed "Powered by Scorebat" text to avoid their branding */}
       </div>
-      
-      {/* CSS to hide Scorebat branding elements */}
-      <style>
-        {`
-          /* Hide Scorebat logo and branding inside the iframe */
-          ._scorebatEmbeddedPlayer_ {
-            position: relative;
-          }
-          
-          /* Hide common Scorebat branding elements */
-          ._scorebatEmbeddedPlayer_ .scorebat-logo,
-          ._scorebatEmbeddedPlayer_ .scorebat-branding,
-          ._scorebatEmbeddedPlayer_ .powered-by-scorebat,
-          ._scorebatEmbeddedPlayer_ .scorebat-footer,
-          ._scorebatEmbeddedPlayer_ [class*="scorebat"] {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            height: 0 !important;
-            width: 0 !important;
-            overflow: hidden !important;
-          }
-          
-          /* Hide Scorebat watermark or logo */
-          ._scorebatEmbeddedPlayer_ img[src*="scorebat"],
-          ._scorebatEmbeddedPlayer_ [src*="scorebat-logo"],
-          ._scorebatEmbeddedPlayer_ .logo,
-          ._scorebatEmbeddedPlayer_ .brand {
-            display: none !important;
-          }
-          
-          /* Hide any text containing "scorebat" */
-          ._scorebatEmbeddedPlayer_ span:contains("Scorebat"),
-          ._scorebatEmbeddedPlayer_ div:contains("scorebat"),
-          ._scorebatEmbeddedPlayer_ p:contains("Scorebat") {
-            display: none !important;
-          }
-        `}
-      </style>
     </div>
   );
 };
