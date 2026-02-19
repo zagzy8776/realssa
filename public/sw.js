@@ -43,6 +43,30 @@ self.addEventListener('fetch', (event) => {
   // Skip API calls
   if (event.request.url.includes('/api/')) return;
   
+  // Skip external URLs that violate CSP (placehold.co, etc.)
+  const url = new URL(event.request.url);
+  const allowedDomains = [
+    'realssa.vercel.app',
+    'realssa-production.up.railway.app',
+    'localhost',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com',
+    'widgets.scoreaxis.com',
+    'www.scoreaxis.com',
+    'cdn.scoreaxis.com',
+    'cdn.footystats.org',
+    'footystats.org'
+  ];
+  
+  // Only handle same-origin or explicitly allowed external resources
+  const isAllowed = url.origin === self.location.origin || 
+                    allowedDomains.some(domain => url.hostname.includes(domain));
+  
+  if (!isAllowed) {
+    // For external URLs not in allowlist, just fetch without caching
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request).then((response) => {
       // Return cached version or fetch from network
@@ -63,6 +87,7 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
 
 // Handle push notifications from FCM
 self.addEventListener('push', (event) => {
