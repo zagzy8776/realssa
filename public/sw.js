@@ -58,7 +58,11 @@ self.addEventListener('fetch', (event) => {
     'footystats.org',
     'images.unsplash.com',
     'placehold.co',
-    'otieu.com'
+    'otieu.com',
+    'www.youtube.com',
+    'www.youtube-nocookie.com',
+    'player.vimeo.com',
+    'www.africanews.com'
   ];
 
   
