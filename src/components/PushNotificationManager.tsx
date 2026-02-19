@@ -2,26 +2,45 @@ import { useState, useEffect } from 'react';
 import { Bell, BellOff, BellRing } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { getFCMToken, requestNotificationPermission, onMessageListener } from '@/lib/firebase';
 
 const PushNotificationManager = () => {
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if push notifications are supported
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
+    // Check if Firebase messaging is supported
+    if ('serviceWorker' in navigator && 'Notification' in window) {
       setIsSupported(true);
       checkSubscription();
     }
   }, []);
 
+  useEffect(() => {
+    // Listen for foreground messages
+    const unsubscribe = onMessageListener((payload) => {
+      console.log('Foreground message received:', payload);
+      // Show toast notification for foreground messages
+      toast({
+        title: payload.notification?.title || 'New Notification',
+        description: payload.notification?.body || 'You have a new message',
+      });
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
+
   const checkSubscription = async () => {
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      setIsSubscribed(!!subscription);
+      // Check if we have an FCM token stored
+      const storedToken = localStorage.getItem('fcmToken');
+      if (storedToken) {
+        setFcmToken(storedToken);
+        setIsSubscribed(true);
+      }
     } catch (error) {
       console.error('Error checking subscription:', error);
     }
@@ -31,8 +50,8 @@ const PushNotificationManager = () => {
     setIsLoading(true);
     try {
       // Request permission
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
+      const permissionGranted = await requestNotificationPermission();
+      if (!permissionGranted) {
         toast({
           title: 'Permission Denied',
           description: 'Please allow notifications in your browser settings.',
@@ -41,24 +60,28 @@ const PushNotificationManager = () => {
         return;
       }
 
-      // Get service worker registration
-      const registration = await navigator.serviceWorker.ready;
+      // Get FCM token from Firebase
+      const token = await getFCMToken();
+      if (!token) {
+        throw new Error('Failed to get FCM token');
+      }
 
-      // Subscribe to push
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(
-          import.meta.env.VITE_VAPID_PUBLIC_KEY || ''
-        ),
-      });
+      // Store token locally
+      localStorage.setItem('fcmToken', token);
+      setFcmToken(token);
 
-      // Send subscription to server
-      const response = await fetch('/api/push/subscribe', {
+      // Subscribe to breaking news topic
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://realssa-production.up.railway.app';
+      const response = await fetch(`${apiUrl}/api/notifications/subscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(subscription),
+        body: JSON.stringify({
+          userId: token,
+          subscription: { endpoint: token },
+          topics: ['breaking-news', 'general'],
+        }),
       });
 
       if (response.ok) {
@@ -85,22 +108,22 @@ const PushNotificationManager = () => {
   const unsubscribeFromPush = async () => {
     setIsLoading(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-
-      if (subscription) {
-        await subscription.unsubscribe();
-
-        // Notify server
-        await fetch('/api/push/unsubscribe', {
+      if (fcmToken) {
+        // Unsubscribe from server
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://realssa-production.up.railway.app';
+        await fetch(`${apiUrl}/api/notifications/unsubscribe`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ endpoint: subscription.endpoint }),
+          body: JSON.stringify({ subscription: { endpoint: fcmToken } }),
         });
 
+        // Remove token from local storage
+        localStorage.removeItem('fcmToken');
+        setFcmToken(null);
         setIsSubscribed(false);
+
         toast({
           title: 'Notifications Disabled',
           description: 'You will no longer receive alerts.',
@@ -117,23 +140,6 @@ const PushNotificationManager = () => {
       setIsLoading(false);
     }
   };
-
-  // Helper function to convert VAPID key
-  function urlBase64ToUint8Array(base64String: string) {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, '+')
-
-      .replace(/_/g, '/');
-
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
 
   if (!isSupported) {
     return null;

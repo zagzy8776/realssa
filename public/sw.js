@@ -1,3 +1,71 @@
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBFc-_uR8Ivp9a1RZrbnu9CuEGuZVlWLbA",
+  authDomain: "realssa-news.firebaseapp.com",
+  projectId: "realssa-news",
+  storageBucket: "realssa-news.firebasestorage.app",
+  messagingSenderId: "530170821780",
+  appId: "1:530170821780:web:d56dd3f571d32a99b7c881"
+};
+
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
+
+// Handle background notifications
+messaging.onBackgroundMessage((payload) => {
+  console.log('Received background message:', payload);
+  
+  const notificationTitle = payload.notification?.title || 'RealSSA News';
+  const notificationOptions = {
+    body: payload.notification?.body || 'New update available',
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
+    tag: payload.data?.category || 'news',
+    requireInteraction: true,
+    actions: [
+      {
+        action: 'open',
+        title: 'Open Article',
+        icon: '/favicon.ico'
+      },
+      {
+        action: 'close',
+        title: 'Close',
+        icon: '/favicon.ico'
+      }
+    ],
+    data: {
+      url: payload.data?.url || '/',
+      newsId: payload.data?.newsId
+    }
+  };
+
+  self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  
+  if (event.action === 'open' || !event.action) {
+    const urlToOpen = event.notification.data?.url || '/';
+    
+    event.waitUntil(
+      clients.matchAll({ type: 'window' }).then((clientList) => {
+        for (const client of clientList) {
+          if (client.url === urlToOpen && 'focus' in client) {
+            return client.focus();
+          }
+        }
+        if (clients.openWindow) {
+          return clients.openWindow(urlToOpen);
+        }
+      })
+    );
+  }
+});
+
 // Service Worker for Realssa News Aggregator
 // Caches last 20 articles for offline reading
 
