@@ -8,17 +8,37 @@ class NotificationService {
       privateKey: process.env.VAPID_PRIVATE_KEY
     };
     
-    webpush.setVapidDetails(
-      'mailto:admin@realssa.com',
-      this.vapidKeys.publicKey,
-      this.vapidKeys.privateKey
-    );
+    // Only set VAPID details if keys are available
+    if (this.vapidKeys.publicKey && this.vapidKeys.privateKey) {
+      try {
+        webpush.setVapidDetails(
+          'mailto:admin@realssa.com',
+          this.vapidKeys.publicKey,
+          this.vapidKeys.privateKey
+        );
+        console.log('Web Push VAPID configured successfully');
+      } catch (error) {
+        console.error('Error setting VAPID details:', error);
+      }
+    } else {
+      console.warn('VAPID keys not set - Web Push notifications will not work');
+    }
   }
+
 
   async sendToUser(userId, payload) {
     try {
+      // Check if VAPID is configured
+      if (!this.vapidKeys.publicKey || !this.vapidKeys.privateKey) {
+        return { success: false, error: 'Web Push not configured - VAPID keys missing' };
+      }
+      
       const UserSubscription = require('../models/userSubscriptions');
       const subscriptions = await UserSubscription.find({ userId, isActive: true });
+      
+      if (subscriptions.length === 0) {
+        return { success: true, sent: 0, message: 'No active subscriptions found' };
+      }
       
       const promises = subscriptions.map(subscription => 
         webpush.sendNotification(subscription, JSON.stringify(payload))
@@ -31,6 +51,7 @@ class NotificationService {
       return { success: false, error: error.message };
     }
   }
+
 
   async sendToTopic(topic, payload) {
     try {
