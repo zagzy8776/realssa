@@ -352,6 +352,21 @@ const sportsFeeds = [
   'https://www.goal.com/en-us/feeds/news'
 ];
 
+// USA News RSS feeds
+const usaFeeds = [
+  'http://rss.cnn.com/rss/edition.rss',
+  'https://feeds.nytimes.com/nyt/rss/HomePage',
+  'https://www.washingtonpost.com/rss/',
+  'https://www.usatoday.com/rss/',
+  'https://feeds.foxnews.com/foxnews/latest',
+  'https://www.npr.org/rss/rss.php?id=1001',
+  'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
+  'https://www.latimes.com/rss.xml',
+  'https://www.chicagotribune.com/rss.xml',
+  'https://www.wsj.com/xml/rss/3_7085.xml'
+];
+
+
 
 // World News RSS feeds
 const worldFeeds = [
@@ -565,8 +580,21 @@ app.get('/api/news/sports', async (req, res) => {
   }
 });
 
+// Get USA news
+app.get('/api/news/usa', async (req, res) => {
+  try {
+    console.log('Fetching USA news feeds...');
+    const articles = await fetchRSSFeeds(usaFeeds);
+    console.log(`Fetched ${articles.length} USA articles`);
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching USA news:', error);
+    res.status(500).json({ error: 'Failed to fetch USA news' });
+  }
+});
 
 // Get World news
+
 app.get('/api/news/world', async (req, res) => {
   try {
     console.log('Fetching World news feeds...');

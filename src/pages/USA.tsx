@@ -132,7 +132,7 @@ const USA = () => {
       <section className="relative overflow-hidden mb-12">
         <div className="absolute inset-0">
           <SimpleImage
-            src="https://images.unsplash.com/photo-1486312338219-ceba24ccdd79?w=1920"
+            src="https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=1920"
             alt="USA News"
             className="w-full h-full object-cover"
             fallback="https://placehold.co/1920x1080/000000/ffffff?text=USA+News"
