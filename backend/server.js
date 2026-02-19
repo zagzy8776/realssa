@@ -1472,6 +1472,12 @@ app.get('/api/youtube/trending', async (req, res) => {
   }
 });
 
+// Import notification routes
+const notificationRoutes = require('./routes/notifications');
+
+// Use notification routes
+app.use('/api/notifications', notificationRoutes);
+
 // Start server
 
 app.listen(PORT, '0.0.0.0', () => {
