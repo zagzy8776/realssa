@@ -108,10 +108,10 @@ const SearchBar = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyPress={handleKeyPress}
-              className="flex-1"
+              className="flex-1 min-h-[44px] text-base"
             />
-            <Button onClick={handleSearch} className="px-6">
-              <Search className="w-4 h-4 mr-2" />
+            <Button onClick={handleSearch} className="px-6 min-h-[44px]">
+              <Search className="w-5 h-5 mr-2" />
               Search
             </Button>
           </div>

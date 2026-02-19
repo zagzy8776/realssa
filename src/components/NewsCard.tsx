@@ -122,7 +122,7 @@ const NewsCard = ({
             <div className="absolute top-3 right-3">
               <button
                 onClick={handleBookmark}
-                className={`p-2 rounded-full transition-colors shadow-sm ${
+                className={`p-3 rounded-full transition-colors shadow-sm min-w-[44px] min-h-[44px] ${
                   isBookmarked 
                     ? 'bg-orange-500 text-white hover:bg-orange-600' 
                     : 'bg-white/90 text-gray-700 hover:bg-white'
@@ -130,9 +130,9 @@ const NewsCard = ({
                 title={isBookmarked ? "Remove bookmark" : "Bookmark this article"}
               >
                 {isBookmarked ? (
-                  <BookmarkCheck className="w-4 h-4" />
+                  <BookmarkCheck className="w-5 h-5" />
                 ) : (
-                  <Bookmark className="w-4 h-4" />
+                  <Bookmark className="w-5 h-5" />
                 )}
               </button>
             </div>
@@ -143,39 +143,37 @@ const NewsCard = ({
         {/* 2. Text Content Box */}
         <div className="p-4 flex flex-col flex-grow">
           {/* Headline: Max 2 lines, then ... */}
-          <h3 className="font-display text-sm font-bold leading-tight text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 h-[2.5rem] group-hover:text-primary transition-colors">
+          <h3 className="font-display text-base font-bold leading-tight text-gray-900 dark:text-gray-100 line-clamp-2 mb-3 h-[2.5rem] group-hover:text-primary transition-colors">
             {title}
           </h3>
           
           {/* Summary: Max 3 lines, then ... */}
-          <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3 mb-4 flex-grow">
+          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3 mb-4 flex-grow">
             {excerpt}
           </p>
 
           {/* Bottom Metadata */}
-          <div className="mt-auto flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400">
-
-
-            <span className="inline-flex items-center gap-1">
-              <Clock size={10} />
+          <div className="mt-auto flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
+            <span className="inline-flex items-center gap-2">
+              <Clock size={16} />
               {readTime}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <Calendar size={10} />
+            <span className="inline-flex items-center gap-2">
+              <Calendar size={16} />
               {date}
             </span>
           </div>
 
           {/* External Video Link Button - Fixed to avoid nested links */}
           {externalLink && (
-            <div className="mt-3">
+            <div className="mt-4">
               <button
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   window.open(externalLink, '_blank', 'noopener,noreferrer');
                 }}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-md text-xs font-medium transition-colors"
+                className="inline-flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-sm font-medium transition-colors min-h-[44px]"
               >
                 🎬 See Full Video
               </button>
