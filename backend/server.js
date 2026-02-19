@@ -210,7 +210,8 @@ app.post('/api/articles', (req, res) => {
     excerpt: req.body.excerpt || '',
     content: req.body.content || req.body.excerpt || '',
     category: req.body.category || 'afrobeats',
-    image: req.body.image || 'https://via.placeholder.com/400x250?text=EntertainmentGHC',
+    image: req.body.image || 'https://placehold.co/400x250?text=EntertainmentGHC',
+
     readTime: req.body.readTime || '5 min read',
     author: req.body.author || 'Admin',
     source: req.body.source || 'user',
@@ -361,7 +362,8 @@ const extractImageFromItem = (item) => {
   }
 
   // Default placeholder
-  return 'https://via.placeholder.com/400x250?text=News+Image';
+  return 'https://placehold.co/400x250?text=News+Image';
+
 };
 
 // Get Nigerian news
@@ -445,4 +447,3 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Try POST /api/auth/login with username: admin, password: admin123`);
 });
-
