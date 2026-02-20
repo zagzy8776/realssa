@@ -188,9 +188,52 @@ const VIDEO_CHANNELS: VideoChannel[] = [
     source: 'SportyShow',
     type: 'youtube'
   },
+  
+  // Rumble Videos
+  {
+    id: 'rumble-1',
+    title: 'Rumble Video 1',
+    embedUrl: 'https://rumble.com/embed/v72sjgw/?pub=4',
+    thumbnail: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400',
+    category: 'africa',
+    country: 'Pan-African',
+    source: 'Rumble',
+    type: 'iframe'
+  },
+  {
+    id: 'rumble-2',
+    title: 'Rumble Video 2',
+    embedUrl: 'https://rumble.com/embed/v73du0y/?pub=4',
+    thumbnail: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400',
+    category: 'africa',
+    country: 'Pan-African',
+    source: 'Rumble',
+    type: 'iframe'
+  },
+  {
+    id: 'rumble-3',
+    title: 'Rumble Video 3',
+    embedUrl: 'https://rumble.com/embed/v73tf3y/?pub=4',
+    thumbnail: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400',
+    category: 'africa',
+    country: 'Pan-African',
+    source: 'Rumble',
+    type: 'iframe'
+  },
+  {
+    id: 'rumble-4',
+    title: 'Rumble Video 4',
+    embedUrl: 'https://rumble.com/embed/v5xwnen/?pub=4',
+    thumbnail: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400',
+    category: 'africa',
+    country: 'Pan-African',
+    source: 'Rumble',
+    type: 'iframe'
+  },
 
   
   // Ghana
+
 
 
   {
