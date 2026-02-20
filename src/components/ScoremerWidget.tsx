@@ -1,25 +1,33 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 
 interface ScoremerWidgetProps {
-  leagues?: string;
-  color?: string;
-  lang?: string;
-  height?: string;
   className?: string;
 }
 
 const ScoremerWidget = ({ 
-  leagues = "35,36,37,38,39,117,128,1211",
-  color = "50812f",
-  lang = "en",
-  height = "500px",
   className = ""
 }: ScoremerWidgetProps) => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-
-
-  const widgetUrl = `https://www.scoremer.com/widgets/live?lid=${leagues}&c=${color}&f=FFF&lang=${lang}`;
+  
+  useEffect(() => {
+    // Load Scorebat embed script
+    const loadScript = () => {
+      if (document.getElementById('scorebat-jssdk')) return;
+      
+      const js = document.createElement('script');
+      js.id = 'scorebat-jssdk';
+      js.src = 'https://www.scorebat.com/embed/embed.js?v=arrv';
+      js.async = true;
+      
+      const fjs = document.getElementsByTagName('script')[0];
+      if (fjs && fjs.parentNode) {
+        fjs.parentNode.insertBefore(js, fjs);
+      } else {
+        document.body.appendChild(js);
+      }
+    };
+    
+    loadScript();
+  }, []);
 
   return (
     <div className={`scoremer-widget-container ${className}`}>
@@ -35,29 +43,17 @@ const ScoremerWidget = ({
         </div>
         
         <div className="border border-gray-200 rounded-lg overflow-hidden">
-          {hasError ? (
-            <div 
-              style={{ height: height }}
-              className="flex items-center justify-center bg-gray-50 text-gray-500"
-            >
-              <div className="text-center p-4">
-                <p className="text-sm">Unable to load live scores widget.</p>
-                <p className="text-xs mt-2">Please check your connection or try again later.</p>
-              </div>
-            </div>
-          ) : (
-            <iframe 
-              src={widgetUrl}
-              style={{ height: height }}
-              scrolling="auto"
-              frameBorder="0"
-              width="100%"
-              title="Live Football Scores"
-              onLoad={() => setIsLoaded(true)}
-              onError={() => setHasError(true)}
-            />
-
-          )}
+          <iframe 
+            src="https://www.scorebat.com/embed/livescore/?token=Mjc3MzMxXzE3NzE1MzMzMjJfNGU5YmVkZmI0OTkyN2E3ZWMwNTRkMmY3MWI3YTRlNzQxYTU3MTljZA=="
+            frameBorder="0"
+            width="100%"
+            height="760"
+            allowFullScreen
+            allow="autoplay; fullscreen"
+            style={{ width: '100%', height: '760px', overflow: 'hidden', display: 'block' }}
+            title="Live Football Scores"
+            className="_scorebatEmbeddedPlayer_"
+          />
         </div>
 
       </div>
