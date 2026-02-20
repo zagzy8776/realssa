@@ -55,8 +55,8 @@ const ScoremerWidget = ({
               title="Live Football Scores"
               onLoad={() => setIsLoaded(true)}
               onError={() => setHasError(true)}
-              sandbox="allow-scripts allow-same-origin"
             />
+
           )}
         </div>
 

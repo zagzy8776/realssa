@@ -59,23 +59,25 @@ const LazyAd: React.FC<LazyAdProps> = ({
         setIsLoaded(true);
 
         // Initialize Monetag script for proper ad serving
-        if (!window.monetag) {
-          window.monetag = { queue: [] };
-          const script = document.createElement('script');
-          script.src = 'https://otieu.com/pop.js';
-          script.async = true;
-          
-          // Add error handling for script loading
-          script.onerror = () => {
-            console.warn('Failed to load ad script from otieu.com');
-          };
-          
-          try {
-            document.head.appendChild(script);
-          } catch (e) {
-            console.warn('Error appending ad script:', e);
-          }
-        }
+        // NOTE: pop.js is currently disabled due to syntax errors
+        // if (!window.monetag) {
+        //   window.monetag = { queue: [] };
+        //   const script = document.createElement('script');
+        //   script.src = 'https://otieu.com/pop.js';
+        //   script.async = true;
+        //   
+        //   // Add error handling for script loading
+        //   script.onerror = () => {
+        //     console.warn('Failed to load ad script from otieu.com');
+        //   };
+        //   
+        //   try {
+        //     document.head.appendChild(script);
+        //   } catch (e) {
+        //     console.warn('Error appending ad script:', e);
+        //   }
+        // }
+
 
         // Initialize ad script if needed
         if (window.adsbygoogle && adType === 'banner') {
