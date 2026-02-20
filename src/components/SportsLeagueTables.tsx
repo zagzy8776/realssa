@@ -250,8 +250,8 @@ const SportsLeagueTables = () => {
           className="w-full border-0"
           style={{ height: '600px' }}
           loading="lazy"
-          sandbox="allow-scripts allow-same-origin"
         />
+
       </div>
 
       {/* Attribution */}
