@@ -129,10 +129,21 @@ const Header = () => {
           </nav>
 
           {/* Mobile: Notification & Dark Mode - Top of Header */}
+          <div className="flex md:hidden items-center gap-2 mr-2">
+            <div className="scale-90 origin-right">
+              <PushNotificationManager />
+            </div>
+            <div className="scale-90 origin-right">
+              <DarkModeToggle />
+            </div>
+          </div>
+
+          {/* Desktop: Notification & Dark Mode */}
           <div className="hidden md:flex items-center gap-1">
             <PushNotificationManager />
             <DarkModeToggle />
           </div>
+
 
           {/* Mobile Menu Button */}
           <button
