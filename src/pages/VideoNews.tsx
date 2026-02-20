@@ -38,7 +38,18 @@ const VIDEO_CHANNELS: VideoChannel[] = [
     type: 'youtube'
   },
   {
+    id: 'nta-live',
+    title: 'NTA Live',
+    embedUrl: 'https://www.youtube.com/embed/VJMfqYmqUP0',
+    thumbnail: 'https://img.youtube.com/vi/VJMfqYmqUP0/mqdefault.jpg',
+    category: 'nigeria',
+    country: 'Nigeria',
+    source: 'NTA',
+    type: 'youtube'
+  },
+  {
     id: 'trust-tv',
+
     title: 'TRUST TV LIVE',
     embedUrl: 'https://www.youtube.com/embed/wY6rUgx2cY0',
     thumbnail: 'https://img.youtube.com/vi/wY6rUgx2cY0/mqdefault.jpg',
