@@ -108,8 +108,90 @@ const VIDEO_CHANNELS: VideoChannel[] = [
     type: 'youtube'
   },
 
+  {
+    id: 'africanews-english-live',
+    title: 'Africanews English Live',
+    embedUrl: 'https://www.youtube.com/embed/NQjabLGdP5g',
+    thumbnail: 'https://img.youtube.com/vi/NQjabLGdP5g/mqdefault.jpg',
+    category: 'africa',
+    country: 'Pan-African',
+    source: 'Africanews',
+    type: 'youtube'
+  },
+  {
+    id: 'news-central-live',
+    title: '🔴LIVE: News Central TV Live',
+    embedUrl: 'https://www.youtube.com/embed/R2YPW8eY1O0',
+    thumbnail: 'https://img.youtube.com/vi/R2YPW8eY1O0/mqdefault.jpg',
+    category: 'nigeria',
+    country: 'Nigeria',
+    source: 'News Central TV',
+    type: 'youtube'
+  },
+  {
+    id: 'bbc-focus-africa',
+    title: 'BBC Focus on Africa - Dating App Experience',
+    embedUrl: 'https://www.youtube.com/embed/WjQ1hvQotT0',
+    thumbnail: 'https://img.youtube.com/vi/WjQ1hvQotT0/mqdefault.jpg',
+    category: 'africa',
+    country: 'UK',
+    source: 'BBC',
+    type: 'youtube'
+  },
+  {
+    id: 'gmb2024-titiaka',
+    title: 'From the Savannah to the World: Titiaka\'s GMB2024 Journey',
+    embedUrl: 'https://www.youtube.com/embed/2IjfrVKST7o',
+    thumbnail: 'https://img.youtube.com/vi/2IjfrVKST7o/mqdefault.jpg',
+    category: 'ghana',
+    country: 'Ghana',
+    source: 'GMB2024',
+    type: 'youtube'
+  },
+  {
+    id: 'pastor-kingsley-tattoo',
+    title: 'Pastor Kingsley Okonkwo - "I Don\'t Owe Anybody an Explanation About My Tattoo"',
+    embedUrl: 'https://www.youtube.com/embed/8f38yDyvID8',
+    thumbnail: 'https://img.youtube.com/vi/8f38yDyvID8/mqdefault.jpg',
+    category: 'religious',
+    country: 'Nigeria',
+    source: 'Pastor Kingsley',
+    type: 'youtube'
+  },
+  {
+    id: 'billionaire-surrogate',
+    title: 'The Billionaire Surrogate Ladies - Ella Idu & Uju Okoli',
+    embedUrl: 'https://www.youtube.com/embed/xJNuxCnEHsI',
+    thumbnail: 'https://img.youtube.com/vi/xJNuxCnEHsI/mqdefault.jpg',
+    category: 'nigeria',
+    country: 'Nigeria',
+    source: 'Nollywood',
+    type: 'youtube'
+  },
+  {
+    id: 'without-you-movie',
+    title: 'WITHOUT YOU - Bambam, Uzor Arukwe, Modola Osifuwa',
+    embedUrl: 'https://www.youtube.com/embed/061B3-yAkSM',
+    thumbnail: 'https://img.youtube.com/vi/061B3-yAkSM/mqdefault.jpg',
+    category: 'nigeria',
+    country: 'Nigeria',
+    source: 'Nollywood',
+    type: 'youtube'
+  },
+  {
+    id: 'sportyshow-defender',
+    title: 'Heated argument on SportyShow - Defining a world-class defender',
+    embedUrl: 'https://www.youtube.com/embed/14hmPROVAis',
+    thumbnail: 'https://img.youtube.com/vi/14hmPROVAis/mqdefault.jpg',
+    category: 'sports',
+    country: 'Nigeria',
+    source: 'SportyShow',
+    type: 'youtube'
+  },
+
   
   // Ghana
+
 
   {
     id: 'joynews',
