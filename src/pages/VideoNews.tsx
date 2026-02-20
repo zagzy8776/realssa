@@ -230,9 +230,22 @@ const VIDEO_CHANNELS: VideoChannel[] = [
     source: 'Rumble',
     type: 'iframe'
   },
+  
+  // RT Live
+  {
+    id: 'rt-live',
+    title: 'RT Live',
+    embedUrl: 'https://www.rt.com/on-air/embed/',
+    thumbnail: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400',
+    category: 'africa',
+    country: 'Russia',
+    source: 'RT',
+    type: 'iframe'
+  },
 
   
   // Ghana
+
 
 
 
