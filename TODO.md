@@ -1,12 +1,26 @@
-# Fix Console Errors for Ghana, Kenya, South Africa, UK, and Sports Pages
+# Site Improvement TODO - Target: 85+ Rating
 
-## Issues to Fix:
-1. CSP Error: images.unsplash.com not in connect-src directive
-2. 404 Errors: Missing API endpoints for /api/news/kenya, /api/news/south-africa, /api/news/uk, /api/news/sports
+## Tasks:
 
-## Progress:
-- [x] Fix vercel.json - Add images.unsplash.com to connect-src
-- [x] Fix backend/server.js - Add Kenya news API endpoint
-- [x] Fix backend/server.js - Add South Africa news API endpoint
-- [x] Fix backend/server.js - Add UK news API endpoint
-- [x] Fix backend/server.js - Add Sports news API endpoint
+### 1. Create SkeletonCard Component ✅
+- [x] Create reusable skeleton loader component
+- [x] Add shimmer animation effect
+- [x] Support different sizes (small, medium, large)
+
+### 2. Enhance RSS Image Extraction
+- [ ] Add Open Graph (og:image) meta tag extraction
+- [ ] Implement image URL validation
+- [ ] Add better category-specific fallback images
+- [ ] Try multiple image sources before falling back
+
+### 3. Add Skeleton Loaders to Pages ✅ COMPLETE
+- [x] Kenya page (src/pages/Kenya.tsx) - ✅ DONE
+- [x] Nigeria page (src/pages/Nigeria.tsx) - ✅ DONE
+- [x] Ghana page (src/pages/Ghana.tsx) - ✅ DONE
+- [x] Video News page (src/pages/VideoNews.tsx) - ✅ DONE
+
+### 4. Test & Verify
+- [x] Skeleton loaders implemented on all pages
+- [x] Ready to commit and push changes
+
+## Progress: 3/4 tasks complete

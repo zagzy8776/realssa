@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "../components/CategoryBadge";
 import SimpleImage from "../components/SimpleImage";
+import SkeletonCard, { SkeletonGrid } from "../components/SkeletonCard";
 
 type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "breaking" | "news" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "lagos-fashion" | "nigerian-tech" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "entertainment" | "general";
 
@@ -182,16 +183,7 @@ const Kenya = () => {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {[...Array(2)].map((_, index) => (
-              <div key={index} className="bg-card rounded-lg p-6 shadow-lg animate-pulse">
-                <div className="h-48 bg-gray-300 rounded-lg mb-4"></div>
-                <div className="h-6 bg-gray-300 rounded mb-2"></div>
-                <div className="h-4 bg-gray-300 rounded mb-4"></div>
-                <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-              </div>
-            ))}
-          </div>
+          <SkeletonGrid count={4} variant="news" columns={2} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {kenyaNews.map((news) => (

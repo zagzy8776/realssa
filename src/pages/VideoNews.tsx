@@ -3,13 +3,15 @@
  * Displays LIVE news channels from RSS/Embed feeds - No API required
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Play, ExternalLink, Youtube, Radio, Tv } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ReadProgressBar from "@/components/ReadProgressBar";
+import { SkeletonGrid } from "@/components/SkeletonCard";
+
 
 // Hardcoded video channels - RSS/Embed based (No API)
 interface VideoChannel {
@@ -512,11 +514,21 @@ const CATEGORIES = [
 const VideoNews = () => {
   const [selectedChannel, setSelectedChannel] = useState<VideoChannel | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate loading for better UX
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [selectedCategory]);
 
   // Filter channels by category
   const filteredChannels = selectedCategory === 'all' 
     ? VIDEO_CHANNELS 
     : VIDEO_CHANNELS.filter(ch => ch.category === selectedCategory);
+
 
   return (
     <div className="min-h-screen bg-[#F4F1DE] dark:bg-[#1A1A2E]">
@@ -587,8 +599,12 @@ const VideoNews = () => {
         </div>
 
         {/* Live Channels Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredChannels.map((channel) => (
+        {loading ? (
+          <SkeletonGrid count={9} variant="video" columns={3} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredChannels.map((channel) => (
+
             <Card
               key={channel.id}
               className="group cursor-pointer overflow-hidden hover:shadow-2xl transition-all bg-white dark:bg-[#16213E] border-2 border-transparent hover:border-red-600"
@@ -634,10 +650,12 @@ const VideoNews = () => {
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* No Channels Found */}
+
         {filteredChannels.length === 0 && (
           <div className="text-center py-12">
             <Youtube className="w-16 h-16 mx-auto text-muted-foreground mb-4" />

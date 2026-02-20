@@ -1,11 +1,22 @@
+import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SocialButtons from "@/components/SocialButtons";
 import SectionHeader from "@/components/SectionHeader";
 import NewsCard from "@/components/NewsCard";
+import { SkeletonGrid } from "@/components/SkeletonCard";
 import { nigeriaNews } from "@/data/newsData";
 
 const Nigeria = () => {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate loading for better UX
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -26,25 +37,29 @@ const Nigeria = () => {
         <div className="container mx-auto px-4">
           <SectionHeader title="Nigeria Entertainment News" emoji="🇳🇬" />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {nigeriaNews.map((story, index) => (
-              <div
-                key={story.id}
-                className="animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <NewsCard
-                  title={story.title}
-                  excerpt={story.excerpt}
-                  category={story.category}
-                  image={story.image}
-                  readTime={story.readTime}
-                  date={story.date}
-                  href="#"
-                />
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <SkeletonGrid count={8} variant="news" columns={4} />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {nigeriaNews.map((story, index) => (
+                <div
+                  key={story.id}
+                  className="animate-fade-in"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <NewsCard
+                    title={story.title}
+                    excerpt={story.excerpt}
+                    category={story.category}
+                    image={story.image}
+                    readTime={story.readTime}
+                    date={story.date}
+                    href="#"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
