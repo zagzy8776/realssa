@@ -479,7 +479,7 @@ const fetchRSSFeeds = async (feeds) => {
           excerpt: item.contentSnippet || item.summary || item.title || 'No content',
           content: item.content || item.summary || item.contentSnippet || '',
           category: 'news',
-          image: extractImageFromItem(item),
+          image: extractImageFromItem(item, feedUrl),
           readTime: '5 min read',
           author: feed.title || 'Unknown Source',
           source: 'rss',
@@ -491,6 +491,7 @@ const fetchRSSFeeds = async (feeds) => {
         };
         allArticles.push(article);
       });
+
     } catch (error) {
       console.error(`Error fetching RSS feed ${feedUrl}:`, error.message);
     }
