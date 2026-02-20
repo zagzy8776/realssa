@@ -87,6 +87,17 @@ const VIDEO_CHANNELS: VideoChannel[] = [
     source: 'Africanews',
     type: 'iframe'
   },
+  {
+    id: 'al-jazeera',
+    title: '🔴 Al Jazeera English | Live',
+    embedUrl: 'https://www.youtube.com/embed/gCNeDWCI0vo',
+    thumbnail: 'https://img.youtube.com/vi/gCNeDWCI0vo/mqdefault.jpg',
+    category: 'africa',
+    country: 'Qatar',
+    source: 'Al Jazeera',
+    type: 'youtube'
+  },
+
   
   // Ghana
   {
