@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 interface ScoremerWidgetProps {
   leagues?: string;
@@ -16,30 +16,8 @@ const ScoremerWidget = ({
   className = ""
 }: ScoremerWidgetProps) => {
   const [isLoaded, setIsLoaded] = useState(false);
-  
-  useEffect(() => {
-    // Check if script is already loaded
-    if (document.getElementById('scoremer-widget-script')) {
-      setIsLoaded(true);
-      return;
-    }
-    
-    // Create and load the script
-    const script = document.createElement('script');
-    script.id = 'scoremer-widget-script';
-    script.src = 'https://www.scoremer.com/widgetv2/w';
-    script.async = true;
-    
-    script.onload = () => {
-      setIsLoaded(true);
-    };
-    
-    document.body.appendChild(script);
-    
-    return () => {
-      // Don't remove script on unmount to prevent reloading issues
-    };
-  }, []);
+  const [hasError, setHasError] = useState(false);
+
 
   const widgetUrl = `https://www.scoremer.com/widgets/live?lid=${leagues}&c=${color}&f=FFF&lang=${lang}`;
 
@@ -57,15 +35,31 @@ const ScoremerWidget = ({
         </div>
         
         <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <iframe 
-            src={widgetUrl}
-            style={{ height: height }}
-            scrolling="auto"
-            frameBorder="0"
-            width="100%"
-            title="Live Football Scores"
-          />
+          {hasError ? (
+            <div 
+              style={{ height: height }}
+              className="flex items-center justify-center bg-gray-50 text-gray-500"
+            >
+              <div className="text-center p-4">
+                <p className="text-sm">Unable to load live scores widget.</p>
+                <p className="text-xs mt-2">Please check your connection or try again later.</p>
+              </div>
+            </div>
+          ) : (
+            <iframe 
+              src={widgetUrl}
+              style={{ height: height }}
+              scrolling="auto"
+              frameBorder="0"
+              width="100%"
+              title="Live Football Scores"
+              onLoad={() => setIsLoaded(true)}
+              onError={() => setHasError(true)}
+              sandbox="allow-scripts allow-same-origin"
+            />
+          )}
         </div>
+
       </div>
     </div>
   );

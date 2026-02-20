@@ -3,8 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 // Type declarations for window properties
 declare global {
   interface Window {
-    monetag?: { queue: any[] };
-    adsbygoogle?: any[];
+    monetag?: { queue: unknown[] };
+    adsbygoogle?: Array<Record<string, unknown>>;
   }
 }
 
@@ -64,7 +64,17 @@ const LazyAd: React.FC<LazyAdProps> = ({
           const script = document.createElement('script');
           script.src = 'https://otieu.com/pop.js';
           script.async = true;
-          document.head.appendChild(script);
+          
+          // Add error handling for script loading
+          script.onerror = () => {
+            console.warn('Failed to load ad script from otieu.com');
+          };
+          
+          try {
+            document.head.appendChild(script);
+          } catch (e) {
+            console.warn('Error appending ad script:', e);
+          }
         }
 
         // Initialize ad script if needed
