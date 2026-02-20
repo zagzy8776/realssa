@@ -631,8 +631,9 @@ const VideoNews = () => {
                     {selectedChannel.source}
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    {selectedChannel.country} • RSS/Embed Stream
+                    {selectedChannel.country}
                   </p>
+
                 </div>
                 <a
                   href={selectedChannel.embedUrl}
