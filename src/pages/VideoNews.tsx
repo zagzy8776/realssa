@@ -97,9 +97,20 @@ const VIDEO_CHANNELS: VideoChannel[] = [
     source: 'Al Jazeera',
     type: 'youtube'
   },
+  {
+    id: 'african-news-playlist',
+    title: 'African News Playlist',
+    embedUrl: 'https://www.youtube.com/embed/videoseries?list=PLL92dfFL9ZdLBqPubKZR8VFNU7K7QCW_m',
+    thumbnail: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400',
+    category: 'africa',
+    country: 'Pan-African',
+    source: 'YouTube Playlist',
+    type: 'youtube'
+  },
 
   
   // Ghana
+
   {
     id: 'joynews',
     title: 'JoyNews Live',
