@@ -111,6 +111,68 @@ async function initializeDatabase() {
       console.log('✅ Created default admin user (admin / admin123)');
     }
 
+    // Seed default articles if the articles table is empty
+    const articleCount = await client.query('SELECT COUNT(*) FROM articles');
+    if (parseInt(articleCount.rows[0].count) === 0) {
+      console.log('📝 Seeding default articles...');
+      const defaultArticles = [
+        {
+          title: 'Welcome to EntertainmentGHC',
+          excerpt: 'Discover the latest in African entertainment and culture',
+          content: '<p>Welcome to our platform where we showcase the best of African entertainment, news, and sports coverage from across Africa and the world.</p>',
+          category: 'general',
+          image: 'https://placehold.co/400x250?text=EntertainmentGHC',
+          author: 'Admin',
+          source: 'static'
+        },
+        {
+          title: 'Nigerian Entertainment Industry Grows 40% in 2026',
+          excerpt: 'The Nigerian entertainment industry, led by Afrobeats and Nollywood, continues its explosive growth trajectory.',
+          content: '<p>The Nigerian entertainment industry has seen remarkable growth this year, with Afrobeats dominating global charts and Nollywood setting new box office records.</p>',
+          category: 'entertainment',
+          image: 'https://placehold.co/400x250?text=Nigerian+Entertainment',
+          author: 'Admin',
+          source: 'static'
+        },
+        {
+          title: 'Africa Cup 2026: Full Schedule Announced',
+          excerpt: 'The Africa Cup of Nations 2026 schedule has been released with 24 teams competing across 6 venues.',
+          content: '<p>The Confederation of African Football has announced the complete schedule for the 2026 Africa Cup of Nations tournament.</p>',
+          category: 'sports',
+          image: 'https://placehold.co/400x250?text=Africa+Cup+2026',
+          author: 'Admin',
+          source: 'static'
+        },
+        {
+          title: 'Tech Revolution: African Startups Raise $5 Billion in 2026',
+          excerpt: 'African tech startups have raised a record $5 billion in funding this year, with Nigeria and Kenya leading the charge.',
+          content: '<p>The African tech ecosystem continues to attract massive investment, with fintech and healthtech leading the funding rounds.</p>',
+          category: 'tech',
+          image: 'https://placehold.co/400x250?text=African+Tech',
+          author: 'Admin',
+          source: 'static'
+        },
+        {
+          title: 'Ghana Music Festival Returns for 2026 Edition',
+          excerpt: 'The biggest music festival in West Africa returns with international and local artist lineup.',
+          content: '<p>Ghana\'s premier music festival returns bigger and better with performances from top African and international artists.</p>',
+          category: 'entertainment',
+          image: 'https://placehold.co/400x250?text=Ghana+Music+Festival',
+          author: 'Admin',
+          source: 'static'
+        }
+      ];
+
+      for (const article of defaultArticles) {
+        await client.query(
+          `INSERT INTO articles (title, excerpt, content, category, image, author, source)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [article.title, article.excerpt, article.content, article.category, article.image, article.author, article.source]
+        );
+      }
+      console.log('✅ Seeded 5 default articles');
+    }
+
     await client.query('COMMIT');
     console.log('✅ Database tables initialized');
   } catch (err) {
