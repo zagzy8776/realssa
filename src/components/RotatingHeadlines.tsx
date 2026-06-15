@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,7 +35,7 @@ const RotatingHeadlines = () => {
         // Try to fetch from backend API first
         let apiArticles: HeadlineItem[] = [];
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/featured`);
+          const response = await fetch(apiUrl('/api/articles/featured'));
           if (response.ok) {
             apiArticles = await response.json();
           }

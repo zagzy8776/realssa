@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "../components/CategoryBadge";
@@ -41,7 +42,7 @@ const Sports = () => {
     const fetchSportsNews = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/sports`);
+        const response = await fetch(apiUrl('/api/news/sports'));
         if (response.ok) {
           const data = await response.json();
 

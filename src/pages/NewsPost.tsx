@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
@@ -92,7 +93,7 @@ const NewsPost = () => {
       };
 
       // Send to backend API
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`, {
+      const response = await fetch(apiUrl('/api/articles'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

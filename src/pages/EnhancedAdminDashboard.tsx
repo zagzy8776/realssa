@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ const EnhancedAdminDashboard = () => {
         // Fetch articles from backend API
         let apiArticles = [];
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`, {
+          const response = await fetch(apiUrl('/api/articles'), {
             headers: {
               'Authorization': `Bearer ${token}`,
             },
@@ -113,7 +114,7 @@ const EnhancedAdminDashboard = () => {
         }
 
         // Delete from backend API
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/${id}`, {
+        const response = await fetch(apiUrl(`/api/articles/${id}`), {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -165,7 +166,7 @@ const EnhancedAdminDashboard = () => {
       }
 
       // Update featured status in backend API
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/${id}/featured`, {
+      const response = await fetch(apiUrl(`/api/articles/${id}/featured`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

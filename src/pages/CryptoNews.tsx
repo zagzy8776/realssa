@@ -1,3 +1,4 @@
+import { apiUrl, getArticleExternalLink } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "../components/CategoryBadge";
@@ -31,7 +32,7 @@ const CryptoNews = () => {
         const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
         // Fetch crypto news from backend RSS feeds with caching
-        const response = await fetch('/api/crypto-news', {
+        const response = await fetch(apiUrl('/api/news/world'), {
           signal: controller.signal,
           headers: {
             'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
@@ -45,7 +46,13 @@ const CryptoNews = () => {
         const data = await response.json();
         
         // Transform backend data to match our interface
-        const cryptoNewsItems: CryptoNewsItem[] = data.map((item: { id?: string; link?: string; title?: string; excerpt?: string; description?: string; contentSnippet?: string; image?: string; author?: string; creator?: string; date?: string; pubDate?: string; content?: string }) => ({
+        const rawItems = Array.isArray(data) ? data : [];
+        const cryptoItems = rawItems.filter((item: { title?: string; excerpt?: string; description?: string; author?: string }) => {
+            const text = `${item.title || ''} ${item.excerpt || ''} ${item.description || ''} ${item.author || ''}`.toLowerCase();
+            return text.includes('crypto') || text.includes('bitcoin') || text.includes('coin') || text.includes('blockchain');
+          });
+        const cryptoNewsItems: CryptoNewsItem[] = (cryptoItems.length ? cryptoItems : rawItems.slice(0, 12))
+          .map((item: { id?: string; link?: string; externalLink?: string; external_link?: string; title?: string; excerpt?: string; description?: string; contentSnippet?: string; image?: string; author?: string; creator?: string; date?: string; pubDate?: string; content?: string }) => ({
           id: item.id || item.link || crypto.randomUUID(),
           title: item.title || "Untitled",
           excerpt: item.excerpt || item.description || item.contentSnippet || "",
@@ -54,7 +61,7 @@ const CryptoNews = () => {
           readTime: "5 min read", // Estimate
           author: item.author || item.creator || "Unknown",
           date: item.date || item.pubDate || new Date().toISOString(),
-          externalLink: item.link || "#",
+          externalLink: getArticleExternalLink(item),
           content: item.content || item.description || ""
         }));
         

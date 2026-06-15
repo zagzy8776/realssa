@@ -1,3 +1,4 @@
+import { apiUrl } from './api-base';
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging';
 
@@ -102,8 +103,7 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 // Subscribe to topic
 export const subscribeToTopic = async (token: string, topic: string): Promise<boolean> => {
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://realssa-production.up.railway.app';
-    const response = await fetch(`${apiUrl}/api/notifications/subscribe`, {
+    const response = await fetch(apiUrl('/api/notifications/subscribe'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

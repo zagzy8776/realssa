@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,20 +39,10 @@ const WorldNews = () => {
     const fetchWorldNews = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/world`);
+        const response = await fetch(apiUrl('/api/news/world'));
         if (response.ok) {
           const data = await response.json();
-          // Filter for international feeds only
-          const internationalFeeds = [
-            'BBC News', 'Al Jazeera', 'Variety', 'Rolling Stone', 
-            'The Verge', 'Wired', 'ESPN', 'CoinDesk', 'CoinTelegraph',
-            'Bitcoin Magazine', 'TechCabal', 'IGN', 'GameSpot', 'PC Gamer', 'Kotaku',
-            'The Business of Fashion', 'Fashionista', 'WWD', 'Fibre2Fashion'
-          ];
-          const internationalArticles = data.filter(article => 
-            internationalFeeds.includes(article.author)
-          );
-          setArticles(internationalArticles);
+          setArticles(Array.isArray(data) ? data : []);
         } else {
           setError("Failed to fetch World news");
         }

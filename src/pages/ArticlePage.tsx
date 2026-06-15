@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import CategoryBadge from "@/components/CategoryBadge";
@@ -43,7 +44,7 @@ const ArticlePage = () => {
         // First try to fetch from backend API
         let apiArticles = [];
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
+          const response = await fetch(apiUrl('/api/articles'));
           if (response.ok) {
             apiArticles = await response.json();
           }
@@ -86,7 +87,7 @@ const ArticlePage = () => {
 
   const fetchComments = async (articleId: string) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments?articleId=${articleId}`);
+      const response = await fetch(apiUrl(`/api/comments?articleId=${articleId}`));
       if (response.ok) {
         const commentsData = await response.json();
         setComments(commentsData);
@@ -102,7 +103,7 @@ const ArticlePage = () => {
 
     setSubmittingComment(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments`, {
+      const response = await fetch(apiUrl('/api/comments'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,7 +132,7 @@ const ArticlePage = () => {
 
   const handleLikeComment = async (commentId: string) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments/${commentId}/like`, {
+      const response = await fetch(apiUrl(`/api/comments/${commentId}/like`), {
         method: 'POST',
       });
 

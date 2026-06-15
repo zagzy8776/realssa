@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ const AdminDashboard = () => {
         // Fetch articles from backend API
         let apiArticles = [];
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
+          const response = await fetch(apiUrl('/api/articles'));
 
           if (response.ok) {
             apiArticles = await response.json();
@@ -116,7 +117,7 @@ const AdminDashboard = () => {
         // Try to delete from backend if it's a backend article
         if (isBackendArticle) {
           try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/${article.id}`, {
+            const response = await fetch(apiUrl(`/api/articles/${article.id}`), {
               method: 'DELETE',
               headers: {
                 'Authorization': `Bearer ${token}`,

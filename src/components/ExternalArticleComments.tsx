@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,7 +37,7 @@ const ExternalArticleComments = ({
     const fetchComments = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments?articleId=${articleId}`);
+        const response = await fetch(apiUrl(`/api/comments?articleId=${articleId}`));
         if (response.ok) {
           const commentsData = await response.json();
           setComments(commentsData);
@@ -57,7 +58,7 @@ const ExternalArticleComments = ({
 
     setSubmittingComment(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments`, {
+      const response = await fetch(apiUrl('/api/comments'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -89,7 +90,7 @@ const ExternalArticleComments = ({
 
   const handleLikeComment = async (commentId: string) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/comments/${commentId}/like`, {
+      const response = await fetch(apiUrl(`/api/comments/${commentId}/like`), {
         method: 'POST',
       });
 

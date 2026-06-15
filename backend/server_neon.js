@@ -261,7 +261,7 @@ app.get('/api/articles', async (req, res) => {
     const result = await pool.query(
       'SELECT * FROM articles ORDER BY date DESC'
     );
-    res.json(result.rows);
+    res.json(formatApiArticles(result.rows));
   } catch (err) {
     console.error('Error fetching articles:', err);
     res.status(500).json({ message: 'Server error' });
@@ -275,7 +275,7 @@ app.get('/api/articles/featured', async (req, res) => {
     let result = await pool.query(
       "SELECT * FROM articles WHERE featured = true OR status = 'published' ORDER BY date DESC LIMIT 10"
     );
-    let featuredArticles = result.rows;
+    let featuredArticles = formatApiArticles(result.rows);
 
     // 2. Get World News RSS for homepage rotation
     try {
@@ -289,11 +289,14 @@ app.get('/api/articles/featured', async (req, res) => {
         category: 'World News',
         image: extractImageFromItem(item),
         read_time: '5 min read',
+        readTime: '5 min read',
         author: 'BBC News',
         source: 'rss',
         external_link: item.link,
+        externalLink: item.link,
         date: item.pubDate || new Date().toISOString(),
         content_type: 'article',
+        contentType: 'article',
         status: 'published',
         featured: true
       }));
@@ -365,6 +368,25 @@ app.put('/api/articles/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/articles/:id/featured
+app.patch('/api/articles/:id/featured', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'UPDATE articles SET featured = $1 WHERE id = $2 RETURNING *',
+      [Boolean(req.body.featured), req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Article not found' });
+    }
+
+    res.json(formatDbArticle(result.rows[0]));
+  } catch (err) {
+    console.error('Error updating featured status:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // DELETE /api/articles/:id
 app.delete('/api/articles/:id', async (req, res) => {
   try {
@@ -399,6 +421,17 @@ const parser = new Parser({
     ]
   }
 });
+
+// Return both Neon/Postgres snake_case fields and frontend-friendly camelCase fields.
+const formatDbArticle = (row) => ({
+  ...row,
+  id: row.id?.toString?.() || String(row.id),
+  readTime: row.read_time || row.readTime || '5 min read',
+  externalLink: row.external_link || row.externalLink || '',
+  contentType: row.content_type || row.contentType || 'article'
+});
+
+const formatApiArticles = (rows) => rows.map(formatDbArticle);
 
 // All RSS feed URLs (same as original server.js)
 const nigerianFeeds = [
@@ -556,11 +589,14 @@ const fetchRSSFeeds = async (feeds) => {
           category: 'news',
           image: extractImageFromItem(item),
           read_time: '5 min read',
+          readTime: '5 min read',
           author: feed.title || 'Unknown Source',
           source: 'rss',
           external_link: item.link,
+          externalLink: item.link,
           date: item.pubDate || new Date().toISOString(),
           content_type: 'article',
+          contentType: 'article',
           status: 'published',
           featured: false
         };
@@ -670,7 +706,7 @@ app.get('/api/comments', async (req, res) => {
       );
     }
 
-    res.json(result.rows);
+    res.json(formatApiArticles(result.rows));
   } catch (err) {
     console.error('Error fetching comments:', err);
     res.status(500).json({ error: 'Server error' });

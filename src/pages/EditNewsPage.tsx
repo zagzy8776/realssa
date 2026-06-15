@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,7 @@ const EditNewsPage = () => {
 
         if (token) {
           try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles/${id}`, {
+            const response = await fetch(apiUrl(`/api/articles/${id}`), {
               headers: {
                 'Authorization': `Bearer ${token}`,
               },

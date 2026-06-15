@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "./CategoryBadge";
 import SimpleImage from "./SimpleImage";
@@ -27,7 +28,7 @@ const HeroSection = ({ stories }: HeroSectionProps) => {
   useEffect(() => {
     const fetchBreakingNews = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/nigerian`);
+        const response = await fetch(apiUrl('/api/news/nigerian'));
         if (response.ok) {
           const news = await response.json();
           if (news.length > 0) {

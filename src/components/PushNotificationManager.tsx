@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from 'react';
 import { Bell, BellOff, BellRing } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -71,8 +72,7 @@ const PushNotificationManager = () => {
       setFcmToken(token);
 
       // Subscribe to breaking news topic
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://realssa-production.up.railway.app';
-      const response = await fetch(`${apiUrl}/api/notifications/subscribe`, {
+      const response = await fetch(apiUrl('/api/notifications/subscribe'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,8 +110,7 @@ const PushNotificationManager = () => {
     try {
       if (fcmToken) {
         // Unsubscribe from server
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://realssa-production.up.railway.app';
-        await fetch(`${apiUrl}/api/notifications/unsubscribe`, {
+        await fetch(apiUrl('/api/notifications/unsubscribe'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

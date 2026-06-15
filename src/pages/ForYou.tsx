@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -70,7 +71,7 @@ const ForYou: React.FC = () => {
 
   const fetchArticles = async () => {
     try {
-      const response = await fetch('/api/articles');
+      const response = await fetch(apiUrl('/api/articles'));
       const data = await response.json();
       
       // Filter out admin-only content for regular users

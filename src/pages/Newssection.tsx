@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 // NewsSection.tsx
 // Clean, fast-loading news interface inspired by Ghana page
 
@@ -83,7 +84,7 @@ export default function NewsSection() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        const response = await fetch('https://realssa-news-agg-production.up.railway.app/news-feed', {
+        const response = await fetch(apiUrl('/api/news/world'), {
           signal: controller.signal
         });
         clearTimeout(timeoutId);

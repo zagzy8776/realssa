@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import Header from "@/components/Header";
 import SocialButtons from "@/components/SocialButtons";
 import HeroSection from "@/components/HeroSection";
@@ -25,13 +26,11 @@ const Index = () => {
       setError(null);
       
       // Fallback API URL if environment variable is not set
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://realssa-production.up.railway.app';
-      
       if (!apiUrl) {
         throw new Error('API URL not configured');
       }
       
-      const response = await fetch(`${apiUrl}/api/articles/featured`);
+      const response = await fetch(apiUrl('/api/articles/featured'));
       if (!response.ok) {
         throw new Error('Failed to fetch stories');
       }

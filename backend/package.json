@@ -2,10 +2,10 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "server.js",
+  "main": "server_neon.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "node server_neon.js",
+    "dev": "node server_neon.js",
     "build": "echo 'No build step required'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SocialButtons from "@/components/SocialButtons";
@@ -13,7 +14,7 @@ const Culture = () => {
     const fetchCultureArticles = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/articles`);
+        const response = await fetch(apiUrl('/api/articles'));
         if (response.ok) {
           const articles = await response.json();
           // Filter for culture category articles - ONLY admin posted

@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,12 +28,10 @@ const SearchBar = () => {
       setError(null);
 
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://realssa-production.up.railway.app';
-
         // Fetch both world and Nigerian news
         const [worldResponse, nigerianResponse] = await Promise.all([
-          fetch(`${apiUrl}/api/news/world`),
-          fetch(`${apiUrl}/api/news/nigerian`)
+          fetch(apiUrl('/api/news/world')),
+          fetch(apiUrl('/api/news/nigerian'))
         ]);
 
         let worldArticles: Article[] = [];
@@ -40,16 +39,7 @@ const SearchBar = () => {
 
         if (worldResponse.ok) {
           const worldData = await worldResponse.json();
-          // Filter for international feeds like in WorldNews.tsx
-          const internationalFeeds = [
-            'BBC News', 'Al Jazeera', 'Variety', 'Rolling Stone',
-            'The Verge', 'Wired', 'ESPN', 'CoinDesk', 'CoinTelegraph',
-            'Bitcoin Magazine', 'TechCabal', 'IGN', 'GameSpot', 'PC Gamer', 'Kotaku',
-            'The Business of Fashion', 'Fashionista', 'WWD', 'Fibre2Fashion'
-          ];
-          worldArticles = worldData.filter((article: Article) =>
-            internationalFeeds.includes(article.author)
-          );
+          worldArticles = Array.isArray(worldData) ? worldData : [];
         }
 
         if (nigerianResponse.ok) {

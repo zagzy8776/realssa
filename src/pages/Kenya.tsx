@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import CategoryBadge from "../components/CategoryBadge";
@@ -42,7 +43,7 @@ const Kenya = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/kenya`);
+        const response = await fetch(apiUrl('/api/news/kenya'));
         if (response.ok) {
           const data = await response.json();
 

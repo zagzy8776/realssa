@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ const NigerianNews = () => {
     const fetchNigerianNews = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/news/nigerian`);
+        const response = await fetch(apiUrl('/api/news/nigerian'));
         if (response.ok) {
           const data = await response.json();
           setArticles(data);
