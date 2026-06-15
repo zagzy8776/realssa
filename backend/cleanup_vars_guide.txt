@@ -1,0 +1,65 @@
+=== FIX YOUR RENDER AND VERCEL ENVIRONMENT VARIABLES ===
+
+== ISSUE 1: On Render - Some variable names are WRONG ==
+
+The lowercase ones WON'T work because the code looks for UPPERCASE FIREBASE_ prefix:
+
+WRONG (delete these from Render):         CORRECT (keep these):
+private_key_id                             FIREBASE_PRIVATE_KEY_ID (already have it ✅)
+private_key                                FIREBASE_PRIVATE_KEY (already have it ✅)
+client_email                               FIREBASE_CLIENT_EMAIL (already have it ✅)
+client_id                                  FIREBASE_CLIENT_ID (already have it ✅)
+auth_uri                                   FIREBASE_AUTH_URI (already have it ✅)
+token_uri                                  FIREBASE_TOKEN_URI (already have it ✅)
+auth_provider_x509_cert_url                FIREBASE_AUTH_PROVIDER_CERT_URL
+client_x509_cert_url                       FIREBASE_CLIENT_CERT_URL
+universe_domain                            (not needed - delete it)
+YOUTUBE_API_KEY                            (not needed - delete it)
+VITE_SPORTS_API_URL                        (belongs on Vercel, not Render - delete)
+
+Also you have DUPLICATES of DATABASE_URL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY - delete the extras.
+
+== ISSUE 2: On Vercel - Backend variables should be REMOVED ==
+
+These are BACKEND vars that don't belong on Vercel (the frontend doesn't use them).
+DELETE these from Vercel:
+- DATABASE_URL
+- FIREBASE_AUTH_URI
+- FIREBASE_CLIENT_EMAIL
+- FIREBASE_CLIENT_ID
+- FIREBASE_PRIVATE_KEY
+- FIREBASE_PRIVATE_KEY_ID
+- FIREBASE_PROJECT_ID
+- FIREBASE_TOKEN_URI
+- JWT_SECRET
+- NODE_ENV
+- PORT
+- VAPID_PRIVATE_KEY
+- VAPID_PUBLIC_KEY
+- FIREBASE_SERVICE_ACCOUNT
+- private_key_id, private_key, client_email, client_id (lowercase ones)
+- auth_uri, token_uri, universe_domain (lowercase ones)
+- auth_provider_x509_cert_url, client_x509_cert_url
+
+Keep ONLY these on Vercel (VITE_ prefix = frontend vars):
+- VITE_API_URL
+- VITE_FIREBASE_API_KEY
+- VITE_FIREBASE_AUTH_DOMAIN
+- VITE_FIREBASE_PROJECT_ID
+- VITE_FIREBASE_STORAGE_BUCKET
+- VITE_FIREBASE_MESSAGING_SENDER_ID
+- VITE_FIREBASE_APP_ID
+- VITE_VAPID_PUBLIC_KEY
+- VITE_SPORTS_API_URL
+- NEXT_PUBLIC_NEWS_API_URL
+
+== SIMPLER APPROACH: You can REPLACE all individual Firebase vars with ONE ==
+
+On Render, instead of having 10+ Firebase variables, you can use just ONE:
+- FIREBASE_SERVICE_ACCOUNT = {"type":"service_account","project_id":"realssa-news",...}
+  (the entire JSON as a single string)
+
+Then DELETE all the individual Firebase vars from Render:
+- FIREBASE_AUTH_URI, FIREBASE_CLIENT_EMAIL, FIREBASE_CLIENT_ID, 
+- FIREBASE_PRIVATE_KEY, FIREBASE_PRIVATE_KEY_ID, FIREBASE_PROJECT_ID,
+- FIREBASE_TOKEN_URI, FIREBASE_AUTH_PROVIDER_CERT_URL, FIREBASE_CLIENT_CERT_URL

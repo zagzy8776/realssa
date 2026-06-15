@@ -1,0 +1,34 @@
+=== ADD THESE ENVIRONMENT VARIABLES TO RENDER ===
+
+Go to Render Dashboard → your service → Environment tab → Add Variable
+
+1. DATABASE_URL
+   Value: postgresql://neondb_owner:npg_ROmuTchvF17g@ep-curly-art-aol2g9ib-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+
+2. JWT_SECRET
+   Value: b5097dbcc53df8c25a868e649ac2bb5abe15217d74998b7f0b748d4c96ff88c2
+
+3. PORT
+   Value: 5000
+
+4. NODE_VERSION
+   Value: 20
+
+5. VAPID_PUBLIC_KEY
+   Value: (copy this from your Railway project → Variables tab)
+
+6. VAPID_PRIVATE_KEY
+   Value: (copy this from your Railway project → Variables tab)
+
+7. FIREBASE_SERVICE_ACCOUNT
+   Value: (copy the FULL Firebase JSON from Railway → Variables tab)
+   It looks like: {"type":"service_account","project_id":"realssa-news",...}
+
+=== HOW TO GET THESE FROM RAILWAY ===
+1. Go to https://railway.app/dashboard
+2. Click your project
+3. Click "Variables" tab
+4. Copy the values for VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and FIREBASE_SERVICE_ACCOUNT
+
+=== AFTER ADDING ===
+Go to Render Dashboard → Manual Deploy → Deploy latest commit
