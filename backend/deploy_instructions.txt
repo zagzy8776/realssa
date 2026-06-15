@@ -1,0 +1,45 @@
+=== FIX FOR RENDER DEPLOYMENT FAILURE ===
+
+The error shows: "Cannot find module 'server_neon.js'"
+
+This means the file exists on your local computer but NOT on GitHub yet.
+Render clones your repo from GitHub — it doesn't see your local files.
+
+=== STEP 1: Push all new files to GitHub ===
+
+Open a terminal in your project folder and run:
+
+git add backend/server_neon.js backend/db_schema.sql backend/migrate_json_to_neon.js MIGRATE_TO_RENDER.md
+git commit -m "Add Neon PostgreSQL files and migration guide"
+git push origin main
+
+=== STEP 2: Then fix the Render settings ===
+
+Since your code is in the "backend/" folder, you have TWO options:
+
+Option A (Recommended - uses Root Directory):
+  - Root Directory: backend
+  - Build Command: npm install
+  - Start Command: node server_neon.js
+
+Option B (Alternative - no Root Directory):
+  - Root Directory: (leave empty)
+  - Build Command: cd backend && npm install
+  - Start Command: cd backend && node server_neon.js
+
+=== STEP 3: Add NeON Env Variable on Render ===
+
+Go to Render Dashboard → Environment tab, set:
+  DATABASE_URL = postgresql://neondb_owner:npg_ROmuTchvF17g@ep-curly-art-aol2g9ib-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+  JWT_SECRET = b5097dbcc53df8c25a868e649ac2bb5abe15217d74998b7f0b748d4c96ff88c2
+  NODE_VERSION = 20
+  PORT = 5000
+
+=== STEP 4: Create Tables in Neon ===
+
+While the push is happening, go to:
+https://console.neon.tech → your project → SQL Editor
+Paste the db_schema.sql content and click Run.
+
+=== DONE ===
+After git push, Render will auto-deploy with the new files.
