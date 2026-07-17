@@ -1,0 +1,445 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* EntertainmentGHC Design System - African Entertainment News Portal */
+
+@layer base {
+  :root {
+    /* Light Mode - Core backgrounds */
+    --background: 0 0% 100%;
+    --foreground: 30 10% 10%;
+
+    /* Cards & Surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 30 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 10% 10%;
+
+    /* Brand Gold - Primary */
+    --primary: 43 96% 56%;
+    --primary-foreground: 30 10% 6%;
+
+    /* Coral Accent - Secondary */
+    --secondary: 15 80% 55%;
+    --secondary-foreground: 0 0% 100%;
+
+    /* Muted tones */
+    --muted: 30 10% 96%;
+    --muted-foreground: 30 10% 45%;
+
+
+    /* Accent - Warm amber */
+    --accent: 35 90% 50%;
+    --accent-foreground: 30 10% 6%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 10% 90%;
+    --input: 30 10% 90%;
+    --ring: 43 96% 56%;
+
+    --radius: 0.75rem;
+
+    /* Category colors */
+    --afrobeats: 43 96% 50%;
+    --nollywood: 0 75% 55%;
+    --culture: 280 60% 55%;
+    --fashion: 330 70% 55%;
+    --tech: 200 80% 55%;
+    --music: 150 60% 45%;
+
+    /* Gradients */
+    --gradient-gold: linear-gradient(135deg, hsl(43 96% 56%), hsl(35 90% 50%));
+    --gradient-hero: linear-gradient(180deg, transparent 0%, hsl(0 0% 100% / 0.9) 100%);
+    --gradient-card: linear-gradient(180deg, transparent 50%, hsl(0 0% 100% / 0.95) 100%);
+
+    /* Shadows */
+    --shadow-glow: 0 0 40px hsl(43 96% 56% / 0.2);
+    --shadow-card: 0 10px 30px -10px hsl(0 0% 0% / 0.1);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 30 10% 10%;
+    --sidebar-primary: 43 96% 56%;
+    --sidebar-primary-foreground: 30 10% 6%;
+    --sidebar-accent: 30 10% 96%;
+    --sidebar-accent-foreground: 30 10% 10%;
+    --sidebar-border: 30 10% 90%;
+    --sidebar-ring: 43 96% 56%;
+  }
+
+  .dark {
+    /* Dark Mode - Core backgrounds updated to charcoal-plum theme (#211D26) */
+    --background: 267 13.4% 13.1%;
+    --foreground: 30 10% 93%;
+    --card: 267 13.4% 13.1%;
+    --card-foreground: 30 10% 93%;
+    --popover: 267 13.4% 13.1%;
+    --popover-foreground: 30 10% 93%;
+    --primary: 43 96% 56%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 15 80% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 267 12.3% 17.6%;
+    /* #2C2732 */
+    --muted-foreground: 267 7.7% 55.3%;
+    /* #8C8494 */
+    --accent: 35 90% 50%;
+    --accent-foreground: 30 10% 6%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 267 13.1% 21.6%;
+    /* #362F3D */
+    --input: 267 13.1% 21.6%;
+    --ring: 43 96% 56%;
+    --gradient-hero: linear-gradient(180deg, transparent 0%, hsl(267 13.4% 13.1% / 0.9) 100%);
+    --gradient-card: linear-gradient(180deg, transparent 50%, hsl(267 13.4% 13.1% / 0.95) 100%);
+    --shadow-card: none;
+    --sidebar-background: 267 13.4% 13.1%;
+    --sidebar-foreground: 30 10% 93%;
+    --sidebar-primary: 43 96% 56%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 267 12.3% 17.6%;
+    --sidebar-accent-foreground: 30 10% 93%;
+    --sidebar-border: 267 13.1% 21.6%;
+    --sidebar-ring: 43 96% 56%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply transition-colors duration-300;
+    /* Smooth scrolling for the whole page */
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground transition-colors duration-300;
+    font-family: 'Inter', sans-serif;
+    /* Better touch scrolling */
+    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
+  }
+
+  /* Allow text selection for all content — users need to copy news text */
+  /* Keep user-select:none only for specific interactive UI (applied per-component) */
+  html,
+  body {
+    user-select: auto;
+    -webkit-user-select: auto;
+  }
+
+  /* Prevent accidental selection on buttons and nav elements */
+  button,
+  nav a,
+  [role="button"],
+  .pill-active {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Playfair Display', serif;
+  }
+
+  /* Ensure link contrast in dark sections - WCAG AA compliance */
+  .dark a,
+  [data-theme="dark"] a,
+  article[style*="background-color: rgb(33, 29, 38)"] a,
+  article[style*="background-color: #211D26"] a,
+  section[style*="background-color: rgb(33, 29, 38)"] a,
+  section[style*="background-color: #211D26"] a {
+    color: #ffffff;
+  }
+
+  .dark a:hover,
+  [data-theme="dark"] a:hover,
+  article[style*="background-color: rgb(33, 29, 38)"] a:hover,
+  article[style*="background-color: #211D26"] a:hover,
+  section[style*="background-color: rgb(33, 29, 38)"] a:hover,
+  section[style*="background-color: #211D26"] a:hover {
+    color: #E8874A;
+  }
+
+  /* Remove tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Better touch targets on mobile */
+  button,
+  a {
+    touch-action: manipulation;
+  }
+}
+
+@layer utilities {
+  .text-gradient-gold {
+    background: linear-gradient(135deg, hsl(43 96% 56%), hsl(35 90% 50%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-gradient-hero {
+    background: linear-gradient(180deg, transparent 0%, hsl(30 10% 6% / 0.9) 100%);
+  }
+
+  .bg-gradient-card {
+    background: linear-gradient(180deg, transparent 50%, hsl(30 10% 6% / 0.95) 100%);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 40px hsl(43 96% 56% / 0.2);
+  }
+
+  /* Smooth scroll container */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Performance optimization */
+  .will-change-transform {
+    will-change: transform;
+  }
+
+  /* GPU acceleration for animations */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
+/* Animations */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 768px) {
+  html {
+    font-size: 15px;
+    /* 14px is too small to read news on mobile */
+  }
+
+  /* Responsive video/iframe embeds */
+  iframe,
+  .video-container iframe {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 200px;
+    aspect-ratio: 16/9;
+  }
+
+  /* Prevent horizontal overflow on any element */
+  img,
+  video,
+  iframe,
+  table {
+    max-width: 100%;
+  }
+
+  body {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 3.5rem);
+    /* space for bottom nav */
+  }
+
+  /* Reduce animations on mobile for performance */
+  .animate-marquee {
+    animation-duration: 20s;
+  }
+
+  /* Better touch feedback */
+  button:active,
+  a:active {
+    opacity: 0.75;
+    transform: scale(0.97);
+  }
+
+  /* Card tap effects */
+  .card-tap-effect:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+
+  /* Improved touch targets */
+  button,
+  a,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Category Pill Active Animation */
+@keyframes pillPop {
+  0% {
+    transform: scale(0.95);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.pill-active {
+  animation: pillPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.snap-x-mandatory {
+  scroll-snap-type: x mandatory;
+}
+
+/* Horizontal Card Sections */
+.horizontal-scroll-section {
+  scroll-snap-type: x mandatory;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.horizontal-scroll-section>* {
+  scroll-snap-align: start;
+}
+
+/* Pull-to-refresh indicator */
+.pull-to-refresh {
+  transform: translateY(-60px);
+  transition: transform 0.3s ease;
+}
+
+.pull-to-refresh.active {
+  transform: translateY(0);
+}
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+      hsl(0 0% 90%) 25%,
+      hsl(0 0% 95%) 50%,
+      hsl(0 0% 90%) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.dark .skeleton {
+  background: linear-gradient(90deg,
+      hsl(30 8% 20%) 25%,
+      hsl(30 8% 25%) 50%,
+      hsl(30 8% 20%) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* System Hardening: Hide Scrollbars Globally */
+::-webkit-scrollbar {
+  display: none;
+  width: 0px;
+  background: transparent;
+  /* make scrollbar transparent */
+}
+
+* {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+/* System Hardening: iOS Safe Area Utilities */
+.safe-pt {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-min-h {
+  min-height: calc(100vh + env(safe-area-inset-top) + env(safe-area-inset-bottom));
+}
+
+/* System Hardening: Android UX Smoothing */
+html,
+body {
+  /* Removed overscroll-behavior-y: none to prevent breaking Swiper in Reels */
+}
+
+.pull-to-refresh-container {
+  overscroll-behavior-y: none;
+}
+
+/* Swiper Touch Event Assist for Android WebView */
+.swiper-vertical {
+  touch-action: pan-y !important;
+}
+
+.swiper-horizontal {
+  touch-action: pan-x !important;
+}
