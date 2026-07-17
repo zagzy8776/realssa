@@ -14,24 +14,22 @@ export default function WeatherWidget() {
           const data = await res.json();
           const current = data.current_condition[0];
           const nearestArea = data.nearest_area?.[0];
-          const city = nearestArea?.areaName?.[0]?.value || "Lagos";
-          const country = nearestArea?.country?.[0]?.value || "NG";
+          const city = nearestArea?.areaName?.[0]?.value || "";
+          const country = nearestArea?.country?.[0]?.value || "";
+          
+          if (!city) throw new Error("Could not resolve location name");
+
           setWeather({
             temp: `${current.temp_C}°C`,
             condition: current.weatherDesc[0].value,
-            location: `${city}, ${country}`
+            location: country ? `${city}, ${country}` : city
           });
         } else {
           throw new Error("API responded with error");
         }
       } catch (err) {
-        console.warn("Weather fetch failed, loading default fallback:", err);
-        // Resilient fallback so the user always sees a professional weather display
-        setWeather({
-          temp: "29°C",
-          condition: "Sunny",
-          location: "Lagos, NG"
-        });
+        console.warn("Weather fetch failed, hiding widget:", err);
+        setWeather(null);
       } finally {
         setLoading(false);
       }

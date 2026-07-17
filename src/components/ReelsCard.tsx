@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Share2, Bookmark, ShieldCheck, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
+import { Share2, Bookmark, ShieldCheck, ChevronUp, ChevronDown, Loader2, Heart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
