@@ -142,12 +142,13 @@ const ForYou: React.FC = () => {
     const personalized = articles.map(article => {
       let score = 0;
       
-      // Factor 1: Reading history (recent reads get lower priority)
+      // Factor 1: Reading history (recent reads get lower priority, decaying to 0 over 48h)
       const historyItem = readingHistory.find(item => item.id === article.id);
       if (historyItem) {
-        const daysSinceRead = (Date.now() - new Date(historyItem.timestamp).getTime()) / (1000 * 60 * 60 * 24);
-        score -= Math.min(daysSinceRead * 2, 10); // Penalize recent reads
-        score += Math.log(historyItem.readCount) * 2; // Reward frequently read
+        const hoursSinceRead = (Date.now() - new Date(historyItem.timestamp).getTime()) / (1000 * 60 * 60);
+        const decayPenalty = Math.max(0, 15 - (hoursSinceRead * 0.3)); // Max -15 penalty right now, decays to 0 after ~48 hours
+        score -= decayPenalty;
+        score += Math.log(historyItem.readCount + 1) * 2; // Reward frequently read articles
       }
       
       // Factor 2: Category preferences
@@ -196,9 +197,9 @@ const ForYou: React.FC = () => {
       .slice(0, 5);
   };
 
-  const getYouMightAlsoLike = (currentCategory: string) => {
+  const getYouMightAlsoLike = (currentCategory: string, currentArticleId?: string) => {
     return articles
-      .filter(article => article.category === currentCategory && article.id !== currentCategory)
+      .filter(article => article.category === currentCategory && article.id !== currentArticleId)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 4);
   };

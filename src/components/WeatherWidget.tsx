@@ -6,9 +6,10 @@ export default function WeatherWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchWeather = async () => {
+    const fetchWeather = async (lat?: number, lon?: number) => {
       try {
-        const res = await fetch("https://wttr.in/?format=j1", { signal: AbortSignal.timeout(4000) });
+        const query = lat !== undefined && lon !== undefined ? `${lat},${lon}` : '';
+        const res = await fetch(`https://wttr.in/${query}?format=j1`, { signal: AbortSignal.timeout(4000) });
         if (res.ok) {
           const data = await res.json();
           const current = data.current_condition[0];
@@ -35,7 +36,22 @@ export default function WeatherWidget() {
         setLoading(false);
       }
     };
-    fetchWeather();
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          fetchWeather(latitude, longitude);
+        },
+        (error) => {
+          console.log("Geolocation error or denied, falling back to IP lookup:", error.message);
+          fetchWeather();
+        },
+        { timeout: 5000, enableHighAccuracy: false }
+      );
+    } else {
+      fetchWeather();
+    }
   }, []);
 
   if (loading) {
