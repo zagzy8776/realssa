@@ -250,7 +250,7 @@ async function upsertMatch(match, competition) {
           'https://onesignal.com/api/v1/notifications',
           {
             app_id:            ONESIGNAL_APP_ID,
-            included_segments: ['Subscribed Users'],
+            included_segments: ['All'],
             headings:          { en: `KICKOFF! — ${competition.name}` },
             contents:          { en: `⚽ Match Started: ${homeTeam} vs ${awayTeam} is now live!` },
             web_url:           `${SITE_URL}/sports`,

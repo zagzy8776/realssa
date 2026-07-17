@@ -75,7 +75,7 @@ class NotificationService {
       // Do NOT include custom segments alongside 'Subscribed Users' — OneSignal will
       // double-deliver to users who belong to both, since 'Subscribed Users' is a
       // built-in catch-all that bypasses custom segment deduplication.
-      const included_segments = ['Subscribed Users'];
+      const included_segments = ['All'];
 
       const notifPayload = {
         ...this._buildPayload(payload),
