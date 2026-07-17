@@ -110,11 +110,41 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
 
   const [reactions, setReactions] = useState({ fire: 0, heart: 0, wow: 0 });
   const [reacted, setReacted] = useState<string | null>(null);
+  const [lastTap, setLastTap] = useState(0);
+  const [showHeartPopup, setShowHeartPopup] = useState(false);
 
   useEffect(() => {
     if (article?.id) {
+      const deviceId = localStorage.getItem('realssa_device_uuid');
+      const deviceParam = deviceId ? `?deviceId=${deviceId}` : '';
+      
       const cached = localStorage.getItem(`reactions_${article.id}`);
-      if (cached) setReactions(JSON.parse(cached));
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.counts) {
+            setReactions(parsed.counts);
+            if (parsed.userReaction) setReacted(parsed.userReaction);
+          } else {
+            setReactions(parsed);
+          }
+        } catch {
+          try {
+            setReactions(JSON.parse(cached));
+          } catch {}
+        }
+      }
+      
+      fetch(apiUrl(`/api/reactions/${article.id}${deviceParam}`))
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.counts) {
+            setReactions(data.counts);
+            setReacted(data.userReaction);
+            localStorage.setItem(`reactions_${article.id}`, JSON.stringify(data));
+          }
+        })
+        .catch(() => {});
     }
   }, [article?.id]);
 
@@ -133,24 +163,60 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
   }, [article?.id]);
 
   const handleReaction = useCallback(async (type: string) => {
-    if (!article?.id || reacted === type) return;
+    if (!article?.id) return;
+    const deviceId = localStorage.getItem('realssa_device_uuid') || '';
+    if (!deviceId) return;
+
     if (Capacitor.isNativePlatform()) Haptics.impact({ style: ImpactStyle.Light });
     
-    setReacted(type);
-    setReactions(prev => ({ ...prev, [type]: prev[type as keyof typeof prev] + 1 }));
+    const isToggleOff = reacted === type;
+    const newReacted = isToggleOff ? null : type;
+    
+    setReacted(newReacted);
+    setReactions(prev => {
+      const copy = { ...prev };
+      if (reacted) {
+        copy[reacted as keyof typeof copy] = Math.max(0, copy[reacted as keyof typeof copy] - 1);
+      }
+      if (!isToggleOff) {
+        copy[type as keyof typeof copy] = (copy[type as keyof typeof copy] || 0) + 1;
+      }
+      return copy;
+    });
+
     try {
       const res = await fetch(apiUrl(`/api/reactions/${article.id}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({ type, deviceId }),
       });
       if (res.ok) {
         const data = await res.json();
-        setReactions(data);
-        localStorage.setItem(`reactions_${article.id}`, JSON.stringify(data));
+        if (data.counts) {
+          setReactions(data.counts);
+          setReacted(data.userReaction);
+          localStorage.setItem(`reactions_${article.id}`, JSON.stringify(data));
+        }
       }
     } catch { /* optimistic state is fine */ }
   }, [article?.id, reacted]);
+
+  const handleImageClick = (e: React.MouseEvent) => {
+    const now = Date.now();
+    const DOUBLE_PRESS_DELAY = 300;
+    if (now - lastTap < DOUBLE_PRESS_DELAY) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (reacted !== 'heart') {
+        handleReaction('heart');
+      }
+      setShowHeartPopup(true);
+      setTimeout(() => setShowHeartPopup(false), 800);
+    } else {
+      handleExpand();
+    }
+    setLastTap(now);
+  };
 
   const fetchFullContent = async () => {
     if (readerContent || isParsing) return;
@@ -248,7 +314,10 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#0a0a0a]">
       {/* 65% HERO IMAGE ZONE (Clear View) */}
-      <div className={`absolute top-0 w-full transition-all duration-500 ease-in-out ${isExpanded ? 'h-[30%]' : 'h-[65%]'}`}>
+      <div 
+        onClick={handleImageClick}
+        className={`absolute top-0 w-full transition-all duration-500 ease-in-out cursor-pointer ${isExpanded ? 'h-[30%]' : 'h-[65%]'}`}
+      >
         {/* Blurred background — only shown when we have a real image */}
         {displayImage && (
           <div
@@ -278,6 +347,13 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
              <ShieldCheck size={10} /> Verified
            </div>
         </div>
+
+        {/* Double-tap heart popup */}
+        {showHeartPopup && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none z-30">
+            <Heart className="w-24 h-24 text-red-500 fill-red-500 animate-bounce" style={{ animationDuration: '0.6s' }} />
+          </div>
+        )}
       </div>
 
       {/* 35% CONTENT ZONE (Glassmorphic Card) */}

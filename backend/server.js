@@ -103,6 +103,15 @@ if (process.env.DATABASE_URL) {
             provider_match_id TEXT NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             UNIQUE(device_id, provider_match_id)
+          );
+          
+          CREATE TABLE IF NOT EXISTS user_article_reactions (
+            device_id VARCHAR(255) NOT NULL,
+            article_id VARCHAR(255) NOT NULL,
+            reaction_type VARCHAR(50) NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (device_id, article_id)
+          );
         `);
         console.log('✅ Sports Hub tables verified.');
       } catch (err) {
@@ -2891,26 +2900,105 @@ app.get('/api/search/suggest', async (req, res) => {
 // POST /api/reactions/:id
 app.post('/api/reactions/:id', async (req, res) => {
   const { id } = req.params;
-  const { type } = req.body;
+  const { type, deviceId } = req.body;
   if (!['fire', 'heart', 'wow'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+  if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
+  
   try {
     if (!process.env.DATABASE_URL) return res.json({ [type]: 1 });
-    await pool.query("INSERT INTO article_reactions (article_id, reaction_type, count) VALUES ($1,$2,1) ON CONFLICT (article_id, reaction_type) DO UPDATE SET count = article_reactions.count + 1", [id, type]);
+    
+    // Check if this device has already reacted to this article
+    const existing = await pool.query(
+      "SELECT reaction_type FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
+      [deviceId, id]
+    );
+    
+    if (existing.rows.length > 0) {
+      const prevType = existing.rows[0].reaction_type;
+      if (prevType === type) {
+        // Toggle off: User clicked the same reaction again, remove it
+        await pool.query(
+          "DELETE FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
+          [deviceId, id]
+        );
+        // Decrease the count in article_reactions
+        await pool.query(
+          "UPDATE article_reactions SET count = GREATEST(0, count - 1) WHERE article_id = $1 AND reaction_type = $2",
+          [id, type]
+        );
+      } else {
+        // Update reaction: User changed their reaction (e.g. from fire to heart)
+        await pool.query(
+          "UPDATE user_article_reactions SET reaction_type = $1 WHERE device_id = $2 AND article_id = $3",
+          [type, deviceId, id]
+        );
+        // Decrease the old reaction count
+        await pool.query(
+          "UPDATE article_reactions SET count = GREATEST(0, count - 1) WHERE article_id = $1 AND reaction_type = $2",
+          [id, prevType]
+        );
+        // Increase the new reaction count
+        await pool.query(
+          "INSERT INTO article_reactions (article_id, reaction_type, count) VALUES ($1, $2, 1) ON CONFLICT (article_id, reaction_type) DO UPDATE SET count = article_reactions.count + 1",
+          [id, type]
+        );
+      }
+    } else {
+      // New reaction: Insert reaction record
+      await pool.query(
+        "INSERT INTO user_article_reactions (device_id, article_id, reaction_type) VALUES ($1, $2, $3)",
+        [deviceId, id, type]
+      );
+      // Increase the reaction count
+      await pool.query(
+        "INSERT INTO article_reactions (article_id, reaction_type, count) VALUES ($1, $2, 1) ON CONFLICT (article_id, reaction_type) DO UPDATE SET count = article_reactions.count + 1",
+        [id, type]
+      );
+    }
+    
+    // Get updated counts
     const r = await pool.query("SELECT reaction_type, count FROM article_reactions WHERE article_id=$1", [id]);
-    const c = {}; r.rows.forEach(x => { c[x.reaction_type] = parseInt(x.count); });
-    res.json(c);
-  } catch (err) { console.error('Reaction:', err.message); res.json({ [type]: 1 }); }
+    const c = { fire: 0, heart: 0, wow: 0 }; r.rows.forEach(x => { c[x.reaction_type] = parseInt(x.count); });
+    
+    // Also send back what the user's current reaction is (or null)
+    const userReact = await pool.query(
+      "SELECT reaction_type FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
+      [deviceId, id]
+    );
+    const userReaction = userReact.rows.length > 0 ? userReact.rows[0].reaction_type : null;
+    
+    res.json({ counts: c, userReaction });
+  } catch (err) { 
+    console.error('Reaction:', err.message); 
+    res.status(500).json({ error: 'Failed to process reaction' }); 
+  }
 });
 
 // GET /api/reactions/:id
 app.get('/api/reactions/:id', async (req, res) => {
   const { id } = req.params;
+  const { deviceId } = req.query;
   try {
-    if (!process.env.DATABASE_URL) return res.json({ fire: 0, heart: 0, wow: 0 });
+    if (!process.env.DATABASE_URL) return res.json({ fire: 0, heart: 0, wow: 0, userReaction: null });
+    
     const r = await pool.query("SELECT reaction_type, count FROM article_reactions WHERE article_id=$1", [id]);
     const c = { fire: 0, heart: 0, wow: 0 }; r.rows.forEach(x => { c[x.reaction_type] = parseInt(x.count); });
-    res.json(c);
-  } catch (err) { res.json({ fire: 0, heart: 0, wow: 0 }); }
+    
+    let userReaction = null;
+    if (deviceId) {
+      const userReact = await pool.query(
+        "SELECT reaction_type FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
+        [deviceId, id]
+      );
+      if (userReact.rows.length > 0) {
+        userReaction = userReact.rows[0].reaction_type;
+      }
+    }
+    
+    res.json({ counts: c, userReaction });
+  } catch (err) { 
+    res.json({ fire: 0, heart: 0, wow: 0, userReaction: null }); 
+  }
 });
 
 // GET /api/hashtags/trending

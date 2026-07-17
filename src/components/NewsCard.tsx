@@ -121,34 +121,107 @@ const NewsCard = ({
   const [imgError, setImgError] = useState(false);
   const [reactions, setReactions] = useState({ fire: 0, heart: 0, wow: 0 });
   const [reacted, setReacted] = useState<string | null>(null);
+  const [lastTap, setLastTap] = useState(0);
+  const [showHeartPopup, setShowHeartPopup] = useState(false);
 
   useEffect(() => {
     if (id) {
+      const deviceId = localStorage.getItem('realssa_device_uuid');
+      const deviceParam = deviceId ? `?deviceId=${deviceId}` : '';
+      
       const cached = localStorage.getItem(`reactions_${id}`);
-      if (cached) setReactions(JSON.parse(cached));
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.counts) {
+            setReactions(parsed.counts);
+            if (parsed.userReaction) setReacted(parsed.userReaction);
+          } else {
+            setReactions(parsed);
+          }
+        } catch {
+          try {
+            setReactions(JSON.parse(cached));
+          } catch {}
+        }
+      }
+      
+      fetch(apiUrl(`/api/reactions/${id}${deviceParam}`))
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.counts) {
+            setReactions(data.counts);
+            setReacted(data.userReaction);
+            localStorage.setItem(`reactions_${id}`, JSON.stringify(data));
+          }
+        })
+        .catch(() => {});
     }
   }, [id]);
 
-  const handleReaction = useCallback(async (e: React.MouseEvent, type: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!id || reacted === type) return;
-    setReacted(type);
-    setReactions(prev => ({ ...prev, [type]: prev[type as keyof typeof prev] + 1 }));
+  const handleReaction = useCallback(async (e: React.MouseEvent | null, type: string) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!id) return;
+    
+    const deviceId = localStorage.getItem('realssa_device_uuid') || '';
+    if (!deviceId) return;
+
+    const isToggleOff = reacted === type;
+    const newReacted = isToggleOff ? null : type;
+    
+    setReacted(newReacted);
+    setReactions(prev => {
+      const copy = { ...prev };
+      if (reacted) {
+        copy[reacted as keyof typeof copy] = Math.max(0, copy[reacted as keyof typeof copy] - 1);
+      }
+      if (!isToggleOff) {
+        copy[type as keyof typeof copy] = (copy[type as keyof typeof copy] || 0) + 1;
+      }
+      return copy;
+    });
+
     logCategoryPreference(category, 2);
+
     try {
       const res = await fetch(apiUrl(`/api/reactions/${id}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({ type, deviceId }),
       });
       if (res.ok) {
         const data = await res.json();
-        setReactions(data);
-        localStorage.setItem(`reactions_${id}`, JSON.stringify(data));
+        if (data.counts) {
+          setReactions(data.counts);
+          setReacted(data.userReaction);
+          localStorage.setItem(`reactions_${id}`, JSON.stringify(data));
+        }
       }
     } catch { /* optimistic state is fine */ }
   }, [id, reacted, category]);
+
+  const handleImageClick = (e: React.MouseEvent) => {
+    const now = Date.now();
+    const DOUBLE_PRESS_DELAY = 300;
+    if (now - lastTap < DOUBLE_PRESS_DELAY) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (reacted !== 'heart') {
+        handleReaction(null, 'heart');
+      }
+      setShowHeartPopup(true);
+      setTimeout(() => setShowHeartPopup(false), 800);
+    } else {
+      logCategoryPreference(category, 1);
+      if (!externalLink && onRead && id) {
+        onRead(id);
+      }
+    }
+    setLastTap(now);
+  };
 
   useEffect(() => {
     if (id) {
@@ -259,7 +332,7 @@ const NewsCard = ({
       <div className="flex flex-col w-full">
         {/* Image */}
         <div className="w-full">
-          <Link to={linkTo} onClick={handleClick} className="block w-full">
+          <Link to={linkTo} onClick={handleImageClick} className="block w-full">
             <div
               className="relative w-full aspect-video overflow-hidden flex items-center justify-center"
               style={{ backgroundColor: '#2C2732', borderRadius: '12px 12px 0 0' }}
@@ -276,6 +349,12 @@ const NewsCard = ({
               ) : (
                 <div className="flex items-center justify-center w-full h-full" style={{ color: '#8C8494' }}>
                   <Image className="w-9 h-9" />
+                </div>
+              )}
+              {/* Double-tap heart popup */}
+              {showHeartPopup && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/25 pointer-events-none z-10">
+                  <Heart className="w-16 h-16 text-red-500 fill-red-500 animate-bounce" style={{ animationDuration: '0.6s' }} />
                 </div>
               )}
               {/* Category badge overlaid on image */}
