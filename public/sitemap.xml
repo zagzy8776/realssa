@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Static pages sitemap -->
+  <sitemap>
+    <loc>https://www.realssanews.com.ng/sitemap-static.xml</loc>
+    <lastmod>2025-01-01</lastmod>
+  </sitemap>
+
+  <!-- Dynamic news sitemap (48-hour rolling, Google News compliant) -->
+  <sitemap>
+    <loc>https://www.realssanews.com.ng/api/sitemap-news.xml</loc>
+  </sitemap>
+
+</sitemapindex>

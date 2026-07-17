@@ -1,0 +1,7 @@
+node_modules
+.env
+*.log
+data/articles.json
+data/comments.json
+data/subscriptions.json
+data/users.json

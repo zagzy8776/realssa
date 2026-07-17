@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Primary SEO — these are the FALLBACK values before React hydrates -->
+    <title>RealSSA News | Breaking News, Sub-Saharan Africa, Sports & Entertainment</title>
+    <meta name="description" content="RealSSA News is Sub-Saharan Africa's premier digital news platform. Get the latest breaking news, politics, business, sports, and culture from Nigeria, Ghana, Kenya, South Africa, and across the region." />
+    <meta name="keywords" content="RealSSA News, RealSSA, Sub-Saharan Africa, breaking news Africa, Nigerian news, African news today, sports news Africa, entertainment Africa, Nollywood, Afrobeats" />
+    <meta name="author" content="RealSSA News" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+
+    <!-- Schema.org Article JSON-LD will be injected by React Helmet -->
+
+    <!-- OneSignal Web Push Notifications -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "055b6596-a96c-48e2-8cda-ff4bb6d61009",
+          safari_web_id: "web.onesignal.auto.31ca14f2-9a64-44ce-b1fb-164017f55430",
+          serviceWorkerPath: "OneSignalSDKWorker.js",
+          serviceWorkerParam: { scope: "/" },
+          allowLocalhostAsSecureOrigin: true,
+          notifyButton: { enable: false },
+          promptOptions: {
+            slidedown: {
+              prompts: [
+                {
+                  type: "push",
+                  autoPrompt: true,
+                  text: {
+                    actionMessage: "\uD83D\uDCF0 Get breaking news alerts from RealSSA News!",
+                    acceptButton: "\u2705 Allow",
+                    cancelButton: "\u274C No Thanks"
+                  },
+                  delay: {
+                    pageViews: 1,
+                    timeDelay: 3
+                  }
+                }
+              ]
+            }
+          }
+        });
+      });
+    </script>
+
+    <!-- Google Search Console Verification -->
+    <meta name="google-site-verification" content="d0088a19dd0f4c40" />
+
+    <!-- Canonical URL is set per-route by React Helmet (SEO.tsx) -->
+    <!-- Do NOT put a static canonical here as it would override all pages with / -->
+
+    <!-- Open Graph (Facebook, WhatsApp, LinkedIn) — static fallback for crawlers -->
+    <meta property="og:site_name" content="RealSSA News" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="RealSSA News | Breaking News, Africa, Nigeria, Sports & Entertainment" />
+    <meta property="og:description" content="RealSSA News is Africa's premier digital news platform. Get breaking news from Nigeria, Ghana, Kenya, South Africa and the world." />
+    <meta property="og:image" content="https://www.realssanews.com.ng/logo.png" />
+    <meta property="og:url" content="https://www.realssanews.com.ng/" />
+    <meta property="og:locale" content="en_NG" />
+
+    <!-- Twitter Card — static fallback -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@RealSSANews" />
+    <meta name="twitter:title" content="RealSSA News | Breaking News Africa" />
+    <meta name="twitter:description" content="Africa's top news platform. Breaking news from Nigeria, Ghana, Kenya and across the continent." />
+    <meta name="twitter:image" content="https://www.realssanews.com.ng/logo.png" />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#f59e0b" />
+    <meta name="background-color" content="#0f0f0f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="RealSSA News" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- RSS Feed Discovery -->
+    <link rel="alternate" type="application/rss+xml" title="RealSSA News — All Stories" href="https://www.realssanews.com.ng/rss/all.xml" />
+
+    <!-- Preload critical assets for fast LCP -->
+    <link rel="preload" as="image" href="/logo.png" />
+
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- Synchronous script to prevent dark mode flash on load -->
+    <script>
+      (function() {
+        try {
+          var isDark = localStorage.getItem('darkMode') === 'true' || 
+            (localStorage.getItem('darkMode') === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+
+
+  <body>
+    <noscript>
+      <div style="text-align:center;padding:60px 20px;font-family:'Georgia',serif;background:#0f0f0f;color:#f1f1f1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <h1 style="font-size:2rem;color:#f59e0b;margin-bottom:12px">RealSSA News</h1>
+        <p style="font-size:1rem;color:#aaa;max-width:400px;margin-bottom:24px">Breaking News, Sub-Saharan Africa, Sports &amp; Entertainment</p>
+        <p style="color:#888">Please enable JavaScript to use this site.</p>
+        <a href="https://realssanews.com.ng/rss/all.xml" style="margin-top:20px;color:#f59e0b;text-decoration:underline">Browse our RSS feed instead</a>
+      </div>
+    </noscript>
+    <div id="root">
+      <style>
+        #startup-loader {
+          position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f0f0f;
+        }
+        .realssa-letter {
+          font-family: "Inter", "Arial Black", sans-serif; font-weight: 900; font-size: clamp(72px, 10vw, 96px); line-height: 1; color: #fbbf24;
+          text-shadow: 0 0 40px rgba(251,191,36,1), 0 0 80px rgba(251,191,36,0.5);
+          user-select: none;
+          animation: realssaFade 1.4s ease-in-out infinite;
+        }
+        .realssa-sub {
+          margin-top: 1rem; color: rgba(255,255,255,0.4); font-size: 0.875rem; letter-spacing: 0.3em; text-transform: uppercase; font-weight: 600;
+          font-family: sans-serif;
+          animation: realssaFade 1.4s ease-in-out infinite;
+          animation-delay: 0.9s;
+        }
+        @keyframes realssaFade {
+          0%, 100% { opacity: 0.1; transform: translateY(4px); }
+          50% { opacity: 1; transform: translateY(0); }
+        }
+      </style>
+      <div id="startup-loader">
+        <div style="display: flex; align-items: flex-end; gap: 4px;">
+          <span class="realssa-letter" style="animation-delay: 0s;">R</span>
+          <span class="realssa-letter" style="animation-delay: 0.14s;">E</span>
+          <span class="realssa-letter" style="animation-delay: 0.28s;">A</span>
+          <span class="realssa-letter" style="animation-delay: 0.42s;">L</span>
+          <span class="realssa-letter" style="animation-delay: 0.56s;">S</span>
+          <span class="realssa-letter" style="animation-delay: 0.70s;">S</span>
+          <span class="realssa-letter" style="animation-delay: 0.84s;">A</span>
+        </div>
+        <p class="realssa-sub">News</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+    <!-- OneSignal manages its own service worker (OneSignalSDKWorker.js) for push notifications -->
+  </body>
+</html>

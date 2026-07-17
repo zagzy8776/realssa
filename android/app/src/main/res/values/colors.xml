@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary brand color (amber/gold — matches RealSSA theme) -->
+    <color name="colorPrimary">#F59E0B</color>
+    <!-- Darker shade for status bar -->
+    <color name="colorPrimaryDark">#B45309</color>
+    <!-- Accent color -->
+    <color name="colorAccent">#F59E0B</color>
+    <!-- Launcher icon background -->
+    <color name="ic_launcher_background">#000000</color>
+</resources>

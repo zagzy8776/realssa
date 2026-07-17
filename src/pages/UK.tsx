@@ -1,0 +1,268 @@
+import { apiUrl } from '@/lib/api-base';
+import { useState, useEffect } from "react";
+import { ArrowRight } from "lucide-react";
+import CategoryBadge from "../components/CategoryBadge";
+import SimpleImage from "../components/SimpleImage";
+import { SkeletonGrid } from "../components/SkeletonCard";
+import Header from "../components/Header";
+import CategorySearch from "@/components/CategorySearch";
+import Footer from "../components/Footer";
+import NewsTicker from "../components/NewsTicker";
+import Pagination from "../components/Pagination";
+import NewsCard from "../components/NewsCard";
+import SEO from "../components/SEO";
+
+type CategoryType = "afrobeats" | "nollywood" | "culture" | "fashion" | "tech" | "music" | "breaking" | "news" | "nigerian-news" | "nigerian-gaming" | "crypto-nigeria" | "lagos-fashion" | "nigerian-tech" | "nigerian-sports" | "nigerian-politics" | "nigerian-business" | "nigerian-lifestyle" | "entertainment" | "general";
+
+interface UKNewsItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  category: CategoryType;
+  image: string;
+  readTime: string;
+  author: string;
+  date: string;
+  externalLink: string;
+  content?: string;
+}
+
+interface ApiUKItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  category: string;
+  image: string;
+  readTime: string;
+  author: string;
+  date: string;
+  externalLink: string;
+  content?: string;
+}
+
+const ARTICLES_PER_PAGE = 12;
+
+const UK = () => {
+  const [ukNews, setUkNews] = useState<UKNewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<UKNewsItem[] | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const fetchUKNews = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(apiUrl('/api/news/uk'));
+        if (response.ok) {
+          const data = await response.json();
+
+          const mappedData: UKNewsItem[] = data.map((item: ApiUKItem) => {
+            let category: CategoryType = "news";
+            const title = item.title || "";
+            const excerpt = item.excerpt || "";
+
+            if (title.toLowerCase().includes("music") ||
+                title.toLowerCase().includes("artist") ||
+                title.toLowerCase().includes("band") ||
+                excerpt.toLowerCase().includes("music")) {
+              category = "music";
+            } else if (title.toLowerCase().includes("fashion") ||
+                       title.toLowerCase().includes("style") ||
+                       excerpt.toLowerCase().includes("fashion")) {
+              category = "fashion";
+            } else if (title.toLowerCase().includes("tech") ||
+                       title.toLowerCase().includes("technology") ||
+                       title.toLowerCase().includes("startup") ||
+                       excerpt.toLowerCase().includes("tech")) {
+              category = "tech";
+            } else if (title.toLowerCase().includes("culture") ||
+                       title.toLowerCase().includes("traditional") ||
+                       excerpt.toLowerCase().includes("culture")) {
+              category = "culture";
+            } else if (title.toLowerCase().includes("sports") ||
+                       title.toLowerCase().includes("football") ||
+                       title.toLowerCase().includes("premier league") ||
+                       excerpt.toLowerCase().includes("sports")) {
+              category = "general";
+            }
+
+            return {
+              id: item.id,
+              title: item.title,
+              excerpt: item.excerpt,
+              category,
+              image: item.image,
+              readTime: item.readTime || "5 min read",
+              author: item.author,
+              date: item.date,
+              externalLink: item.externalLink,
+              content: item.content
+            };
+          });
+
+          setUkNews(mappedData);
+        } else {
+          setError("Failed to fetch UK news");
+        }
+      } catch (err) {
+        console.error("Error fetching UK news:", err);
+        setError("Network error while fetching news");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUKNews();
+
+    const interval = setInterval(fetchUKNews, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const totalPages = Math.ceil(ukNews.length / ARTICLES_PER_PAGE);
+  const paginatedNews = ukNews.slice(
+    (currentPage - 1) * ARTICLES_PER_PAGE,
+    currentPage * ARTICLES_PER_PAGE
+  );
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <SEO
+        title="UK News for Africa — British Headlines | RealSSA News"
+        description="Follow UK and British news coverage from an African perspective. Get the latest London, UK politics, sports and global news on RealSSA News."
+        keywords="UK news Africa, British news, London news, UK breaking news, RealSSA UK, UK politics, Premier League news, UK entertainment"
+        url="/uk"
+        section="UK"
+      />
+      <Header />
+      <NewsTicker />
+      <div className="container mx-auto px-4 py-8">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden mb-12">
+        <div className="absolute inset-0">
+          <SimpleImage
+            src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=75"
+            alt="UK News"
+            className="w-full h-full object-cover"
+            fallback="https://placehold.co/800x400/000000/ffffff?text=UK+News"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/80 via-white/80 to-red-500/80" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80" />
+          <div className="absolute inset-0 bg-background/60" />
+        </div>
+
+        <div className="relative container mx-auto px-4 py-16 md:py-24">
+          <div className="max-w-4xl">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-2xl font-bold">🇬🇧</span>
+              </div>
+              <div>
+                <CategoryBadge category="news" className="mb-2" />
+                <span className="text-sm text-white/80 font-medium">UK NEWS</span>
+              </div>
+            </div>
+
+            <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
+              British Stories
+            
+          </h1>
+          <div className="max-w-2xl mt-8">
+            <CategorySearch 
+              category="uk"
+              onSearchResults={(results) => setSearchResults(results as any)}
+              onClearSearch={() => setSearchResults(null)}
+            />
+          </div>
+
+            <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl">
+              Your gateway to the latest technology, fashion, and culture from the United Kingdom.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+              <a
+                href="#latest"
+                className="inline-flex items-center gap-3 px-8 py-4 bg-white text-gray-900 font-bold rounded-full hover:shadow-xl transition-all duration-300 hover:scale-105 group"
+              >
+                Read Latest News
+                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </a>
+              <a
+                href="/nigerian-news"
+                className="inline-flex items-center gap-3 px-8 py-4 border-2 border-white text-white font-bold rounded-full hover:bg-white hover:text-gray-900 transition-all duration-300"
+              >
+                View All News
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Latest News Grid */}
+      <section id="latest" className="mb-12">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold">Latest UK News</h2>
+          <CategoryBadge category="news" />
+        </div>
+
+        {error && (
+          <div className="text-center py-8 text-red-600">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && ukNews.length === 0 && (
+          <div className="text-center py-12">
+            <h3 className="text-xl font-bold mb-2">No UK News Right Now</h3>
+            <p className="text-muted-foreground">We're pulling the latest from BBC, The Guardian, and more. Check back soon!</p>
+          </div>
+        )}
+
+        {loading ? (
+          <SkeletonGrid count={4} variant="news" columns={2} />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {paginatedNews.map((news) => (
+              <NewsCard
+                key={news.id}
+                title={news.title}
+                excerpt={news.excerpt}
+                category={news.category}
+                image={news.image}
+                readTime={news.readTime}
+                date={news.date}
+                href={`/article/${news.id}`}
+                id={news.id}
+                externalLink={news.externalLink}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && ukNews.length > 0 && (
+          <>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+            <p className="text-center text-sm text-muted-foreground mb-4 mt-4">
+              Page {currentPage} of {totalPages} · {ukNews.length} articles
+            </p>
+          </>
+        )}
+      </section>
+      </div>
+      <Footer />
+    </div>
+  );
+};
+
+export default UK;

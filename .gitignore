@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+backend/config/firebase-service-account.json
+
+.vercel
+
+# Android keystores
+*.jks
+*.keystore
+
+# Android build artifacts
+android/app/release/
+android/.gradle/
+android/build/
+android/app/build/
+*.apk
+.env*
+
+# Git backups and huge archive files
+.git_disabled/
+bundle.zip
+realssa/
+

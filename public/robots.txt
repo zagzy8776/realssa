@@ -1,0 +1,47 @@
+# Robots.txt for RealSSA News - realssanews.com.ng
+# Allow all search engines to crawl the site
+
+User-agent: *
+Allow: /
+
+# Block admin and API routes from crawlers
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /edit-news/
+Disallow: /post-news
+Disallow: /api/
+
+# Crawl delay to be respectful to servers
+Crawl-delay: 1
+
+# Google
+User-agent: Googlebot
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /api/
+
+# Google AdsBot
+User-agent: AdsBot-Google
+Allow: /
+Disallow: /admin-login
+Disallow: /api/
+
+# Bing
+User-agent: bingbot
+Allow: /
+Crawl-delay: 1
+
+# Yandex
+User-agent: YandexBot
+Allow: /
+Crawl-delay: 1
+
+# Baidu
+User-agent: Baiduspider
+Allow: /
+Crawl-delay: 1
+
+# Sitemaps — primary static + dynamic from backend
+Sitemap: https://www.realssanews.com.ng/sitemap.xml
+Sitemap: https://www.realssanews.com.ng/api/sitemap-news.xml

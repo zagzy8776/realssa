@@ -1,0 +1,15 @@
+app = "realssa-scraper"
+primary_region = "lhr"
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  PORT = "5000"
+
+[processes]
+  web = "node --max-old-space-size=450 server.js"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
