@@ -96,9 +96,7 @@ const getSourceFromUrl = (urlStr?: string) => {
 };
 
 const getSourceLabel = (sName?: string, auth?: string, extLink?: string) => {
-  if (sName) return sName;
-  if (auth) return auth;
-  return getSourceFromUrl(extLink);
+  return "RealSSA News Desk";
 };
 
 const NewsCard = ({
