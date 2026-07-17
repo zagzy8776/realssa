@@ -196,7 +196,10 @@ const allowedOrigins = [
   'https://www.realssanews.com.ng',
   'https://realssa.vercel.app',
   'http://localhost:5173',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost'
 ];
 
 app.use(cors({
