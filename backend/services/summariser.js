@@ -23,9 +23,12 @@ async function callGemini(prompt, { maxOutputTokens, temperature, timeout }) {
   }
 
   try {
-    const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(GEMINI_BASE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { maxOutputTokens, temperature, topP: 0.9 },

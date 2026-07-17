@@ -8,6 +8,7 @@ import { apiUrl } from '@/lib/api-base';
 import { shareContent } from '@/lib/share';
 import { saveOfflineArticle, deleteOfflineArticle, getOfflineArticle } from '@/lib/ReadingListStore';
 import { decodeHTMLEntities } from '@/lib/utils';
+import DOMPurify from 'dompurify';
 
 interface ReelsCardProps {
   article: any;
@@ -339,7 +340,7 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
                   ) : articleBody ? (
                     <div
                       className="prose prose-sm prose-invert max-w-none prose-headings:text-white prose-p:text-gray-300 prose-p:leading-relaxed prose-a:text-amber-400"
-                      dangerouslySetInnerHTML={{ __html: articleBody }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(articleBody) }}
                     />
                   ) : (
                     <p className="text-gray-500 text-sm text-center italic">

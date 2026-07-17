@@ -1,5 +1,19 @@
 const { JSDOM } = require('jsdom');
 const { Readability } = require('@mozilla/readability');
+const dns = require('dns').promises;
+
+// SSRF protection helper
+const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;
+async function isSafeUrl(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    if (!['http:', 'https:'].includes(u.protocol)) return false;
+    const { address } = await dns.lookup(u.hostname);
+    return !PRIVATE_IP_RE.test(address);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Spoofs headers to bypass basic bot protection.
@@ -26,6 +40,10 @@ const HEADERS = {
  */
 async function extractArticle(url) {
   try {
+    if (!(await isSafeUrl(url))) {
+      console.warn(`[Extractor] Blocked SSRF attempt to unsafe URL: ${url}`);
+      return null;
+    }
     const response = await fetch(url, {
       method: 'GET',
       headers: HEADERS,
@@ -112,9 +130,12 @@ async function aiFallbackExtractor(rawHtml, url) {
   const prompt = `You are an expert web scraper. Extract the main article text from this messy HTML content from ${url}. Return ONLY the pure article text, nothing else. No introductions or formatting.\n\n${cleanHtml}`;
 
   try {
-    const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(GEMINI_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { maxOutputTokens: 2000, temperature: 0.1 }

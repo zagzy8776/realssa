@@ -5,10 +5,36 @@ const fs = require('fs');
 const path = require('path');
 const Parser = require('rss-parser');
 const { Pool } = require('pg');
+const dns = require('dns').promises;
+const rateLimit = require('express-rate-limit');
 const { initRssBot } = require('./services/rssBot');
 const { initSportsBot } = require('./services/sportsBot');
 const notificationService = require('./services/notificationService');
 const { runMigrations } = require('./worker');
+
+// SSRF protection helper
+const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;
+async function isSafeUrl(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    if (!['http:', 'https:'].includes(u.protocol)) return false;
+    const { address } = await dns.lookup(u.hostname);
+    return !PRIVATE_IP_RE.test(address);
+  } catch {
+    return false;
+  }
+}
+
+// XSS escape helper
+function escapeHtml(unsafe) {
+  if (typeof unsafe !== 'string') return '';
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 // Initialize Express app
 const app = express();
@@ -154,13 +180,57 @@ if (process.env.DATABASE_URL) {
 const cors = require('cors');
 const compression = require('compression');
 app.use(compression()); // Gzip all responses to make API calls fast
-app.use(cors()); // Allow all origins
+
+// Allowed origins configuration
+const allowedOrigins = [
+  'https://realssanews.com.ng',
+  'https://www.realssanews.com.ng',
+  'https://realssa.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
   next();
 });
+
+// Rate limiting middleware
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 300, // Limit each IP to 300 requests per 15 minutes
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20, // Limit each IP to 20 attempts per 15 minutes
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later.' }
+});
+
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
 app.use(express.json());
 
 // Database file paths
@@ -182,11 +252,16 @@ try {
 const initializeDataFiles = () => {
   // Create default users file if it doesn't exist
   if (!fs.existsSync(usersFilePath)) {
+    const adminUser = process.env.ADMIN_USERNAME || 'admin';
+    const adminPass = process.env.ADMIN_PASSWORD;
+    if (!adminPass) {
+      console.warn('⚠️ WARNING: ADMIN_PASSWORD environment variable not set. Using default credentials "admin / admin123". This is insecure in production!');
+    }
     const defaultUsers = [
       {
         id: '1',
-        username: 'admin',
-        password: bcrypt.hashSync('admin123', 10), // Default password
+        username: adminUser,
+        password: bcrypt.hashSync(adminPass || 'admin123', 10), // Default password (fallback)
         isAdmin: true
       }
     ];
@@ -302,6 +377,10 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/debug-env', async (req, res) => {
+  const { secret } = req.query;
+  if (!secret || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
     return res.json({ status: 'missing', value: null });
@@ -381,6 +460,12 @@ const { JSDOM } = require('jsdom');
 app.post('/api/extract', async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required' });
+  
+  // SSRF Protection
+  if (!(await isSafeUrl(url))) {
+    return res.status(400).json({ error: 'Invalid or unsafe URL' });
+  }
+
   try {
     // Spoffing Googlebot UA to bypass most paywalls and bot-blockers
     const response = await fetch(url, {
@@ -2310,9 +2395,9 @@ app.post('/api/comments', (req, res) => {
   const comments = readJsonFile(commentsFilePath);
   const newComment = {
     id: Date.now().toString(),
-    articleId,
-    author,
-    content,
+    articleId: String(articleId),
+    author: escapeHtml(author).substring(0, 100),
+    content: escapeHtml(content).substring(0, 1000),
     date: new Date().toISOString(),
     likes: 0
   };

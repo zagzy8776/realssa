@@ -41,3 +41,13 @@ android/app/build/
 bundle.zip
 realssa/
 
+# Database helper scripts and keystores
+backend/check_*.js
+backend/clear_*.js
+backend/delete_*.mjs
+backend/initialize_db.js
+backend/query_db.js
+backend/seed_*.js
+release-key.jks
+
+

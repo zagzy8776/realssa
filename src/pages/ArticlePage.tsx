@@ -15,6 +15,7 @@ import SEO from "@/components/SEO";
 import { fetchWithRetry } from "@/lib/fetchWithRetry";
 import { NewsItem } from "@/data/newsData";
 import { decodeHTMLEntities } from "@/lib/utils";
+import DOMPurify from 'dompurify';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -469,7 +470,7 @@ const ArticlePage = () => {
             {!isParsing && readerContent && (
               <div
                 className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-display prose-a:text-primary mt-6 mb-12 reader-content-engine selectable-text"
-                dangerouslySetInnerHTML={{ __html: readerContent }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(readerContent) }}
               />
             )}
 
@@ -477,7 +478,7 @@ const ArticlePage = () => {
             {!isParsing && !readerContent && (
               <div
                 className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-display prose-a:text-primary mt-6 mb-12 selectable-text"
-                dangerouslySetInnerHTML={{ __html: (article as any).content || '' }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((article as any).content || '') }}
               />
             )}
             
