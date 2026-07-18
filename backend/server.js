@@ -2388,30 +2388,51 @@ app.get('/api/news/search', async (req, res) => {
   }
 });
 
-// --- Dynamic sitemap.xml Generator (Programmatic SEO) ---
+// --- Sitemap Index (Google-recommended multi-sitemap structure) ---
 app.get('/sitemap.xml', async (req, res) => {
+  const SITE = 'https://realssanews.com.ng';
+  const now = new Date().toISOString();
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${SITE}/pages-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${SITE}/news-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+</sitemapindex>`;
+  res.header('Content-Type', 'application/xml');
+  res.send(xml);
+});
+
+// --- Pages Sitemap (static routes + publishers + leagues) ---
+app.get('/pages-sitemap.xml', async (req, res) => {
   try {
-    const baseUrl = 'https://realssa.news';
+    const SITE = 'https://realssanews.com.ng';
     let urls = [
-      { loc: `${baseUrl}/`, changefreq: 'daily', priority: 1.0 },
-      { loc: `${baseUrl}/reels`, changefreq: 'daily', priority: 0.8 },
-      { loc: `${baseUrl}/sports`, changefreq: 'daily', priority: 0.8 },
-      { loc: `${baseUrl}/videos`, changefreq: 'daily', priority: 0.8 },
-      { loc: `${baseUrl}/saved`, changefreq: 'weekly', priority: 0.5 },
+      { loc: `${SITE}/`, changefreq: 'daily', priority: 1.0 },
+      { loc: `${SITE}/reels`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${SITE}/sports`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${SITE}/videos`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${SITE}/saved`, changefreq: 'weekly', priority: 0.5 },
     ];
 
     if (process.env.DATABASE_URL) {
-      // Fetch dynamic publishers
-      const pubRes = await pool.query('SELECT slug FROM publishers');
-      pubRes.rows.forEach(row => {
-        urls.push({ loc: `${baseUrl}/publisher/${row.slug}`, changefreq: 'daily', priority: 0.7 });
-      });
+      try {
+        const pubRes = await pool.query('SELECT slug FROM publishers');
+        pubRes.rows.forEach(row => {
+          urls.push({ loc: `${SITE}/publisher/${row.slug}`, changefreq: 'daily', priority: 0.7 });
+        });
+      } catch (e) { /* table may not exist yet */ }
 
-      // Fetch active league slugs from competitions
-      const compRes = await pool.query('SELECT slug FROM competitions WHERE is_active = true');
-      compRes.rows.forEach(row => {
-        urls.push({ loc: `${baseUrl}/sports/league/${row.slug}`, changefreq: 'daily', priority: 0.7 });
-      });
+      try {
+        const compRes = await pool.query('SELECT slug FROM competitions WHERE is_active = true');
+        compRes.rows.forEach(row => {
+          urls.push({ loc: `${SITE}/sports/league/${row.slug}`, changefreq: 'daily', priority: 0.7 });
+        });
+      } catch (e) { /* table may not exist yet */ }
     }
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -2428,7 +2449,7 @@ app.get('/sitemap.xml', async (req, res) => {
     res.header('Content-Type', 'application/xml');
     res.send(xml);
   } catch (err) {
-    console.error('Sitemap generation failed:', err.message);
+    console.error('Pages sitemap generation failed:', err.message);
     res.status(500).send('Error generating sitemap');
   }
 });
@@ -2925,6 +2946,106 @@ app.get('/api/sitemap-news.xml', async (req, res) => {
       rows = result.rows;
     }
     const SITE = 'https://www.realssanews.com.ng';
+    const urls = rows.map(r => {
+      const loc = `${SITE}/article/rss-${r.id}`;
+      const pubDate = new Date(r.published_at).toISOString();
+      const safeTitle = (r.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return `
+  <url>
+    <loc>${loc}</loc>
+    <lastmod>${pubDate}</lastmod>
+    <changefreq>never</changefreq>
+    <priority>0.8</priority>
+    <news:news>
+      <news:publication>
+        <news:name>RealSSA News</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>${pubDate}</news:publication_date>
+      <news:title>${safeTitle}</news:title>
+    </news:news>${r.image ? `
+    <image:image><image:loc>${r.image}</image:loc></image:image>` : ''}
+  </url>`;
+    }).join('');
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${urls}
+</urlset>`);
+  } catch (err) {
+    console.error('Sitemap error:', err.message);
+    res.status(500).send('Sitemap generation failed');
+  }
+});
+
+// --- WebSub RSS Feed for Google News Discovery ---
+app.get('/rss/all.xml', async (req, res) => {
+  try {
+    let rows = [];
+    if (process.env.DATABASE_URL) {
+      const result = await pool.query(
+        `SELECT id, title, summary, image, category, published_at, source_name, author
+         FROM rss_articles
+         ORDER BY published_at DESC
+         LIMIT 50`
+      );
+      rows = result.rows;
+    }
+    const SITE = 'https://realssanews.com.ng';
+    const itemsXml = rows.map(r => {
+      const guid = `rss-${r.id}`;
+      const link = `${SITE}/article/${guid}`;
+      const pubDate = new Date(r.published_at).toUTCString();
+      const safeTitle = (r.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const safeDesc = (r.summary || r.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const safeAuthor = (r.author || r.source_name || 'RealSSA News Desk').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return `
+    <item>
+      <title>${safeTitle}</title>
+      <link>${link}</link>
+      <guid isPermaLink="false">${guid}</guid>
+      <pubDate>${pubDate}</pubDate>
+      <description>${safeDesc}</description>
+      <author>${safeAuthor}</author>
+    </item>`;
+    }).join('');
+
+    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>RealSSA News - Nigeria &amp; Africa Grassroots News Aggregator</title>
+    <link>${SITE}</link>
+    <description>The absolute best news site in Nigeria for grassroots local stories, politics, sports, startups, and culture.</description>
+    <language>en</language>
+    <atom:link rel="hub" href="https://pubsubhubbub.appspot.com/"/>
+    <atom:link rel="self" href="${SITE}/rss/all.xml" type="application/rss+xml"/>
+    ${itemsXml}
+  </channel>
+</rss>`);
+  } catch (err) {
+    console.error('Feed generation failed:', err.message);
+    res.status(500).send('Error generating RSS feed');
+  }
+});
+
+// Root-level Google News Sitemap Mapping
+app.get('/news-sitemap.xml', async (req, res) => {
+  try {
+    let rows = [];
+    if (process.env.DATABASE_URL) {
+      const result = await pool.query(
+        `SELECT id, title, image, category, published_at, external_link
+         FROM rss_articles
+         WHERE published_at > NOW() - INTERVAL '48 hours'
+         ORDER BY published_at DESC
+         LIMIT 1000`
+      );
+      rows = result.rows;
+    }
+    const SITE = 'https://realssanews.com.ng';
     const urls = rows.map(r => {
       const loc = `${SITE}/article/rss-${r.id}`;
       const pubDate = new Date(r.published_at).toISOString();

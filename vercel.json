@@ -92,6 +92,18 @@
       "destination": "/googled0088a19dd0f4c40.html"
     },
     {
+      "source": "/sitemap.xml",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/news-sitemap.xml",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/pages-sitemap.xml",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

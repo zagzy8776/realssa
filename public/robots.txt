@@ -42,6 +42,11 @@ User-agent: Baiduspider
 Allow: /
 Crawl-delay: 1
 
-# Sitemaps — primary static + dynamic from backend
+# Sitemaps — Sitemap Index + News Sitemap + Legacy API path
 Sitemap: https://www.realssanews.com.ng/sitemap.xml
+Sitemap: https://www.realssanews.com.ng/news-sitemap.xml
+Sitemap: https://www.realssanews.com.ng/pages-sitemap.xml
 Sitemap: https://www.realssanews.com.ng/api/sitemap-news.xml
+
+# RSS / WebSub Feed (Google News subscriber discovery)
+# https://www.realssanews.com.ng/rss/all.xml
