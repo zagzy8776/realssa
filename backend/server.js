@@ -3265,7 +3265,7 @@ async function getMatchDetailsFromDB(matchId) {
       id: m.provider_match_id,
       status: m.status,
       utcDate: m.kickoff_at,
-      venue: 'Unknown Stadium',
+      source: m.home_team_crest ? 'api' : 'scraper',
       competition: { name: m.competition_name },
       homeTeam: { name: m.home_team_name, crest: m.home_team_crest },
       awayTeam: { name: m.away_team_name, crest: m.away_team_crest },

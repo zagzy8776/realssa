@@ -2,7 +2,7 @@ import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Trophy, PlayCircle, Bell, BellOff, RefreshCw, Calendar,
-  Flame, X, ChevronRight, Clock, Shield, Activity, ExternalLink, Zap
+  Flame, X, ChevronRight, Clock, Shield, Activity, Zap
 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -328,8 +328,8 @@ const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, o
 const MatchModal = ({ matchId, match, matchDetails, h2hData, loading, onClose }: {
   matchId: string; match: Match | null; matchDetails: any; h2hData: any; loading: boolean; onClose: () => void;
 }) => {
-  // Scraper match: no matchDetails returned from API, but we have raw match data
-  const isScraperMatch = !matchDetails && match && !loading;
+  // Scraper match: identified by source flag from DB fallback
+  const isScraperMatch = (matchDetails?.source === 'scraper') || (!matchDetails && match && !loading);
   const isLive = match?.status === 'live';
 
   return (
@@ -434,24 +434,7 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, loading, onClose }:
                 </div>
               </div>
 
-              {/* Source link */}
-              {match.match_url && (
-                <a
-                  href={match.match_url} target="_blank" rel="noopener noreferrer"
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    padding: '12px 20px', borderRadius: 12,
-                    background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)',
-                    color: '#eab308', fontWeight: 700, fontSize: 13, textDecoration: 'none',
-                    transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(234,179,8,0.18)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(234,179,8,0.1)'; }}
-                >
-                  <ExternalLink size={14} />
-                  View Live Commentary
-                </a>
-              )}
+
             </div>
 
           ) : matchDetails ? (
