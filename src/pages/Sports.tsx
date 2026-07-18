@@ -139,9 +139,12 @@ const Sports = () => {
   useEffect(() => {
     if (!deviceId) return;
     loadMatches();
-    const iv = setInterval(loadMatches, 30_000);
+    // Poll every 15s when live matches exist, 30s otherwise
+    const iv = setInterval(async () => {
+      await loadMatches();
+    }, liveMatches.length > 0 ? 15_000 : 30_000);
     return () => clearInterval(iv);
-  }, [deviceId]);
+  }, [deviceId, liveMatches.length]);
 
   /* ── Sports News ── */
   useEffect(() => {
@@ -463,7 +466,11 @@ const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
               <span style={{ color: '#64748b', fontSize: 11 }}>–</span>
               <span className="text-base font-black" style={{ color: isLive ? '#ef4444' : '#e2e8f0' }}>{match.away_score}</span>
             </div>
-            {isLive && <span className="text-[9px] font-black uppercase animate-pulse" style={{ color: '#ef4444', letterSpacing: 1 }}>LIVE</span>}
+            {isLive && (
+              <span className="text-[9px] font-black uppercase animate-pulse" style={{ color: '#ef4444', letterSpacing: 1 }}>
+                {match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE'}
+              </span>
+            )}
             {isFin  && <span className="text-[9px] font-bold uppercase" style={{ color: '#64748b' }}>FT</span>}
           </>
         )}

@@ -266,13 +266,36 @@ async function upsertMatch(match, competition) {
     }
   }
 
-  // Fire goal notification + stamp last_notified_score to prevent duplicates
+  // Fire goal notification to ALL subscribers
   if (isNewGoal) {
     await sendGoalNotification({ homeTeam, awayTeam, homeScore, awayScore, minute, competition: competition.name });
     await pool.query(
       'UPDATE live_matches SET last_notified_score = $1 WHERE match_id = $2',
       [newScore, matchId]
     );
+  }
+
+  // FT notification
+  if (dbRow && dbRow.status === 'live' && status === 'finished') {
+    if (ONESIGNAL_API_KEY) {
+      try {
+        await axios.post(
+          'https://onesignal.com/api/v1/notifications',
+          {
+            app_id: ONESIGNAL_APP_ID,
+            included_segments: ['All'],
+            headings: { en: `🏁 FULL TIME — ${competition.name}` },
+            contents: { en: `${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}` },
+            web_url: `${SITE_URL}/sports`,
+            collapse_id: `ft-${homeTeam}-${awayTeam}`,
+          },
+          { headers: { Authorization: `Key ${ONESIGNAL_API_KEY}`, 'Content-Type': 'application/json' } }
+        );
+        console.log(`🔔 FT push sent: ${homeTeam} ${homeScore}-${awayScore} ${awayTeam}`);
+      } catch (e) {
+        console.error('FT push error:', e.response?.data || e.message);
+      }
+    }
   }
 }
 

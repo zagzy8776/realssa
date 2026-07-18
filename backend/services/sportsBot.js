@@ -176,25 +176,24 @@ async function pollMatches(pool, notificationService) {
           updated_at = NOW()
       `, [matchId, displayCompName, homeTeam, homeCrest, awayTeam, awayCrest, status, minute, homeScore, awayScore, kickoffAt]);
 
-      // Mirror into `live_matches` so /api/sports/live and /api/sports/results
-      // (which read live_matches) also get data from the football-data feed.
+      // Mirror into `live_matches` — but NEVER overwrite match_minute if scraper already has it
       try {
         await pool.query(`
           INSERT INTO live_matches (
             match_id, competition, home_team, away_team,
             home_score, away_score, status, match_minute, kickoff_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, NOW())
           ON CONFLICT (match_id) DO UPDATE SET
-            competition = EXCLUDED.competition,
-            home_team = EXCLUDED.home_team,
-            away_team = EXCLUDED.away_team,
-            home_score = EXCLUDED.home_score,
-            away_score = EXCLUDED.away_score,
-            status = EXCLUDED.status,
-            match_minute = EXCLUDED.match_minute,
-            kickoff_at = EXCLUDED.kickoff_at,
-            updated_at = NOW()
-        `, [matchId, compName, homeTeam, awayTeam, homeScore, awayScore, status, null, kickoffAt]);
+            competition  = EXCLUDED.competition,
+            home_team    = EXCLUDED.home_team,
+            away_team    = EXCLUDED.away_team,
+            home_score   = EXCLUDED.home_score,
+            away_score   = EXCLUDED.away_score,
+            status       = EXCLUDED.status,
+            kickoff_at   = EXCLUDED.kickoff_at,
+            updated_at   = NOW()
+            -- match_minute intentionally NOT updated: scraper owns it
+        `, [matchId, compName, homeTeam, awayTeam, homeScore, awayScore, status, kickoffAt]);
       } catch (lmErr) {
         console.error('[sportsBot] live_matches mirror failed:', lmErr.message);
       }
@@ -211,21 +210,27 @@ async function pollMatches(pool, notificationService) {
         });
       }
 
-      // Send Notifications if goal occurred
+      // Send goal notification to ALL subscribers
       if (goalOccurred && notificationService) {
-        const goalMsg = `⚽ GOAL! ${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}`;
+        const goalMsg = `${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}`;
         console.log(`[sportsBot] Goal detected: ${goalMsg}`);
-        // Find users following this match
-        const followersRes = await pool.query(`SELECT device_id FROM followed_matches WHERE provider_match_id = $1`, [matchId]);
-        const deviceIds = followersRes.rows.map(r => r.device_id).filter(id => id);
+        await notificationService.sendToTopic('sports', {
+          title: `⚽ GOAL! — ${displayCompName}`,
+          body: goalMsg,
+          url: 'https://realssanews.com.ng/sports',
+          category: 'sports',
+          priority: 10
+        });
+      }
 
-        if (deviceIds.length > 0) {
-          await notificationService.sendPushNotification({
-            title: 'Match Update',
-            body: goalMsg,
-            data: { type: 'sports_match', match_id: matchId }
-          }, deviceIds);
-        }
+      // Also send FT notification to all subscribers
+      if (existingRes.rows.length > 0 && existingRes.rows[0].status === 'live' && status === 'finished' && notificationService) {
+        await notificationService.sendToTopic('sports', {
+          title: `🏁 FULL TIME — ${displayCompName}`,
+          body: `${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}`,
+          url: 'https://realssanews.com.ng/sports',
+          category: 'sports'
+        });
       }
     }
 
