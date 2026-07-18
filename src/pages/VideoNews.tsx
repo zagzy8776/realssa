@@ -51,37 +51,6 @@ interface Article {
 }
 
 const VIDEO_CHANNELS: VideoChannel[] = [
-  // 🏆 FIFA World Cup 2026 — CazéTV (Brazil, often no geo-block)
-  {
-    id: 'cazetv-wc-fra-eng-1',
-    title: '🔴 LIVE | França x Inglaterra | Copa do Mundo 2026 | CazéTV',
-    embedUrl: 'https://www.youtube.com/embed/E1zxKEZbQEM?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
-    thumbnail: 'https://img.youtube.com/vi/E1zxKEZbQEM/mqdefault.jpg',
-    category: 'worldcup',
-    country: 'Brazil',
-    source: 'CazéTV',
-    type: 'youtube'
-  },
-  {
-    id: 'cazetv-wc-fra-eng-2',
-    title: '🔴 França x Inglaterra | Copa 2026 | Mbappé & Olise | CazéTV',
-    embedUrl: 'https://www.youtube.com/embed/yuNZLtU0wrc?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
-    thumbnail: 'https://img.youtube.com/vi/yuNZLtU0wrc/mqdefault.jpg',
-    category: 'worldcup',
-    country: 'Brazil',
-    source: 'CazéTV',
-    type: 'youtube'
-  },
-  {
-    id: 'cazetv-wc-fra-eng-3',
-    title: '🔴 França x Inglaterra | Copa do Mundo 2026 | CazéTV Ao Vivo',
-    embedUrl: 'https://www.youtube.com/embed/CEB37llsDX8?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
-    thumbnail: 'https://img.youtube.com/vi/CEB37llsDX8/mqdefault.jpg',
-    category: 'worldcup',
-    country: 'Brazil',
-    source: 'CazéTV',
-    type: 'youtube'
-  },
   // 🔴 LIVE NEWS CHANNELS
   {
     id: 'france-24-en',
