@@ -50,16 +50,16 @@ async function fetchLiveScores() {
  * @param {string} streamTitle 
  * @returns {Object|null} Match data if found
  */
-async function mapStreamToMatch(streamTitle) {
-  const scores = await fetchLiveScores();
-  if (!scores || scores.length === 0) return null;
+async function mapStreamToMatch(streamTitle, scores) {
+  const activeScores = scores || await fetchLiveScores();
+  if (!activeScores || activeScores.length === 0) return null;
 
   const titleLower = streamTitle.toLowerCase();
   
   let bestMatch = null;
   let bestScore = Infinity;
 
-  for (const match of scores) {
+  for (const match of activeScores) {
     // Expected format from the railway API
     const homeTeam = (match.home_team || '').toLowerCase();
     const awayTeam = (match.away_team || '').toLowerCase();
