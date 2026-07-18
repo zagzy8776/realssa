@@ -438,7 +438,17 @@ async function sleep(ms) {
 const HARD_KEYWORDS = [
   'breaking', 'killed', 'kills', 'dead', 'deaths', 'crash', 'explosion',
   'attack', 'shooting', 'arrested', 'detained', 'coup', 'emergency',
-  'earthquake', 'flood', 'fire', 'collapse', 'crisis'
+  'earthquake', 'flood', 'fire', 'collapse', 'crisis',
+  // Extended: common high-impact African/Nigerian news triggers
+  'impeached', 'suspended', 'convicted', 'sentenced', 'acquitted',
+  'sacked', 'resigns', 'resigned', 'appointed', 'elected',
+  'protest', 'protests', 'strike', 'riot', 'riots',
+  'wins', 'victory', 'defeat', 'qualifies', 'qualified',
+  'announces', 'announced', 'signed', 'passes', 'passed',
+  'kidnapped', 'abducted', 'rescued', 'missing',
+  'fuel', 'naira', 'dollar', 'economy', 'inflation',
+  'buhari', 'tinubu', 'presidency', 'senate', 'house of rep',
+  'supreme court', 'efcc', 'nnpc', 'cbn'
 ];
 // Soft alerts: newsworthy but prone to false positives — only notify from authority sources
 const SOFT_KEYWORDS = [
@@ -499,6 +509,9 @@ function notificationScore(title, category, feedUrl) {
       const match = kwMatch(lower, kw);
       if (match) return 1;
     }
+    // Fallback: any new article from an authority source is worth a soft notification
+    // This ensures at least some notifications fire even on slow news days
+    return 1;
   }
 
   return 0;
@@ -852,6 +865,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
                   title,
                   category,
                   summary: originalExcerpt,
+                  image: image || null,
                   urgency: score >= 2 ? 'hard' : 'soft',
                   score,
                   source_name: sourceName
