@@ -15,8 +15,8 @@ const Footer = () => {
 
   const socialLinks = [
     { href: "https://www.facebook.com/RealSSANews", icon: Facebook, label: "Facebook" },
-    { href: "https://twitter.com/RealSSANews", icon: Twitter, label: "Twitter" },
-    { href: "https://www.instagram.com/RealSSANews", icon: Instagram, label: "Instagram" },
+    { href: "https://x.com/realssanews", icon: Twitter, label: "X / Twitter" },
+    { href: "https://www.instagram.com/realssanews/", icon: Instagram, label: "Instagram" },
     { href: "https://www.youtube.com/@RealSSANews", icon: Youtube, label: "YouTube" },
     { href: "https://realssanews.com.ng/rss/all.xml", icon: Rss, label: "RSS Feed" },
   ];

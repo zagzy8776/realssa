@@ -18,7 +18,7 @@ const SITE_URL = 'https://www.realssanews.com.ng';
 const SITE_NAME = 'RealSSA News';
 const SITE_TAGLINE = 'RealSSA News — The Pulse of Africa';
 const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
-const TWITTER_HANDLE = '@RealSSANews';
+const TWITTER_HANDLE = '@realssanews';
 
 const DEFAULT_KEYWORDS =
   'RealSSA News, RealSSA, realssa news, breaking news Africa, Nigerian news today, ' +
@@ -75,9 +75,9 @@ const SEO = ({
         height: 60,
       },
       sameAs: [
-        'https://twitter.com/RealSSANews',
+        'https://x.com/realssanews',
         'https://www.facebook.com/RealSSANews',
-        'https://www.instagram.com/RealSSANews',
+        'https://www.instagram.com/realssanews/',
       ],
     },
   };
@@ -144,7 +144,7 @@ const SEO = ({
       url: `${SITE_URL}/contact`,
     },
     sameAs: [
-      'https://twitter.com/RealSSANews',
+      'https://x.com/realssanews',
       'https://www.facebook.com/RealSSANews',
     ],
   };
