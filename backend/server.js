@@ -1823,25 +1823,8 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
 app.get('/api/sports/matches', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT * FROM (
-        SELECT 
-          provider_match_id,
-          competition_name,
-          home_team_name,
-          home_team_crest,
-          away_team_name,
-          away_team_crest,
-          status,
-          minute,
-          home_score,
-          away_score,
-          kickoff_at,
-          updated_at
-        FROM matches
-        WHERE kickoff_at >= NOW() - INTERVAL '24 hours'
-
-        UNION ALL
-
+      SELECT DISTINCT ON (provider_match_id) * FROM (
+        -- Scraper data first (real-time) for live matches
         SELECT 
           match_id AS provider_match_id,
           competition AS competition_name,
@@ -1857,18 +1840,36 @@ app.get('/api/sports/matches', async (req, res) => {
           updated_at
         FROM live_matches
         WHERE (kickoff_at >= NOW() - INTERVAL '24 hours' OR status = 'live')
-          AND NOT EXISTS (
-            SELECT 1 FROM matches WHERE provider_match_id = live_matches.match_id
-          )
+
+        UNION ALL
+
+        -- API data as fallback (has crests, used for non-live/scheduled)
+        SELECT 
+          provider_match_id,
+          competition_name,
+          home_team_name,
+          home_team_crest,
+          away_team_name,
+          away_team_crest,
+          status,
+          minute,
+          home_score,
+          away_score,
+          kickoff_at,
+          updated_at
+        FROM matches
+        WHERE kickoff_at >= NOW() - INTERVAL '24 hours'
       ) combined_matches
       ORDER BY 
-        CASE 
-          WHEN status = 'live' THEN 1
-          WHEN status = 'scheduled' THEN 2
-          ELSE 3
-        END,
-        kickoff_at ASC
+        provider_match_id,
+        -- For live matches prefer scraper (updated_at more recent); for others API is fine
+        updated_at DESC
     `);
+    // Re-sort after dedup: live first, then scheduled, then finished
+    result.rows.sort((a, b) => {
+      const order = s => s === 'live' ? 1 : s === 'scheduled' ? 2 : 3;
+      return order(a.status) - order(b.status) || new Date(a.kickoff_at) - new Date(b.kickoff_at);
+    });
     res.json({ matches: result.rows });
   } catch (err) {
     console.error('Error fetching sports matches:', err.message);
