@@ -82,6 +82,47 @@ const VIDEO_CHANNELS: VideoChannel[] = [
     source: 'CazéTV',
     type: 'youtube'
   },
+  // 🔴 LIVE NEWS CHANNELS
+  {
+    id: 'france-24-en',
+    title: '🔴 France 24 English – LIVE – International Breaking News',
+    embedUrl: 'https://www.youtube.com/embed/HvZt-nh9sGg?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/HvZt-nh9sGg/mqdefault.jpg',
+    category: 'breaking',
+    country: 'France / Global',
+    source: 'France 24',
+    type: 'youtube'
+  },
+  {
+    id: 'euronews-pt',
+    title: '🔴 Euronews Em Direto | Live Europe News',
+    embedUrl: 'https://www.youtube.com/embed/XuZAl-ZPEcA?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/XuZAl-ZPEcA/mqdefault.jpg',
+    category: 'breaking',
+    country: 'Europe',
+    source: 'Euronews',
+    type: 'youtube'
+  },
+  {
+    id: 'cnn-live',
+    title: '🔴 CNN Headlines: 24/7 Live News',
+    embedUrl: 'https://www.youtube.com/embed/GotlA1KKWoo?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/GotlA1KKWoo/mqdefault.jpg',
+    category: 'usa',
+    country: 'USA',
+    source: 'CNN',
+    type: 'youtube'
+  },
+  {
+    id: 'swat-live',
+    title: '🔴 S.W.A.T. em Português | 24/7 Action Stream',
+    embedUrl: 'https://www.youtube.com/embed/BF5O-0yY_ZA?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/BF5O-0yY_ZA/mqdefault.jpg',
+    category: 'breaking',
+    country: 'USA',
+    source: 'S.W.A.T. TV',
+    type: 'youtube'
+  },
   // 🔴 LIVE MATCH — Featured at top
   {
     id: 'fifa-wc-arg-egy',
