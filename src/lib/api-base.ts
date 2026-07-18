@@ -2,13 +2,23 @@ import { Capacitor } from '@capacitor/core';
 
 // Use canonical URL with 'www' to ensure consistency and avoid CORS/redirect issues
 export const API_BASE_URL = import.meta.env?.MODE === 'development'
-  ? 'https://realssanews.com.ng'
+  ? (import.meta.env?.VITE_API_URL || 'http://localhost:5000')
   : 'https://www.realssanews.com.ng';
 
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  // Ensure we always return an absolute URL for Capacitor compatibility
-  return `${API_BASE_URL}${normalizedPath}`;
+  let finalUrl = `${API_BASE_URL}${normalizedPath}`;
+  
+  // Auto-append deviceId for /api/ requests to enable batched user reactions
+  if (normalizedPath.startsWith('/api/') && !normalizedPath.includes('deviceId=')) {
+    const deviceId = typeof window !== 'undefined' ? window.localStorage.getItem('realssa_device_uuid') : null;
+    if (deviceId) {
+      const sep = finalUrl.includes('?') ? '&' : '?';
+      finalUrl = `${finalUrl}${sep}deviceId=${deviceId}`;
+    }
+  }
+  
+  return finalUrl;
 };
 
 export const getArticleReadTime = (article: any, fallback = '5 min read') =>

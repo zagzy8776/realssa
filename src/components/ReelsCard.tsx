@@ -108,12 +108,18 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
     }
   }, [article.id, article.image, article.externalLink]);
 
-  const [reactions, setReactions] = useState({ fire: 0, heart: 0, wow: 0 });
-  const [reacted, setReacted] = useState<string | null>(null);
+  const [reactions, setReactions] = useState(
+    article?.reactions?.counts || { fire: 0, heart: 0, wow: 0 }
+  );
+  const [reacted, setReacted] = useState<string | null>(
+    article?.reactions?.userReaction || null
+  );
   const [lastTap, setLastTap] = useState(0);
   const [showHeartPopup, setShowHeartPopup] = useState(false);
 
   useEffect(() => {
+    if (article?.reactions) return;
+    
     if (article?.id) {
       const deviceId = localStorage.getItem('realssa_device_uuid');
       const deviceParam = deviceId ? `?deviceId=${deviceId}` : '';
@@ -146,7 +152,7 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
         })
         .catch(() => {});
     }
-  }, [article?.id]);
+  }, [article?.id, article?.reactions]);
 
   useEffect(() => {
     const checkSavedStatus = async () => {

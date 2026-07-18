@@ -615,24 +615,11 @@ const VideoNews = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'tv' | 'matches'>('tv');
+  const [activeTab, setActiveTab] = useState<'tv' | 'matches'>('matches');
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [activeStream, setActiveStream] = useState<LiveStream | null>(null);
 
-  const STATIC_LIVE_MATCHES: LiveStream[] = [
-    {
-      id: 9001,
-      match_id: 'arg-egy-wc2026',
-      match_title: '🔴 LIVE | Argentina vs Egypt | FIFA World Cup 2026™ Round of 16',
-      home_team: 'Argentina',
-      away_team: 'Egypt',
-      league: 'FIFA World Cup 2026',
-      stream_url: 'https://www.youtube.com/embed/RHV6tEOgFu0',
-      stream_type: 'iframe',
-      quality: 'HD',
-      language: 'English',
-    }
-  ];
+  const STATIC_LIVE_MATCHES: LiveStream[] = [];
 
   // Fetch live streams
   useEffect(() => {

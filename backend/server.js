@@ -11,6 +11,7 @@ const { initRssBot } = require('./services/rssBot');
 const { initSportsBot } = require('./services/sportsBot');
 const notificationService = require('./services/notificationService');
 const { runMigrations } = require('./worker');
+const { runCrawler } = require('./services/crawlerService');
 
 // SSRF protection helper
 const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;
@@ -2886,9 +2887,18 @@ app.get('/api/cron/streams', async (req, res) => {
   }
   try {
     console.log('🎥 Cron: Processing video streams...');
+    if (process.env.DATABASE_URL) {
+      setImmediate(async () => {
+        try {
+          await runCrawler(pool);
+        } catch (err) {
+          console.error('[Cron] Background stream discovery crawler failed:', err.message);
+        }
+      });
+    }
     res.status(200).json({
       success: true,
-      message: 'Streams processed',
+      message: 'Streams processing started',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
