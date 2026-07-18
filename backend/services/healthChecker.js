@@ -1,4 +1,5 @@
 const fetch = require('node-fetch');
+const { runCrawler } = require('./crawlerService');
 
 async function checkStreamHealth(url, type) {
   try {
@@ -46,19 +47,33 @@ async function runHealthCheck(pool) {
       await pool.query(
         "INSERT INTO stream_health_log (stream_id, status_code, is_healthy) VALUES ($1, $2, $3)",
         [stream.id, isHealthy ? 200 : 404, isHealthy]
-      );
+      ).catch(() => {}); // ignore logging errors
 
-      // If dead, mark as offline
+      // If dead, delete immediately from database
       if (!isHealthy) {
-        await pool.query("UPDATE live_streams SET is_live = false WHERE id = $1", [stream.id]);
+        await pool.query("DELETE FROM live_streams WHERE id = $1", [stream.id]);
         deadCount++;
       }
     }));
 
-    console.log(`[HealthChecker] Validation complete. Marked ${deadCount} streams as offline.`);
+    console.log(`[HealthChecker] Validation complete. Deleted ${deadCount} dead streams.`);
 
-    // Purge old offline streams
-    await pool.query("DELETE FROM live_streams WHERE is_live = false AND updated_at < NOW() - INTERVAL '1 day'");
+    // Check remaining active streams count
+    const remainingResult = await pool.query("SELECT COUNT(*) FROM live_streams WHERE is_live = true");
+    const remainingCount = parseInt(remainingResult.rows[0].count) || 0;
+    console.log(`[HealthChecker] ${remainingCount} healthy streams remaining in database.`);
+
+    // Auto-trigger crawler if active streams count drops below 15
+    if (remainingCount < 15) {
+      console.log(`[HealthChecker] Stream count is low (${remainingCount}/15). Auto-triggering crawler for new channels...`);
+      setImmediate(async () => {
+        try {
+          await runCrawler(pool);
+        } catch (err) {
+          console.error('[HealthChecker] Background auto-crawler run failed:', err.message);
+        }
+      });
+    }
     
   } catch (err) {
     console.error('[HealthChecker] Error running validation:', err);
