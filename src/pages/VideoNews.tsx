@@ -691,6 +691,7 @@ const VideoNews = () => {
     id: string;
     name: string;
     url: string;
+    embedUrl?: string;
     flag: string;
     language: string;
     coverage: string;
@@ -729,6 +730,7 @@ const VideoNews = () => {
       id: "caze",
       name: "CazéTV (YouTube)",
       url: "https://www.youtube.com/@CazeTV/live",
+      embedUrl: "https://www.youtube.com/embed/live_stream?channel=UCq6-K2B0s6B14qR-Z98Yy6w",
       flag: "🇧🇷",
       language: "Portuguese",
       coverage: "All 104 Matches Live",
@@ -1195,36 +1197,61 @@ const VideoNews = () => {
                     </div>
                   )
                 ) : (
-                  OFFICIAL_WORLD_CUP_STREAMS.map(stream => (
-                    <a 
-                      key={stream.id}
-                      href={stream.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block p-3 rounded-lg border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-850 hover:border-zinc-700 transition-all duration-300"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-base shrink-0">{stream.flag}</span>
-                            <h4 className="text-sm font-bold text-zinc-100 truncate">{stream.name}</h4>
+                  OFFICIAL_WORLD_CUP_STREAMS.map(stream => {
+                    const hasEmbed = !!stream.embedUrl;
+                    
+                    const handleStreamClick = (e: React.MouseEvent) => {
+                      if (hasEmbed) {
+                        e.preventDefault();
+                        setActiveStream({
+                          id: stream.id,
+                          match_id: stream.id,
+                          match_title: `🏆 Live | ${stream.name} - World Cup Broadcast`,
+                          home_team: stream.name,
+                          away_team: 'Live Broadcast',
+                          league: 'FIFA World Cup 2026',
+                          stream_url: stream.embedUrl!,
+                          stream_type: 'iframe',
+                          quality: '1080p',
+                          language: stream.language
+                        });
+                        setIsPlayerActive(true);
+                        setActiveTab('matches');
+                      }
+                    };
+
+                    return (
+                      <a 
+                        key={stream.id}
+                        href={stream.url}
+                        onClick={handleStreamClick}
+                        target={hasEmbed ? undefined : "_blank"}
+                        rel="noopener noreferrer"
+                        className="block p-3 rounded-lg border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-850 hover:border-zinc-700 transition-all duration-300 cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-base shrink-0">{stream.flag}</span>
+                              <h4 className="text-sm font-bold text-zinc-100 truncate">{stream.name}</h4>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-1">{stream.coverage}</p>
+                            <span className="inline-block text-[9px] text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded mt-2">
+                              🗣️ {stream.language}
+                            </span>
                           </div>
-                          <p className="text-[11px] text-zinc-400 mt-1">{stream.coverage}</p>
-                          <span className="inline-block text-[9px] text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded mt-2">
-                            🗣️ {stream.language}
-                          </span>
+                          <div className="flex flex-col items-end shrink-0 gap-1.5">
+                            <span className="text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 text-right">
+                              {stream.vpnRequired}
+                            </span>
+                            <span className="text-[9px] text-zinc-500 flex items-center gap-0.5">
+                              {hasEmbed ? 'Play In-Site 🟢' : 'Open Link ↗'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end shrink-0 gap-1.5">
-                          <span className="text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 text-right">
-                            {stream.vpnRequired}
-                          </span>
-                          <span className="text-[9px] text-zinc-500 flex items-center gap-0.5">
-                            Open Link ↗
-                          </span>
-                        </div>
-                      </div>
-                    </a>
-                  ))
+                      </a>
+                    );
+                  })
                 )}
               </div>
             </div>
