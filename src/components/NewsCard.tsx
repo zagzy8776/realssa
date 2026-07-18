@@ -51,6 +51,10 @@ interface NewsCardProps {
   coverageCount?: number;
   sourceName?: string;
   author?: string;
+  reactions?: {
+    counts: { fire: number; heart: number; wow: number };
+    userReaction?: string | null;
+  };
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -99,7 +103,13 @@ const getSourceFromUrl = (urlStr?: string) => {
   }
 };
 
+// Global in-memory cache to prevent redundant image extractions during a single app session
+const extractedImagesCache = new Map<string, string>();
+
 const getSourceLabel = (sName?: string, auth?: string, extLink?: string) => {
+  if (sName) return sName;
+  if (auth) return auth;
+  if (extLink) return getSourceFromUrl(extLink);
   return "RealSSA News Desk";
 };
 
@@ -122,12 +132,17 @@ const NewsCard = ({
   coverageCount,
   sourceName,
   author,
+  reactions: reactionsProp,
 }: NewsCardProps) => {
   const { toast } = useToast();
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const [reactions, setReactions] = useState({ fire: 0, heart: 0, wow: 0 });
-  const [reacted, setReacted] = useState<string | null>(null);
+  const [reactions, setReactions] = useState(
+    reactionsProp?.counts || { fire: 0, heart: 0, wow: 0 }
+  );
+  const [reacted, setReacted] = useState<string | null>(
+    reactionsProp?.userReaction || null
+  );
   const [lastTap, setLastTap] = useState(0);
   const [showHeartPopup, setShowHeartPopup] = useState(false);
 
@@ -139,39 +154,37 @@ const NewsCard = ({
   const { recordRead } = useStreak();
 
   useEffect(() => {
-    if (id) {
-      const deviceId = localStorage.getItem('realssa_device_uuid');
-      const deviceParam = deviceId ? `?deviceId=${deviceId}` : '';
-      
-      const cached = localStorage.getItem(`reactions_${id}`);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (parsed.counts) {
-            setReactions(parsed.counts);
-            if (parsed.userReaction) setReacted(parsed.userReaction);
-          } else {
-            setReactions(parsed);
-          }
-        } catch {
-          try {
-            setReactions(JSON.parse(cached));
-          } catch {}
+    // Skip fetch when reactions are already provided via props (batch-loaded by parent)
+    if (reactionsProp || !id) return;
+
+    const deviceId = localStorage.getItem('realssa_device_uuid');
+    const deviceParam = deviceId ? `?deviceId=${deviceId}` : '';
+
+    const cached = localStorage.getItem(`reactions_${id}`);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.counts) {
+          setReactions(parsed.counts);
+          if (parsed.userReaction) setReacted(parsed.userReaction);
+        } else {
+          setReactions(parsed);
         }
-      }
-      
-      fetch(apiUrl(`/api/reactions/${id}${deviceParam}`))
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
-          if (data && data.counts) {
-            setReactions(data.counts);
-            setReacted(data.userReaction);
-            localStorage.setItem(`reactions_${id}`, JSON.stringify(data));
-          }
-        })
-        .catch(() => {});
+      } catch {}
+      return; // Use cache; skip network fetch
     }
-  }, [id]);
+
+    fetch(apiUrl(`/api/reactions/${id}${deviceParam}`))
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.counts) {
+          setReactions(data.counts);
+          setReacted(data.userReaction);
+          localStorage.setItem(`reactions_${id}`, JSON.stringify(data));
+        }
+      })
+      .catch(() => {});
+  }, [id, reactionsProp]);
 
   const handleReaction = useCallback(async (e: React.MouseEvent | null, type: string) => {
     if (e) {
@@ -265,6 +278,16 @@ const NewsCard = ({
   useEffect(() => {
     const isLogo = isLogoPattern(image);
     if (isLogo && externalLink) {
+      const cachedImage = extractedImagesCache.get(externalLink);
+      if (cachedImage) {
+        if (cachedImage === 'FAILED') {
+          setImgError(true);
+        } else {
+          setCurrentImage(cachedImage);
+        }
+        return;
+      }
+
       fetch(apiUrl('/api/extract'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -273,12 +296,15 @@ const NewsCard = ({
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data && data.image && !isLogoPattern(data.image)) {
+            extractedImagesCache.set(externalLink, data.image);
             setCurrentImage(data.image);
           } else {
+            extractedImagesCache.set(externalLink, 'FAILED');
             setImgError(true);
           }
         })
         .catch(() => {
+          extractedImagesCache.set(externalLink, 'FAILED');
           setImgError(true);
         });
     } else {

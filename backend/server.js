@@ -715,6 +715,73 @@ app.post('/api/profile/sync', async (req, res) => {
   res.json({ success: true, message: 'No DB configured' });
 });
 
+// Helper to enrich a list of articles with reaction counts and user-specific reaction
+async function enrichArticlesWithReactions(articles, deviceId) {
+  if (!process.env.DATABASE_URL || !articles || articles.length === 0) {
+    return articles;
+  }
+  try {
+    const idMap = {};
+    const articleIds = [];
+    
+    articles.forEach(article => {
+      if (article.id) {
+        const idStr = String(article.id);
+        const dbId = idStr.startsWith('rss-') ? idStr.replace('rss-', '') : idStr;
+        const isNumeric = /^\d+$/.test(dbId);
+        if (isNumeric) {
+          const numericId = parseInt(dbId, 10);
+          articleIds.push(numericId);
+          idMap[numericId] = article;
+        }
+      }
+    });
+
+    if (articleIds.length === 0) return articles;
+
+    articles.forEach(article => {
+      article.reactions = {
+        counts: { fire: 0, heart: 0, wow: 0 },
+        userReaction: null
+      };
+    });
+
+    const countsResult = await pool.query(
+      `SELECT article_id, reaction_type, count 
+       FROM article_reactions 
+       WHERE article_id = ANY($1)`,
+      [articleIds]
+    );
+
+    if (deviceId) {
+      const userRes = await pool.query(
+        `SELECT article_id, reaction_type 
+         FROM user_article_reactions 
+         WHERE device_id = $1 AND article_id = ANY($2)`,
+        [deviceId, articleIds]
+      );
+      userRes.rows.forEach(r => {
+        const article = idMap[r.article_id];
+        if (article && article.reactions) {
+          article.reactions.userReaction = r.reaction_type;
+        }
+      });
+    }
+
+    countsResult.rows.forEach(row => {
+      const article = idMap[row.article_id];
+      if (article && article.reactions && article.reactions.counts) {
+        article.reactions.counts[row.reaction_type] = parseInt(row.count, 10) || 0;
+      }
+    });
+
+    return articles;
+  } catch (err) {
+    console.error('enrichArticlesWithReactions failed:', err.message);
+    return articles;
+  }
+}
+
 // Get all articles (combines JSON files + Neon database)
 app.get('/api/articles', async (req, res) => {
   try {
@@ -807,6 +874,7 @@ app.get('/api/articles', async (req, res) => {
 
     // Combine and return
     const allArticles = [...jsonArticles, ...rssArticles];
+    await enrichArticlesWithReactions(allArticles, deviceId);
     res.json(allArticles);
   } catch (error) {
     console.error('Error fetching articles:', error);
@@ -818,6 +886,7 @@ app.get('/api/articles', async (req, res) => {
 // MUST be defined BEFORE /api/articles/:id to prevent Express from matching "featured" as an ID
 app.get('/api/articles/featured', async (req, res) => {
   try {
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
     // 1. Get RSS articles from Neon database as featured
     let rssArticles = [];
     if (process.env.DATABASE_URL) {
@@ -903,7 +972,7 @@ app.get('/api/articles/featured', async (req, res) => {
 
     // Limit to 10 featured articles
     featuredArticles = featuredArticles.slice(0, 10);
-
+    await enrichArticlesWithReactions(featuredArticles, deviceId);
     res.json(featuredArticles);
   } catch (error) {
     console.error('Error fetching featured articles:', error);
@@ -915,6 +984,7 @@ app.get('/api/articles/featured', async (req, res) => {
 // MUST be defined BEFORE /api/articles/:id to prevent Express from matching "trending" as an ID
 app.get('/api/articles/trending', async (req, res) => {
   try {
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, parseInt(req.query.limit) || 15);
     const offset = (page - 1) * limit;
@@ -989,12 +1059,14 @@ app.get('/api/articles/trending', async (req, res) => {
         // Fallback to live RSS only on first page when DB is empty
         console.log('Trending: DB empty, falling back to live RSS...');
       } else {
-        return res.json(dbResult.rows.map(r => ({
+        const results = dbResult.rows.map(r => ({
           id: r.id, title: r.title, excerpt: r.excerpt,
           category: r.category, image: r.image, author: r.author,
           externalLink: r.external_link, date: r.date,
           contentType: r.content_type, readTime: r.read_time, source: 'rss'
-        })));
+        }));
+        await enrichArticlesWithReactions(results, deviceId);
+        return res.json(results);
       }
     }
 
@@ -1013,6 +1085,7 @@ app.get('/api/articles/trending', async (req, res) => {
     trending = trending
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, limit);
+    await enrichArticlesWithReactions(trending, deviceId);
     res.json(trending);
   } catch (error) {
     console.error('Error fetching trending articles:', error);
@@ -1054,15 +1127,19 @@ app.post('/api/articles/:id/view', async (req, res) => {
   try {
     const rawId = req.params.id;
     const dbId = rawId.startsWith('rss-') ? rawId.replace('rss-', '') : rawId;
-    if (process.env.DATABASE_URL) {
-      await pool.query(
-        'UPDATE rss_articles SET view_count = COALESCE(view_count, 0) + 1 WHERE id = $1',
+    let viewCount = 1;
+    
+    if (process.env.DATABASE_URL && rawId.startsWith('rss-')) {
+      const result = await pool.query(
+        'UPDATE rss_articles SET view_count = COALESCE(view_count, 0) + 1 WHERE id = $1 RETURNING view_count',
         [dbId]
       );
+      viewCount = result.rows[0]?.view_count || 1;
     }
-    res.json({ success: true });
+    res.json({ success: true, views: viewCount });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update view count' });
+    console.error('Failed to update view count:', err.message);
+    res.status(500).json({ error: 'Failed to update view count', views: 0 });
   }
 });
 
@@ -1454,16 +1531,6 @@ const lifestyleFeeds = [
   'https://nypost.com/celebrities/feed/'
 ];
 
-// USA News RSS feeds (continued)
-const usaFeedsRemaining = [
-  'https://www.npr.org/rss/rss.php?id=1001',
-  'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
-  'https://www.latimes.com/rss.xml',
-  'https://www.chicagotribune.com/rss.xml',
-  'https://www.wsj.com/xml/rss/3_7085.xml'
-];
-
-
 
 // World News RSS feeds
 const worldFeeds = [
@@ -1621,6 +1688,7 @@ const fetchRSSFeeds = async (feeds) => {
 // This prevents timeout errors on Android
 const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) => {
   const cat = dbCategory || category;
+  const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
   try {
     // Enable CDN and browser caching with stale-while-revalidate for speed
     res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=30, stale-while-revalidate=30');
@@ -1703,6 +1771,7 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
         const paginated = combined.slice(0, limit);
 
         if (req.query.paginated === 'true') {
+          await enrichArticlesWithReactions(paginated, deviceId);
           return res.json({
             articles: paginated,
             pagination: {
@@ -1713,6 +1782,7 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
             }
           });
         }
+        await enrichArticlesWithReactions(paginated, deviceId);
         return res.json(paginated);
       }
     }
@@ -1730,11 +1800,13 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 50;
       const slice = combined.slice((page - 1) * limit, page * limit);
+      await enrichArticlesWithReactions(slice, deviceId);
       return res.json({
         articles: slice,
         pagination: { currentPage: page, totalPages: Math.ceil(combined.length / limit), totalItems: combined.length, itemsPerPage: limit }
       });
     }
+    await enrichArticlesWithReactions(combined, deviceId);
     res.json(combined);
   } catch (error) {
     console.error(`Error fetching [${cat}] news:`, error.message);
@@ -2067,18 +2139,7 @@ app.get('/api/news/sports/featured', async (req, res) => {
   }
 });
 
-// Get USA news
-app.get('/api/news/usa', async (req, res) => {
-  try {
-    console.log('Fetching USA news feeds...');
-    const articles = await fetchRSSFeeds(usaFeeds);
-    console.log(`Fetched ${articles.length} USA articles`);
-    res.json(articles);
-  } catch (error) {
-    console.error('Error fetching USA news:', error);
-    res.status(500).json({ error: 'Failed to fetch USA news' });
-  }
-});
+
 
 // Get World news — DB-first (all non-country-specific categories)
 app.get('/api/news/world', async (req, res) => {
@@ -2485,29 +2546,34 @@ app.post('/api/users/streak', async (req, res) => {
 
     const streak = result.rows[0];
     const lastReadAt = new Date(streak.last_read_at);
-    
-    // Absolute elapsed time gap calculation
-    const gapMs = now - lastReadAt;
-    const gapHours = gapMs / (1000 * 60 * 60);
+
+    // Compare calendar dates in UTC to avoid timezone-based miscounts
+    const todayUTC = now.toISOString().slice(0, 10);
+    const lastDayUTC = lastReadAt.toISOString().slice(0, 10);
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const calendarDayDiff = Math.round(
+      (new Date(todayUTC).getTime() - new Date(lastDayUTC).getTime()) / msPerDay
+    );
 
     let nextStreak = streak.current_streak;
     let nextLongest = streak.longest_streak;
 
-    if (gapHours < 24) {
+    if (calendarDayDiff === 0) {
+      // Already read today — just refresh last_read_at, no streak change
       await usersPool.query(
         'UPDATE user_streaks SET last_read_at = NOW() WHERE device_id = $1',
         [deviceId]
       );
-    } else if (gapHours >= 24 && gapHours <= 48) {
+    } else if (calendarDayDiff === 1) {
+      // Read on the next calendar day — extend streak
       nextStreak += 1;
-      if (nextStreak > nextLongest) {
-        nextLongest = nextStreak;
-      }
+      if (nextStreak > nextLongest) nextLongest = nextStreak;
       await usersPool.query(
-        'UPDATE user_streaks SET current_streak = $1, longest_streak = $2, last_read_at = NOW() WHERE device_id = $1',
+        'UPDATE user_streaks SET current_streak = $1, longest_streak = $2, last_read_at = NOW() WHERE device_id = $3',
         [nextStreak, nextLongest, deviceId]
       );
     } else {
+      // Missed one or more days — reset streak
       nextStreak = 1;
       await usersPool.query(
         'UPDATE user_streaks SET current_streak = 1, last_read_at = NOW() WHERE device_id = $1',
@@ -2912,24 +2978,7 @@ app.get('/api/cron/test-notify', async (req, res) => {
   res.json(result);
 });
 
-// ── View Counter ─────────────────────────────────────────────────────────
-// POST /api/articles/:id/view — increment view count
-app.post('/api/articles/:id/view', async (req, res) => {
-  try {
-    if (!process.env.DATABASE_URL || !req.params.id.startsWith('rss-')) {
-      return res.json({ views: 0 });
-    }
-    const articleId = req.params.id.replace('rss-', '');
-    const result = await pool.query(
-      `UPDATE rss_articles SET view_count = COALESCE(view_count, 0) + 1
-       WHERE id = $1 RETURNING view_count`,
-      [articleId]
-    );
-    res.json({ views: result.rows[0]?.view_count || 1 });
-  } catch (err) {
-    res.json({ views: 0 });
-  }
-});
+
 
 // Dynamic Google News Sitemap — articles from last 48 hours only
 app.get('/api/sitemap-news.xml', async (req, res) => {
@@ -3211,7 +3260,7 @@ async function getMatchDetailsFromDB(matchId) {
 // GET /api/sports/matches/:id/details (venue, referees, H2H aggregates, recent matches)
 app.get('/api/sports/matches/:id/details', async (req, res) => {
   const matchId = req.params.id;
-  const apiKey = process.env.FOOTBALL_DATA_API_KEY || '0327f3b996a6499fb450bd012b939809';
+  const apiKey = process.env.FOOTBALL_DATA_API_KEY;
   const isNumeric = /^\d+$/.test(matchId);
 
   // 1. Grasp Soccerway or non-numeric matches immediately via DB fallback
