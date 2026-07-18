@@ -439,7 +439,7 @@ const HARD_KEYWORDS = [
   'breaking', 'killed', 'kills', 'dead', 'deaths', 'crash', 'explosion',
   'attack', 'shooting', 'arrested', 'detained', 'coup', 'emergency',
   'earthquake', 'flood', 'fire', 'collapse', 'crisis',
-  // Extended: common high-impact African/Nigerian news triggers
+  // High-impact African/Nigerian news triggers
   'impeached', 'suspended', 'convicted', 'sentenced', 'acquitted',
   'sacked', 'resigns', 'resigned', 'appointed', 'elected',
   'protest', 'protests', 'strike', 'riot', 'riots',
@@ -448,7 +448,17 @@ const HARD_KEYWORDS = [
   'kidnapped', 'abducted', 'rescued', 'missing',
   'fuel', 'naira', 'dollar', 'economy', 'inflation',
   'buhari', 'tinubu', 'presidency', 'senate', 'house of rep',
-  'supreme court', 'efcc', 'nnpc', 'cbn'
+  'supreme court', 'efcc', 'nnpc', 'cbn',
+  // Global Geopolitics & Leaders
+  'trump', 'biden', 'putin', 'zelensky', 'netanyahu', 'macron', 'starmer', 'xi jinping',
+  'war', 'missile', 'missiles', 'bombing', 'bombed', 'clash', 'clashes', 'sanctions', 'tariffs',
+  'israel', 'gaza', 'ukraine', 'russia', 'nato', 'un', 'united nations',
+  // Global Markets, Finance & Tech
+  'federal reserve', 'interest rates', 'rate cut', 'recession', 'bitcoin', 'crypto', 'btc', 'cyberattack', 'hacked', 'musk',
+  // Global Disasters & Weather
+  'tsunami', 'hurricane', 'typhoon', 'tornado', 'wildfire', 'outbreak', 'pandemic', 'epidemic',
+  // Major Global Sports & Entertainment
+  'champions league', 'world cup', 'premier league', 'transfer', 'afcon', 'olympics', 'oscars', 'grammys'
 ];
 // Soft alerts: newsworthy but prone to false positives — only notify from authority sources
 const SOFT_KEYWORDS = [
