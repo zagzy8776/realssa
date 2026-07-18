@@ -316,133 +316,118 @@ async function scrapeAllActive() {
 
   console.log(`🔄 Scraping live scores from Flashscore Mobi for ${competitions.length} active competitions...`);
 
+  // Try primary Flashscore Mobi scrape
+  let parsedMatches = [];
+  let scrapedOk = false;
+
   try {
     const html = await fetchHtml('https://www.flashscore.mobi/');
-    if (!html) {
-      console.warn('[liveScraper] Empty HTML returned from Flashscore Mobi');
-      return;
-    }
+    if (html) {
+      const $ = cheerio.load(html);
+      const scoreDataDiv = $('#score-data');
 
-    const $ = cheerio.load(html);
-    const scoreDataDiv = $('#score-data');
-    if (scoreDataDiv.length === 0) {
-      console.warn('[liveScraper] No #score-data div found on Flashscore Mobi page');
-      return;
-    }
+      if (scoreDataDiv.length > 0) {
+        let currentLeague = '';
+        const leagueStandingsUrls = {};
 
-    let currentLeague = '';
-    const parsedMatches = [];
-    const leagueStandingsUrls = {}; // leagueName => standingsUrl
-
-    scoreDataDiv.contents().each((_, el) => {
-      if (el.name === 'h4') {
-        currentLeague = $(el).text().replace(/Standings/gi, '').replace(/\s+/g, ' ').trim();
-        const standingsLink = $(el).find('a').attr('href');
-        if (standingsLink) {
-          leagueStandingsUrls[currentLeague] = `https://www.flashscore.mobi${standingsLink}`;
-        }
-      } else if (el.name === 'span') {
-        const timeOrStatus = $(el).text().trim();
-        
-        // Find next text node that contains the team matchups
-        let nextNode = el.nextSibling;
-        let teamsText = '';
-        while (nextNode) {
-          if (nextNode.type === 'text') {
-            teamsText = nextNode.data.trim();
-            if (teamsText.includes(' - ')) {
-              break;
-            }
-          }
-          nextNode = nextNode.nextSibling;
-        }
-
-        if (teamsText) {
-          const parts = teamsText.split(' - ');
-          const homeTeam = parts[0].trim();
-          const awayTeam = parts[1].trim();
-
-          // Find the link node containing match details and score
-          let linkNode = nextNode ? nextNode.nextSibling : null;
-          while (linkNode) {
-            if (linkNode.name === 'a') {
-              break;
-            }
-            linkNode = linkNode.nextSibling;
-          }
-
-          if (linkNode) {
-            const href = $(linkNode).attr('href') || '';
-            const matchIdMatch = href.match(/\/match\/([a-zA-Z0-9]+)\//);
-            const matchId = matchIdMatch ? matchIdMatch[1] : hashId(`flash-${currentLeague}-${homeTeam}-${awayTeam}`);
-            const scoreText = $(linkNode).text().trim();
-            const cls = $(linkNode).attr('class') || '';
-            const matchUrl = `https://www.flashscore.mobi${href}`;
-
-            let status = 'scheduled';
-            let minute = null;
-
-            if (cls.includes('live')) {
-              status = 'live';
-              const minMatch = timeOrStatus.match(/(\d+)'/);
-              if (minMatch) {
-                minute = parseInt(minMatch[1]);
+        scoreDataDiv.contents().each((_, el) => {
+          if (el.name === 'h4') {
+            currentLeague = $(el).text().replace(/Standings/gi, '').replace(/\s+/g, ' ').trim();
+            const standingsLink = $(el).find('a').attr('href');
+            if (standingsLink) leagueStandingsUrls[currentLeague] = `https://www.flashscore.mobi${standingsLink}`;
+          } else if (el.name === 'span') {
+            const timeOrStatus = $(el).text().trim();
+            let nextNode = el.nextSibling;
+            let teamsText = '';
+            while (nextNode) {
+              if (nextNode.type === 'text') {
+                teamsText = nextNode.data.trim();
+                if (teamsText.includes(' - ')) break;
               }
-            } else if (cls.includes('fin')) {
-              status = 'finished';
+              nextNode = nextNode.nextSibling;
             }
-
-            let homeScore = 0;
-            let awayScore = 0;
-            const scoreMatch = scoreText.match(/(\d+)-(\d+)/);
-            if (scoreMatch) {
-              homeScore = parseInt(scoreMatch[1]);
-              awayScore = parseInt(scoreMatch[2]);
+            if (teamsText) {
+              const parts = teamsText.split(' - ');
+              const homeTeam = parts[0].trim();
+              const awayTeam = parts[1].trim();
+              let linkNode = nextNode ? nextNode.nextSibling : null;
+              while (linkNode) {
+                if (linkNode.name === 'a') break;
+                linkNode = linkNode.nextSibling;
+              }
+              if (linkNode) {
+                const href = $(linkNode).attr('href') || '';
+                const matchIdMatch = href.match(/\/match\/([a-zA-Z0-9]+)\//);
+                const matchId = matchIdMatch ? matchIdMatch[1] : hashId(`flash-${currentLeague}-${homeTeam}-${awayTeam}`);
+                const scoreText = $(linkNode).text().trim();
+                const cls = $(linkNode).attr('class') || '';
+                const matchUrl = `https://www.flashscore.mobi${href}`;
+                let status = 'scheduled';
+                let minute = null;
+                if (cls.includes('live')) {
+                  status = 'live';
+                  const minMatch = timeOrStatus.match(/(\d+)'/);
+                  if (minMatch) minute = parseInt(minMatch[1]);
+                } else if (cls.includes('fin')) {
+                  status = 'finished';
+                }
+                let homeScore = 0, awayScore = 0;
+                const scoreMatch = scoreText.match(/(\d+)-(\d+)/);
+                if (scoreMatch) { homeScore = parseInt(scoreMatch[1]); awayScore = parseInt(scoreMatch[2]); }
+                parsedMatches.push({ matchId, league: currentLeague, timeOrStatus, homeTeam, awayTeam, homeScore, awayScore, status, minute, matchUrl });
+              }
             }
-
-            parsedMatches.push({
-              matchId,
-              league: currentLeague,
-              timeOrStatus,
-              homeTeam,
-              awayTeam,
-              homeScore,
-              awayScore,
-              status,
-              minute,
-              matchUrl
-            });
           }
-        }
-      }
-    });
-
-    console.log(`[liveScraper] Parsed ${parsedMatches.length} matches from Flashscore Mobi.`);
-
-    // Match parsed games to database competitions and upsert
-    let matchedCount = 0;
-    for (const match of parsedMatches) {
-      const comp = matchCompetition(match.league, competitions);
-      if (comp) {
-        matchedCount++;
-        await upsertMatch(match, comp);
-        
-        // Save the standings URL to the competition record if found
-        const stdUrl = leagueStandingsUrls[match.league];
-        if (stdUrl && comp.scrape_url !== stdUrl) {
-          await pool.query(
-            'UPDATE competitions SET scrape_url = $1 WHERE id = $2',
-            [stdUrl, comp.id]
-          );
-        }
+        });
+        scrapedOk = parsedMatches.length > 0;
+        console.log(`[liveScraper] Parsed ${parsedMatches.length} matches from Flashscore Mobi.`);
+      } else {
+        console.warn('[liveScraper] #score-data div not found — Flashscore may have changed structure');
       }
     }
-
-    console.log(`[liveScraper] Upserted ${matchedCount} matched scores to DB.`);
-
   } catch (err) {
-    console.error('[liveScraper] Error during scrape cycle:', err.message);
+    console.error('[liveScraper] Flashscore scrape error:', err.message);
   }
+
+  // Fallback: try livescore.com mobi if Flashscore returned nothing
+  if (!scrapedOk) {
+    console.warn('[liveScraper] Flashscore returned 0 matches, trying livescore.in fallback...');
+    try {
+      const html2 = await fetchHtml('https://www.livescore.in/');
+      if (html2) {
+        const $ = cheerio.load(html2);
+        $('div.match, div.event__match, .soccer-match').each((_, el) => {
+          const homeTeam = $(el).find('.event__participant--home, .home-team, .team-home').first().text().trim();
+          const awayTeam = $(el).find('.event__participant--away, .away-team, .team-away').first().text().trim();
+          const scoreEl = $(el).find('.event__score, .score, .match-score').first().text().trim();
+          const statusEl = $(el).find('.event__stage, .match-status').first().text().trim().toLowerCase();
+          if (!homeTeam || !awayTeam) return;
+          const scoreMatch = scoreEl.match(/(\d+)[^\d]+(\d+)/);
+          const homeScore = scoreMatch ? parseInt(scoreMatch[1]) : 0;
+          const awayScore = scoreMatch ? parseInt(scoreMatch[2]) : 0;
+          const isLive = statusEl.includes("'") || statusEl === 'live' || statusEl.includes('ht');
+          const isFin = statusEl === 'ft' || statusEl === 'finished' || statusEl === 'aet';
+          const status = isLive ? 'live' : isFin ? 'finished' : 'scheduled';
+          const matchId = hashId(`ls-${homeTeam}-${awayTeam}`);
+          parsedMatches.push({ matchId, league: 'Unknown', timeOrStatus: statusEl, homeTeam, awayTeam, homeScore, awayScore, status, minute: null, matchUrl: '' });
+        });
+        console.log(`[liveScraper] Fallback parsed ${parsedMatches.length} matches from livescore.in`);
+      }
+    } catch (e2) {
+      console.error('[liveScraper] Fallback scrape also failed:', e2.message);
+    }
+  }
+
+  // Upsert all parsed matches
+  let matchedCount = 0;
+  for (const match of parsedMatches) {
+    const comp = matchCompetition(match.league, competitions);
+    if (comp) {
+      matchedCount++;
+      await upsertMatch(match, comp);
+    }
+  }
+  console.log(`[liveScraper] Upserted ${matchedCount} matched scores to DB.`);
 
   await cleanStaleLiveMatches();
 }

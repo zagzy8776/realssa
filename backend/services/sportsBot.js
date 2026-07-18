@@ -2,8 +2,9 @@ const fetch = require('node-fetch');
 
 const API_BASE = 'https://api.football-data.org/v4';
 
-// Poll matches every 1 minute
-const POLL_INTERVAL = 1 * 60 * 1000;
+// Poll matches every 45 seconds during live matches, 2 minutes otherwise
+const POLL_INTERVAL_LIVE = 45 * 1000;
+const POLL_INTERVAL_IDLE = 2 * 60 * 1000;
 
 // All competitions available on the football-data.org free tier
 // ID => { slug, code, name, flag }
@@ -127,8 +128,11 @@ async function pollMatches(pool, notificationService) {
       const awayTeam = match.awayTeam.name;
       const awayCrest = match.awayTeam.crest;
       const status = normalizeStatus(match.status);
-      const homeScore = match.score.fullTime.home ?? match.score.halfTime.home ?? 0;
-      const awayScore = match.score.fullTime.away ?? match.score.halfTime.away ?? 0;
+      // Use in-play score first (live), then fullTime (finished), then halfTime, then 0
+      const homeScore = match.score.fullTime.home 
+        ?? (status === 'live' ? (match.score.regularTime?.home ?? match.score.halfTime?.home ?? 0) : 0);
+      const awayScore = match.score.fullTime.away 
+        ?? (status === 'live' ? (match.score.regularTime?.away ?? match.score.halfTime?.away ?? 0) : 0);
       const kickoffAt = match.utcDate;
 
       const minute = status === 'live' ? 'Live' : (status === 'finished' ? 'FT' : '');
@@ -138,14 +142,15 @@ async function pollMatches(pool, notificationService) {
 
       let goalOccurred = false;
       let isKickoff = false;
+      let notificationMessage = '';
 
       if (existingRes.rows.length > 0) {
         const existing = existingRes.rows[0];
         if (existing.status !== 'live' && status === 'live') {
           isKickoff = true;
         }
-        if (existing.status === 'live' && status === 'live') {
-          if (existing.home_score !== homeScore || existing.away_score !== awayScore) {
+        if (status === 'live') {
+          if (Number(existing.home_score) !== homeScore || Number(existing.away_score) !== awayScore) {
             goalOccurred = true;
             notificationMessage = `⚽ GOAL! ${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}`;
           }
@@ -331,10 +336,19 @@ function initSportsBot(pool, notificationService) {
   // Initial match polling run
   pollMatches(pool, notificationService);
 
-  // Set match polling interval for every 8 minutes
-  setInterval(() => {
-    pollMatches(pool, notificationService);
-  }, POLL_INTERVAL);
+  // Adaptive polling: fast during live matches, slower when idle
+  const schedulePoll = async () => {
+    await pollMatches(pool, notificationService);
+    // Check if any matches are currently live
+    try {
+      const liveCheck = await pool.query(`SELECT COUNT(*) AS c FROM matches WHERE status = 'live'`);
+      const hasLive = parseInt(liveCheck.rows[0].c) > 0;
+      setTimeout(schedulePoll, hasLive ? POLL_INTERVAL_LIVE : POLL_INTERVAL_IDLE);
+    } catch (e) {
+      setTimeout(schedulePoll, POLL_INTERVAL_IDLE);
+    }
+  };
+  setTimeout(schedulePoll, POLL_INTERVAL_LIVE);
 
   // Fetch standings immediately on startup, and refresh every 12 hours
   fetchAndCacheStandings(pool);
