@@ -2525,6 +2525,17 @@ app.post('/api/users/streak', async (req, res) => {
   }
 
   try {
+    // Auto-create user_streaks table in case migration hasn't run yet on this DB
+    await usersPool.query(`
+      CREATE TABLE IF NOT EXISTS user_streaks (
+        device_id     TEXT PRIMARY KEY,
+        current_streak INT DEFAULT 1,
+        longest_streak INT DEFAULT 1,
+        last_read_at  TIMESTAMPTZ DEFAULT NOW(),
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {}); // ignore if table already exists / no permission
+
     const result = await usersPool.query(
       'SELECT current_streak, longest_streak, last_read_at FROM user_streaks WHERE device_id = $1',
       [deviceId]
