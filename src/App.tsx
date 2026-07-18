@@ -67,6 +67,15 @@ const FeedWatermarkWrapper = () => {
   return <FeedWatermark />;
 };
 
+// Scroll to top on every route change (fixes pages starting from bottom on navigation)
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
+  return null;
+};
+
 const App = () => {
   // Hide native splash screen immediately so our custom React loading animation shows
   useEffect(() => {
@@ -90,6 +99,7 @@ const App = () => {
         <PWAInstallPrompt />
         <KeepAlive />
         <BrowserRouter>
+          <ScrollToTop />
           <GlobalHooks />
           <FeedWatermarkWrapper />
           <MobileBottomNav />
