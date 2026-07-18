@@ -47,10 +47,17 @@ export const LeagueHub: React.FC = () => {
   const [rows, setRows] = useState<TeamRow[]>([]);
   const [fixtures, setFixtures] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
-  const [votedMatchId, setVotedMatchId] = useState<string | null>(null);
+  const [votedMatchIds, setVotedMatchIds] = useState<string[]>([]);
   const [hypeVotes, setHypeVotes] = useState<Record<string, { home: number; away: number }>>({});
 
   const leagueInfo = leagueSlug ? LEAGUE_NAMES[leagueSlug.toLowerCase()] : null;
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('realssa_voted_matches');
+      if (stored) setVotedMatchIds(JSON.parse(stored));
+    } catch (e) {}
+  }, []);
 
   useEffect(() => {
     const fetchLeagueData = async () => {
@@ -97,7 +104,7 @@ export const LeagueHub: React.FC = () => {
   }, [leagueSlug, leagueInfo, toast]);
 
   const handleHypeVote = async (matchId: string, team: 'home' | 'away') => {
-    if (votedMatchId === matchId) return;
+    if (votedMatchIds.includes(matchId)) return;
     try {
       const response = await axios.post(`/api/sports/matches/${matchId}/hype`, { team });
       setHypeVotes(prev => ({
@@ -107,7 +114,11 @@ export const LeagueHub: React.FC = () => {
           away: response.data.away_hype_count,
         }
       }));
-      setVotedMatchId(matchId);
+      setVotedMatchIds(prev => {
+        const next = [...prev, matchId];
+        localStorage.setItem('realssa_voted_matches', JSON.stringify(next));
+        return next;
+      });
       toast({
         title: "Vote Recorded!",
         description: `You hyped the ${team} team!`,
@@ -264,14 +275,14 @@ export const LeagueHub: React.FC = () => {
                         {/* Vote buttons */}
                         <div className="mt-1 flex gap-1">
                           <button
-                            disabled={votedMatchId === m.match_id}
+                            disabled={votedMatchIds.includes(m.match_id)}
                             onClick={() => handleHypeVote(m.match_id, 'home')}
                             className="flex-1 text-[9px] font-bold bg-emerald-500/10 hover:bg-emerald-500/25 active:scale-[0.98] border border-emerald-500/15 py-1 rounded text-emerald-300 disabled:opacity-40"
                           >
                             Vote Home
                           </button>
                           <button
-                            disabled={votedMatchId === m.match_id}
+                            disabled={votedMatchIds.includes(m.match_id)}
                             onClick={() => handleHypeVote(m.match_id, 'away')}
                             className="flex-1 text-[9px] font-bold bg-teal-500/10 hover:bg-teal-500/25 active:scale-[0.98] border border-teal-500/15 py-1 rounded text-teal-300 disabled:opacity-40"
                           >

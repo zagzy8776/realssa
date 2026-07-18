@@ -37,7 +37,14 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [match, setMatch] = useState<MatchData | null>(null);
   const [hypeVotes, setHypeVotes] = useState<{ home: number; away: number } | null>(null);
-  const [votedMatchId, setVotedMatchId] = useState<string | null>(null);
+  const [votedMatchIds, setVotedMatchIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('realssa_voted_matches');
+      if (stored) setVotedMatchIds(JSON.parse(stored));
+    } catch (e) {}
+  }, []);
 
   // 1. Fetch Geolocation and Weather
   useEffect(() => {
@@ -112,14 +119,18 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
 
   // 3. Hype Meter Vote Handler
   const handleHypeVote = async (team: 'home' | 'away') => {
-    if (!match || votedMatchId === match.match_id) return;
+    if (!match || votedMatchIds.includes(match.match_id)) return;
     try {
       const response = await axios.post(`/api/sports/matches/${match.match_id}/hype`, { team });
       setHypeVotes({
         home: response.data.home_hype_count,
         away: response.data.away_hype_count,
       });
-      setVotedMatchId(match.match_id);
+      setVotedMatchIds(prev => {
+        const next = [...prev, match.match_id];
+        localStorage.setItem('realssa_voted_matches', JSON.stringify(next));
+        return next;
+      });
     } catch (err) {
       console.error('Hype vote submission failed:', err);
     }
@@ -239,14 +250,14 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
                 {/* Vote buttons */}
                 <div className="mt-2 flex gap-2">
                   <button
-                    disabled={votedMatchId === match.match_id}
+                    disabled={votedMatchIds.includes(match.match_id)}
                     onClick={() => handleHypeVote('home')}
                     className="flex-1 text-[10px] font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 active:scale-[0.98] border border-emerald-500/20 py-1 rounded-md transition-all duration-200 disabled:opacity-50 text-emerald-200"
                   >
                     Hype Home
                   </button>
                   <button
-                    disabled={votedMatchId === match.match_id}
+                    disabled={votedMatchIds.includes(match.match_id)}
                     onClick={() => handleHypeVote('away')}
                     className="flex-1 text-[10px] font-semibold bg-teal-500/20 hover:bg-teal-500/30 active:scale-[0.98] border border-teal-500/20 py-1 rounded-md transition-all duration-200 disabled:opacity-50 text-teal-200"
                   >

@@ -2990,7 +2990,7 @@ app.get('/api/sports/live', async (req, res) => {
     const result = await pool.query(
       `SELECT match_id, competition, home_team, away_team,
               home_score, away_score, status, match_minute,
-              match_url, updated_at
+              match_url, updated_at, home_hype_count, away_hype_count
        FROM live_matches
        WHERE status IN ('live', 'scheduled')
          AND (status = 'live' OR kickoff_at > NOW() - INTERVAL '3 hours')
@@ -3009,7 +3009,8 @@ app.get('/api/sports/results', async (req, res) => {
     if (!process.env.DATABASE_URL) return res.json([]);
     const result = await pool.query(
       `SELECT match_id, competition, home_team, away_team,
-              home_score, away_score, status, match_minute, updated_at
+              home_score, away_score, status, match_minute, updated_at,
+              home_hype_count, away_hype_count
        FROM live_matches
        WHERE status = 'finished'
        ORDER BY updated_at DESC
