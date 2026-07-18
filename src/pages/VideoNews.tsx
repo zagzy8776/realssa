@@ -798,9 +798,9 @@ const VideoNews = () => {
                       />
                     ) : activeStream ? (
                       activeStream.stream_type === 'hls' ? (
-                        <HlsPlayer src={activeStream.stream_url} autoPlay={autoplayAllowed} controls />
+                        <HlsPlayer key={activeStream.id} src={activeStream.stream_url} autoPlay={autoplayAllowed} controls />
                       ) : (
-                        <SandboxedIframe src={activeStream.stream_url} />
+                        <SandboxedIframe key={activeStream.id} src={activeStream.stream_url} />
                       )
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center text-zinc-500">

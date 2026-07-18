@@ -12,9 +12,19 @@ export function HlsPlayer({ src, autoPlay = true, controls = true, className = "
   const videoRef = useRef<HTMLVideoElement>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
 
-  // Bubble up asynchronous error to the parent ErrorBoundary during render phase
+  useEffect(() => {
+    setStreamError(null);
+  }, [src]);
+
   if (streamError) {
-    throw new Error(streamError);
+    return (
+      <div className="flex flex-col items-center justify-center p-6 text-center bg-black w-full h-full min-h-[200px] text-zinc-400 gap-2">
+        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping mb-1" />
+        <p className="text-sm font-bold text-zinc-200">Playback Error</p>
+        <p className="text-xs max-w-xs">{streamError}</p>
+        <p className="text-[10px] opacity-60">Try selecting another link/server from the list.</p>
+      </div>
+    );
   }
 
   useEffect(() => {
