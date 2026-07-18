@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Trophy, RefreshCw, ArrowLeft, ArrowRight, ShieldAlert, Award, Vote } from 'lucide-react';
 import axios from 'axios';
+import { apiUrl } from '@/lib/api-base';
 import Header from '@/components/Header';
 import { useToast } from "@/hooks/use-toast";
 
@@ -65,11 +66,11 @@ export const LeagueHub: React.FC = () => {
       try {
         setLoading(true);
         // 1. Fetch standings
-        const standingsRes = await axios.get(`/api/sports/standings/${leagueSlug.toLowerCase()}`);
+        const standingsRes = await axios.get(apiUrl(`/api/sports/standings/${leagueSlug.toLowerCase()}`));
         setRows(standingsRes.data.standings || []);
 
         // 2. Fetch matches (filter matches corresponding to this league name)
-        const matchesRes = await axios.get('/api/sports/live');
+        const matchesRes = await axios.get(apiUrl('/api/sports/live'));
         if (matchesRes.data) {
           const compName = leagueInfo?.name.toLowerCase() || leagueSlug.toLowerCase();
           const filtered = matchesRes.data.filter((m: Match) => 
@@ -106,7 +107,7 @@ export const LeagueHub: React.FC = () => {
   const handleHypeVote = async (matchId: string, team: 'home' | 'away') => {
     if (votedMatchIds.includes(matchId)) return;
     try {
-      const response = await axios.post(`/api/sports/matches/${matchId}/hype`, { team });
+      const response = await axios.post(apiUrl(`/api/sports/matches/${matchId}/hype`), { team });
       setHypeVotes(prev => ({
         ...prev,
         [matchId]: {

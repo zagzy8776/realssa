@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Cloud, Sun, CloudRain, Wind, Play, Trophy, Users, ShieldAlert, Award } from 'lucide-react';
 import { Geolocation } from '@capacitor/geolocation';
 import axios from 'axios';
+import { apiUrl } from '@/lib/api-base';
 
 interface AtAGlanceCarouselProps {
   activeFilter: string;
@@ -97,7 +98,7 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
   useEffect(() => {
     const fetchLiveMatch = async () => {
       try {
-        const response = await axios.get('/api/sports/live');
+        const response = await axios.get(apiUrl('/api/sports/live'));
         if (response.data && response.data.length > 0) {
           // Select first live match, or first scheduled match
           const activeMatch = response.data.find((m: MatchData) => m.status === 'live') || response.data[0];
@@ -121,7 +122,7 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
   const handleHypeVote = async (team: 'home' | 'away') => {
     if (!match || votedMatchIds.includes(match.match_id)) return;
     try {
-      const response = await axios.post(`/api/sports/matches/${match.match_id}/hype`, { team });
+      const response = await axios.post(apiUrl(`/api/sports/matches/${match.match_id}/hype`), { team });
       setHypeVotes({
         home: response.data.home_hype_count,
         away: response.data.away_hype_count,
