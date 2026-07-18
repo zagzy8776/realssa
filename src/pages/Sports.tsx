@@ -1,8 +1,8 @@
 import { apiUrl } from '@/lib/api-base';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Trophy, PlayCircle, Bell, BellOff, RefreshCw, Calendar,
-  Flame, X, ChevronRight, Clock, Shield, Activity
+  Flame, X, ChevronRight, Clock, Shield, Activity, ExternalLink, Zap
 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -29,6 +29,8 @@ interface Match {
   away_score: number;
   kickoff_at: string;
   updated_at: string;
+  match_url?: string;
+  source?: string;
 }
 
 interface SportsArticle {
@@ -47,18 +49,16 @@ interface SportsArticle {
 const SPORTS_PER_PAGE = 8;
 
 const TABS = [
-  { id: 'all',       label: 'All Matches', icon: '⚽' },
-  { id: 'live',      label: 'Live Now',    icon: '🔴' },
-  { id: 'upcoming',  label: 'Upcoming',    icon: '📅' },
-  { id: 'results',   label: 'Results',     icon: '🏁' },
-  { id: 'standings', label: 'Standings',   icon: '📊' },
+  { id: 'all',       label: 'All',      icon: '⚽' },
+  { id: 'live',      label: 'Live',     icon: '🔴' },
+  { id: 'upcoming',  label: 'Upcoming', icon: '📅' },
+  { id: 'results',   label: 'Results',  icon: '🏁' },
 ];
 
 /* ─────────────────────────── Helpers ─────────────────────────────────── */
 function fmtTime(iso: string) {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch { return '--:--'; }
+  try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+  catch { return '--:--'; }
 }
 
 function fmtDate(iso: string) {
@@ -72,6 +72,31 @@ function fmtDate(iso: string) {
   } catch { return ''; }
 }
 
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0].toUpperCase())
+    .join('');
+}
+
+function competitionEmoji(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('world cup') || n.includes('fifa')) return '🌍';
+  if (n.includes('champions')) return '⭐';
+  if (n.includes('europa')) return '🟠';
+  if (n.includes('premier') || n.includes('epl')) return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
+  if (n.includes('laliga') || n.includes('la liga')) return '🇪🇸';
+  if (n.includes('bundesliga')) return '🇩🇪';
+  if (n.includes('serie a')) return '🇮🇹';
+  if (n.includes('ligue')) return '🇫🇷';
+  if (n.includes('npfl') || n.includes('nigeria')) return '🇳🇬';
+  if (n.includes('caf') || n.includes('africa')) return '🌍';
+  if (n.includes('mls')) return '🇺🇸';
+  return '🏆';
+}
+
 function groupByCompetition(matches: Match[]): Record<string, Match[]> {
   return matches.reduce((acc, m) => {
     const key = m.competition_name || 'Other';
@@ -81,7 +106,474 @@ function groupByCompetition(matches: Match[]): Record<string, Match[]> {
   }, {} as Record<string, Match[]>);
 }
 
-/* ─────────────────────────── Main Page ───────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════ */
+/*  TeamAvatar — crest image with initials fallback                        */
+/* ═══════════════════════════════════════════════════════════════════════ */
+const TeamAvatar = ({ crest, name, size = 28 }: { crest: string; name: string; size?: number }) => {
+  const [broken, setBroken] = useState(!crest);
+  const bg = useMemo(() => {
+    // Deterministic colour from team name
+    const hues = [210, 240, 160, 30, 270, 340, 190, 50];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    const hue = hues[Math.abs(hash) % hues.length];
+    return `hsl(${hue}, 60%, 28%)`;
+  }, [name]);
+
+  if (broken || !crest) {
+    return (
+      <div
+        style={{ width: size, height: size, background: bg, borderRadius: '50%', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: size * 0.34, fontWeight: 800, color: '#e2e8f0', letterSpacing: '-0.5px' }}
+      >
+        {initials(name)}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={crest} alt={name}
+      style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }}
+      onError={() => setBroken(true)}
+    />
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/*  ScoreFlash — highlights score in gold when value changes               */
+/* ═══════════════════════════════════════════════════════════════════════ */
+const ScoreFlash = ({ value, live }: { value: number; live: boolean }) => {
+  const [flash, setFlash] = useState(false);
+  const prev = useRef(value);
+  useEffect(() => {
+    if (value !== prev.current) {
+      setFlash(true);
+      prev.current = value;
+      const t = setTimeout(() => setFlash(false), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [value]);
+
+  return (
+    <span
+      className={flash ? 'score-flash' : ''}
+      style={{
+        fontSize: 22, fontWeight: 900,
+        color: flash ? '#f59e0b' : live ? '#f87171' : '#e2e8f0',
+        transition: 'color 0.3s',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {value}
+    </span>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/*  MatchCard                                                               */
+/* ═══════════════════════════════════════════════════════════════════════ */
+const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
+  match: Match; isFollowing: boolean; onFollowToggle: (id: string) => void; onClick: () => void;
+}) => {
+  const isLive = match.status === 'live';
+  const isFin  = match.status === 'finished';
+  const isSched = match.status === 'scheduled';
+
+  return (
+    <div
+      onClick={onClick}
+      className="group cursor-pointer"
+      style={{
+        background: isLive
+          ? 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(11,15,25,0.6) 100%)'
+          : 'rgba(30,41,59,0.7)',
+        border: isLive ? '1px solid rgba(239,68,68,0.35)' : '1px solid rgba(51,65,85,0.6)',
+        borderRadius: 14,
+        transition: 'all 0.18s',
+        boxShadow: isLive ? '0 0 18px rgba(239,68,68,0.12)' : 'none',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = isLive ? 'rgba(239,68,68,0.6)' : 'rgba(234,179,8,0.5)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = isLive ? 'rgba(239,68,68,0.35)' : 'rgba(51,65,85,0.6)'; (e.currentTarget as HTMLElement).style.transform = ''; }}
+    >
+      <div className="flex items-center px-3 py-3 gap-1">
+        {/* Home team */}
+        <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
+          <span
+            style={{
+              color: '#e2e8f0', maxWidth: 110, fontSize: 13, fontWeight: 700,
+              fontFamily: "'Playfair Display', Georgia, serif",
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              textAlign: 'right',
+            }}
+          >
+            {match.home_team_name}
+          </span>
+          <TeamAvatar crest={match.home_team_crest} name={match.home_team_name} size={28} />
+        </div>
+
+        {/* Score / Time */}
+        <div style={{ minWidth: 76, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+          {isSched ? (
+            <>
+              <span style={{ color: '#38bdf8', fontSize: 13, fontWeight: 800 }}>{fmtTime(match.kickoff_at)}</span>
+              <span style={{ color: '#64748b', fontSize: 10, fontWeight: 600 }}>{fmtDate(match.kickoff_at)}</span>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ScoreFlash value={match.home_score} live={isLive} />
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>–</span>
+                <ScoreFlash value={match.away_score} live={isLive} />
+              </div>
+              {isLive && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                  <span style={{ color: '#ef4444', fontSize: 9, fontWeight: 900, letterSpacing: 1 }}>
+                    {match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE'}
+                  </span>
+                </div>
+              )}
+              {isFin && <span style={{ color: '#475569', fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>FT</span>}
+            </>
+          )}
+        </div>
+
+        {/* Away team */}
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={28} />
+          <span
+            style={{
+              color: '#e2e8f0', maxWidth: 110, fontSize: 13, fontWeight: 700,
+              fontFamily: "'Playfair Display', Georgia, serif",
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}
+          >
+            {match.away_team_name}
+          </span>
+        </div>
+
+        {/* Follow button */}
+        {match.status !== 'finished' && (
+          <button
+            onClick={e => { e.stopPropagation(); onFollowToggle(match.provider_match_id); }}
+            style={{
+              marginLeft: 6, padding: 6, borderRadius: '50%', flexShrink: 0,
+              background: isFollowing ? 'rgba(234,179,8,0.15)' : 'transparent',
+              color: isFollowing ? '#eab308' : '#475569',
+              border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+            }}
+            title={isFollowing ? 'Unfollow match' : 'Follow for goal alerts'}
+          >
+            {isFollowing ? <Bell size={13} fill="currentColor" /> : <BellOff size={13} />}
+          </button>
+        )}
+        <ChevronRight size={12} style={{ color: '#475569', opacity: 0, flexShrink: 0, transition: 'opacity 0.15s' }}
+          className="group-hover:!opacity-100" />
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/*  CompetitionGroup                                                        */
+/* ═══════════════════════════════════════════════════════════════════════ */
+interface CompGroupProps {
+  competition: string;
+  matches: Match[];
+  followedIds: string[];
+  onFollowToggle: (id: string) => void;
+  onMatchClick: (id: string) => void;
+}
+const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, onMatchClick }: CompGroupProps) => (
+  <div>
+    {/* Competition header — pill badge */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '0 2px' }}>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)',
+        borderRadius: 999, padding: '3px 10px 3px 8px',
+      }}>
+        <span style={{ fontSize: 13 }}>{competitionEmoji(competition)}</span>
+        <span style={{
+          fontSize: 11, fontWeight: 800, textTransform: 'uppercase',
+          letterSpacing: '0.08em', color: '#eab308',
+        }}>
+          {competition}
+        </span>
+      </div>
+      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to right, rgba(234,179,8,0.2), transparent)' }} />
+      <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>
+        {matches.length} match{matches.length !== 1 ? 'es' : ''}
+      </span>
+    </div>
+
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {matches.map(m => (
+        <MatchCard
+          key={m.provider_match_id}
+          match={m}
+          isFollowing={followedIds.includes(m.provider_match_id)}
+          onFollowToggle={onFollowToggle}
+          onClick={() => onMatchClick(m.provider_match_id)}
+        />
+      ))}
+    </div>
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/*  MatchModal — dual mode: API (full details) vs Scraper (scoreboard)     */
+/* ═══════════════════════════════════════════════════════════════════════ */
+const MatchModal = ({ matchId, match, matchDetails, h2hData, loading, onClose }: {
+  matchId: string; match: Match | null; matchDetails: any; h2hData: any; loading: boolean; onClose: () => void;
+}) => {
+  // Scraper match: no matchDetails returned from API, but we have raw match data
+  const isScraperMatch = !matchDetails && match && !loading;
+  const isLive = match?.status === 'live';
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden', background: '#0f1623', border: '1px solid rgba(51,65,85,0.8)', borderRadius: 20, boxShadow: '0 32px 80px rgba(0,0,0,0.7)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid rgba(51,65,85,0.6)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>{match ? competitionEmoji(match.competition_name) : '🏆'}</span>
+            <span style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#eab308' }}>
+              {match?.competition_name || matchDetails?.competition?.name || 'Match Details'}
+            </span>
+          </div>
+          <button onClick={onClose} style={{ padding: 6, borderRadius: 8, background: 'rgba(51,65,85,0.4)', color: '#94a3b8', border: 'none', cursor: 'pointer' }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+          {loading ? (
+            <div style={{ padding: '32px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[1, 2, 3].map(i => (
+                <div key={i} style={{ height: 70, borderRadius: 12, background: '#1a2234', animation: 'pulse 1.5s ease-in-out infinite' }} />
+              ))}
+            </div>
+
+          ) : isScraperMatch ? (
+            /* ── SCRAPER MODE: rich scoreboard from raw match data ── */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Big Scoreboard */}
+              <div style={{ background: 'linear-gradient(135deg, #131b2a, #0f1623)', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 16, padding: 24 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12 }}>
+                  {/* Home */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                    <TeamAvatar crest={match.home_team_crest} name={match.home_team_name} size={56} />
+                    <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 14, fontWeight: 700, color: '#e2e8f0', textAlign: 'center' }}>
+                      {match.home_team_name}
+                    </span>
+                  </div>
+                  {/* Score */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    {match.status === 'scheduled' ? (
+                      <>
+                        <Clock size={22} style={{ color: '#38bdf8' }} />
+                        <span style={{ color: '#38bdf8', fontSize: 15, fontWeight: 800 }}>{fmtTime(match.kickoff_at)}</span>
+                        <span style={{ color: '#64748b', fontSize: 11 }}>{fmtDate(match.kickoff_at)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 38, fontWeight: 900, color: isLive ? '#f87171' : '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{match.home_score}</span>
+                          <span style={{ color: '#475569', fontSize: 20 }}>–</span>
+                          <span style={{ fontSize: 38, fontWeight: 900, color: isLive ? '#f87171' : '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{match.away_score}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {isLive && <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />}
+                          <span style={{
+                            fontSize: 11, fontWeight: 800, letterSpacing: 1,
+                            color: isLive ? '#ef4444' : match.status === 'finished' ? '#64748b' : '#94a3b8',
+                            textTransform: 'uppercase',
+                          }}>
+                            {isLive
+                              ? (match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE')
+                              : match.status === 'finished' ? 'Full Time'
+                              : match.status}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {/* Away */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                    <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={56} />
+                    <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 14, fontWeight: 700, color: '#e2e8f0', textAlign: 'center' }}>
+                      {match.away_team_name}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scraper Meta */}
+              <div style={{ background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b', borderBottom: '1px solid rgba(51,65,85,0.4)', paddingBottom: 8 }}>Match Info</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Competition</span>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginTop: 2 }}>{match.competition_name}</p>
+                  </div>
+                  {match.kickoff_at && (
+                    <div>
+                      <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Kickoff</span>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginTop: 2 }}>{fmtDate(match.kickoff_at)} · {fmtTime(match.kickoff_at)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Source link */}
+              {match.match_url && (
+                <a
+                  href={match.match_url} target="_blank" rel="noopener noreferrer"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '12px 20px', borderRadius: 12,
+                    background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)',
+                    color: '#eab308', fontWeight: 700, fontSize: 13, textDecoration: 'none',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(234,179,8,0.18)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(234,179,8,0.1)'; }}
+                >
+                  <ExternalLink size={14} />
+                  View Live Commentary
+                </a>
+              )}
+            </div>
+
+          ) : matchDetails ? (
+            /* ── API MODE: full match details from football-data.org ── */
+            <>
+              {/* Matchup Banner */}
+              <div style={{ padding: 20, borderRadius: 16, background: 'linear-gradient(135deg, #131b2a, #0f1623)', border: '1px solid rgba(51,65,85,0.5)', marginBottom: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12 }}>
+                  {/* Home */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <TeamAvatar crest={matchDetails.homeTeam?.crest} name={matchDetails.homeTeam?.name || ''} size={52} />
+                    <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 13, fontWeight: 700, color: '#e2e8f0', textAlign: 'center', lineHeight: 1.3 }}>
+                      {matchDetails.homeTeam?.shortName || matchDetails.homeTeam?.name}
+                    </span>
+                  </div>
+                  {/* Score */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    {(matchDetails.status === 'SCHEDULED' || matchDetails.status === 'scheduled') ? (
+                      <>
+                        <Clock size={20} style={{ color: '#38bdf8' }} />
+                        <span style={{ color: '#38bdf8', fontSize: 14, fontWeight: 800 }}>{fmtTime(matchDetails.utcDate)}</span>
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 34, fontWeight: 900, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{matchDetails.score?.fullTime?.home ?? 0}</span>
+                        <span style={{ color: '#475569', fontSize: 16 }}>–</span>
+                        <span style={{ fontSize: 34, fontWeight: 900, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{matchDetails.score?.fullTime?.away ?? 0}</span>
+                      </div>
+                    )}
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, letterSpacing: 1, marginTop: 4,
+                      padding: '2px 10px', borderRadius: 999,
+                      background: matchDetails.status === 'IN_PLAY' ? 'rgba(239,68,68,0.15)' : 'rgba(100,116,139,0.15)',
+                      color: matchDetails.status === 'IN_PLAY' ? '#ef4444' : '#64748b',
+                    }}>
+                      {matchDetails.status === 'IN_PLAY' ? '🔴 LIVE' : matchDetails.status === 'FINISHED' ? 'FT' : matchDetails.status}
+                    </span>
+                  </div>
+                  {/* Away */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <TeamAvatar crest={matchDetails.awayTeam?.crest} name={matchDetails.awayTeam?.name || ''} size={52} />
+                    <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 13, fontWeight: 700, color: '#e2e8f0', textAlign: 'center', lineHeight: 1.3 }}>
+                      {matchDetails.awayTeam?.shortName || matchDetails.awayTeam?.name}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center', marginTop: 14, paddingTop: 12, fontSize: 11, color: '#64748b', borderTop: '1px solid rgba(51,65,85,0.4)' }}>
+                  {new Date(matchDetails.utcDate).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}
+                </div>
+              </div>
+
+              {/* Match Info */}
+              {(matchDetails.venue || matchDetails.matchday || matchDetails.referees?.length > 0) && (
+                <div style={{ padding: 16, borderRadius: 14, background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b', borderBottom: '1px solid rgba(51,65,85,0.4)', paddingBottom: 8, marginBottom: 12 }}>Match Info</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {matchDetails.venue && (
+                      <div>
+                        <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Venue</span>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>🏟️ {matchDetails.venue}</p>
+                      </div>
+                    )}
+                    {matchDetails.matchday && (
+                      <div>
+                        <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Matchday</span>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>Round {matchDetails.matchday}</p>
+                      </div>
+                    )}
+                    {matchDetails.referees?.length > 0 && (
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Referee</span>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>🟨 {matchDetails.referees.map((r: any) => r.name).join(', ')}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* H2H */}
+              {h2hData?.aggregates && (
+                <div>
+                  <h3 style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b', marginBottom: 10 }}>Head to Head</h3>
+                  <div style={{ padding: 16, borderRadius: 14, background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 800, marginBottom: 8 }}>
+                      <span style={{ color: '#22c55e' }}>{h2hData.aggregates.homeTeam?.wins ?? 0}W</span>
+                      <span style={{ color: '#64748b' }}>{(h2hData.aggregates.numberOfMatches ?? 0) - (h2hData.aggregates.homeTeam?.wins ?? 0) - (h2hData.aggregates.awayTeam?.wins ?? 0)}D</span>
+                      <span style={{ color: '#3b82f6' }}>{h2hData.aggregates.awayTeam?.wins ?? 0}W</span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 99, overflow: 'hidden', display: 'flex', background: '#1e2d47' }}>
+                      {h2hData.aggregates.numberOfMatches > 0 && (
+                        <>
+                          <div style={{ height: '100%', width: `${((h2hData.aggregates.homeTeam?.wins ?? 0) / h2hData.aggregates.numberOfMatches) * 100}%`, background: '#22c55e', transition: 'width 0.6s' }} />
+                          <div style={{ height: '100%', width: `${(((h2hData.aggregates.numberOfMatches ?? 0) - (h2hData.aggregates.homeTeam?.wins ?? 0) - (h2hData.aggregates.awayTeam?.wins ?? 0)) / h2hData.aggregates.numberOfMatches) * 100}%`, background: '#374151' }} />
+                          <div style={{ height: '100%', width: `${((h2hData.aggregates.awayTeam?.wins ?? 0) / h2hData.aggregates.numberOfMatches) * 100}%`, background: '#3b82f6' }} />
+                        </>
+                      )}
+                    </div>
+                    <p style={{ textAlign: 'center', fontSize: 10, marginTop: 8, color: '#64748b' }}>Last {h2hData.aggregates.numberOfMatches} meetings</p>
+                  </div>
+                  {h2hData.matches?.slice(0, 5).map((m: any) => (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, fontSize: 12, background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', marginBottom: 6 }}>
+                      <span style={{ color: '#64748b', minWidth: 52 }}>{new Date(m.utcDate).toLocaleDateString([], { month: 'short', year: '2-digit' })}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 600, color: '#cbd5e1', textAlign: 'right', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.homeTeam?.shortName || m.homeTeam?.name}</span>
+                        <span style={{ fontWeight: 900, padding: '2px 8px', borderRadius: 6, background: '#1e2d47', color: '#e2e8f0' }}>{m.score?.fullTime?.home} – {m.score?.fullTime?.away}</span>
+                        <span style={{ fontWeight: 600, color: '#cbd5e1', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.awayTeam?.shortName || m.awayTeam?.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/*  Main Page                                                               */
+/* ═══════════════════════════════════════════════════════════════════════ */
 const Sports = () => {
   const [activeTab, setActiveTab] = useState<string>('all');
   const [allArticles, setAllArticles]           = useState<SportsArticle[]>([]);
@@ -121,6 +613,11 @@ const Sports = () => {
       .finally(() => setDetailsLoading(false));
   }, [selectedMatchId]);
 
+  /* ── Derived match lists (declared early so loadMatches can ref them) ── */
+  const liveMatches      = useMemo(() => matches.filter(m => m.status === 'live'), [matches]);
+  const scheduledMatches = useMemo(() => matches.filter(m => m.status === 'scheduled'), [matches]);
+  const finishedMatches  = useMemo(() => matches.filter(m => m.status === 'finished'), [matches]);
+
   /* ── Matches ── */
   const loadMatches = async () => {
     if (!deviceId) return;
@@ -139,10 +636,7 @@ const Sports = () => {
   useEffect(() => {
     if (!deviceId) return;
     loadMatches();
-    // Poll every 15s when live matches exist, 30s otherwise
-    const iv = setInterval(async () => {
-      await loadMatches();
-    }, liveMatches.length > 0 ? 15_000 : 30_000);
+    const iv = setInterval(loadMatches, liveMatches.length > 0 ? 15_000 : 30_000);
     return () => clearInterval(iv);
   }, [deviceId, liveMatches.length]);
 
@@ -187,11 +681,6 @@ const Sports = () => {
     }
   };
 
-  /* ── Derived match lists ── */
-  const liveMatches      = useMemo(() => matches.filter(m => m.status === 'live'), [matches]);
-  const scheduledMatches = useMemo(() => matches.filter(m => m.status === 'scheduled'), [matches]);
-  const finishedMatches  = useMemo(() => matches.filter(m => m.status === 'finished'), [matches]);
-
   const tabMatches = useMemo(() => {
     if (activeTab === 'live')     return liveMatches;
     if (activeTab === 'upcoming') return scheduledMatches;
@@ -207,7 +696,7 @@ const Sports = () => {
     a.id !== featuredArticle?.id &&
     a.title.trim().toLowerCase() !== featuredArticle?.title?.trim().toLowerCase()
   );
-  const totalPages   = Math.ceil(gridArticles.length / SPORTS_PER_PAGE);
+  const totalPages    = Math.ceil(gridArticles.length / SPORTS_PER_PAGE);
   const paginatedGrid = gridArticles.slice((currentPage - 1) * SPORTS_PER_PAGE, currentPage * SPORTS_PER_PAGE);
 
   const handlePageChange = (page: number) => {
@@ -215,9 +704,27 @@ const Sports = () => {
     document.getElementById('sports-news-section')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // The raw match object for the selected match (for scraper modal mode)
+  const selectedMatch = useMemo(() => matches.find(m => m.provider_match_id === selectedMatchId) ?? null, [matches, selectedMatchId]);
+
   /* ────────────────────────── RENDER ──────────────────────────────────── */
   return (
-    <div className="min-h-screen flex flex-col animate-in fade-in duration-300" style={{ background: 'linear-gradient(to bottom, #0b0f19 0%, #1e293b 100%)', color: '#e2e8f0' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom, #080e1a 0%, #0f1623 60%, #111827 100%)', color: '#e2e8f0' }}>
+      {/* CSS Keyframes injected inline */}
+      <style>{`
+        @keyframes scoreFlash {
+          0%   { color: #f59e0b; text-shadow: 0 0 18px rgba(245,158,11,0.8); transform: scale(1.25); }
+          60%  { color: #fbbf24; }
+          100% { color: inherit;  text-shadow: none; transform: scale(1); }
+        }
+        .score-flash { animation: scoreFlash 1.2s ease-out forwards; }
+        @keyframes livePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.5; transform: scale(0.7); }
+        }
+        .live-dot { animation: livePulse 1.2s ease-in-out infinite; }
+      `}</style>
+
       <SEO
         title="Sports Livescore Hub | RealSSA"
         description="Live match scores, standings, upcoming fixtures from EPL, CAF, NPFL and 30+ leagues."
@@ -228,161 +735,186 @@ const Sports = () => {
 
       {/* ── Hero Banner ──────────────────────────────────────────────── */}
       <section style={{
-        backgroundImage: 'linear-gradient(to bottom, rgba(11, 15, 25, 0.45) 0%, rgba(11, 15, 25, 0.95) 100%), url("/sports_stadium_bg.png")',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        borderBottom: '1px solid #1e293b'
-      }} className="py-12 px-4 relative">
-        <div className="container mx-auto">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-5">
-            <div className="flex items-center gap-3">
-              <div style={{ background: 'linear-gradient(135deg, #1a56db, #00b4d8)', boxShadow: '0 0 24px rgba(26,86,219,0.4)' }} className="p-3 rounded-xl">
-                <Trophy size={26} className="text-white" />
+        background: 'linear-gradient(135deg, #0d1117 0%, #1a0f00 40%, #1a1000 70%, #0d1117 100%)',
+        borderBottom: '1px solid rgba(234,179,8,0.15)',
+        position: 'relative', overflow: 'hidden',
+        padding: '36px 16px',
+      }}>
+        {/* Gold glow orbs */}
+        <div style={{ position: 'absolute', top: -60, right: -60, width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, rgba(234,179,8,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -40, left: -40, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(234,100,8,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+        <div className="container mx-auto" style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              {/* Icon */}
+              <div style={{ background: 'linear-gradient(135deg, #d97706, #b45309)', boxShadow: '0 0 28px rgba(217,119,6,0.4)', padding: 12, borderRadius: 14, flexShrink: 0 }}>
+                <Trophy size={24} style={{ color: '#fff' }} />
               </div>
               <div>
-                <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: '#e2e8f0' }}>
-                  RealSSA <span style={{ color: '#00b4d8' }}>Sports Hub</span>
-                  {liveMatches.length > 0 && (
-                    <span className="ml-3 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full align-middle" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-                      {liveMatches.length} LIVE
-                    </span>
-                  )}
+                <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 'clamp(22px, 5vw, 32px)', fontWeight: 900, lineHeight: 1.1, color: '#f1f5f9' }}>
+                  RealSSA <span style={{ background: 'linear-gradient(90deg, #f59e0b, #f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Sports Hub</span>
                 </h1>
-                <p style={{ color: '#94a3b8' }} className="text-sm mt-0.5">Live scores · Goal alerts · 30+ leagues worldwide</p>
+                <p style={{ color: '#94a3b8', fontSize: 13, marginTop: 4 }}>Live scores · Goal alerts · 30+ leagues worldwide</p>
+              </div>
+              {/* Live count badge */}
+              {liveMatches.length > 0 && (
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 999, padding: '5px 12px' }}>
+                  <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                  <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 900 }}>{liveMatches.length} LIVE</span>
+                </div>
+              )}
+            </div>
+
+            {/* Watch Live + Search row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {hasLiveStreams && (
+                <Link to="/videos" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
+                  fontWeight: 800, borderRadius: 999, fontSize: 13, textDecoration: 'none',
+                  background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                  color: 'white', boxShadow: '0 4px 18px rgba(220,38,38,0.35)', flexShrink: 0,
+                }}>
+                  <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: 'white', display: 'inline-block' }} />
+                  Watch Live <PlayCircle size={14} />
+                </Link>
+              )}
+              <div style={{ flex: 1, minWidth: 240, maxWidth: 480 }}>
+                <CategorySearch category="sports" onSearchResults={r => { setSearchResults(r as SportsArticle[]); setCurrentPage(1); }} onClearSearch={() => setSearchResults(null)} />
               </div>
             </div>
-            {hasLiveStreams && (
-              <Link to="/videos" className="sm:ml-auto inline-flex items-center gap-2 px-4 py-2.5 font-bold rounded-full transition-all hover:scale-105" style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)', color: 'white', boxShadow: '0 4px 16px rgba(220,38,38,0.3)' }}>
-                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                Watch Live <PlayCircle size={16} />
-              </Link>
-            )}
-          </div>
-          <div className="max-w-xl">
-            <CategorySearch category="sports" onSearchResults={r => { setSearchResults(r as SportsArticle[]); setCurrentPage(1); }} onClearSearch={() => setSearchResults(null)} />
           </div>
         </div>
       </section>
 
-      <div className="container mx-auto max-w-4xl px-4 py-6 flex-1 space-y-6">
+      <div className="container mx-auto" style={{ maxWidth: 860, padding: '20px 16px', flex: 1 }}>
 
-        {/* ── Main Column ──────────────────────────────────────────── */}
-        <div className="space-y-6">
+        {/* ── Scores Section ─────────────────────────────────────────── */}
+        <section style={{ background: '#0f1623', border: '1px solid rgba(51,65,85,0.7)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.4)', marginBottom: 32 }}>
 
-          {/* Scores Section */}
-          <section style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16 }} className="overflow-hidden shadow-xl">
-
-            {/* Tab Bar */}
-            <div style={{ borderBottom: '1px solid #334155', background: '#131b2e' }} className="flex items-center justify-between px-4 pt-3 gap-2">
-              <div className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-1 pb-1">
-                {TABS.map(tab => {
-                  if (tab.id === 'standings') return null; // standings in sidebar
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold whitespace-nowrap transition-all rounded-t-lg relative"
-                      style={isActive ? { color: '#00b4d8', borderBottom: '2px solid #00b4d8', background: 'rgba(0,180,216,0.08)' } : { color: '#64748b' }}
-                    >
-                      <span>{tab.icon}</span>
-                      {tab.label}
-                      {tab.id === 'live' && liveMatches.length > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 text-[10px] font-black rounded-full" style={{ background: '#ef4444', color: 'white' }}>
-                          {liveMatches.length}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="flex items-center gap-2 pb-2 flex-shrink-0 pl-2">
-                {lastRefreshed && (
-                  <span className="hidden sm:inline text-slate-500 text-[10px]">
-                    Updated {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                )}
-                <button onClick={loadMatches} className="p-1.5 rounded-lg transition-colors text-slate-500 hover:text-slate-300 hover:bg-slate-800" title="Refresh">
-                  <RefreshCw size={14} className={matchesLoading ? 'animate-spin' : ''} />
-                </button>
-              </div>
+          {/* ── Pill Tab Bar ── */}
+          <div style={{ borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#080e1a', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto' }}>
+              {TABS.map(tab => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '6px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap', transition: 'all 0.18s',
+                      background: isActive ? 'linear-gradient(135deg, rgba(234,179,8,0.2), rgba(234,179,8,0.08))' : 'transparent',
+                      color: isActive ? '#eab308' : '#475569',
+                      boxShadow: isActive ? 'inset 0 0 0 1px rgba(234,179,8,0.4)' : 'none',
+                    }}
+                  >
+                    <span style={{ fontSize: 13 }}>{tab.icon}</span>
+                    {tab.label}
+                    {tab.id === 'live' && liveMatches.length > 0 && (
+                      <span style={{ background: '#ef4444', color: 'white', fontSize: 9, fontWeight: 900, borderRadius: 999, padding: '1px 5px', marginLeft: 2 }}>
+                        {liveMatches.length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-
-            {/* Match Content */}
-            <div className="p-4">
-              {matchesLoading && matches.length === 0 ? (
-                <div className="space-y-3 py-4">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="h-16 rounded-xl animate-pulse" style={{ background: '#1a2234' }} />
-                  ))}
-                </div>
-              ) : tabMatches.length === 0 ? (
-                <div className="text-center py-12" style={{ color: '#94a3b8' }}>
-                  <Calendar size={36} className="mx-auto mb-3 opacity-30" />
-                  <p className="font-semibold text-sm">
-                    {activeTab === 'live' ? 'No matches live right now' :
-                     activeTab === 'upcoming' ? 'No upcoming fixtures found' :
-                     activeTab === 'results' ? 'No results available' :
-                     'No matches found in the next 14 days'}
-                  </p>
-                  <p className="text-xs mt-1 opacity-60">Check back soon — scores update every 30 seconds</p>
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {Object.entries(groupedTabMatches).map(([comp, compMatches]) => (
-                    <CompetitionGroup
-                      key={comp}
-                      competition={comp}
-                      matches={compMatches}
-                      followedIds={followedIds}
-                      onFollowToggle={handleFollowToggle}
-                      onMatchClick={id => setSelectedMatchId(id)}
-                    />
-                  ))}
-                </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {lastRefreshed && (
+                <span style={{ color: '#374151', fontSize: 10, display: 'none' }} className="sm:!inline">
+                  {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               )}
+              <button
+                onClick={loadMatches}
+                style={{ padding: 6, borderRadius: 8, background: 'transparent', color: '#475569', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }}
+                title="Refresh"
+                onMouseEnter={e => (e.currentTarget.style.color = '#e2e8f0')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#475569')}
+              >
+                <RefreshCw size={14} className={matchesLoading ? 'animate-spin' : ''} />
+              </button>
             </div>
-          </section>
+          </div>
 
-          {/* Sports News */}
-          <section id="sports-news-section" className="space-y-5">
-            <h2 className="text-xl font-bold" style={{ color: '#e2e8f0', borderBottom: '1px solid #1e2d47', paddingBottom: 8 }}>
-              Latest Sports News
-            </h2>
-            {newsError && (
-              <div className="text-center py-10 rounded-2xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
-                <p className="font-bold mb-3">{newsError}</p>
-                <button onClick={() => window.location.reload()} className="px-5 py-2 rounded-full font-semibold text-white text-sm" style={{ background: '#dc2626' }}>🔄 Retry</button>
+          {/* Match Content */}
+          <div style={{ padding: 16 }}>
+            {matchesLoading && matches.length === 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 0' }}>
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} style={{ height: 64, borderRadius: 14, background: '#131b2a', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                ))}
               </div>
-            )}
-            {newsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {[1, 2, 3, 4].map(i => <div key={i} className="h-64 rounded-2xl animate-pulse" style={{ background: '#111827' }} />)}
+            ) : tabMatches.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8' }}>
+                <Calendar size={36} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                <p style={{ fontWeight: 700, fontSize: 14 }}>
+                  {activeTab === 'live'     ? 'No matches live right now'
+                  : activeTab === 'upcoming' ? 'No upcoming fixtures found'
+                  : activeTab === 'results'  ? 'No results available'
+                  :                           'No matches found in the next 14 days'}
+                </p>
+                <p style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>Scores update every 30 seconds</p>
               </div>
             ) : (
-              <>
-                {featuredArticle && !searchResults && (
-                  <div className="mb-5">
-                    <NewsCard key={featuredArticle.id} title={featuredArticle.title} excerpt={featuredArticle.excerpt} category="sports" image={featuredArticle.image} readTime={featuredArticle.readTime} date={featuredArticle.date} id={featuredArticle.id} externalLink={featuredArticle.externalLink} />
-                  </div>
-                )}
-                {paginatedGrid.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    {paginatedGrid.map(a => <NewsCard key={a.id} title={a.title} excerpt={a.excerpt} category="sports" image={a.image} readTime={a.readTime} date={a.date} id={a.id} externalLink={a.externalLink} />)}
-                  </div>
-                ) : (!newsError && <div className="text-center py-10" style={{ color: '#94a3b8' }}>No sports articles found.</div>)}
-                {totalPages > 1 && <div className="mt-5"><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} /></div>}
-              </>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {Object.entries(groupedTabMatches).map(([comp, compMatches]) => (
+                  <CompetitionGroup
+                    key={comp}
+                    competition={comp}
+                    matches={compMatches}
+                    followedIds={followedIds}
+                    onFollowToggle={handleFollowToggle}
+                    onMatchClick={id => setSelectedMatchId(id)}
+                  />
+                ))}
+              </div>
             )}
-          </section>
-        </div>
+          </div>
+        </section>
+
+        {/* ── Sports News ─────────────────────────────────────────────── */}
+        <section id="sports-news-section" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 22, fontWeight: 800, color: '#f1f5f9', borderBottom: '1px solid rgba(51,65,85,0.5)', paddingBottom: 10 }}>
+            Latest Sports News
+          </h2>
+          {newsError && (
+            <div style={{ textAlign: 'center', padding: '40px 20px', borderRadius: 16, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
+              <p style={{ fontWeight: 700, marginBottom: 12 }}>{newsError}</p>
+              <button onClick={() => window.location.reload()} style={{ padding: '8px 20px', borderRadius: 999, fontWeight: 700, color: 'white', fontSize: 13, background: '#dc2626', border: 'none', cursor: 'pointer' }}>🔄 Retry</button>
+            </div>
+          )}
+          {newsLoading ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+              {[1, 2, 3, 4].map(i => <div key={i} style={{ height: 240, borderRadius: 18, background: '#0f1623', animation: 'pulse 1.5s ease-in-out infinite' }} />)}
+            </div>
+          ) : (
+            <>
+              {featuredArticle && !searchResults && (
+                <div style={{ marginBottom: 4 }}>
+                  <NewsCard key={featuredArticle.id} title={featuredArticle.title} excerpt={featuredArticle.excerpt} category="sports" image={featuredArticle.image} readTime={featuredArticle.readTime} date={featuredArticle.date} id={featuredArticle.id} externalLink={featuredArticle.externalLink} />
+                </div>
+              )}
+              {paginatedGrid.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+                  {paginatedGrid.map(a => <NewsCard key={a.id} title={a.title} excerpt={a.excerpt} category="sports" image={a.image} readTime={a.readTime} date={a.date} id={a.id} externalLink={a.externalLink} />)}
+                </div>
+              ) : !newsError && (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>No sports articles found.</div>
+              )}
+              {totalPages > 1 && <div style={{ marginTop: 4 }}><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} /></div>}
+            </>
+          )}
+        </section>
       </div>
 
       {/* ── Match Details Modal ─────────────────────────────────────────── */}
       {selectedMatchId && (
         <MatchModal
           matchId={selectedMatchId}
+          match={selectedMatch}
           matchDetails={matchDetails}
           h2hData={h2hData}
           loading={detailsLoading}
@@ -394,246 +926,5 @@ const Sports = () => {
     </div>
   );
 };
-
-/* ─────────────────────────── CompetitionGroup ────────────────────────── */
-interface CompGroupProps {
-  competition: string;
-  matches: Match[];
-  followedIds: string[];
-  onFollowToggle: (id: string) => void;
-  onMatchClick: (id: string) => void;
-}
-const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, onMatchClick }: CompGroupProps) => (
-  <div>
-    <div className="flex items-center gap-2 mb-2 px-1">
-      <Shield size={13} style={{ color: '#00b4d8' }} />
-      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#00b4d8' }}>{competition}</span>
-      <div className="flex-1 h-px" style={{ background: '#334155' }} />
-      <span className="text-[10px]" style={{ color: '#64748b' }}>{matches.length} match{matches.length !== 1 ? 'es' : ''}</span>
-    </div>
-    <div className="space-y-1.5">
-      {matches.map(m => (
-        <MatchCard
-          key={m.provider_match_id}
-          match={m}
-          isFollowing={followedIds.includes(m.provider_match_id)}
-          onFollowToggle={onFollowToggle}
-          onClick={() => onMatchClick(m.provider_match_id)}
-        />
-      ))}
-    </div>
-  </div>
-);
-
-/* ─────────────────────────── MatchCard ───────────────────────────────── */
-const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
-  match: Match; isFollowing: boolean; onFollowToggle: (id: string) => void; onClick: () => void;
-}) => {
-  const isLive = match.status === 'live';
-  const isFin  = match.status === 'finished';
-
-  return (
-    <div
-      style={{
-        background: isLive ? 'rgba(239,68,68,0.1)' : '#1e293b',
-        border: isLive ? '1px solid rgba(239,68,68,0.3)' : '1px solid #334155',
-        borderRadius: 12,
-        transition: 'all 0.15s'
-      }}
-      className="flex items-center px-3 py-2.5 group hover:border-blue-500/50 cursor-pointer shadow-sm hover:shadow"
-      onClick={onClick}
-    >
-      {/* Home team */}
-      <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
-        <span className="text-xs sm:text-sm font-semibold truncate text-right" style={{ color: '#e2e8f0', maxWidth: 120 }}>{match.home_team_name}</span>
-        {match.home_team_crest
-          ? <img src={match.home_team_crest} alt="" className="w-6 h-6 object-contain flex-shrink-0" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          : <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ background: '#334155' }} />
-        }
-      </div>
-
-      {/* Score / Time */}
-      <div className="flex flex-col items-center justify-center mx-3 min-w-[60px]">
-        {match.status === 'scheduled' ? (
-          <>
-            <span className="text-xs font-bold" style={{ color: '#00b4d8' }}>{fmtTime(match.kickoff_at)}</span>
-            <span className="text-[10px]" style={{ color: '#64748b' }}>{fmtDate(match.kickoff_at)}</span>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-black" style={{ color: isLive ? '#ef4444' : '#e2e8f0' }}>{match.home_score}</span>
-              <span style={{ color: '#64748b', fontSize: 11 }}>–</span>
-              <span className="text-base font-black" style={{ color: isLive ? '#ef4444' : '#e2e8f0' }}>{match.away_score}</span>
-            </div>
-            {isLive && (
-              <span className="text-[9px] font-black uppercase animate-pulse" style={{ color: '#ef4444', letterSpacing: 1 }}>
-                {match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE'}
-              </span>
-            )}
-            {isFin  && <span className="text-[9px] font-bold uppercase" style={{ color: '#64748b' }}>FT</span>}
-          </>
-        )}
-      </div>
-
-      {/* Away team */}
-      <div className="flex-1 flex items-center gap-2 min-w-0">
-        {match.away_team_crest
-          ? <img src={match.away_team_crest} alt="" className="w-6 h-6 object-contain flex-shrink-0" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          : <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ background: '#334155' }} />
-        }
-        <span className="text-xs sm:text-sm font-semibold truncate" style={{ color: '#e2e8f0', maxWidth: 120 }}>{match.away_team_name}</span>
-      </div>
-
-      {/* Follow button */}
-      {match.status !== 'finished' && (
-        <button
-          onClick={e => { e.stopPropagation(); onFollowToggle(match.provider_match_id); }}
-          className="ml-3 p-1.5 rounded-full flex-shrink-0 transition-all hover:bg-slate-700"
-          style={isFollowing ? { background: 'rgba(0,180,216,0.15)', color: '#00b4d8' } : { color: '#64748b' }}
-          title={isFollowing ? 'Unfollow match' : 'Follow for goal alerts'}
-        >
-          {isFollowing ? <Bell size={14} fill="currentColor" /> : <BellOff size={14} />}
-        </button>
-      )}
-      <ChevronRight size={14} className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" style={{ color: '#64748b' }} />
-    </div>
-  );
-};
-
-/* ─────────────────────────── MatchModal ──────────────────────────────── */
-const MatchModal = ({ matchId, matchDetails, h2hData, loading, onClose }: {
-  matchId: string; matchDetails: any; h2hData: any; loading: boolean; onClose: () => void;
-}) => (
-  <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}>
-    <div className="w-full max-w-lg flex flex-col max-h-[88vh] overflow-hidden" style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 20, boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
-
-      {/* Modal Header */}
-      <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: '1px solid #334155' }}>
-        <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#00b4d8' }}>
-          {matchDetails?.competition?.name || 'Match Details'}
-        </span>
-        <button onClick={onClose} className="p-1.5 rounded-lg transition-colors hover:bg-slate-700" style={{ color: '#94a3b8' }} title="Close">
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* Modal Body */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
-        {loading ? (
-          <div className="space-y-4 py-8">
-            {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-xl animate-pulse" style={{ background: '#1a2234' }} />)}
-          </div>
-        ) : !matchDetails ? (
-          <div className="text-center py-14" style={{ color: '#94a3b8' }}>
-            <Activity size={32} className="mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-semibold">Match details unavailable</p>
-            <p className="text-xs mt-1 opacity-60">Click any FD.org match for full stats & H2H</p>
-          </div>
-        ) : (
-          <>
-            {/* Matchup Banner */}
-            <div className="p-5 rounded-2xl" style={{ background: 'linear-gradient(135deg, #0f1623, #131b2a)', border: '1px solid #1e2d47' }}>
-              <div className="grid grid-cols-7 items-center gap-2">
-                {/* Home */}
-                <div className="col-span-3 flex flex-col items-center text-center">
-                  <img src={matchDetails.homeTeam?.crest} alt="" className="w-14 h-14 object-contain mb-2" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  <span className="text-sm font-bold leading-tight" style={{ color: '#e2e8f0' }}>{matchDetails.homeTeam?.shortName || matchDetails.homeTeam?.name}</span>
-                </div>
-                {/* Score */}
-                <div className="col-span-1 flex flex-col items-center">
-                  {matchDetails.status === 'SCHEDULED' || matchDetails.status === 'scheduled' ? (
-                    <div className="flex flex-col items-center gap-1">
-                      <Clock size={18} style={{ color: '#00b4d8' }} />
-                      <span className="text-xs font-bold" style={{ color: '#00b4d8' }}>{fmtTime(matchDetails.utcDate)}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-2xl font-black" style={{ color: '#e2e8f0' }}>
-                      <span>{matchDetails.score?.fullTime?.home ?? 0}</span>
-                      <span style={{ color: '#94a3b8', fontSize: 14 }}>–</span>
-                      <span>{matchDetails.score?.fullTime?.away ?? 0}</span>
-                    </div>
-                  )}
-                  <span className="text-[10px] font-bold mt-1.5 px-2 py-0.5 rounded-full" style={{
-                    background: matchDetails.status === 'IN_PLAY' ? 'rgba(239,68,68,0.15)' : 'rgba(100,116,139,0.15)',
-                    color: matchDetails.status === 'IN_PLAY' ? '#ef4444' : '#64748b'
-                  }}>
-                    {matchDetails.status === 'IN_PLAY' ? '🔴 LIVE' : matchDetails.status === 'FINISHED' ? 'FT' : matchDetails.status}
-                  </span>
-                </div>
-                {/* Away */}
-                <div className="col-span-3 flex flex-col items-center text-center">
-                  <img src={matchDetails.awayTeam?.crest} alt="" className="w-14 h-14 object-contain mb-2" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  <span className="text-sm font-bold leading-tight" style={{ color: '#e2e8f0' }}>{matchDetails.awayTeam?.shortName || matchDetails.awayTeam?.name}</span>
-                </div>
-              </div>
-              {/* Date/Time */}
-              <div className="text-center mt-4 pt-3 text-xs" style={{ borderTop: '1px solid #1e2d47', color: '#94a3b8' }}>
-                {new Date(matchDetails.utcDate).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}
-              </div>
-            </div>
-
-            {/* Match Info */}
-            <div className="p-4 rounded-2xl" style={{ background: '#131b2a', border: '1px solid #1e2d47' }}>
-              <h3 className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: '#94a3b8', borderBottom: '1px solid #1e2d47', paddingBottom: 8 }}>Match Info</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {matchDetails.venue && (
-                  <div>
-                    <span className="text-[10px] uppercase" style={{ color: '#94a3b8' }}>Venue</span>
-                    <p className="font-semibold mt-0.5" style={{ color: '#e2e8f0' }}>🏟️ {matchDetails.venue}</p>
-                  </div>
-                )}
-                {matchDetails.matchday && (
-                  <div>
-                    <span className="text-[10px] uppercase" style={{ color: '#94a3b8' }}>Matchday</span>
-                    <p className="font-semibold mt-0.5" style={{ color: '#e2e8f0' }}>Round {matchDetails.matchday}</p>
-                  </div>
-                )}
-                {matchDetails.referees?.length > 0 && (
-                  <div className="col-span-2">
-                    <span className="text-[10px] uppercase" style={{ color: '#94a3b8' }}>Referee</span>
-                    <p className="font-semibold mt-0.5" style={{ color: '#e2e8f0' }}>🟨 {matchDetails.referees.map((r: any) => r.name).join(', ')}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* H2H */}
-            {h2hData?.aggregates && (
-              <div className="space-y-3">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>Head to Head</h3>
-                <div className="p-4 rounded-2xl" style={{ background: '#131b2a', border: '1px solid #1e2d47' }}>
-                  <div className="flex justify-between text-xs font-bold mb-2">
-                    <span style={{ color: '#22c55e' }}>{h2hData.aggregates.homeTeam?.wins ?? 0}W</span>
-                    <span style={{ color: '#64748b' }}>{(h2hData.aggregates.numberOfMatches ?? 0) - (h2hData.aggregates.homeTeam?.wins ?? 0) - (h2hData.aggregates.awayTeam?.wins ?? 0)}D</span>
-                    <span style={{ color: '#3b82f6' }}>{h2hData.aggregates.awayTeam?.wins ?? 0}W</span>
-                  </div>
-                  <div className="h-2.5 w-full rounded-full overflow-hidden flex" style={{ background: '#1e2d47' }}>
-                    {h2hData.aggregates.numberOfMatches > 0 && (<>
-                      <div className="h-full transition-all" style={{ width: `${((h2hData.aggregates.homeTeam?.wins ?? 0) / h2hData.aggregates.numberOfMatches) * 100}%`, background: '#22c55e' }} />
-                      <div className="h-full transition-all" style={{ width: `${(((h2hData.aggregates.numberOfMatches ?? 0) - (h2hData.aggregates.homeTeam?.wins ?? 0) - (h2hData.aggregates.awayTeam?.wins ?? 0)) / h2hData.aggregates.numberOfMatches) * 100}%`, background: '#374151' }} />
-                      <div className="h-full transition-all" style={{ width: `${((h2hData.aggregates.awayTeam?.wins ?? 0) / h2hData.aggregates.numberOfMatches) * 100}%`, background: '#3b82f6' }} />
-                    </>)}
-                  </div>
-                  <p className="text-center text-[10px] mt-2" style={{ color: '#94a3b8' }}>Last {h2hData.aggregates.numberOfMatches} meetings</p>
-                </div>
-                {h2hData.matches?.slice(0, 5).map((m: any) => (
-                  <div key={m.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs" style={{ background: '#131b2a', border: '1px solid #1e2d47' }}>
-                    <span style={{ color: '#94a3b8', minWidth: 60 }}>{new Date(m.utcDate).toLocaleDateString([], { month: 'short', year: '2-digit' })}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-right" style={{ color: '#cbd5e1', maxWidth: 80 }} >{m.homeTeam?.shortName || m.homeTeam?.name}</span>
-                      <span className="font-black px-2 py-0.5 rounded" style={{ background: '#1e2d47', color: '#e2e8f0' }}>{m.score?.fullTime?.home} – {m.score?.fullTime?.away}</span>
-                      <span className="font-semibold" style={{ color: '#cbd5e1', maxWidth: 80 }}>{m.awayTeam?.shortName || m.awayTeam?.name}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  </div>
-);
 
 export default Sports;
