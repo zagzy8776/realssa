@@ -328,8 +328,8 @@ const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, o
 const MatchModal = ({ matchId, match, matchDetails, h2hData, loading, onClose }: {
   matchId: string; match: Match | null; matchDetails: any; h2hData: any; loading: boolean; onClose: () => void;
 }) => {
-  // Scraper match: identified by source flag from DB fallback
-  const isScraperMatch = (matchDetails?.source === 'scraper') || (!matchDetails && match && !loading);
+  // Scraper match: source field comes directly from the matches list
+  const isScraperMatch = match?.source === 'scraper';
   const isLive = match?.status === 'live';
 
   return (

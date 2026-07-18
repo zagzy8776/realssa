@@ -1837,7 +1837,8 @@ app.get('/api/sports/matches', async (req, res) => {
           home_score,
           away_score,
           COALESCE(kickoff_at, updated_at, NOW()) AS kickoff_at,
-          updated_at
+          updated_at,
+          'scraper' AS source
         FROM live_matches
         WHERE (kickoff_at >= NOW() - INTERVAL '24 hours' OR status = 'live')
 
@@ -1856,7 +1857,8 @@ app.get('/api/sports/matches', async (req, res) => {
           home_score,
           away_score,
           kickoff_at,
-          updated_at
+          updated_at,
+          'api' AS source
         FROM matches
         WHERE kickoff_at >= NOW() - INTERVAL '24 hours'
       ) combined_matches
