@@ -1,55 +1,76 @@
-import { useState, useEffect } from 'react';
-import { Preferences } from '@capacitor/preferences';
+import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 
 const STREAK_KEY = 'user_reading_streak';
+const LONGEST_STREAK_KEY = 'user_longest_streak';
 const LAST_READ_DATE_KEY = 'last_read_date';
 
 export function useStreak() {
   const [streak, setStreak] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const checkStreak = async () => {
-      try {
-        const streakRes = await Preferences.get({ key: STREAK_KEY });
-        const lastDateRes = await Preferences.get({ key: LAST_READ_DATE_KEY });
-        
-        const currentStreak = parseInt(streakRes.value || '0', 10);
-        const lastReadDate = lastDateRes.value;
-        const today = new Date().toDateString();
-
-        if (lastReadDate) {
-          const lastDate = new Date(lastReadDate);
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-
-          if (lastReadDate === today) {
-            // Already read today, streak remains the same
-            setStreak(currentStreak);
-          } else if (lastDate.toDateString() === yesterday.toDateString()) {
-            // Read yesterday, increment streak
-            const newStreak = currentStreak + 1;
-            setStreak(newStreak);
-            await Preferences.set({ key: STREAK_KEY, value: newStreak.toString() });
-            await Preferences.set({ key: LAST_READ_DATE_KEY, value: today });
-          } else {
-            // Missed a day, reset streak to 1 (since they are reading today)
-            setStreak(1);
-            await Preferences.set({ key: STREAK_KEY, value: '1' });
-            await Preferences.set({ key: LAST_READ_DATE_KEY, value: today });
-          }
-        } else {
-          // First time reading ever
-          setStreak(1);
-          await Preferences.set({ key: STREAK_KEY, value: '1' });
-          await Preferences.set({ key: LAST_READ_DATE_KEY, value: today });
-        }
-      } catch (err) {
-        console.error('Failed to load streak', err);
-      }
-    };
-
-    checkStreak();
+  // Helper to get or generate device ID
+  const getDeviceId = useCallback(() => {
+    let id = localStorage.getItem('realssa_device_uuid');
+    if (!id) {
+      id = 'dev-' + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('realssa_device_uuid', id);
+    }
+    return id;
   }, []);
 
-  return streak;
+  const syncStreakWithServer = useCallback(async () => {
+    const deviceId = getDeviceId();
+    try {
+      const response = await axios.post('/api/users/streak', { deviceId });
+      const { currentStreak, longestStreak: longest, lastReadAt } = response.data;
+      
+      setStreak(currentStreak);
+      setLongestStreak(longest);
+      
+      localStorage.setItem(STREAK_KEY, String(currentStreak));
+      localStorage.setItem(LONGEST_STREAK_KEY, String(longest));
+      localStorage.setItem(LAST_READ_DATE_KEY, lastReadAt);
+    } catch (err) {
+      console.error('Failed to sync streak with server:', err);
+      // Fallback to local storage if server is unreachable
+      const cachedStreak = parseInt(localStorage.getItem(STREAK_KEY) || '0', 10);
+      const cachedLongest = parseInt(localStorage.getItem(LONGEST_STREAK_KEY) || '0', 10);
+      setStreak(cachedStreak);
+      setLongestStreak(cachedLongest);
+    } finally {
+      setLoading(false);
+    }
+  }, [getDeviceId]);
+
+  useEffect(() => {
+    syncStreakWithServer();
+  }, [syncStreakWithServer]);
+
+  // Call this function when user reads/opens an article to increment their streak
+  const recordRead = useCallback(async () => {
+    const deviceId = getDeviceId();
+    try {
+      const response = await axios.post('/api/users/streak', { deviceId });
+      const { currentStreak, longestStreak: longest, lastReadAt } = response.data;
+      
+      setStreak(currentStreak);
+      setLongestStreak(longest);
+      
+      localStorage.setItem(STREAK_KEY, String(currentStreak));
+      localStorage.setItem(LONGEST_STREAK_KEY, String(longest));
+      localStorage.setItem(LAST_READ_DATE_KEY, lastReadAt);
+    } catch (err) {
+      console.error('Failed to record read/update streak:', err);
+    }
+  }, [getDeviceId]);
+
+  return {
+    streak,
+    longestStreak,
+    loading,
+    recordRead,
+    syncStreakWithServer
+  };
 }

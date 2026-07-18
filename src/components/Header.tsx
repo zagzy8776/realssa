@@ -57,7 +57,8 @@ const Header = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const location = useLocation();
-  const streak = useStreak();
+  const { streak, longestStreak } = useStreak();
+  const [isStreakOpen, setIsStreakOpen] = useState(false);
 
   const categoryPills = [
     { name: "Breaking", path: "/news" },
@@ -136,14 +137,100 @@ const Header = () => {
 
           {/* Gamification Streak & Weather */}
           <div className="flex items-center gap-1 md:gap-2 animate-in fade-in zoom-in duration-500">
-            <div className={`flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 rounded-full ${streak > 0 ? 'bg-orange-100 dark:bg-orange-950' : 'bg-gray-100 dark:bg-gray-800'}`}>
-              <span className={`font-bold text-xs md:text-sm ${streak > 0 ? 'text-orange-500' : 'text-gray-400'}`}>🔥 {streak}</span>
+            <button
+              onClick={() => setIsStreakOpen(true)}
+              className={`flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 rounded-full active:scale-95 transition-all cursor-pointer ${
+                streak > 0 ? 'bg-orange-100 dark:bg-orange-950/60 hover:bg-orange-200' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-250'
+              }`}
+            >
+              <span className={`font-bold text-xs md:text-sm ${streak > 0 ? 'text-orange-500' : 'text-gray-400 animate-pulse'}`}>🔥 {streak}</span>
               <span className={`hidden sm:inline text-xs font-medium ${streak > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500'}`}>Streak</span>
-            </div>
+            </button>
             <div>
               <WeatherWidget />
             </div>
           </div>
+
+          {/* Reading Streak Calendar Modal */}
+          {isStreakOpen && (
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="relative w-full max-w-sm bg-gradient-to-br from-card to-background border border-border rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col gap-6 animate-in zoom-in-95 duration-250">
+                
+                {/* Background glow effects */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-lg text-foreground flex items-center gap-1.5">
+                    ⚡ Reading Streak
+                  </h3>
+                  <button 
+                    onClick={() => setIsStreakOpen(false)}
+                    className="p-1 rounded-full hover:bg-muted text-muted-foreground transition"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center text-4xl shadow-inner relative group">
+                    <span className="group-hover:scale-110 transition duration-300 transform inline-block">🔥</span>
+                    <span className="absolute inset-0 rounded-full border-2 border-orange-500/20 animate-ping"></span>
+                  </div>
+                  
+                  <div>
+                    <div className="text-3xl font-extrabold tracking-tight text-foreground">{streak} Days</div>
+                    <p className="text-xs text-muted-foreground mt-0.5">Your current daily reading habit</p>
+                  </div>
+                </div>
+
+                {/* Milestones / Stats */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-muted/40 rounded-2xl p-3 border border-border/50 text-center">
+                    <div className="text-[10px] font-semibold uppercase text-muted-foreground">Longest Streak</div>
+                    <div className="text-lg font-bold text-foreground mt-1">🏆 {longestStreak} days</div>
+                  </div>
+                  <div className="bg-muted/40 rounded-2xl p-3 border border-border/50 text-center">
+                    <div className="text-[10px] font-semibold uppercase text-muted-foreground">Habit Level</div>
+                    <div className="text-lg font-bold text-orange-500 mt-1">
+                      {streak >= 30 ? '🔥 Expert' : streak >= 7 ? '⭐ Regular' : '🌱 Novice'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 7-Day Calendar Checklist */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase text-muted-foreground mb-3 tracking-wider">Weekly Progress</h4>
+                  <div className="flex justify-between gap-1">
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
+                      const todayIdx = (new Date().getDay() + 6) % 7; // Map Mon-Sun to 0-6
+                      const isActive = idx <= todayIdx;
+                      return (
+                        <div key={idx} className="flex flex-col items-center gap-1.5 flex-1">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border transition-all duration-300 ${
+                            idx === todayIdx
+                              ? 'bg-orange-500 text-white border-orange-500 scale-[1.05] shadow-md shadow-orange-500/20'
+                              : isActive
+                                ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25'
+                                : 'bg-muted text-muted-foreground border-border'
+                          }`}>
+                            {idx === todayIdx && streak > 0 ? '✓' : day}
+                          </div>
+                          <span className="text-[9px] font-semibold text-muted-foreground/60">{day}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="text-center text-xs text-muted-foreground px-4 leading-relaxed">
+                  {streak > 0 
+                    ? "Fantastic! You've read today's news to secure your streak. See you tomorrow!"
+                    : "Read any summary article today to start your reading streak flame!"}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-6">

@@ -2388,48 +2388,339 @@ app.get('/api/news/search', async (req, res) => {
   }
 });
 
-// Comments endpoint
-app.get('/api/comments', (req, res) => {
-  const { articleId } = req.query;
-  const comments = readJsonFile(commentsFilePath);
-  const filteredComments = articleId
-    ? comments.filter(comment => comment.articleId === articleId)
-    : comments;
-  res.json(filteredComments);
+// --- Dynamic sitemap.xml Generator (Programmatic SEO) ---
+app.get('/sitemap.xml', async (req, res) => {
+  try {
+    const baseUrl = 'https://realssa.news';
+    let urls = [
+      { loc: `${baseUrl}/`, changefreq: 'daily', priority: 1.0 },
+      { loc: `${baseUrl}/reels`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${baseUrl}/sports`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${baseUrl}/videos`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${baseUrl}/saved`, changefreq: 'weekly', priority: 0.5 },
+    ];
+
+    if (process.env.DATABASE_URL) {
+      // Fetch dynamic publishers
+      const pubRes = await pool.query('SELECT slug FROM publishers');
+      pubRes.rows.forEach(row => {
+        urls.push({ loc: `${baseUrl}/publisher/${row.slug}`, changefreq: 'daily', priority: 0.7 });
+      });
+
+      // Fetch active league slugs from competitions
+      const compRes = await pool.query('SELECT slug FROM competitions WHERE is_active = true');
+      compRes.rows.forEach(row => {
+        urls.push({ loc: `${baseUrl}/sports/league/${row.slug}`, changefreq: 'daily', priority: 0.7 });
+      });
+    }
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    urls.forEach(item => {
+      xml += '  <url>\n';
+      xml += `    <loc>${item.loc}</loc>\n`;
+      xml += `    <changefreq>${item.changefreq}</changefreq>\n`;
+      xml += `    <priority>${item.priority.toFixed(1)}</priority>\n`;
+      xml += '  </url>\n';
+    });
+    xml += '</urlset>';
+
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    console.error('Sitemap generation failed:', err.message);
+    res.status(500).send('Error generating sitemap');
+  }
 });
 
-app.post('/api/comments', (req, res) => {
-  const { articleId, author, content } = req.body;
+// --- User Reading Streak sync endpoint ---
+app.post('/api/users/streak', async (req, res) => {
+  const { deviceId } = req.body;
+  if (!deviceId) {
+    return res.status(400).json({ error: 'Missing deviceId' });
+  }
+
+  try {
+    const result = await usersPool.query(
+      'SELECT current_streak, longest_streak, last_read_at FROM user_streaks WHERE device_id = $1',
+      [deviceId]
+    );
+
+    const now = new Date();
+
+    if (result.rows.length === 0) {
+      const insertRes = await usersPool.query(
+        `INSERT INTO user_streaks (device_id, current_streak, longest_streak, last_read_at)
+         VALUES ($1, 1, 1, NOW()) RETURNING *`,
+        [deviceId]
+      );
+      const row = insertRes.rows[0];
+      return res.json({
+        currentStreak: row.current_streak,
+        longestStreak: row.longest_streak,
+        lastReadAt: row.last_read_at
+      });
+    }
+
+    const streak = result.rows[0];
+    const lastReadAt = new Date(streak.last_read_at);
+    
+    // Absolute elapsed time gap calculation
+    const gapMs = now - lastReadAt;
+    const gapHours = gapMs / (1000 * 60 * 60);
+
+    let nextStreak = streak.current_streak;
+    let nextLongest = streak.longest_streak;
+
+    if (gapHours < 24) {
+      await usersPool.query(
+        'UPDATE user_streaks SET last_read_at = NOW() WHERE device_id = $1',
+        [deviceId]
+      );
+    } else if (gapHours >= 24 && gapHours <= 48) {
+      nextStreak += 1;
+      if (nextStreak > nextLongest) {
+        nextLongest = nextStreak;
+      }
+      await usersPool.query(
+        'UPDATE user_streaks SET current_streak = $1, longest_streak = $2, last_read_at = NOW() WHERE device_id = $1',
+        [nextStreak, nextLongest, deviceId]
+      );
+    } else {
+      nextStreak = 1;
+      await usersPool.query(
+        'UPDATE user_streaks SET current_streak = 1, last_read_at = NOW() WHERE device_id = $1',
+        [deviceId]
+      );
+    }
+
+    res.json({
+      currentStreak: nextStreak,
+      longestStreak: nextLongest,
+      lastReadAt: now.toISOString()
+    });
+  } catch (err) {
+    console.error('Streak sync error:', err.message);
+    res.status(500).json({ error: 'Failed to sync reading streak' });
+  }
+});
+
+// --- Publisher Hub metadata & feeds ---
+app.get('/api/publishers/:slug', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, slug, logo_url, bio, wikipedia_url, follower_metrics FROM publishers WHERE slug = $1',
+      [req.params.slug]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Publisher not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Fetch publisher details error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/publishers/:slug/posts', async (req, res) => {
+  try {
+    const pubRes = await pool.query('SELECT id FROM publishers WHERE slug = $1', [req.params.slug]);
+    if (pubRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Publisher not found' });
+    }
+    const publisherId = pubRes.rows[0].id;
+    const postsRes = await pool.query(
+      'SELECT id, platform, post_text, media_url, post_url, published_at FROM publisher_social_posts WHERE publisher_id = $1 ORDER BY published_at DESC LIMIT 10',
+      [publisherId]
+    );
+    res.json(postsRes.rows);
+  } catch (err) {
+    console.error('Fetch publisher social posts error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/publishers/:slug/articles', async (req, res) => {
+  try {
+    const pubRes = await pool.query('SELECT name FROM publishers WHERE slug = $1', [req.params.slug]);
+    if (pubRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Publisher not found' });
+    }
+    const publisherName = pubRes.rows[0].name;
+    const articlesRes = await pool.query(
+      `SELECT id, story_hash, title, summary, link, image_url, source, published_at, category, local_verified_count, rumor_flag_count
+       FROM rss_articles 
+       WHERE source ILIKE $1 
+       ORDER BY published_at DESC 
+       LIMIT 30`,
+      [`%${publisherName}%`]
+    );
+    res.json(articlesRes.rows);
+  } catch (err) {
+    console.error('Fetch publisher articles error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Community Hype Meter & Article Verification ---
+app.post('/api/sports/matches/:matchId/hype', async (req, res) => {
+  const { team } = req.body;
+  if (team !== 'home' && team !== 'away') {
+    return res.status(400).json({ error: 'Invalid team parameter' });
+  }
+
+  try {
+    const column = team === 'home' ? 'home_hype_count' : 'away_hype_count';
+    const result = await pool.query(
+      `UPDATE live_matches 
+       SET ${column} = ${column} + 1 
+       WHERE match_id = $1 
+       RETURNING home_hype_count, away_hype_count`,
+      [req.params.matchId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Hype meter error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/articles/:storyHash/verify', async (req, res) => {
+  const { type } = req.body;
+  if (type !== 'verify' && type !== 'flag') {
+    return res.status(400).json({ error: 'Invalid type parameter' });
+  }
+
+  try {
+    const column = type === 'verify' ? 'local_verified_count' : 'rumor_flag_count';
+    const result = await pool.query(
+      `UPDATE rss_articles 
+       SET ${column} = ${column} + 1 
+       WHERE story_hash = $1 
+       RETURNING local_verified_count, rumor_flag_count`,
+      [req.params.storyHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Article verification error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- PostgreSQL Threaded Comments endpoints (In-Memory Tree Mapping) ---
+app.get('/api/comments', async (req, res) => {
+  const { articleId } = req.query;
+  if (!articleId) {
+    return res.status(400).json({ error: 'Missing articleId query parameter' });
+  }
+
+  try {
+    const result = await usersPool.query(
+      'SELECT * FROM comments WHERE article_id = $1 ORDER BY created_at ASC',
+      [String(articleId)]
+    );
+
+    const allComments = result.rows.map(comment => ({
+      id: String(comment.id),
+      articleId: comment.article_id,
+      parentId: comment.parent_id ? String(comment.parent_id) : null,
+      author: comment.author_name,
+      content: comment.content,
+      date: new Date(comment.created_at).toISOString(),
+      likes: comment.likes || 0,
+      replies: []
+    }));
+
+    const commentMap = {};
+    const rootComments = [];
+
+    allComments.forEach(comment => {
+      commentMap[comment.id] = comment;
+    });
+
+    allComments.forEach(comment => {
+      if (comment.parentId) {
+        if (commentMap[comment.parentId]) {
+          commentMap[comment.parentId].replies.push(comment);
+        }
+      } else {
+        rootComments.push(comment);
+      }
+    });
+
+    res.json(rootComments.reverse()); // Show newest parent threads first
+  } catch (err) {
+    console.error('Fetch comments failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/comments', async (req, res) => {
+  const { articleId, author, content, parentId } = req.body;
   if (!articleId || !author || !content) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  const comments = readJsonFile(commentsFilePath);
-  const newComment = {
-    id: Date.now().toString(),
-    articleId: String(articleId),
-    author: escapeHtml(author).substring(0, 100),
-    content: escapeHtml(content).substring(0, 1000),
-    date: new Date().toISOString(),
-    likes: 0
-  };
+  try {
+    const pId = parentId ? parseInt(parentId, 10) : null;
+    const result = await usersPool.query(
+      `INSERT INTO comments (article_id, author_name, content, parent_id) 
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [String(articleId), escapeHtml(author).substring(0, 100), escapeHtml(content).substring(0, 1000), pId]
+    );
 
-  comments.push(newComment);
-  writeJsonFile(commentsFilePath, comments);
-  res.status(201).json(newComment);
+    const created = result.rows[0];
+    res.status(201).json({
+      id: String(created.id),
+      articleId: created.article_id,
+      parentId: created.parent_id ? String(created.parent_id) : null,
+      author: created.author_name,
+      content: created.content,
+      date: new Date(created.created_at).toISOString(),
+      likes: created.likes || 0,
+      replies: []
+    });
+  } catch (err) {
+    console.error('Submit comment failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/comments/:id/like', (req, res) => {
-  const comments = readJsonFile(commentsFilePath);
-  const comment = comments.find(c => c.id === req.params.id);
+app.post('/api/comments/:id/like', async (req, res) => {
+  try {
+    const result = await usersPool.query(
+      'UPDATE comments SET likes = likes + 1 WHERE id = $1 RETURNING *',
+      [parseInt(req.params.id, 10)]
+    );
 
-  if (!comment) {
-    return res.status(404).json({ error: 'Comment not found' });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    const updated = result.rows[0];
+    res.json({
+      id: String(updated.id),
+      articleId: updated.article_id,
+      parentId: updated.parent_id ? String(updated.parent_id) : null,
+      author: updated.author_name,
+      content: updated.content,
+      date: new Date(updated.created_at).toISOString(),
+      likes: updated.likes
+    });
+  } catch (err) {
+    console.error('Like comment failed:', err.message);
+    res.status(500).json({ error: err.message });
   }
-
-  comment.likes = (comment.likes || 0) + 1;
-  writeJsonFile(commentsFilePath, comments);
-  res.json(comment);
 });
 
 // ── CRON JOB HANDLERS ──────────────────────────────────────────────────────

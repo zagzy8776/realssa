@@ -20,10 +20,12 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 import TrendingHashtags from "@/components/TrendingHashtags";
 import StoryGroupCard from "@/components/StoryGroupCard";
 import LocalNewsRail from "@/components/LocalNewsRail";
+import { AtAGlanceCarousel } from "@/components/AtAGlanceCarousel";
 
 let initialLoadDone = false;
 
 const Index = () => {
+  const [activeFilter, setActiveFilter] = useState('all');
   const [stories, setStories] = useState([]);
   const [allArticles, setAllArticles] = useState([]);
   const [trendingArticles, setTrendingArticles] = useState([]);
@@ -262,7 +264,21 @@ const Index = () => {
     return item.image.startsWith('//') ? 'https:' + item.image : item.image;
   };
 
-  const visibleArticles = allArticles.slice(0, visibleCount);
+  const getFilteredArticles = () => {
+    if (activeFilter === 'deep_dives') {
+      return allArticles.filter((art: any) => (art.summary || art.excerpt || '').length > 150);
+    }
+    if (activeFilter === 'facts') {
+      return allArticles.filter((art: any) => ['general', 'news', 'sports', 'politics', 'business'].includes(art.category || ''));
+    }
+    if (activeFilter === 'local') {
+      return allArticles.filter((art: any) => art.category === 'local');
+    }
+    return allArticles;
+  };
+
+  const filteredArticles = getFilteredArticles();
+  const visibleArticles = filteredArticles.slice(0, visibleCount);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -289,6 +305,7 @@ const Index = () => {
       <ReadProgressBar />
       <Header />
       <NewsTicker />
+      <AtAGlanceCarousel activeFilter={activeFilter} onFilterChange={setActiveFilter} />
       <BreakingNowRail excludeIds={stories.map((s: any) => s.id)} />
       <LocalNewsRail excludeIds={stories.map((s: any) => s.id)} />
       <SocialButtons />
@@ -333,6 +350,9 @@ const Index = () => {
                   readTime={article.readTime || '3 min read'}
                   date={article.date || new Date().toLocaleDateString()}
                   externalLink={article.externalLink}
+                  storyHash={article.story_hash || article.storyHash}
+                  localVerifiedCount={article.local_verified_count || article.localVerifiedCount}
+                  rumorFlagCount={article.rumor_flag_count || article.rumorFlagCount}
                 />
               ))}
             </div>
@@ -386,6 +406,9 @@ const Index = () => {
                           readTime={article.readTime || '3 min read'}
                           date={article.date || new Date().toLocaleDateString()}
                           externalLink={article.externalLink}
+                          storyHash={article.story_hash || article.storyHash}
+                          localVerifiedCount={article.local_verified_count || article.localVerifiedCount}
+                          rumorFlagCount={article.rumor_flag_count || article.rumorFlagCount}
                         />
                       </div>
                     ))}

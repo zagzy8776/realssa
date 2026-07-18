@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl } from "@/lib/api-base";
+import { useStreak } from "@/hooks/useStreak";
 import { logCategoryPreference } from "@/lib/preferences";
 import { decodeHTMLEntities } from "@/lib/utils";
 
@@ -40,6 +41,9 @@ interface NewsCardProps {
   date: string;
   href?: string;
   id?: string;
+  storyHash?: string;
+  localVerifiedCount?: number;
+  rumorFlagCount?: number;
   externalLink?: string;
   onRead?: (articleId: string) => void;
   onBookmark?: (articleId: string) => void;
@@ -108,6 +112,9 @@ const NewsCard = ({
   date,
   href,
   id,
+  storyHash,
+  localVerifiedCount = 0,
+  rumorFlagCount = 0,
   externalLink,
   onRead,
   onBookmark,
@@ -123,6 +130,13 @@ const NewsCard = ({
   const [reacted, setReacted] = useState<string | null>(null);
   const [lastTap, setLastTap] = useState(0);
   const [showHeartPopup, setShowHeartPopup] = useState(false);
+
+  // RealSSA Hubs & Engagement states
+  const [floatingBubbles, setFloatingBubbles] = useState<{ id: number; emoji: string; left: number }[]>([]);
+  const [verifiedCount, setVerifiedCount] = useState(localVerifiedCount);
+  const [rumorCount, setRumorCount] = useState(rumorFlagCount);
+  const [hasVotedVerify, setHasVotedVerify] = useState(false);
+  const { recordRead } = useStreak();
 
   useEffect(() => {
     if (id) {
@@ -185,6 +199,17 @@ const NewsCard = ({
     });
 
     logCategoryPreference(category, 2);
+
+    // Trigger floating emoji bubble
+    if (!isToggleOff) {
+      const emoji = type === 'fire' ? '🔥' : type === 'heart' ? '❤️' : '😮';
+      const idVal = Date.now() + Math.random();
+      const leftVal = 20 + Math.random() * 60;
+      setFloatingBubbles(prev => [...prev, { id: idVal, emoji, left: leftVal }]);
+      setTimeout(() => {
+        setFloatingBubbles(prev => prev.filter(b => b.id !== idVal));
+      }, 800);
+    }
 
     try {
       const res = await fetch(apiUrl(`/api/reactions/${id}`), {
@@ -276,6 +301,7 @@ const NewsCard = ({
 
   const handleClick = (e: React.MouseEvent) => {
     logCategoryPreference(category, 1);
+    recordRead();
     if (!externalLink && onRead && id) {
       onRead(id);
     }
@@ -299,6 +325,48 @@ const NewsCard = ({
       description: isBookmarked ? "Removed from bookmarks" : "Article saved to bookmarks"
     });
     if (onBookmark && id) onBookmark(id);
+  };
+
+  const handleVerifyClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (hasVotedVerify || !storyHash) return;
+    setVerifiedCount(prev => prev + 1);
+    setHasVotedVerify(true);
+    toast({
+      title: "Verified!",
+      description: "Thanks for verifying this local update.",
+    });
+    try {
+      await fetch(apiUrl(`/api/articles/${storyHash}/verify`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'verify' })
+      });
+    } catch (err) {
+      console.error('Verify failed:', err);
+    }
+  };
+
+  const handleFlagClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (hasVotedVerify || !storyHash) return;
+    setRumorCount(prev => prev + 1);
+    setHasVotedVerify(true);
+    toast({
+      title: "Flagged!",
+      description: "Article flagged as a potential rumor.",
+    });
+    try {
+      await fetch(apiUrl(`/api/articles/${storyHash}/verify`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'flag' })
+      });
+    } catch (err) {
+      console.error('Flag failed:', err);
+    }
   };
 
   const formatDate = (d: string) => {
@@ -426,6 +494,33 @@ const NewsCard = ({
           </div>
         )}
 
+        {storyHash && (
+          <div className="px-4 pb-3 flex gap-2 text-xs">
+            <button
+              disabled={hasVotedVerify}
+              onClick={handleVerifyClick}
+              className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[11px] font-bold ${
+                hasVotedVerify 
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                  : 'bg-muted/30 text-muted-foreground border-border hover:bg-emerald-500/10 hover:text-emerald-400'
+              }`}
+            >
+              ✓ {verifiedCount} Verified
+            </button>
+            <button
+              disabled={hasVotedVerify}
+              onClick={handleFlagClick}
+              className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[11px] font-bold ${
+                hasVotedVerify 
+                  ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                  : 'bg-muted/30 text-muted-foreground border-border hover:bg-red-500/10 hover:text-red-400'
+              }`}
+            >
+              ⚠ {rumorCount} Rumor
+            </button>
+          </div>
+        )}
+
         <div style={{ borderTop: '1px solid #362F3D', margin: '0 16px' }} />
 
         {/* Metadata row */}
@@ -446,7 +541,16 @@ const NewsCard = ({
             {source} · {formatDate(date)}
           </div>
 
-          <div className="flex items-center gap-3" style={{ color: '#8C8494', flexShrink: 0 }}>
+          <div className="flex items-center gap-3 relative" style={{ color: '#8C8494', flexShrink: 0 }}>
+            {floatingBubbles.map(bubble => (
+              <div 
+                key={bubble.id} 
+                className="floating-bubble" 
+                style={{ left: `${bubble.left}%` }}
+              >
+                {bubble.emoji}
+              </div>
+            ))}
             <button
               onClick={(e) => handleReaction(e, 'fire')}
               className={`flex items-center gap-0.5 transition-colors ${reacted === 'fire' ? 'text-amber-500' : 'hover:text-amber-500'}`}

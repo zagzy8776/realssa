@@ -50,7 +50,8 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import AppDownload from "./pages/AppDownload";
 import Reels from "./pages/Reels";
 import ReadingList from "./pages/ReadingList";
-import ReadingHistory from "./pages/ReadingHistory";
+import PublisherHub from "./pages/PublisherHub";
+import LeagueHub from "./pages/LeagueHub";
 
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import OneSignalNative from 'onesignal-cordova-plugin';
@@ -131,7 +132,8 @@ const App = () => {
               <Route path="/download" element={<AppDownload />} />
               <Route path="/reels" element={<Reels />} />
               <Route path="/reading-list" element={<ReadingList />} />
-              <Route path="/reading-history" element={<ReadingHistory />} />
+              <Route path="/publisher/:slug" element={<PublisherHub />} />
+              <Route path="/sports/league/:leagueSlug" element={<LeagueHub />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -139,6 +139,77 @@ async function runMigrations() {
       );
     `);
 
+    // --- Added RealSSA Engagement & Hubs Migrations ---
+    console.log('🔄 Running RealSSA Engagement & Hubs Migrations...');
+    
+    // 1. Alter live_matches for Hype Meter
+    await pool.query(`
+      ALTER TABLE live_matches 
+        ADD COLUMN IF NOT EXISTS home_hype_count INT DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS away_hype_count INT DEFAULT 0;
+    `);
+
+    // 2. Alter rss_articles for Community Verification Counters
+    await pool.query(`
+      ALTER TABLE rss_articles 
+        ADD COLUMN IF NOT EXISTS local_verified_count INT DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS rumor_flag_count INT DEFAULT 0;
+    `);
+
+    // 3. Create publishers table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS publishers (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        slug VARCHAR(100) UNIQUE NOT NULL,
+        logo_url TEXT,
+        bio TEXT,
+        wikipedia_url TEXT,
+        follower_metrics JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+
+    // 4. Create publisher_social_posts table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS publisher_social_posts (
+        id SERIAL PRIMARY KEY,
+        publisher_id INT REFERENCES publishers(id) ON DELETE CASCADE,
+        platform VARCHAR(20) NOT NULL,
+        post_text TEXT NOT NULL,
+        media_url TEXT,
+        post_url TEXT,
+        published_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        fetched_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_publisher_posts_query ON publisher_social_posts (publisher_id, published_at DESC)');
+
+    // 5. Create user_streaks table on usersPool
+    await usersPool.query(`
+      CREATE TABLE IF NOT EXISTS user_streaks (
+        device_id VARCHAR(255) PRIMARY KEY,
+        current_streak INT DEFAULT 1,
+        longest_streak INT DEFAULT 1,
+        last_read_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+
+    // 6. Create comments table on usersPool
+    await usersPool.query(`
+      CREATE TABLE IF NOT EXISTS comments (
+        id SERIAL PRIMARY KEY,
+        article_id VARCHAR(255) NOT NULL,
+        parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
+        author_name VARCHAR(100) NOT NULL,
+        device_id VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        likes INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+    await usersPool.query('CREATE INDEX IF NOT EXISTS idx_comments_article ON comments (article_id, created_at DESC)');
+
     console.log('✅ Migrations complete.');
   } catch (err) {
     console.error('❌ Migration failed:', err.message);

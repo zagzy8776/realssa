@@ -310,6 +310,15 @@ const FEED_CATEGORIES = [
       'https://skift.com/feed/',
       'https://www.traveldailynews.com/feed/'
     ]
+  },
+  {
+    category: 'local',
+    feeds: [
+      'https://techpoint.africa/feed/',
+      'https://www.lindaikejisblog.com/feed',
+      'https://techcabal.com/feed/',
+      'https://disrupt-africa.com/feed/'
+    ]
   }
 ];
 

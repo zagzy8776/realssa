@@ -443,3 +443,29 @@ body {
 .swiper-horizontal {
   touch-action: pan-x !important;
 }
+
+/* GPU-Accelerated Floating Reaction Bubbles */
+@keyframes floatUp {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(-15px) scale(1.1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-80px) scale(0.85);
+    opacity: 0;
+  }
+}
+
+.floating-bubble {
+  position: absolute;
+  bottom: 20px;
+  animation: floatUp 0.8s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  pointer-events: none;
+  font-size: 18px;
+  will-change: transform, opacity;
+  z-index: 50;
+}
