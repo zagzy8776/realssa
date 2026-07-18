@@ -576,6 +576,7 @@ const LazyIframe = ({ embedUrl, thumbnail, title, autoPlay = false }: { embedUrl
           className="absolute inset-0 w-full h-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
+          sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
         ></iframe>
       )}
     </div>
@@ -583,6 +584,9 @@ const LazyIframe = ({ embedUrl, thumbnail, title, autoPlay = false }: { embedUrl
 };
 
 const VideoNews = () => {
+  const [isPlayerActive, setIsPlayerActive] = useState(true);
+  const [autoplayAllowed, setAutoplayAllowed] = useState(true);
+
   const [activeChannel, setActiveChannel] = useState<VideoChannel>(() => {
     try {
       const saved = localStorage.getItem("realssa_last_channel_id");
@@ -596,6 +600,7 @@ const VideoNews = () => {
 
   const changeChannel = (channel: VideoChannel) => {
     setActiveChannel(channel);
+    setIsPlayerActive(true);
     try {
       localStorage.setItem("realssa_last_channel_id", channel.id);
     } catch (e) {}
@@ -650,6 +655,54 @@ const VideoNews = () => {
       }
     };
     fetchStreams();
+  }, []);
+
+  // Stop video on app minimize (Capacitor background state) to comply with Google Play
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let appListener: any;
+    const setupListener = async () => {
+      try {
+        const { App } = await import('@capacitor/app');
+        appListener = await App.addListener('appStateChange', (state) => {
+          if (!state.isActive) {
+            console.log('[VideoNews] App went to background, stopping video playback');
+            setIsPlayerActive(false);
+            setIsMiniPlayer(false);
+          }
+        });
+      } catch (e) {
+        console.warn('Failed to register App lifecycle listener', e);
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      if (appListener && typeof appListener.remove === 'function') {
+        appListener.remove();
+      }
+    };
+  }, []);
+
+  // Detect connection type to prevent high cellular data usage
+  useEffect(() => {
+    const checkNetwork = async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const { Network } = await import('@capacitor/network');
+          const status = await Network.getStatus();
+          if (status.connectionType === 'cellular') {
+            console.log('[VideoNews] Cellular connection detected, disabling autoplay');
+            setAutoplayAllowed(false);
+          }
+        } catch (e) {
+          console.warn('Network plugin not available', e);
+        }
+      }
+    };
+    checkNetwork();
   }, []);
 
   // Fetch dynamic videos from backend
@@ -747,23 +800,33 @@ const VideoNews = () => {
             <div className="lg:col-span-2" ref={mainPlayerRef}>
               <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl">
                 <ErrorBoundary name="VideoNewsMainPlayer">
-                  {activeTab === 'tv' ? (
-                    <LazyIframe 
-                      key={activeChannel.id}
-                      embedUrl={activeChannel.embedUrl}
-                      thumbnail={activeChannel.thumbnail}
-                      title={activeChannel.title}
-                      autoPlay={true}
-                    />
-                  ) : activeStream ? (
-                    activeStream.stream_type === 'hls' ? (
-                      <HlsPlayer src={activeStream.stream_url} autoPlay controls />
+                  {isPlayerActive ? (
+                    activeTab === 'tv' ? (
+                      <LazyIframe 
+                        key={activeChannel.id}
+                        embedUrl={activeChannel.embedUrl}
+                        thumbnail={activeChannel.thumbnail}
+                        title={activeChannel.title}
+                        autoPlay={autoplayAllowed}
+                      />
+                    ) : activeStream ? (
+                      activeStream.stream_type === 'hls' ? (
+                        <HlsPlayer src={activeStream.stream_url} autoPlay={autoplayAllowed} controls />
+                      ) : (
+                        <SandboxedIframe src={activeStream.stream_url} />
+                      )
                     ) : (
-                      <SandboxedIframe src={activeStream.stream_url} />
+                      <div className="absolute inset-0 flex items-center justify-center text-zinc-500">
+                        No live streams currently available.
+                      </div>
                     )
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-zinc-500">
-                      No live streams currently available.
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400 bg-zinc-900/90 gap-3">
+                      <Tv className="h-10 w-10 text-muted-foreground opacity-60" />
+                      <p className="text-sm font-medium">Playback Paused</p>
+                      <Button size="sm" onClick={() => setIsPlayerActive(true)}>
+                        Resume Video
+                      </Button>
                     </div>
                   )}
                 </ErrorBoundary>
@@ -784,6 +847,9 @@ const VideoNews = () => {
                   )}
                   <span className="flex items-center gap-1"><Radio className="h-4 w-4 text-red-500"/> LIVE</span>
                 </div>
+                <p className="text-[10px] text-zinc-500 mt-4 leading-relaxed border-t border-zinc-800/85 pt-3">
+                  Disclaimer: All live broadcasts and video streams shown are aggregated third-party feeds from public domains (e.g., YouTube, Rumble). RealSSA News does not host, upload, or transmit any copyrighted video content directly.
+                </p>
               </div>
             </div>
             
@@ -833,7 +899,7 @@ const VideoNews = () => {
                 )) : liveStreams.length > 0 ? liveStreams.map(stream => (
                   <div 
                     key={stream.id}
-                    onClick={() => setActiveStream(stream)}
+                    onClick={() => { setActiveStream(stream); setIsPlayerActive(true); }}
                     className={`flex gap-3 p-3 rounded-lg cursor-pointer transition-all duration-300 ${activeStream?.id === stream.id ? 'bg-red-500/10 border border-red-500/50' : 'hover:bg-zinc-800 border border-transparent bg-zinc-900/80'}`}
                   >
                     <div className="flex-1 min-w-0">
@@ -950,7 +1016,7 @@ const VideoNews = () => {
 
       {/* Sticky Mini Player */}
       {isMiniPlayer && (
-        <div className="fixed bottom-20 md:bottom-6 right-4 md:right-8 w-64 md:w-80 aspect-video z-50 rounded-xl overflow-hidden shadow-2xl border border-zinc-800 bg-black animate-fade-in group">
+        <div className="fixed bottom-24 md:bottom-6 right-4 md:right-8 w-64 md:w-80 aspect-video z-50 rounded-xl overflow-hidden shadow-2xl border border-zinc-800 bg-black animate-fade-in group">
           <Button 
             variant="ghost" 
             size="icon" 
@@ -967,6 +1033,7 @@ const VideoNews = () => {
             className="w-full h-full pointer-events-none"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
           ></iframe>
         </div>
       )}
