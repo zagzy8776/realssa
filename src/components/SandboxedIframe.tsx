@@ -12,8 +12,8 @@ export function SandboxedIframe({ src, className = "" }: SandboxedIframeProps) {
         src={src}
         className="absolute inset-0 w-full h-full border-0"
         allowFullScreen
-        // This is the magic that blocks popups and redirects
-        sandbox="allow-scripts allow-same-origin allow-forms"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
         title="Live Stream"
       />
     </div>

@@ -51,6 +51,37 @@ interface Article {
 }
 
 const VIDEO_CHANNELS: VideoChannel[] = [
+  // 🏆 FIFA World Cup 2026 — CazéTV (Brazil, often no geo-block)
+  {
+    id: 'cazetv-wc-fra-eng-1',
+    title: '🔴 LIVE | França x Inglaterra | Copa do Mundo 2026 | CazéTV',
+    embedUrl: 'https://www.youtube.com/embed/E1zxKEZbQEM?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/E1zxKEZbQEM/mqdefault.jpg',
+    category: 'worldcup',
+    country: 'Brazil',
+    source: 'CazéTV',
+    type: 'youtube'
+  },
+  {
+    id: 'cazetv-wc-fra-eng-2',
+    title: '🔴 França x Inglaterra | Copa 2026 | Mbappé & Olise | CazéTV',
+    embedUrl: 'https://www.youtube.com/embed/yuNZLtU0wrc?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/yuNZLtU0wrc/mqdefault.jpg',
+    category: 'worldcup',
+    country: 'Brazil',
+    source: 'CazéTV',
+    type: 'youtube'
+  },
+  {
+    id: 'cazetv-wc-fra-eng-3',
+    title: '🔴 França x Inglaterra | Copa do Mundo 2026 | CazéTV Ao Vivo',
+    embedUrl: 'https://www.youtube.com/embed/CEB37llsDX8?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/CEB37llsDX8/mqdefault.jpg',
+    category: 'worldcup',
+    country: 'Brazil',
+    source: 'CazéTV',
+    type: 'youtube'
+  },
   // 🔴 LIVE MATCH — Featured at top
   {
     id: 'fifa-wc-arg-egy',
@@ -615,11 +646,142 @@ const VideoNews = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'tv' | 'matches'>('matches');
+  interface OfficialStream {
+    id: string;
+    name: string;
+    url: string;
+    flag: string;
+    language: string;
+    coverage: string;
+    vpnRequired: string;
+  }
+
+  const OFFICIAL_WORLD_CUP_STREAMS: OfficialStream[] = [
+    {
+      id: "bbc",
+      name: "BBC iPlayer",
+      url: "https://www.bbc.co.uk/iplayer",
+      flag: "🇬🇧",
+      language: "English",
+      coverage: "All 104 Matches Live",
+      vpnRequired: "UK VPN"
+    },
+    {
+      id: "itvx",
+      name: "ITVX",
+      url: "https://www.itv.com/watch",
+      flag: "🇬🇧",
+      language: "English",
+      coverage: "All 104 Matches Live",
+      vpnRequired: "UK VPN"
+    },
+    {
+      id: "sbs",
+      name: "SBS On Demand",
+      url: "https://www.sbs.com.au/ondemand/sports-series/fifa-world-cup-2026",
+      flag: "🇦🇺",
+      language: "English",
+      coverage: "All 104 Matches Live",
+      vpnRequired: "Australia VPN"
+    },
+    {
+      id: "caze",
+      name: "CazéTV (YouTube)",
+      url: "https://www.youtube.com/@CazeTV/live",
+      flag: "🇧🇷",
+      language: "Portuguese",
+      coverage: "All 104 Matches Live",
+      vpnRequired: "Usually None / Global"
+    },
+    {
+      id: "nos",
+      name: "NOS",
+      url: "https://nos.nl",
+      flag: "🇳🇱",
+      language: "Dutch",
+      coverage: "All Matches Live",
+      vpnRequired: "Netherlands VPN"
+    },
+    {
+      id: "tvp",
+      name: "TVP Sport",
+      url: "https://sport.tvp.pl",
+      flag: "🇵🇱",
+      language: "Polish",
+      coverage: "All Matches Live",
+      vpnRequired: "Poland VPN"
+    },
+    {
+      id: "trt",
+      name: "TRT Spor",
+      url: "https://www.trt.net.tr",
+      flag: "🇹🇷",
+      language: "Turkish",
+      coverage: "All Matches Live",
+      vpnRequired: "Turkey VPN"
+    },
+    {
+      id: "zee5",
+      name: "ZEE5",
+      url: "https://www.zee5.com",
+      flag: "🇮🇳",
+      language: "Hindi/English",
+      coverage: "All Matches Live",
+      vpnRequired: "India VPN"
+    },
+    {
+      id: "tubi",
+      name: "Tubi",
+      url: "https://tubitv.com",
+      flag: "🇺🇸",
+      language: "English",
+      coverage: "Select Openers / Replays (Free)",
+      vpnRequired: "USA VPN"
+    }
+  ];
+
+  const [activeTab, setActiveTab] = useState<'tv' | 'matches' | 'official'>('matches');
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [activeStream, setActiveStream] = useState<LiveStream | null>(null);
 
-  const STATIC_LIVE_MATCHES: LiveStream[] = [];
+  const STATIC_LIVE_MATCHES: LiveStream[] = [
+    {
+      id: 'cazetv-wc-fra-eng-1',
+      match_id: 'cazetv-wc-fra-eng-1',
+      match_title: '🔴 França x Inglaterra | Copa 2026 | CazéTV (Stream 1)',
+      home_team: 'França',
+      away_team: 'Inglaterra',
+      league: 'FIFA World Cup 2026',
+      stream_url: 'https://www.youtube.com/embed/E1zxKEZbQEM?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+      stream_type: 'iframe',
+      quality: '1080p',
+      language: 'Portuguese'
+    },
+    {
+      id: 'cazetv-wc-fra-eng-2',
+      match_id: 'cazetv-wc-fra-eng-2',
+      match_title: '🔴 França x Inglaterra | Mbappé & Olise | CazéTV (Stream 2)',
+      home_team: 'França',
+      away_team: 'Inglaterra',
+      league: 'FIFA World Cup 2026',
+      stream_url: 'https://www.youtube.com/embed/yuNZLtU0wrc?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+      stream_type: 'iframe',
+      quality: '1080p',
+      language: 'Portuguese'
+    },
+    {
+      id: 'cazetv-wc-fra-eng-3',
+      match_id: 'cazetv-wc-fra-eng-3',
+      match_title: '🔴 França x Inglaterra | Copa do Mundo 2026 | CazéTV (Stream 3)',
+      home_team: 'França',
+      away_team: 'Inglaterra',
+      league: 'FIFA World Cup 2026',
+      stream_url: 'https://www.youtube.com/embed/CEB37llsDX8?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+      stream_type: 'iframe',
+      quality: '1080p',
+      language: 'Portuguese'
+    }
+  ];
 
   // Fetch live streams
   useEffect(() => {
@@ -745,7 +907,7 @@ const VideoNews = () => {
   }, [activeChannel]);
 
   const [channelCategory, setChannelCategory] = useState<string>('all');
-  const CHANNEL_CATS = ['all', 'breaking', 'nigeria', 'africa', 'usa', 'uk', 'sports', 'business', 'ghana', 'japan', 'australia', 'religious'];
+  const CHANNEL_CATS = ['all', 'worldcup', 'breaking', 'nigeria', 'africa', 'usa', 'uk', 'sports', 'business', 'ghana', 'japan', 'australia', 'religious'];
   const featuredChannels = channelCategory === 'all'
     ? VIDEO_CHANNELS
     : VIDEO_CHANNELS.filter(c => c.category === channelCategory);
@@ -762,22 +924,28 @@ const VideoNews = () => {
             <div className="flex items-center gap-2">
               <Radio className="h-6 w-6 text-red-500 animate-pulse" />
               <h1 className="text-2xl md:text-3xl font-bold">
-                {activeTab === 'tv' ? 'Featured Live TV' : 'Live Matches'}
+                {activeTab === 'tv' ? 'Featured Live TV' : activeTab === 'matches' ? 'Live Matches' : 'Official Free Streams'}
               </h1>
             </div>
             
             <div className="flex p-1 bg-zinc-900 rounded-lg">
               <button
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'tv' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${activeTab === 'tv' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
                 onClick={() => setActiveTab('tv')}
               >
                 Live TV
               </button>
               <button
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'matches' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${activeTab === 'matches' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
                 onClick={() => setActiveTab('matches')}
               >
-                Live Matches {liveStreams.length > 0 && <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{liveStreams.length}</span>}
+                Live Matches {liveStreams.length > 0 && <span className="ml-1.5 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{liveStreams.length}</span>}
+              </button>
+              <button
+                className={`px-3 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${activeTab === 'official' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                onClick={() => setActiveTab('official')}
+              >
+                🏆 Official Streams
               </button>
             </div>
           </div>
@@ -820,12 +988,22 @@ const VideoNews = () => {
               </div>
               <div className="mt-4">
                 <h2 className="text-2xl font-bold">
-                  {activeTab === 'tv' ? activeChannel.title : activeStream?.match_title || "No Live Matches"}
+                  {activeTab === 'tv' 
+                    ? activeChannel.title 
+                    : activeTab === 'matches' 
+                      ? activeStream?.match_title || "No Live Matches"
+                      : "Official FIFA World Cup 2026 Free Stream Links"
+                  }
                 </h2>
                 <div className="flex items-center gap-4 mt-2 text-zinc-400">
                   <span className="flex items-center gap-1">
                     <Tv className="h-4 w-4"/> 
-                    {activeTab === 'tv' ? activeChannel.source : (activeStream?.league || "Sports")}
+                    {activeTab === 'tv' 
+                      ? activeChannel.source 
+                      : activeTab === 'matches'
+                        ? (activeStream?.league || "Sports")
+                        : "Global Free Broadcasts"
+                    }
                   </span>
                   {activeTab === 'matches' && activeStream && (
                     <span className="flex items-center gap-1 capitalize px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-300">
@@ -837,13 +1015,79 @@ const VideoNews = () => {
                 <p className="text-[10px] text-zinc-500 mt-4 leading-relaxed border-t border-zinc-800/85 pt-3">
                   Disclaimer: All live broadcasts and video streams shown are aggregated third-party feeds from public domains (e.g., YouTube, Rumble). RealSSA News does not host, upload, or transmit any copyrighted video content directly.
                 </p>
+
+                {/* Recommended Free Streams Fallback Panel */}
+                {activeTab === 'matches' && (
+                  <div className="mt-6 p-4 rounded-xl border border-zinc-850 bg-zinc-900/40 backdrop-blur-md">
+                    <h3 className="text-sm font-bold text-zinc-200 mb-2 flex items-center gap-1.5">
+                      🏆 Premium Legal Stream Fallbacks (No Buffering)
+                    </h3>
+                    <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
+                      If direct servers are slow, we highly recommend switching to these official free broadcasters. Connect your VPN to the target country to watch instantly:
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <a 
+                        href="https://www.bbc.co.uk/iplayer" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-950 border border-white/5 hover:border-white/10 transition-colors animate-pulse hover:animate-none"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>🇬🇧</span>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-zinc-200">BBC iPlayer</p>
+                            <p className="text-[9px] text-zinc-500">UK VPN</p>
+                          </div>
+                        </div>
+                        <span className="text-zinc-500 text-[10px]">Play ↗</span>
+                      </a>
+                      
+                      <a 
+                        href="https://www.sbs.com.au/ondemand/sports-series/fifa-world-cup-2026" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-950 border border-white/5 hover:border-white/10 transition-colors animate-pulse hover:animate-none"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>🇦🇺</span>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-zinc-200">SBS On Demand</p>
+                            <p className="text-[9px] text-zinc-500">Australia VPN</p>
+                          </div>
+                        </div>
+                        <span className="text-zinc-500 text-[10px]">Play ↗</span>
+                      </a>
+
+                      <a 
+                        href="https://www.youtube.com/@CazeTV/live" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-950 border border-white/5 hover:border-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>🇧🇷</span>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-zinc-200">CazéTV Live</p>
+                            <p className="text-[9px] text-zinc-500">YouTube (Global)</p>
+                          </div>
+                        </div>
+                        <span className="text-zinc-500 text-[10px]">Play ↗</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
             {/* Channel List */}
             <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 h-fit max-h-[600px] overflow-y-auto custom-scrollbar">
               <h3 className="font-semibold text-lg mb-3 text-zinc-200">
-                {activeTab === 'tv' ? `All Channels (${featuredChannels.length})` : 'Live Match Streams'}
+                {activeTab === 'tv' 
+                  ? `All Channels (${featuredChannels.length})` 
+                  : activeTab === 'matches'
+                    ? 'Live Match Streams'
+                    : 'Official Broadcast Hubs'
+                }
               </h3>
               {/* Category filter tabs */}
               {activeTab === 'tv' && (
@@ -864,45 +1108,82 @@ const VideoNews = () => {
                 </div>
               )}
               <div className="space-y-3">
-                {activeTab === 'tv' ? featuredChannels.map(channel => (
-                  <div 
-                    key={channel.id}
-                    onClick={() => changeChannel(channel)}
-                    className={`flex gap-3 p-2 rounded-lg cursor-pointer transition-all duration-300 ${activeChannel.id === channel.id ? 'bg-primary/20 border border-primary/50' : 'hover:bg-zinc-800 border border-transparent'}`}
-                  >
-                    <div className="relative w-24 aspect-video rounded overflow-hidden shrink-0">
-                      <img src={channel.thumbnail} alt={channel.title} className="object-cover w-full h-full" />
-                      {activeChannel.id === channel.id && (
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 py-1">
-                      <h4 className="text-sm font-medium line-clamp-2 text-zinc-200">{channel.title}</h4>
-                      <p className="text-xs text-zinc-500 mt-1">{channel.source}</p>
-                    </div>
-                  </div>
-                )) : liveStreams.length > 0 ? liveStreams.map(stream => (
-                  <div 
-                    key={stream.id}
-                    onClick={() => { setActiveStream(stream); setIsPlayerActive(true); }}
-                    className={`flex gap-3 p-3 rounded-lg cursor-pointer transition-all duration-300 ${activeStream?.id === stream.id ? 'bg-red-500/10 border border-red-500/50' : 'hover:bg-zinc-800 border border-transparent bg-zinc-900/80'}`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-bold line-clamp-2 text-zinc-100">{stream.match_title}</h4>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-[10px] uppercase font-bold bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded">
-                          {stream.stream_type === 'hls' ? 'PREMIUM' : 'WEB'}
-                        </span>
-                        <span className="text-xs text-zinc-400">{stream.league}</span>
+                {activeTab === 'tv' ? (
+                  featuredChannels.map(channel => (
+                    <div 
+                      key={channel.id}
+                      onClick={() => changeChannel(channel)}
+                      className={`flex gap-3 p-2 rounded-lg cursor-pointer transition-all duration-300 ${activeChannel.id === channel.id ? 'bg-primary/20 border border-primary/50' : 'hover:bg-zinc-800 border border-transparent'}`}
+                    >
+                      <div className="relative w-24 aspect-video rounded overflow-hidden shrink-0">
+                        <img src={channel.thumbnail} alt={channel.title} className="object-cover w-full h-full" />
+                        {activeChannel.id === channel.id && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 py-1">
+                        <h4 className="text-sm font-medium line-clamp-2 text-zinc-200">{channel.title}</h4>
+                        <p className="text-xs text-zinc-500 mt-1">{channel.source}</p>
                       </div>
                     </div>
-                  </div>
-                )) : (
-                  <div className="text-center py-8 text-zinc-500 text-sm">
-                    No live matches found right now.
-                  </div>
+                  ))
+                ) : activeTab === 'matches' ? (
+                  liveStreams.length > 0 ? (
+                    liveStreams.map(stream => (
+                      <div 
+                        key={stream.id}
+                        onClick={() => { setActiveStream(stream); setIsPlayerActive(true); }}
+                        className={`flex gap-3 p-3 rounded-lg cursor-pointer transition-all duration-300 ${activeStream?.id === stream.id ? 'bg-red-500/10 border border-red-500/50' : 'hover:bg-zinc-800 border border-transparent bg-zinc-900/80'}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-bold line-clamp-2 text-zinc-100">{stream.match_title}</h4>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[10px] uppercase font-bold bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded">
+                              {stream.stream_type === 'hls' ? 'PREMIUM' : 'WEB'}
+                            </span>
+                            <span className="text-xs text-zinc-400">{stream.league}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-zinc-500 text-sm">
+                      No live matches found right now.
+                    </div>
+                  )
+                ) : (
+                  OFFICIAL_WORLD_CUP_STREAMS.map(stream => (
+                    <a 
+                      key={stream.id}
+                      href={stream.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block p-3 rounded-lg border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-850 hover:border-zinc-700 transition-all duration-300"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-base shrink-0">{stream.flag}</span>
+                            <h4 className="text-sm font-bold text-zinc-100 truncate">{stream.name}</h4>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 mt-1">{stream.coverage}</p>
+                          <span className="inline-block text-[9px] text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded mt-2">
+                            🗣️ {stream.language}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end shrink-0 gap-1.5">
+                          <span className="text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 text-right">
+                            {stream.vpnRequired}
+                          </span>
+                          <span className="text-[9px] text-zinc-500 flex items-center gap-0.5">
+                            Open Link ↗
+                          </span>
+                        </div>
+                      </div>
+                    </a>
+                  ))
                 )}
               </div>
             </div>
