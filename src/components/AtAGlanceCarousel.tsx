@@ -100,8 +100,17 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
       try {
         const response = await axios.get(apiUrl('/api/sports/live'));
         if (response.data && response.data.length > 0) {
-          // Select first live match, or first scheduled match
-          const activeMatch = response.data.find((m: MatchData) => m.status === 'live') || response.data[0];
+          // Prioritize: 1) Live World Cup match, 2) Any Live match, 3) Upcoming World Cup match, 4) Fallback first match
+          const liveWorldCup = response.data.find((m: MatchData) => 
+            m.status === 'live' && 
+            (m.competition || '').toLowerCase().includes('world cup')
+          );
+          const anyLive = response.data.find((m: MatchData) => m.status === 'live');
+          const upcomingWorldCup = response.data.find((m: MatchData) => 
+            (m.competition || '').toLowerCase().includes('world cup')
+          );
+          
+          const activeMatch = liveWorldCup || anyLive || upcomingWorldCup || response.data[0];
           setMatch(activeMatch);
           setHypeVotes({
             home: activeMatch.home_hype_count || 0,

@@ -2,8 +2,8 @@ const fetch = require('node-fetch');
 
 const API_BASE = 'https://api.football-data.org/v4';
 
-// Poll matches every 8 minutes
-const POLL_INTERVAL = 8 * 60 * 1000;
+// Poll matches every 1 minute
+const POLL_INTERVAL = 1 * 60 * 1000;
 
 // All competitions available on the football-data.org free tier
 // ID => { slug, code, name, flag }
