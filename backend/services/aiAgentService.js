@@ -8,7 +8,7 @@ const getGeminiKey = () => {
   const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
   return keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
 };
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
 
 // ── Rate Limiter ──────────────────────────────────────────────────────────
 // Gemini free tier: 15 RPM, 1,500 RPD

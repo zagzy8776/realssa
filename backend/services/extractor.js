@@ -140,7 +140,7 @@ async function aiFallbackExtractor(rawHtml, url) {
   const GEMINI_API_KEY = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
   if (!GEMINI_API_KEY) return null;
 
-  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
+  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
   
   // Strip out heavy junk to save tokens
   const cleanHtml = rawHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
