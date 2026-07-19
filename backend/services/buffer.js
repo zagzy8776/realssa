@@ -175,7 +175,7 @@ async function _postToProfile(profileId, text, imageUrl, now) {
       text: text,
       schedulingType: 'automatic',
       mode: mode,
-      saveToDraft: true
+      saveToDraft: false
     };
 
     // Attach image asset if provided

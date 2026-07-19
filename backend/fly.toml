@@ -10,6 +10,7 @@ primary_region = "lhr"
 
 [processes]
   web = "node --max-old-space-size=450 server.js"
+  worker = "node --max-old-space-size=450 worker.js"
 
 [[vm]]
   size = "shared-cpu-1x"

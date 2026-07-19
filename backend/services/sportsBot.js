@@ -89,21 +89,14 @@ async function pollMatches(pool, notificationService) {
       matches = [...data.matches];
     }
 
-    // World Cup dedicated call check
-    const now = new Date();
-    const isWorldCupWindow = now >= new Date('2026-06-11') && now <= new Date('2026-07-20');
-    if (isWorldCupWindow) {
-      console.log('[sportsBot] Inside World Cup window. Scheduling dedicated WC match fetch with a 15s stagger...');
-      await new Promise(resolve => setTimeout(resolve, 15000));
-      const wcData = await fetchWithToken(`/competitions/WC/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`);
-      if (wcData && wcData.matches) {
-        console.log(`[sportsBot] Fetched ${wcData.matches.length} dedicated World Cup matches.`);
-        const seenIds = new Set(matches.map(m => m.id));
-        for (const match of wcData.matches) {
-          if (!seenIds.has(match.id)) {
-            matches.push(match);
-          }
-        }
+    // Always fetch World Cup matches directly — they are NOT in the general /matches endpoint on free tier
+    await new Promise(resolve => setTimeout(resolve, 6000));
+    const wcData = await fetchWithToken(`/competitions/WC/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+    if (wcData && wcData.matches && wcData.matches.length > 0) {
+      console.log(`[sportsBot] Fetched ${wcData.matches.length} World Cup matches.`);
+      const seenIds = new Set(matches.map(m => m.id));
+      for (const match of wcData.matches) {
+        if (!seenIds.has(match.id)) matches.push(match);
       }
     }
 

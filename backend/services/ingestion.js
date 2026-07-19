@@ -657,6 +657,15 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     // Fetch all slugs for database mapping
     const allSlugs = allCategories.map(c => c.category);
     try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS feed_schedule (
+          category TEXT PRIMARY KEY,
+          tier SMALLINT DEFAULT 2,
+          last_ingested_at TIMESTAMPTZ,
+          failure_count INT DEFAULT 0,
+          quarantined_until TIMESTAMPTZ
+        )
+      `);
       await pool.query(
         `INSERT INTO feed_schedule (category, tier)
          SELECT u.cat,
@@ -678,7 +687,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
       );
       activeCategoriesSet = new Set(activeRes.rows.map(r => r.category));
     } catch (e) {
-      console.warn('Failed to query active categories:', e.message);
+      console.warn('Failed to query active categories, using all:', e.message);
     }
 
     const mainCategories = allCategories.filter(c => mainSlugs.has(c.category) && activeCategoriesSet.has(c.category));
@@ -701,7 +710,12 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
       coldestWorld = worldCategories.sort(() => 0.5 - Math.random()).slice(0, 3);
     }
 
+    // Always include all main categories — never let rotation produce zero feeds
     categoriesToFetch = [...mainCategories, ...coldestWorld];
+    if (categoriesToFetch.length === 0) {
+      console.warn('Rotation produced 0 categories — falling back to all main categories');
+      categoriesToFetch = allCategories.filter(c => mainSlugs.has(c.category));
+    }
     console.log(
       `📅 Rotation: all ${mainCategories.length} active main + world [${coldestWorld.map(c => c.category).join(', ')}]`
     );

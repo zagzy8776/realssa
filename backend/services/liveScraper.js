@@ -13,7 +13,6 @@ const axios   = require('axios');
 
 const DATABASE_URL      = process.env.DATABASE_URL;
 const ONESIGNAL_APP_ID  = process.env.ONESIGNAL_APP_ID || '055b6596-a96c-48e2-8cda-ff4bb6d61009';
-const ONESIGNAL_API_KEY = process.env.ONESIGNAL_API_KEY;
 const FD_API_KEY        = process.env.FOOTBALL_DATA_API_KEY;
 const SITE_URL          = 'https://realssanews.com.ng';
 
@@ -270,6 +269,7 @@ function parseSoccerwayStandings(html) {
 // ── OneSignal Push ────────────────────────────────────────────────────────
 
 async function sendPush(title, body, collapseId) {
+  const ONESIGNAL_API_KEY = process.env.ONESIGNAL_API_KEY;
   if (!ONESIGNAL_API_KEY) return;
   try {
     await axios.post('https://onesignal.com/api/v1/notifications', {
