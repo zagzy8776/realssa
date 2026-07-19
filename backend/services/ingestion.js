@@ -1087,24 +1087,44 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
             }
 
             // Score this article for notification worthiness
-            const score = notificationScore(title, category, itemResult.url);
-            if (score > 0 && (!bestNotifCandidate || score > bestNotifCandidate.score)) {
-              bestNotifCandidate = {
-                score,
-                article: {
-                  id: `rss-${articleId}`,
-                  rawId: articleId,
-                  externalLink,
-                  title,
-                  category,
-                  summary: originalExcerpt,
-                  image: image || null,
-                  urgency: score >= 2 ? 'hard' : 'soft',
-                  score,
-                  source_name: sourceName
+            const score = notificationScore(title, category, externalLink);
+            if (score > 0) {
+              const articleHash = crypto.createHash('md5').update(title + (sourceName || '')).digest('hex');
+              try {
+                // 1. Deduplication check
+                const checkNotified = await pool.query('SELECT 1 FROM notified_articles WHERE story_hash = $1', [articleHash]);
+                if (checkNotified.rows.length === 0) {
+                  // 2. Rate limiter check: max 8 notifications per hour
+                  const limitCheck = await pool.query("SELECT COUNT(*) FROM notified_articles WHERE notified_at > NOW() - INTERVAL '1 hour'");
+                  const currentHourCount = parseInt(limitCheck.rows[0].count) || 0;
+
+                  if (currentHourCount < 8) {
+                    const notifArticle = {
+                      id: `rss-${articleId}`,
+                      rawId: articleId,
+                      externalLink,
+                      title,
+                      category,
+                      summary: originalExcerpt,
+                      image: imageUrl || null,
+                      score,
+                      source_name: sourceName
+                    };
+                    console.log(`🔔 Eagerly Notifying [score=${score}]: "${title.slice(0, 60)}"`);
+                    await notificationService.sendBreakingNews(notifArticle);
+                    // 3. Mark as notified
+                    await pool.query('INSERT INTO notified_articles (story_hash, notified_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING', [articleHash]);
+                    // Clean up rows older than 48 hours to preserve space
+                    await pool.query("DELETE FROM notified_articles WHERE notified_at < NOW() - INTERVAL '48 hours'");
+                  } else {
+                    console.log(`📭 Notification rate limiter: hourly limit reached (${currentHourCount}/8). Skipping notification.`);
+                  }
                 }
-              };
+              } catch (notifErr) {
+                console.error('Error handling eager push notification:', notifErr.message);
+              }
             }
+
           }
           summaryCount++;
 
@@ -1168,36 +1188,11 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
   if (newArticleIds.length > 0) {
     const fullUrls = newArticleIds.map(id => `${SITE_URL}/article/${id}`);
 
-    // Trigger push notification for the highest-scoring new article
-    if (bestNotifCandidate) {
-      const articleHash = crypto.createHash('md5').update(bestNotifCandidate.article.title + bestNotifCandidate.article.source_name).digest('hex');
-      try {
-        // 1. Deduplication check: check if already notified
-        const checkNotified = await pool.query('SELECT 1 FROM notified_articles WHERE story_hash = $1', [articleHash]);
-        if (checkNotified.rows.length > 0) {
-          console.log(`📭 Notification deduplication: already sent alert for "${bestNotifCandidate.article.title.slice(0, 45)}"`);
-        } else {
-          // 2. Rate limiter check: max 3 notifications per hour
-          const limitCheck = await pool.query("SELECT COUNT(*) FROM notified_articles WHERE notified_at > NOW() - INTERVAL '1 hour'");
-          const currentHourCount = parseInt(limitCheck.rows[0].count) || 0;
+    // Trigger ping for search engines (IndexNow, etc.)
+    const fullUrls = newArticleIds.map(id => `${SITE_URL}/article/${id}`);
+    
+    // Notifications are now handled eagerly inside the loop to avoid Vercel timeouts!
 
-          if (currentHourCount >= 8) {
-            console.log(`📭 Notification rate limiter: hourly limit reached (${currentHourCount}/8). Skipping notification.`);
-          } else {
-            console.log(`🔔 Notifying [score=${bestNotifCandidate.score}]: "${bestNotifCandidate.article.title.slice(0, 60)}"`);
-            await notificationService.sendBreakingNews(bestNotifCandidate.article);
-            // 3. Mark as notified
-            await pool.query('INSERT INTO notified_articles (story_hash, notified_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING', [articleHash]);
-            // Clean up rows older than 48 hours to preserve space
-            await pool.query("DELETE FROM notified_articles WHERE notified_at < NOW() - INTERVAL '48 hours'");
-          }
-        }
-      } catch (err) {
-        console.error('Error handling push notification dispatch filters:', err.message);
-      }
-    } else {
-      console.log('📭 No notification-worthy articles this cycle');
-    }
 
     // Ping search engines (Non-critical, fire-and-forget to prevent Vercel 10s timeout)
     pingIndexNow(fullUrls).catch(e => console.error('IndexNow error', e));
