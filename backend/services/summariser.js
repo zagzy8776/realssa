@@ -33,7 +33,8 @@ async function callGemini(prompt, { maxOutputTokens, temperature, timeout, respo
     });
 
     if (!response.ok) {
-      console.warn(`Gemini API error: ${response.status} ${response.statusText}`);
+      const errText = await response.text();
+      console.warn(`Gemini API error: ${response.status} ${response.statusText} - Details: ${errText}`);
       return null;
     }
 
@@ -68,7 +69,8 @@ async function generateEmbedding(text) {
     });
 
     if (!response.ok) {
-      console.warn(`Gemini Embedding API error: ${response.status}`);
+      const errText = await response.text();
+      console.warn(`Gemini Embedding API error: ${response.status} - Details: ${errText}`);
       return null;
     }
 

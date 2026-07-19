@@ -91,7 +91,7 @@ async function pollMatches(pool, notificationService) {
 
     // World Cup dedicated call check
     const now = new Date();
-    const isWorldCupWindow = now >= new Date('2026-06-11') && now <= new Date('2026-07-25');
+    const isWorldCupWindow = now >= new Date('2026-06-11') && now <= new Date('2026-07-20');
     if (isWorldCupWindow) {
       console.log('[sportsBot] Inside World Cup window. Scheduling dedicated WC match fetch with a 15s stagger...');
       await new Promise(resolve => setTimeout(resolve, 15000));
@@ -128,11 +128,11 @@ async function pollMatches(pool, notificationService) {
       const awayTeam = match.awayTeam.name;
       const awayCrest = match.awayTeam.crest;
       const status = normalizeStatus(match.status);
-      // Use in-play score first (live), then fullTime (finished), then halfTime, then 0
-      const homeScore = match.score.fullTime.home 
-        ?? (status === 'live' ? (match.score.regularTime?.home ?? match.score.halfTime?.home ?? 0) : 0);
-      const awayScore = match.score.fullTime.away 
-        ?? (status === 'live' ? (match.score.regularTime?.away ?? match.score.halfTime?.away ?? 0) : 0);
+      // Score resolution: extraTime > regularTime > fullTime > halfTime > 0
+      // football-data.org sets fullTime only after FT whistle; during live play use regularTime/halfTime
+      const s = match.score;
+      const homeScore = s.extraTime?.home ?? s.regularTime?.home ?? s.fullTime?.home ?? s.halfTime?.home ?? 0;
+      const awayScore = s.extraTime?.away ?? s.regularTime?.away ?? s.fullTime?.away ?? s.halfTime?.away ?? 0;
       const kickoffAt = match.utcDate;
 
       const minute = status === 'live' ? 'Live' : (status === 'finished' ? 'FT' : '');
@@ -198,37 +198,64 @@ async function pollMatches(pool, notificationService) {
         console.error('[sportsBot] live_matches mirror failed:', lmErr.message);
       }
 
-      // Send Notifications if kickoff occurred
-      if (isKickoff && notificationService) {
-        console.log(`[sportsBot] Kickoff detected: ${homeTeam} vs ${awayTeam}`);
-        const SITE_URL = 'https://realssanews.com.ng';
-        await notificationService.sendToTopic('sports', {
-          title: `KICKOFF! — ${displayCompName}`,
-          body: `⚽ Match Started: ${homeTeam} vs ${awayTeam} is now live!`,
-          url: `${SITE_URL}/sports`,
-          category: 'sports'
-        });
+      const SITE_URL = 'https://realssanews.com.ng';
+      const sportsUrl = `${SITE_URL}/sports`;
+
+      // Pre-match reminder: fire ~60 mins before kickoff (DB-backed dedup so restarts don't double-fire)
+      if (notificationService && status === 'scheduled' && kickoffAt) {
+        const minsToKickoff = (new Date(kickoffAt) - new Date()) / 60000;
+        if (minsToKickoff > 0 && minsToKickoff <= 65) {
+          const reminderKey = `reminder_${matchId}`;
+          const alreadySent = await pool.query(
+            `SELECT 1 FROM notified_articles WHERE story_hash = $1`, [reminderKey]
+          );
+          if (alreadySent.rows.length === 0) {
+            await pool.query(
+              `INSERT INTO notified_articles (story_hash, notified_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING`,
+              [reminderKey]
+            );
+            const kickoffLocal = new Date(kickoffAt).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' });
+            console.log(`[sportsBot] Pre-match reminder: ${homeTeam} vs ${awayTeam} in ~${Math.round(minsToKickoff)} mins`);
+            await notificationService.sendToTopic('sports', {
+              title: `${compFlag} Kicks off at ${kickoffLocal} — ${compName}`,
+              body: `${homeTeam} vs ${awayTeam} — Don't miss it!`,
+              url: sportsUrl,
+              category: 'sports'
+            });
+          }
+        }
       }
 
-      // Send goal notification to ALL subscribers
-      if (goalOccurred && notificationService) {
-        const goalMsg = `${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}`;
-        console.log(`[sportsBot] Goal detected: ${goalMsg}`);
+      // Kickoff notification
+      if (isKickoff && notificationService) {
+        console.log(`[sportsBot] Kickoff detected: ${homeTeam} vs ${awayTeam}`);
         await notificationService.sendToTopic('sports', {
-          title: `⚽ GOAL! — ${displayCompName}`,
-          body: goalMsg,
-          url: 'https://realssanews.com.ng/sports',
+          title: `🟢 KICKOFF! ${homeTeam} vs ${awayTeam}`,
+          body: `${displayCompName} is now live — follow the action!`,
+          url: sportsUrl,
           category: 'sports',
           priority: 10
         });
       }
 
-      // Also send FT notification to all subscribers
+      // Goal notification
+      if (goalOccurred && notificationService) {
+        console.log(`[sportsBot] Goal detected: ${homeTeam} ${homeScore}-${awayScore} ${awayTeam}`);
+        await notificationService.sendToTopic('sports', {
+          title: `⚽ GOAL! ${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}`,
+          body: `${displayCompName}`,
+          url: sportsUrl,
+          category: 'sports',
+          priority: 10
+        });
+      }
+
+      // Full time notification
       if (existingRes.rows.length > 0 && existingRes.rows[0].status === 'live' && status === 'finished' && notificationService) {
         await notificationService.sendToTopic('sports', {
-          title: `🏁 FULL TIME — ${displayCompName}`,
-          body: `${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}`,
-          url: 'https://realssanews.com.ng/sports',
+          title: `🏁 FT: ${homeTeam} ${homeScore} - ${awayScore} ${awayTeam}`,
+          body: `${displayCompName} — Full Time`,
+          url: sportsUrl,
           category: 'sports'
         });
       }
