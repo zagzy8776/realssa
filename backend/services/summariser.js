@@ -1,37 +1,33 @@
 /**
- * Gemini AI Summariser
- * Generates unique 2-sentence RealSSA-branded summaries for RSS articles.
- * Uses Google Gemini 2.0 Flash Lite (free: 1,500 req/day, 15 req/min).
+ * Gemini AI Summariser, Translator, Entity Extractor & Embedder
+ * Uses Google Gemini (free tier) for all structured AI features.
  */
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
+const GEMINI_EMBED_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent';
 
 /**
  * A generic helper to call the Gemini API.
- * @param {string} prompt - The full prompt to send to the model.
- * @param {object} config - Generation config and timeout settings.
- * @param {number} config.maxOutputTokens - Max tokens for the response.
- * @param {number} config.temperature - The creativity temperature.
- * @param {number} config.timeout - Request timeout in milliseconds.
- * @returns {Promise<string|null>} The generated text or null on failure.
  */
-async function callGemini(prompt, { maxOutputTokens, temperature, timeout }) {
+async function callGemini(prompt, { maxOutputTokens, temperature, timeout, responseMimeType }) {
   if (!GEMINI_API_KEY) {
     console.warn('GEMINI_API_KEY is not set. Skipping generation.');
     return null;
   }
 
   try {
-    const response = await fetch(GEMINI_BASE_URL, {
+    const config = { maxOutputTokens, temperature, topP: 0.9 };
+    if (responseMimeType) {
+      config.responseMimeType = responseMimeType;
+    }
+
+    const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'x-goog-api-key': GEMINI_API_KEY
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens, temperature, topP: 0.9 },
+        generationConfig: config,
       }),
       signal: AbortSignal.timeout(timeout),
     });
@@ -50,28 +46,109 @@ async function callGemini(prompt, { maxOutputTokens, temperature, timeout }) {
 }
 
 /**
- * Generate a 2-sentence RealSSA-voiced summary of an article.
- * Returns null if Gemini is unavailable or rate-limited.
+ * Generate a 768-dimension vector embedding for a given text.
+ * Uses gemini-embedding-001 model.
+ * @param {string} text - The text to embed.
+ * @returns {Promise<Array<number>|null>} Array of floats.
  */
-async function generateSummary(title, excerpt) {
+async function generateEmbedding(text) {
+  if (!GEMINI_API_KEY) return null;
+  if (!text || text.trim().length === 0) return null;
+
+  try {
+    const response = await fetch(`${GEMINI_EMBED_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: {
+          parts: [{ text: text.substring(0, 2000) }] // Cap characters to avoid API limits
+        }
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) {
+      console.warn(`Gemini Embedding API error: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data?.embedding?.values || null;
+  } catch (err) {
+    console.warn(`Gemini Embedding failed: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Perform complete structured AI analysis on an article (Summary, Entity Extraction, Translations).
+ * Performs a single API call to save rate limits and resources.
+ */
+async function generateAIAnalysis(title, excerpt) {
   const cleanText = (excerpt || title || '').replace(/<[^>]+>/g, '').slice(0, 600);
 
   const prompt = [
-    'You are an editor for RealSSA News, Africa\'s leading digital news platform.',
-    'Write a 2-sentence summary of this news article in a clear, engaging voice aimed at an African audience.',
-    'First sentence: state the key fact directly. Second sentence: explain why it matters for Africa or everyday people.',
-    `Article title: "${title}"`,
-    `Article text: "${cleanText}"`,
-    'Return ONLY the 2-sentence summary. No intro, no labels, no quotes around the sentences.'
+    'You are the lead editor for RealSSA News, Africa\'s leading digital news platform.',
+    'Analyze the following news article and output a structured JSON object.',
+    '',
+    'Strict requirements for the JSON schema:',
+    '{',
+    '  "summary": "2-sentence summary. First sentence states key fact directly. Second sentence explains why it matters for Africa or everyday people.",',
+    '  "entities": [',
+    '    {',
+    '      "name": "Normalized canonical standard full name. Use full names (e.g. \'Bola Tinubu\' instead of \'Tinubu\' or \'President Tinubu\', \'Central Bank of Nigeria\' instead of \'CBN\', \'Super Eagles\' instead of \'Nigeria national team\').",',
+    '      "type": "Must be one of: \'person\', \'organization\', \'location\', \'sports_team\'"',
+    '    }',
+    '  ],',
+    '  "translations": {',
+    '    "pidgin": {',
+    '      "title": "Translate the article headline into Wazobia Pidgin English.",',
+    '      "summary": "Translate the 2-sentence summary into Wazobia Pidgin English."',
+    '    },',
+    '    "yoruba": {',
+    '      "title": "Translate the article headline into Yoruba.",',
+    '      "summary": "Translate the 2-sentence summary into Yoruba."',
+    '    },',
+    '    "hausa": {',
+    '      "title": "Translate the article headline into Hausa.",',
+    '      "summary": "Translate the 2-sentence summary into Hausa."',
+    '    },',
+    '    "igbo": {',
+    '      "title": "Translate the article headline into Igbo.",',
+    '      "summary": "Translate the 2-sentence summary into Igbo."',
+    '    }',
+    '  }',
+    '}',
+    '',
+    `Article Title: "${title}"`,
+    `Article Text: "${cleanText}"`,
+    '',
+    'Return ONLY the raw JSON block. No markdown formatting, no ```json wrappers.'
   ].join('\n');
 
-  const text = await callGemini(prompt, {
-    maxOutputTokens: 120,
-    temperature: 0.6,
-    timeout: 8000,
+  const jsonText = await callGemini(prompt, {
+    maxOutputTokens: 800,
+    temperature: 0.2, // Low temperature for high accuracy and valid JSON structure
+    timeout: 12000,
+    responseMimeType: 'application/json'
   });
 
-  return text && text.length > 20 ? text : null;
+  if (!jsonText) return null;
+
+  try {
+    return JSON.parse(jsonText);
+  } catch (err) {
+    console.error('Failed to parse Gemini AI Analysis JSON:', err.message, 'Raw response:', jsonText);
+    return null;
+  }
+}
+
+/**
+ * Backwards compatibility wrapper for generating summaries.
+ */
+async function generateSummary(title, excerpt) {
+  const analysis = await generateAIAnalysis(title, excerpt);
+  return analysis?.summary || null;
 }
 
 /**
@@ -102,7 +179,6 @@ async function generateSocialHook(title, excerpt) {
  * Rewrite an entire extracted article into original RealSSA reporting.
  */
 async function rewriteArticle(title, text) {
-  // Grab up to ~10,000 characters of the raw text so we get the full story
   const cleanText = (text || '').replace(/<[^>]+>/g, '').slice(0, 10000);
 
   const prompt = [
@@ -121,10 +197,16 @@ async function rewriteArticle(title, text) {
   const result = await callGemini(prompt, {
     maxOutputTokens: 800,
     temperature: 0.7,
-    timeout: 12000, // allow up to 12s for full rewrite
+    timeout: 12000,
   });
 
   return result && result.length > 50 ? result : null;
 }
 
-module.exports = { generateSummary, generateSocialHook, rewriteArticle };
+module.exports = { 
+  generateSummary, 
+  generateSocialHook, 
+  rewriteArticle, 
+  generateAIAnalysis, 
+  generateEmbedding 
+};

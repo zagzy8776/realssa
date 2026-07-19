@@ -110,7 +110,7 @@ async function runCrawler(pool) {
     let scores = [];
     try {
       console.log('[Crawler] Pre-fetching live sports scores for mapping...');
-      const response = await fetch('https://realssasportsapi-production.up.railway.app/scores');
+      const response = await fetch(`${process.env.SCORES_API_URL || 'http://localhost:5000'}/scores`);
       if (response.ok) {
         scores = await response.json();
         console.log(`[Crawler] Fetched ${scores.length} active fixtures for mapping.`);

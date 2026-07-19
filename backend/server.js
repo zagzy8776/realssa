@@ -464,7 +464,7 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 // Import summarizer for on-demand generation
-const { generateSummary, rewriteArticle } = require('./services/summariser');
+const { generateSummary, rewriteArticle, generateEmbedding } = require('./services/summariser');
 
 // Article extraction for Reader Mode
 const { Readability } = require('@mozilla/readability');
@@ -1249,6 +1249,55 @@ app.get('/api/articles/:id', async (req, res) => {
 });
 
 
+// --- Knowledge Graph Entity Hub ---
+app.get('/api/entities/:name', async (req, res) => {
+  const entityName = req.params.name.trim();
+  try {
+    // 1. Fetch matching articles (sorted by freshness and date)
+    const articlesQuery = `
+      SELECT a.id, a.title, a.original_excerpt, a.image, a.published_at, a.source_name, a.category, a.freshness_score
+      FROM rss_articles a
+      JOIN article_entities e ON a.id = e.article_id
+      WHERE LOWER(e.entity_name) = LOWER($1)
+      ORDER BY a.freshness_score DESC, a.published_at DESC
+      LIMIT 12
+    `;
+    const articlesResult = await pool.query(articlesQuery, [entityName]);
+
+    // 2. Fetch co-occurring (related) entities
+    const relatedQuery = `
+      SELECT entity_name, entity_type, COUNT(*) AS cooccurrence
+      FROM article_entities
+      WHERE article_id IN (
+        SELECT article_id FROM article_entities WHERE LOWER(entity_name) = LOWER($1)
+      )
+      AND LOWER(entity_name) != LOWER($1)
+      GROUP BY entity_name, entity_type
+      ORDER BY cooccurrence DESC
+      LIMIT 6
+    `;
+    const relatedResult = await pool.query(relatedQuery, [entityName]);
+
+    // 3. Fetch politician bio details if they exist in the politicians table
+    const politicianResult = await pool.query(
+      'SELECT role, state, constituency, party, profile_image, bio, assets_summary, voting_record FROM politicians WHERE LOWER(name) = LOWER($1)',
+      [entityName]
+    );
+
+    res.json({
+      name: entityName,
+      isPolitician: politicianResult.rows.length > 0,
+      profile: politicianResult.rows[0] || null,
+      articles: articlesResult.rows,
+      relatedEntities: relatedResult.rows
+    });
+  } catch (err) {
+    console.error('Error fetching entity hub details:', err.message);
+    res.status(500).json({ error: 'Failed to fetch entity details' });
+  }
+});
+
+
 // Create new article
 app.post('/api/articles', (req, res) => {
   const articles = readJsonFile(articlesFilePath);
@@ -1964,6 +2013,9 @@ app.get('/api/sports/following/:device_id', async (req, res) => {
   }
 });
 
+// Get Social feed (Twitter/X via Nitter RSS) — DB-first
+app.get('/api/news/social', makeDbFirstRoute('social', [], 'social'));
+
 // Get Nigerian news — DB-first (instant)
 app.get('/api/news/nigerian', makeDbFirstRoute('nigerian', nigerianFeeds, ['nigerian-news', 'nigeria']));
 
@@ -2345,7 +2397,7 @@ app.get('/api/news/breaking', async (req, res) => {
 });
 
 
-// Search endpoint — PostgreSQL full-text search with relevance + time-decay ranking
+// Search endpoint — Hybrid Search with Semantic (pgvector) + Keyword Fallback
 app.get('/api/news/search', async (req, res) => {
   try {
     const { q, category } = req.query;
@@ -2396,42 +2448,119 @@ app.get('/api/news/search', async (req, res) => {
       return res.status(503).json({ error: 'Search unavailable — no database configured' });
     }
 
-    console.log(`🔍 FTS search: "${q}"${category ? ` [${category}]` : ''}`);
+    console.log(`🔍 Search request: "${q}"${category ? ` [${category}]` : ''}`);
 
-    // websearch_to_tsquery parses natural language: quotes = phrase, - = exclude, OR = union
-    // Falls back to plainto_tsquery if the input produces an invalid tsquery
     const categoryFilter = category ? 'AND category = $2' : '';
-    const params = category ? [q, category] : [q];
+    const queryLower = `%${q.toLowerCase()}%`;
 
-    const result = await pool.query(
-      `SELECT
-         'rss-' || id          AS id,
-         title,
-         COALESCE(ai_summary, original_excerpt) AS excerpt,
-         category,
-         image,
-         source_name           AS author,
-         external_link,
-         published_at          AS date,
-         content_type,
-         '5 min read'          AS read_time,
-         -- Relevance: title match (weight A) scores ~4x higher than excerpt (weight B)
-         ts_rank(search_vector, websearch_to_tsquery('english', $1),
-                 32 /* rank by unique words, normalise by doc length */) AS relevance,
-         -- Time decay: halves every 48 hours; recent articles naturally float up
-         EXP(-0.5 * EXTRACT(EPOCH FROM (NOW() - published_at)) / 172800.0) AS freshness
-       FROM rss_articles
-       WHERE search_vector @@ websearch_to_tsquery('english', $1)
-         ${categoryFilter}
-         AND published_at > NOW() - INTERVAL '14 days'
-       ORDER BY (ts_rank(search_vector, websearch_to_tsquery('english', $1), 32) * 0.6
-                 + EXP(-0.5 * EXTRACT(EPOCH FROM (NOW() - published_at)) / 172800.0) * 0.4
-                ) DESC
-       LIMIT 30`,
-      params
-    );
+    // 1. Try Semantic Search first using Gemini Embeddings
+    let articles = [];
+    let usedSemantic = false;
 
-    const articles = result.rows.map(row => ({
+    try {
+      const queryVector = await generateEmbedding(q);
+      if (queryVector && queryVector.length === 768) {
+        const vectorStr = `[${queryVector.join(',')}]`;
+        const vectorParams = category ? [vectorStr, category] : [vectorStr];
+
+        console.log('🤖 Running pgvector semantic search...');
+        const semanticResult = await pool.query(
+          `SELECT
+             'rss-' || id          AS id,
+             title,
+             COALESCE(ai_summary, original_excerpt) AS excerpt,
+             category,
+             image,
+             source_name           AS author,
+             external_link,
+             published_at          AS date,
+             content_type,
+             '5 min read'          AS read_time,
+             (1 - (embedding <=> $1::vector)) AS similarity
+           FROM rss_articles
+           WHERE embedding IS NOT NULL
+             AND published_at > NOW() - INTERVAL '14 days'
+             ${categoryFilter}
+           ORDER BY similarity DESC
+           LIMIT 30`,
+          vectorParams
+        );
+
+        // Check if we got high-confidence results (similarity >= 0.60)
+        if (semanticResult.rows.length > 0 && parseFloat(semanticResult.rows[0].similarity) >= 0.60) {
+          articles = semanticResult.rows;
+          usedSemantic = true;
+          console.log(`✅ Semantic search succeeded with ${articles.length} matches. Best similarity: ${articles[0].similarity}`);
+        } else {
+          console.log('⚠️ Low-confidence semantic results. Falling back to keyword search.');
+        }
+      }
+    } catch (vectorErr) {
+      console.warn('Semantic search failed/skipped:', vectorErr.message);
+    }
+
+    // 2. Fallback to Full-Text Keyword Search & Multilingual Translation Search
+    if (!usedSemantic) {
+      console.log('🔍 Running standard keyword + translation search...');
+      
+      const keywordParams = category ? [q, category, queryLower] : [q, queryLower];
+      const categoryFilterFTS = category ? 'AND category = $2' : '';
+      const localLangQuery = category 
+        ? `OR (
+             LOWER(title_translations->'pidgin'->>'title') LIKE $3 OR
+             LOWER(title_translations->'yoruba'->>'title') LIKE $3 OR
+             LOWER(title_translations->'hausa'->>'title') LIKE $3 OR
+             LOWER(title_translations->'igbo'->>'title') LIKE $3 OR
+             LOWER(summary_translations->'pidgin'->>'summary') LIKE $3 OR
+             LOWER(summary_translations->'yoruba'->>'summary') LIKE $3 OR
+             LOWER(summary_translations->'hausa'->>'summary') LIKE $3 OR
+             LOWER(summary_translations->'igbo'->>'summary') LIKE $3
+           )`
+        : `OR (
+             LOWER(title_translations->'pidgin'->>'title') LIKE $2 OR
+             LOWER(title_translations->'yoruba'->>'title') LIKE $2 OR
+             LOWER(title_translations->'hausa'->>'title') LIKE $2 OR
+             LOWER(title_translations->'igbo'->>'title') LIKE $2 OR
+             LOWER(summary_translations->'pidgin'->>'summary') LIKE $2 OR
+             LOWER(summary_translations->'yoruba'->>'summary') LIKE $2 OR
+             LOWER(summary_translations->'hausa'->>'summary') LIKE $2 OR
+             LOWER(summary_translations->'igbo'->>'summary') LIKE $2
+           )`;
+
+      const ftsQuery = `
+        SELECT
+          'rss-' || id          AS id,
+          title,
+          COALESCE(ai_summary, original_excerpt) AS excerpt,
+          category,
+          image,
+          source_name           AS author,
+          external_link,
+          published_at          AS date,
+          content_type,
+          '5 min read'          AS read_time,
+          ts_rank(search_vector, websearch_to_tsquery('english', $1), 32) AS relevance
+        FROM rss_articles
+        WHERE (
+          search_vector @@ websearch_to_tsquery('english', $1)
+          ${localLangQuery}
+        )
+        ${categoryFilterFTS}
+        AND published_at > NOW() - INTERVAL '14 days'
+        ORDER BY (
+          COALESCE(ts_rank(search_vector, websearch_to_tsquery('english', $1), 32), 0) * 0.6
+          + EXP(-0.5 * EXTRACT(EPOCH FROM (NOW() - published_at)) / 172800.0) * 0.4
+        ) DESC
+        LIMIT 30
+      `;
+
+      const ftsResult = await pool.query(ftsQuery, keywordParams);
+      articles = ftsResult.rows;
+      console.log(`✅ FTS & Translations completed: ${articles.length} matches.`);
+    }
+
+    // Map rows to standard client objects
+    const responseArticles = articles.map(row => ({
       id: row.id,
       title: row.title,
       excerpt: row.excerpt,
@@ -2443,10 +2572,10 @@ app.get('/api/news/search', async (req, res) => {
       contentType: row.content_type || 'article',
       readTime: row.read_time,
       source: 'rss',
+      similarity: row.similarity || null
     }));
 
-    console.log(`✅ FTS: ${articles.length} results for "${q}"`);
-    res.json(articles);
+    res.json(responseArticles);
   } catch (error) {
     console.error('Search error:', error.message);
     res.status(500).json({ error: 'Search failed', message: error.message });
@@ -3619,6 +3748,135 @@ app.get('/api/news/by-source', async (req, res) => {
     res.json(result.rows.map(r => ({ id: r.id, title: r.title, excerpt: r.excerpt, category: r.category, image: r.image, author: r.author, externalLink: r.external_link, date: r.date, contentType: r.content_type, source: 'rss' })));
   } catch (err) { console.error('By-source:', err.message); res.json([]); }
 });
+
+// --- Street Parallel Exchange Rates ---
+app.get('/api/rates', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT DISTINCT ON (currency) currency, buy_rate, sell_rate, source, created_at
+       FROM parallel_rates
+       ORDER BY currency, created_at DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Rates API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch rates' });
+  }
+});
+
+// --- Commodity Prices ---
+app.get('/api/prices', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT DISTINCT ON (item_name) item_name, price, location, unit, created_at
+       FROM market_prices
+       ORDER BY item_name, created_at DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Prices API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch prices' });
+  }
+});
+
+// --- NGX Stock Tracker ---
+app.get('/api/stocks', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT DISTINCT ON (symbol) symbol, company_name, price, price_change, percent_change, volume, trading_date
+       FROM ngx_stocks
+       ORDER BY symbol, trading_date DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Stocks API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch stocks' });
+  }
+});
+
+
+// --- Politicians Directory ---
+app.get('/api/politicians', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT name, role, state, constituency, party, profile_image, created_at
+       FROM politicians
+       ORDER BY name ASC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Politicians API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch politicians' });
+  }
+});
+
+// --- Events Calendar Index ---
+app.get('/api/events', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    
+    // Fetch upcoming and recent events
+    const result = await pool.query(
+      `SELECT id, title, description, category, event_date, location, ticket_link, created_at
+       FROM events
+       WHERE event_date >= NOW() - INTERVAL '3 days'
+       ORDER BY event_date ASC`
+    );
+    
+    // For each event, fetch linked articles count
+    const events = [];
+    for (const ev of result.rows) {
+      const artCount = await pool.query(
+        `SELECT COUNT(*) FROM article_events WHERE event_id = $1`,
+        [ev.id]
+      );
+      events.push({
+        ...ev,
+        linked_articles_count: parseInt(artCount.rows[0].count)
+      });
+    }
+    
+    res.json(events);
+  } catch (err) {
+    console.error('Events API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch events' });
+  }
+});
+
+// --- Linked Event Articles ---
+app.get('/api/events/:id/articles', async (req, res) => {
+  const eventId = parseInt(req.params.id);
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT a.id, a.title, a.original_excerpt AS excerpt, a.image, a.published_at AS date, a.source_name AS author, a.category, a.content_type
+       FROM rss_articles a
+       JOIN article_events ae ON a.id = ae.article_id
+       WHERE ae.event_id = $1
+       ORDER BY a.published_at DESC`,
+      [eventId]
+    );
+    res.json(result.rows.map(row => ({
+      id: 'rss-' + row.id,
+      title: row.title,
+      excerpt: row.excerpt,
+      image: row.image,
+      date: row.date,
+      author: row.author,
+      category: row.category,
+      contentType: row.content_type || 'article',
+      source: 'rss'
+    })));
+  } catch (err) {
+    console.error('Event articles API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch event articles' });
+  }
+});
+
 
 // Auto-create reactions table
 if (process.env.DATABASE_URL) {

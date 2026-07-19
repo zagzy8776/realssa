@@ -1,6 +1,6 @@
 // lib/api.ts
 // API Integration for RealSSA
-// Connects to multiple Railway backends
+// Connects to Vercel (frontend) and Fly.io (backend)
 
 // Vite environment variables (use import.meta.env in Vite)
 // For production (and Capacitor native app), always use the absolute domain.
@@ -97,8 +97,8 @@ async function fetchAPI<T>(
 }
 
 /**
- * NEWS API - C++ RSS News Backend
- * Your C++ backend running on Railway
+ * NEWS API - Node.js RSS News Backend
+ * Your backend running on Fly.io
  */
 export const newsAPI = {
   baseURL: NEWS_API_URL,
@@ -280,7 +280,7 @@ export const newsAPI = {
 };
 
 /**
- * SPORTS API - If you have a separate sports backend on Railway
+ * SPORTS API - If you have a separate sports backend on Fly.io
  * (Only include this if you actually have a sports API backend)
  */
 export const sportsAPI = {
@@ -303,7 +303,7 @@ export const sportsAPI = {
 };
 
 /**
- * DATABASE API - If you have a separate PostgreSQL backend on Railway
+ * DATABASE API - If you have a separate PostgreSQL backend on Fly.io / Neon
  */
 export const dbAPI = {
   baseURL: DB_API_URL,

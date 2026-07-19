@@ -106,8 +106,8 @@ npx web-push generate-vapid-keys
 - `vercel.json` - Routes configured correctly
 
 **Working URLs:**
-- Backend: `https://realssa-production.up.railway.app/rss/all.xml`
-- Frontend: `https://realssa.vercel.app/rss/all.xml`
+- Backend: `https://realssa-scraper.fly.dev/rss/all.xml`
+- Frontend: `https://realssanews.com.ng/rss/all.xml`
 
 **Note:** RSS shows empty items because you aggregate from external sources. When you have local articles, they will appear in the feed.
 
@@ -115,22 +115,22 @@ npx web-push generate-vapid-keys
 
 ## 🚀 Deployment Checklist
 
-### Step 1: Deploy Backend to Railway
+### Step 1: Deploy Backend to Fly.io
 ```bash
 cd backend
 npm install  # Install new web-push dependency
 git add .
 git commit -m "Add push notification support"
 git push origin main
+# Fly.io auto-deploys on push (or run: fly deploy)
 ```
 
-### Step 2: Set Environment Variables in Railway
-Go to Railway Dashboard → Variables:
+### Step 2: Set Environment Variables in Fly.io
+Go to the Fly.io dashboard → Secrets, or run:
 ```bash
-VAPID_PUBLIC_KEY=your_generated_public_key
-VAPID_PRIVATE_KEY=your_generated_private_key
-DATABASE_URL=your_postgres_url  # Already set
-JWT_SECRET=your_jwt_secret      # Already set
+fly secrets set VAPID_PUBLIC_KEY=your_generated_public_key
+fly secrets set VAPID_PRIVATE_KEY=your_generated_private_key
+# DATABASE_URL and JWT_SECRET should already be set
 ```
 
 ### Step 3: Deploy Frontend to Vercel
@@ -142,7 +142,7 @@ git push origin main
 ```
 
 ### Step 4: Update Frontend Environment
-Add to `.env` or Vercel environment variables:
+Add to Vercel environment variables:
 ```bash
 VITE_VAPID_PUBLIC_KEY=your_generated_public_key
 ```
@@ -177,7 +177,7 @@ VITE_VAPID_PUBLIC_KEY=your_generated_public_key
 
 ### To Complete Push Notifications:
 1. Generate VAPID keys using `npx web-push generate-vapid-keys`
-2. Add keys to Railway environment variables
+2. Add keys to Fly.io secrets: `fly secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=...`
 3. Add `VITE_VAPID_PUBLIC_KEY` to Vercel environment variables
 4. Test sending a notification via admin dashboard
 
@@ -224,11 +224,11 @@ cd backend && npm install
 # Generate VAPID keys
 npx web-push generate-vapid-keys
 
-# Test RSS feed
-curl https://realssa.vercel.app/rss/all.xml
+# Test RSS feed (via Vercel frontend proxy)
+curl https://realssanews.com.ng/rss/all.xml
 
-# Test backend directly
-curl https://realssa-production.up.railway.app/rss/all.xml
+# Test backend directly on Fly.io
+curl https://realssa-scraper.fly.dev/rss/all.xml
 ```
 
 ---

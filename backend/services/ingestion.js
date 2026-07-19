@@ -6,7 +6,7 @@
  */
 
 const crypto = require('crypto');
-const { generateSummary, generateSocialHook } = require('./summariser');
+const { generateSummary, generateSocialHook, generateAIAnalysis, generateEmbedding } = require('./summariser');
 const { pingIndexNow } = require('./indexnow');
 const { pingWebSub } = require('./websub');
 const { pingGoogleIndexingAPI } = require('./googleIndexing');
@@ -319,6 +319,33 @@ const FEED_CATEGORIES = [
       'https://techcabal.com/feed/',
       'https://disrupt-africa.com/feed/'
     ]
+  },
+  {
+    // Social media pull via Nitter RSS (free, no API key needed)
+    // Nitter mirrors Twitter/X accounts as RSS feeds
+    // Format: https://nitter.net/<handle>/rss
+    category: 'social',
+    feeds: [
+      // African news accounts
+      'https://nitter.net/channelstv/rss',
+      'https://nitter.net/PremiumTimesng/rss',
+      'https://nitter.net/vanguardngrnews/rss',
+      'https://nitter.net/thecableng/rss',
+      'https://nitter.net/GuardianNigeria/rss',
+      'https://nitter.net/BBCAfrica/rss',
+      'https://nitter.net/AlJazeera/rss',
+      'https://nitter.net/CNNAfrica/rss',
+      // Sports accounts
+      'https://nitter.net/SuperSport/rss',
+      'https://nitter.net/BBCSport/rss',
+      'https://nitter.net/SkySports/rss',
+      'https://nitter.net/thenff/rss',
+      // Hashtag feeds (trending topics)
+      'https://nitter.net/search/rss?q=%23Nigeria&f=tweets',
+      'https://nitter.net/search/rss?q=%23NigeriaNews&f=tweets',
+      'https://nitter.net/search/rss?q=%23NPFL&f=tweets',
+      'https://nitter.net/search/rss?q=%23Afrobeats&f=tweets',
+    ]
   }
 ];
 
@@ -572,6 +599,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
   console.log(`🔄 Starting RSS ingestion cycle...${targetCategory ? ` [Category: ${targetCategory}]` : ''}`);
   let newArticleIds = [];
   let summaryCount = 0;
+  let aiProcessedCount = 0;
   let bestNotifCandidate = null;
   const MAX_SUMMARIES_PER_CYCLE = 12;
 
@@ -612,6 +640,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     console.error('Error loading world_feeds.json:', err.message);
   }
 
+  // 'social' runs every cycle alongside core categories — tweets go stale fast
   const mainSlugs = new Set(FEED_CATEGORIES.map(c => c.category));
 
   // 2. Select categories to fetch this cycle
@@ -625,31 +654,44 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     // ── Round-Robin Rotation Engine ──────────────────────────────────────────────────
     // Tier 1 (main categories): ALL run every cycle — they update fast and are the core UX
     // Tier 2 (world countries): pick the 3 coldest by last_ingested_at — deterministic rotation
-    const mainCategories = allCategories.filter(c => mainSlugs.has(c.category));
-    const worldCategories = allCategories.filter(c => !mainSlugs.has(c.category));
-
-    // Ensure feed_schedule rows exist for all known categories (upsert)
+    
+    // Fetch all slugs for database mapping
     const allSlugs = allCategories.map(c => c.category);
     try {
-      // Bulk upsert: insert missing rows, leave existing timestamps untouched
       await pool.query(
         `INSERT INTO feed_schedule (category, tier)
          SELECT u.cat,
                 CASE WHEN u.cat = ANY($2::text[]) THEN 1 ELSE 2 END
          FROM unnest($1::text[]) AS u(cat)
          ON CONFLICT (category) DO NOTHING`,
-        [allSlugs, [...mainSlugs]]
+         [allSlugs, [...mainSlugs]]
       );
     } catch (e) {
       console.warn('feed_schedule upsert skipped:', e.message);
     }
 
-    // Pick 3 coldest world categories (NULL timestamps sort first = never-ingested wins)
+    // Fetch active non-quarantined categories
+    let activeCategoriesSet = new Set(allSlugs);
+    try {
+      const activeRes = await pool.query(
+        `SELECT category FROM feed_schedule
+         WHERE quarantined_until IS NULL OR quarantined_until < NOW()`
+      );
+      activeCategoriesSet = new Set(activeRes.rows.map(r => r.category));
+    } catch (e) {
+      console.warn('Failed to query active categories:', e.message);
+    }
+
+    const mainCategories = allCategories.filter(c => mainSlugs.has(c.category) && activeCategoriesSet.has(c.category));
+    const worldCategories = allCategories.filter(c => !mainSlugs.has(c.category) && activeCategoriesSet.has(c.category));
+
+    // Pick 3 coldest active world categories
     let coldestWorld = [];
     try {
       const res = await pool.query(
         `SELECT category FROM feed_schedule
          WHERE tier = 2
+           AND (quarantined_until IS NULL OR quarantined_until < NOW())
          ORDER BY last_ingested_at ASC NULLS FIRST
          LIMIT 3`
       );
@@ -662,7 +704,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
 
     categoriesToFetch = [...mainCategories, ...coldestWorld];
     console.log(
-      `📅 Rotation: all ${mainCategories.length} main + world [${coldestWorld.map(c => c.category).join(', ')}]`
+      `📅 Rotation: all ${mainCategories.length} active main + world [${coldestWorld.map(c => c.category).join(', ')}]`
     );
   }
 
@@ -703,8 +745,50 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         const sanitizedXml = xmlText.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&amp;');
         return rssParser.parseString(sanitizedXml);
       })
-      .then(feed => ({ category, feed, url, contentType }))
-      .catch(err => { console.warn(`Feed error (${url}): ${err.message}`); return null; })
+      .then(async feed => {
+        // Reset failure count on success
+        if (pool) {
+          try {
+            await pool.query(
+              `UPDATE feed_schedule SET failure_count = 0, quarantined_until = NULL WHERE category = $1`,
+              [category]
+            );
+          } catch (dbErr) {
+            console.error(`Failed to reset failure count for ${category}:`, dbErr.message);
+          }
+        }
+        return { category, feed, url, contentType };
+      })
+      .catch(async err => {
+        console.warn(`Feed error (${url}): ${err.message}`);
+        // Increment failure count and trigger circuit breaker
+        if (pool) {
+          try {
+            const failRes = await pool.query(
+              `UPDATE feed_schedule 
+               SET failure_count = failure_count + 1 
+               WHERE category = $1 
+               RETURNING failure_count`,
+              [category]
+            );
+            if (failRes.rows.length > 0) {
+              const count = failRes.rows[0].failure_count;
+              if (count >= 3) {
+                await pool.query(
+                  `UPDATE feed_schedule 
+                   SET quarantined_until = NOW() + INTERVAL '24 hours' 
+                   WHERE category = $1`,
+                  [category]
+                );
+                console.error(`🚨 Category [${category}] QUARANTINED for 24 hours due to 3 consecutive failures.`);
+              }
+            }
+          } catch (dbErr) {
+            console.error(`Failed to update failure count for ${category}:`, dbErr.message);
+          }
+        }
+        return null;
+      })
     );
     const batchResults = await Promise.all(batchPromises);
     
@@ -810,20 +894,52 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           }
         }
 
-        // Insert into DB (AI summary is generated on-demand when viewed to keep ingestion fast)
+        // Run Structured AI analysis (up to 5 articles per cycle to respect free tier rates)
+        let aiSummary = null;
+        let titleTrans = {};
+        let summaryTrans = {};
+        let embeddingVal = null;
+        let extractedEntities = [];
+
+        if (contentType === 'article' && aiProcessedCount < 5) {
+          try {
+            console.log(`🤖 Running Gemini AI analysis for: "${title}"`);
+            const analysis = await generateAIAnalysis(title, description || originalExcerpt);
+            if (analysis) {
+              aiSummary = analysis.summary;
+              titleTrans = analysis.translations || {};
+              summaryTrans = analysis.translations || {};
+              extractedEntities = analysis.entities || [];
+
+              // Generate vector embedding
+              if (aiSummary) {
+                embeddingVal = await generateEmbedding(aiSummary);
+              }
+              aiProcessedCount++;
+              
+              // Sleep for 4 seconds to stay under 15 requests per minute limit
+              await sleep(4000);
+            }
+          } catch (aiErr) {
+            console.error('AI Ingestion error:', aiErr.message);
+          }
+        }
+
+        // Insert into DB
         try {
           let queryStr, queryValues;
           
           if (!process.env.VERCEL) {
             queryStr = `INSERT INTO rss_articles
-               (url_hash, title, original_excerpt, ai_summary, category, image, author, source_name, external_link, published_at, content_type, is_featured, story_hash, full_content)
-             VALUES ($1, $2, $3, null, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+               (url_hash, title, original_excerpt, ai_summary, category, image, author, source_name, external_link, published_at, content_type, is_featured, story_hash, full_content, title_translations, summary_translations, embedding)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
              ON CONFLICT (story_hash) DO NOTHING
              RETURNING id`;
             queryValues = [
               urlHash,
               title,
               description,
+              aiSummary,
               category,
               imageUrl,
               author,
@@ -833,19 +949,23 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
               contentType,
               isFeatured,
               storyHash,
-              fullContent
+              fullContent,
+              JSON.stringify(titleTrans),
+              JSON.stringify(summaryTrans),
+              embeddingVal ? `[${embeddingVal.join(',')}]` : null
             ];
           } else {
             // Legacy Vercel Insert
             queryStr = `INSERT INTO rss_articles
-               (url_hash, title, original_excerpt, ai_summary, category, image, author, source_name, external_link, published_at, content_type, is_featured, full_content)
-             VALUES ($1, $2, $3, null, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+               (url_hash, title, original_excerpt, ai_summary, category, image, author, source_name, external_link, published_at, content_type, is_featured, full_content, title_translations, summary_translations, embedding)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              ON CONFLICT (url_hash) DO NOTHING
              RETURNING id`;
             queryValues = [
               urlHash,
               title,
               description,
+              aiSummary,
               category,
               imageUrl,
               author,
@@ -854,7 +974,10 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
               publishedAt,
               contentType,
               isFeatured,
-              fullContent
+              fullContent,
+              JSON.stringify(titleTrans),
+              JSON.stringify(summaryTrans),
+              embeddingVal ? `[${embeddingVal.join(',')}]` : null
             ];
           }
 
@@ -863,6 +986,47 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           if (result.rows.length > 0) {
             const articleId = result.rows[0].id;
             newArticleIds.push(`rss-${articleId}`);
+            
+            // Insert extracted entities
+            if (extractedEntities.length > 0) {
+              for (const ent of extractedEntities) {
+                try {
+                  await pool.query(
+                    `INSERT INTO article_entities (article_id, entity_name, entity_type)
+                     VALUES ($1, $2, $3)
+                     ON CONFLICT (article_id, entity_name, entity_type) DO NOTHING`,
+                    [articleId, ent.name.trim(), ent.type]
+                  );
+                } catch (entErr) {
+                  console.error('Error inserting entity:', entErr.message);
+                }
+              }
+            }
+
+            // Auto-link to matching events in the next 7 days
+            try {
+              const matchingEvents = await pool.query(
+                `SELECT id, title FROM events 
+                 WHERE event_date BETWEEN NOW() - INTERVAL '1 day' AND NOW() + INTERVAL '7 days'`
+              );
+              for (const evt of matchingEvents.rows) {
+                const evtKeywords = evt.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+                const articleText = (title + ' ' + (description || '')).toLowerCase();
+                const isMatch = evtKeywords.every(kw => articleText.includes(kw));
+                if (isMatch) {
+                  await pool.query(
+                    `INSERT INTO article_events (article_id, event_id)
+                     VALUES ($1, $2)
+                     ON CONFLICT DO NOTHING`,
+                    [articleId, evt.id]
+                  );
+                  console.log(`🔗 Auto-linked article ${articleId} to Event "${evt.title}"`);
+                }
+              }
+            } catch (evtLinkErr) {
+              console.error('Event auto-linking error:', evtLinkErr.message);
+            }
+
             // Score this article for notification worthiness
             const score = notificationScore(title, category, itemResult.url);
             if (score > 0 && (!bestNotifCandidate || score > bestNotifCandidate.score)) {
@@ -972,6 +1136,23 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
       })
     );
     Promise.all(googlePingPromises).catch(e => console.error('Google Ping error', e));
+  }
+
+  // ── Recalculate Freshness Scores ──────────────────────────────────────────
+  try {
+    console.log('📊 Recalculating content freshness scores...');
+    await pool.query(`
+      UPDATE rss_articles
+      SET freshness_score = (
+        (view_count * 1) + (reaction_count * 5) + 
+        (CASE WHEN is_featured = true THEN 50 ELSE 0 END) +
+        (CASE WHEN source_name IN ('BBC News', 'Al Jazeera', 'Premium Times', 'Vanguard') THEN 20 ELSE 0 END)
+      ) / POW(EXTRACT(EPOCH FROM (NOW() - published_at))/3600 + 2, 1.8)
+      WHERE published_at > NOW() - INTERVAL '14 days'
+    `);
+    console.log('✅ Freshness scores updated.');
+  } catch (freshErr) {
+    console.error('Freshness score update failed:', freshErr.message);
   }
 
   // --- Self-Cleaning Database ---

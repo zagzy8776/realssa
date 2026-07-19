@@ -2,9 +2,11 @@
 const fetch = require('node-fetch');
 
 /**
- * Maps stream titles to existing match fixtures from the Railway Scores API.
+ * Maps stream titles to existing match fixtures from the Scores API (Fly.io backend).
  * Uses a basic fuzzy matching algorithm.
  */
+
+const SCORES_API_URL = process.env.SCORES_API_URL || 'http://localhost:5000';
 
 // Simple Levenshtein distance for fuzzy matching
 function levenshtein(a, b) {
@@ -36,7 +38,7 @@ function levenshtein(a, b) {
 
 async function fetchLiveScores() {
   try {
-    const response = await fetch('https://realssasportsapi-production.up.railway.app/scores');
+    const response = await fetch(`${SCORES_API_URL}/scores`);
     if (!response.ok) return [];
     return await response.json();
   } catch (error) {
@@ -60,7 +62,7 @@ async function mapStreamToMatch(streamTitle, scores) {
   let bestScore = Infinity;
 
   for (const match of activeScores) {
-    // Expected format from the railway API
+    // Expected format from the Scores API
     const homeTeam = (match.home_team || '').toLowerCase();
     const awayTeam = (match.away_team || '').toLowerCase();
     

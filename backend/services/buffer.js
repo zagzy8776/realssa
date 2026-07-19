@@ -1,17 +1,17 @@
 /**
- * Buffer Social Media Integration
+ * Buffer Social Media Integration (GraphQL API)
  * Auto-posts new RealSSA articles to Twitter/Facebook/Instagram via Buffer API
  *
  * Setup:
- *  1. Go to https://buffer.com → Settings → Apps & API → Create Access Token
- *  2. Get profile IDs: https://api.bufferapp.com/1/profiles.json?access_token=YOUR_TOKEN
- *  3. Set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS in Railway env vars
+ *  1. Go to https://publish.buffer.com/settings/api?tab=personal-keys → Create Personal Key
+ *  2. Get profile/channel IDs: Run the test endpoint GET /api/cron/ingest or /api/buffer/test
+ *  3. Set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS in Fly.io secrets (fly secrets set KEY=VALUE)
  */
 
 const BUFFER_ACCESS_TOKEN = process.env.BUFFER_ACCESS_TOKEN || process.env.BUFFER_S_TOKEN;
 const BUFFER_PROFILE_IDS  = process.env.BUFFER_PROFILE_IDS  || process.env.BUFFER_FILE_IDS;
 
-const BUFFER_API_BASE = 'https://api.bufferapp.com/1';
+const BUFFER_API_ENDPOINT = 'https://api.buffer.com';
 
 /**
  * Check if Buffer is configured with valid credentials.
@@ -29,17 +29,81 @@ function isBufferConfigured() {
 async function getBufferProfiles() {
   if (!BUFFER_ACCESS_TOKEN) throw new Error('BUFFER_ACCESS_TOKEN not set');
 
-  const res = await fetch(
-    `${BUFFER_API_BASE}/profiles.json?access_token=${BUFFER_ACCESS_TOKEN}`,
-    { method: 'GET' }
-  );
+  // Step 1: Get Organizations
+  const orgQuery = {
+    query: `
+      query GetOrganizations {
+        account {
+          organizations {
+            id
+            name
+          }
+        }
+      }
+    `
+  };
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Buffer profiles API error (${res.status}): ${err}`);
+  const orgRes = await fetch(BUFFER_API_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}`
+    },
+    body: JSON.stringify(orgQuery)
+  });
+
+  if (!orgRes.ok) {
+    const err = await orgRes.text();
+    throw new Error(`Buffer API error fetching organizations (${orgRes.status}): ${err}`);
   }
 
-  return res.json();
+  const orgData = await orgRes.json();
+  if (orgData.errors) {
+    throw new Error(`Buffer GraphQL error fetching organizations: ${orgData.errors[0].message}`);
+  }
+
+  const orgs = orgData?.data?.account?.organizations || [];
+  if (orgs.length === 0) {
+    return [];
+  }
+
+  const allChannels = [];
+
+  // Step 2: Fetch channels for all organizations
+  for (const org of orgs) {
+    const channelsQuery = {
+      query: `
+        query GetChannels($orgId: OrganizationId!) {
+          channels(input: { organizationId: $orgId }) {
+            id
+            name
+            service
+          }
+        }
+      `,
+      variables: {
+        orgId: org.id
+      }
+    };
+
+    const chanRes = await fetch(BUFFER_API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify(channelsQuery)
+    });
+
+    if (chanRes.ok) {
+      const chanData = await chanRes.json();
+      if (chanData.data && chanData.data.channels) {
+        allChannels.push(...chanData.data.channels);
+      }
+    }
+  }
+
+  return allChannels;
 }
 
 /**
@@ -63,11 +127,20 @@ async function postToBuffer(text, link, imageUrl, now = false) {
     return false;
   }
 
-  // Truncate text to Twitter's 280 char limit (minus URL length ~23 chars)
-  const safeText = text.length > 255 ? text.slice(0, 252) + '…' : text;
+  // Embed the link directly in the text (works on all platforms, avoids link asset incompatibility on X/Twitter)
+  let fullText = text;
+  if (link) {
+    fullText = `${text}\n\nRead the full story: ${link}`;
+  }
+
+  // Truncate text to Twitter's 280 char limit (if posting to Twitter/X, it needs to be safe)
+  // Let's keep a reasonable limit of 275 characters so it's always safe
+  if (fullText.length > 275) {
+    fullText = fullText.slice(0, 272) + '…';
+  }
 
   const results = await Promise.allSettled(
-    profileIds.map(profileId => _postToProfile(profileId, safeText, link, imageUrl, now))
+    profileIds.map(profileId => _postToProfile(profileId, fullText, imageUrl, now))
   );
 
   const succeeded = results.filter(r => r.status === 'fulfilled' && r.value).length;
@@ -86,27 +159,57 @@ async function postToBuffer(text, link, imageUrl, now = false) {
 /**
  * Internal: post to a single Buffer profile.
  */
-async function _postToProfile(profileId, text, link, imageUrl, now) {
+async function _postToProfile(profileId, text, imageUrl, now) {
   try {
-    const endpoint = now
-      ? `${BUFFER_API_BASE}/updates/create.json`
-      : `${BUFFER_API_BASE}/updates/create.json`;
+    const mode = now ? 'shareNow' : 'addToQueue';
 
-    const formData = new URLSearchParams();
-    formData.append('access_token',    BUFFER_ACCESS_TOKEN);
-    formData.append('profile_ids[]',   profileId);
-    formData.append('text',            text);
-    if (now) formData.append('now',    'true');
+    const input = {
+      channelId: profileId,
+      text: text,
+      schedulingType: 'automatic',
+      mode: mode,
+      saveToDraft: true
+    };
 
-    // Attach article link and image as media
-    if (link)     formData.append('media[link]',      link);
-    if (imageUrl) formData.append('media[picture]',   imageUrl);
-    if (imageUrl) formData.append('media[thumbnail]', imageUrl);
+    // Attach image asset if provided
+    if (imageUrl && imageUrl !== 'https://realssanews.com.ng/logo.png') {
+      input.assets = [
+        {
+          image: {
+            url: imageUrl
+          }
+        }
+      ];
+    }
 
-    const res = await fetch(endpoint, {
+    const mutation = {
+      query: `
+        mutation CreatePost($input: CreatePostInput!) {
+          createPost(input: $input) {
+            ... on PostActionSuccess {
+              post {
+                id
+                dueAt
+              }
+            }
+            ... on MutationError {
+              message
+            }
+          }
+        }
+      `,
+      variables: {
+        input: input
+      }
+    };
+
+    const res = await fetch(BUFFER_API_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData.toString(),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify(mutation)
     });
 
     if (!res.ok) {
@@ -116,8 +219,14 @@ async function _postToProfile(profileId, text, link, imageUrl, now) {
     }
 
     const data = await res.json();
-    if (!data.success) {
-      console.error(`[Buffer] Post rejected for profile ${profileId}:`, data);
+    if (data.errors) {
+      console.error(`[Buffer] GraphQL errors for profile ${profileId}:`, JSON.stringify(data.errors));
+      return false;
+    }
+
+    const mutationResult = data?.data?.createPost;
+    if (mutationResult?.message) {
+      console.error(`[Buffer] Post rejected/error for profile ${profileId}:`, mutationResult.message);
       return false;
     }
 
@@ -137,7 +246,7 @@ async function testBufferConnection() {
     return {
       ok: false,
       configured: false,
-      message: 'Buffer not configured. Set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS in Railway env vars.',
+      message: 'Buffer not configured. Set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS in Fly.io secrets (fly secrets set KEY=VALUE).',
     };
   }
 
@@ -153,8 +262,8 @@ async function testBufferConnection() {
       profiles: profiles.map(p => ({
         id:       p.id,
         service:  p.service,
-        handle:   p.service_username,
-        paused:   p.paused,
+        handle:   p.name,
+        paused:   false,
         connected: profileIds.includes(p.id),
       })),
       message: `✅ Buffer connected — ${profiles.length} social profile(s) found.`,

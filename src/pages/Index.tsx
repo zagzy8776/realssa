@@ -21,6 +21,7 @@ import TrendingHashtags from "@/components/TrendingHashtags";
 import StoryGroupCard from "@/components/StoryGroupCard";
 import LocalNewsRail from "@/components/LocalNewsRail";
 import { AtAGlanceCarousel } from "@/components/AtAGlanceCarousel";
+import SocialFeedModal from "@/components/SocialFeedModal";
 
 let initialLoadDone = false;
 
@@ -32,6 +33,7 @@ const Index = () => {
   const [storyGroups, setStoryGroups] = useState([]);
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
+  const [socialOpen, setSocialOpen] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!initialLoadDone);
   const [error, setError] = useState(null);
 
@@ -444,6 +446,33 @@ const Index = () => {
           <div className="container mx-auto px-4"><LazyAd /></div>
         </section>
       </main>
+
+      {/* Floating Social Feed button */}
+      <button
+        onClick={() => setSocialOpen(true)}
+        title="Live Social Feed"
+        style={{
+          position: 'fixed', bottom: 88, right: 20, zIndex: 999,
+          height: 42, borderRadius: 21,
+          background: '#000',
+          border: '1px solid #2a2535',
+          cursor: 'pointer',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '0 16px',
+          transition: 'transform 0.15s, box-shadow 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(29,161,242,0.3)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)'; }}
+      >
+        <svg width="16" height="16" fill="#fff" viewBox="0 0 24 24">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+        </svg>
+        <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>Social Feed</span>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#1DA1F2', animation: 'pulse 2s infinite', flexShrink: 0 }} />
+      </button>
+
+      <SocialFeedModal open={socialOpen} onClose={() => setSocialOpen(false)} />
 
       <Footer />
     </div>

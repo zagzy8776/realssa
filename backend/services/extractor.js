@@ -15,23 +15,35 @@ async function isSafeUrl(urlStr) {
   }
 }
 
+// User-Agent Rotation Pool
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
+];
+
 /**
- * Spoofs headers to bypass basic bot protection.
+ * Spoofs headers using a rotating User-Agent.
  */
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Cache-Control': 'max-age=0',
-  'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-  'Sec-Ch-Ua-Mobile': '?0',
-  'Sec-Ch-Ua-Platform': '"Windows"',
-  'Sec-Fetch-Dest': 'document',
-  'Sec-Fetch-Mode': 'navigate',
-  'Sec-Fetch-Site': 'none',
-  'Sec-Fetch-User': '?1',
-  'Upgrade-Insecure-Requests': '1'
-};
+function getStealthHeaders() {
+  const randomUserAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+  return {
+    'User-Agent': randomUserAgent,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'max-age=0',
+    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Upgrade-Insecure-Requests': '1'
+  };
+}
 
 /**
  * Extracts full article content from a given URL using Mozilla Readability.
@@ -44,9 +56,18 @@ async function extractArticle(url) {
       console.warn(`[Extractor] Blocked SSRF attempt to unsafe URL: ${url}`);
       return null;
     }
+
+    // 1. Politeness Delay: Sleep 3 to 5 seconds before loading the page
+    const politenessDelay = Math.floor(Math.random() * 2000) + 3000;
+    console.log(`[Extractor] Enforcing ${politenessDelay}ms politeness delay for: ${url}`);
+    await new Promise(resolve => setTimeout(resolve, politenessDelay));
+
+    // Get randomized stealth headers
+    const headers = getStealthHeaders();
+
     const response = await fetch(url, {
       method: 'GET',
-      headers: HEADERS,
+      headers: headers,
       signal: AbortSignal.timeout(10000)
     });
 
@@ -130,11 +151,10 @@ async function aiFallbackExtractor(rawHtml, url) {
   const prompt = `You are an expert web scraper. Extract the main article text from this messy HTML content from ${url}. Return ONLY the pure article text, nothing else. No introductions or formatting.\n\n${cleanHtml}`;
 
   try {
-    const response = await fetch(GEMINI_URL, {
+    const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
-        'x-goog-api-key': GEMINI_API_KEY
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
