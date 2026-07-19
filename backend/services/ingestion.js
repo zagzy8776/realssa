@@ -1189,7 +1189,6 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     const fullUrls = newArticleIds.map(id => `${SITE_URL}/article/${id}`);
 
     // Trigger ping for search engines (IndexNow, etc.)
-    const fullUrls = newArticleIds.map(id => `${SITE_URL}/article/${id}`);
     
     // Notifications are now handled eagerly inside the loop to avoid Vercel timeouts!
 
