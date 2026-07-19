@@ -729,8 +729,9 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
   const BATCH_SIZE = 10;
   for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
     const batch = allUrls.slice(i, i + BATCH_SIZE);
-    const batchPromises = batch.map(({ category, url, contentType }) => 
-      fetch(url, {
+    const batchPromises = batch.map(({ category, url, contentType }) => {
+      const startTime = Date.now();
+      return fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'application/rss+xml, application/xml, text/xml, */*'
@@ -746,24 +747,47 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         return rssParser.parseString(sanitizedXml);
       })
       .then(async feed => {
-        // Reset failure count on success
+        const responseTime = Date.now() - startTime;
         if (pool) {
           try {
+            await pool.query(
+              `INSERT INTO feed_health (feed_url, category, last_success, last_error, error_count, avg_response_ms)
+               VALUES ($1, $2, NOW(), NULL, 0, $3)
+               ON CONFLICT (feed_url) DO UPDATE
+               SET category = EXCLUDED.category,
+                   last_success = NOW(),
+                   last_error = NULL,
+                   error_count = 0,
+                   avg_response_ms = ROUND((feed_health.avg_response_ms * 4 + EXCLUDED.avg_response_ms) / 5.0)`,
+              [url, category, responseTime]
+            );
+
             await pool.query(
               `UPDATE feed_schedule SET failure_count = 0, quarantined_until = NULL WHERE category = $1`,
               [category]
             );
           } catch (dbErr) {
-            console.error(`Failed to reset failure count for ${category}:`, dbErr.message);
+            console.error(`Failed to update feed success log for ${category}:`, dbErr.message);
           }
         }
         return { category, feed, url, contentType };
       })
       .catch(async err => {
         console.warn(`Feed error (${url}): ${err.message}`);
-        // Increment failure count and trigger circuit breaker
+        const responseTime = Date.now() - startTime;
         if (pool) {
           try {
+            await pool.query(
+              `INSERT INTO feed_health (feed_url, category, last_success, last_error, error_count, avg_response_ms)
+               VALUES ($1, $2, NULL, $3, 1, $4)
+               ON CONFLICT (feed_url) DO UPDATE
+               SET category = EXCLUDED.category,
+                   last_error = EXCLUDED.last_error,
+                   error_count = feed_health.error_count + 1,
+                   avg_response_ms = ROUND((feed_health.avg_response_ms * 4 + EXCLUDED.avg_response_ms) / 5.0)`,
+              [url, category, err.message, responseTime]
+            );
+
             const failRes = await pool.query(
               `UPDATE feed_schedule 
                SET failure_count = failure_count + 1 
@@ -784,12 +808,12 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
               }
             }
           } catch (dbErr) {
-            console.error(`Failed to update failure count for ${category}:`, dbErr.message);
+            console.error(`Failed to update feed failure log for ${category}:`, dbErr.message);
           }
         }
         return null;
-      })
-    );
+      });
+    });
     const batchResults = await Promise.all(batchPromises);
     
     // Process this batch immediately
@@ -831,10 +855,46 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           continue;
         }
 
-        // Skip if a similar story already exists in the last 24 hours (de-duplication)
-        if (isDuplicateStory(title, recentTitles)) {
-          console.log(`Dedup: skipping "${title.slice(0, 60)}"`);
+        // Fast keyword deduplication check
+        let isKeywordDuplicate = false;
+        let isBorderlineDuplicate = false;
+        
+        for (const row of recentTitles) {
+          const sim = titleSimilarity(title, row.title);
+          if (sim >= 0.65) {
+            isKeywordDuplicate = true;
+            break;
+          } else if (sim >= 0.35) {
+            isBorderlineDuplicate = true;
+          }
+        }
+
+        if (isKeywordDuplicate) {
+          console.log(`Dedup (Keyword): skipping "${title.slice(0, 60)}"`);
           continue;
+        }
+
+        // Slow semantic pass for borderline duplicates using pgvector
+        if (isBorderlineDuplicate && pool) {
+          try {
+            const embedding = await generateEmbedding(title);
+            if (embedding && Array.isArray(embedding)) {
+              const vectorString = `[${embedding.join(',')}]`;
+              const semanticRes = await pool.query(
+                `SELECT id, title FROM rss_articles 
+                 WHERE published_at >= NOW() - INTERVAL '24 hours'
+                   AND embedding <=> $1::vector < 0.15 
+                 LIMIT 1`,
+                [vectorString]
+              );
+              if (semanticRes.rows.length > 0) {
+                console.log(`Dedup (Semantic): skipping "${title.slice(0, 60)}" (matched: "${semanticRes.rows[0].title.slice(0, 40)}")`);
+                continue;
+              }
+            }
+          } catch (embedErr) {
+            console.error('Semantic dedup check error:', embedErr.message);
+          }
         }
 
         // Add to recentTitles to prevent duplicates within the same fetch cycle

@@ -210,6 +210,44 @@ async function runMigrations() {
     `);
     await usersPool.query('CREATE INDEX IF NOT EXISTS idx_comments_article ON comments (article_id, created_at DESC)');
 
+    // 7. Create source_credibility table and seed initial weights
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS source_credibility (
+        source_name VARCHAR(255) PRIMARY KEY,
+        credibility_score INTEGER NOT NULL DEFAULT 70
+      );
+    `);
+
+    await pool.query(`
+      INSERT INTO source_credibility (source_name, credibility_score) VALUES
+        ('BBC Africa', 95),
+        ('BBC News', 95),
+        ('Premium Times', 95),
+        ('Al Jazeera English', 95),
+        ('The Guardian Nigeria', 95),
+        ('Channels TV', 85),
+        ('Vanguard', 85),
+        ('TheCable', 85),
+        ('Nairametrics', 85),
+        ('Daily Trust', 85),
+        ('BusinessDay', 85),
+        ('SuperSport', 85)
+      ON CONFLICT (source_name) DO UPDATE SET credibility_score = EXCLUDED.credibility_score;
+    `);
+
+    // 8. Create feed_health table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS feed_health (
+        feed_url TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        last_success TIMESTAMP WITH TIME ZONE,
+        last_error TEXT,
+        error_count INTEGER DEFAULT 0,
+        avg_response_ms INTEGER DEFAULT 0,
+        articles_last_24h INTEGER DEFAULT 0
+      );
+    `);
+
     console.log('✅ Migrations complete.');
   } catch (err) {
     console.error('❌ Migration failed:', err.message);

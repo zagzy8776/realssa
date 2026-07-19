@@ -1793,15 +1793,17 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
         const offsetParamIndex = queryParams.length + 2;
 
         const dbResult = await pool.query(
-          `SELECT 'rss-' || id AS id,
-                  title,
-                  COALESCE(ai_summary, original_excerpt) AS excerpt,
-                  category, image, source_name AS author,
-                  external_link, published_at AS date, content_type,
-                  is_featured, '5 min read' AS read_time
-           FROM rss_articles
-           WHERE category IN (${catPlaceholders}) ${excludeClause}
-           ORDER BY published_at DESC
+          `SELECT 'rss-' || a.id AS id,
+                  a.title,
+                  COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
+                  a.category, a.image, a.source_name AS author,
+                  a.external_link, a.published_at AS date, a.content_type,
+                  a.is_featured, '5 min read' AS read_time,
+                  a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
+           FROM rss_articles a
+           LEFT JOIN source_credibility c ON a.source_name = c.source_name
+           WHERE a.category IN (${catPlaceholders}) ${excludeClause}
+           ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
            LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
           [...queryParams, limit, offset]
         );
@@ -3856,6 +3858,24 @@ app.get('/api/generate/rate-card', async (req, res) => {
   } catch (err) {
     console.error('Rate Card endpoint error:', err.message);
     res.status(500).send('<svg xmlns="http://www.w3.org/2000/svg"><text y="20">Error generating card</text></svg>');
+  }
+});
+
+// Admin crawler feed health logs endpoint
+app.get('/api/admin/feed-health', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT fh.feed_url, fh.category, fh.last_success, fh.last_error, fh.error_count, fh.avg_response_ms,
+             COALESCE((SELECT COUNT(*) FROM rss_articles a 
+                       WHERE a.external_link LIKE '%' || SPLIT_PART(fh.feed_url, '/', 3) || '%'
+                         AND a.published_at >= NOW() - INTERVAL '24 hours'), 0) AS articles_last_24h
+      FROM feed_health fh
+      ORDER BY fh.error_count DESC, fh.avg_response_ms DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Feed health fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch feed health logs' });
   }
 });
 

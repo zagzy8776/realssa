@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Edit2, Trash2, PlusCircle, LogOut, Search, Star, Eye, EyeOff, Copy, Check, Share2 } from "lucide-react";
+import { Edit2, Trash2, PlusCircle, LogOut, Search, Star, Eye, EyeOff, Copy, Check, Share2, Activity } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import CategoryBadge from "@/components/CategoryBadge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +30,8 @@ const AdminDashboard = () => {
   const [loadingBroadcast, setLoadingBroadcast] = useState(false);
   const [isCopiedEng, setIsCopiedEng] = useState(false);
   const [isCopiedPidg, setIsCopiedPidg] = useState(false);
+  const [feedHealth, setFeedHealth] = useState<any[]>([]);
+  const [loadingHealth, setLoadingHealth] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'growth') {
@@ -47,7 +49,24 @@ const AdminDashboard = () => {
           setLoadingBroadcast(false);
         }
       };
+
+      const fetchFeedHealth = async () => {
+        try {
+          setLoadingHealth(true);
+          const response = await fetch('/api/admin/feed-health');
+          if (response.ok) {
+            const data = await response.json();
+            setFeedHealth(data);
+          }
+        } catch (err) {
+          console.error("Failed to load feed health", err);
+        } finally {
+          setLoadingHealth(false);
+        }
+      };
+
       fetchBroadcasts();
+      fetchFeedHealth();
     }
   }, [activeTab]);
 
@@ -620,6 +639,73 @@ const AdminDashboard = () => {
                           className="w-full p-3 rounded-xl border bg-muted/40 text-xs font-mono select-all focus:outline-none resize-none leading-relaxed"
                         />
                       </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Bot Health Dashboard */}
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle className="text-lg font-black flex items-center gap-1.5">
+                    🤖 Scraper Bot Health Monitor
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Real-time crawler status, response latency, and volume of news ingested in the last 24 hours. Fails automatically trigger quarantines.
+                  </p>
+
+                  {loadingHealth ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-10 w-full bg-muted" />
+                      <Skeleton className="h-10 w-full bg-muted" />
+                    </div>
+                  ) : feedHealth.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic text-center py-4">No health logs recorded yet. Run crawling cycle to populate.</p>
+                  ) : (
+                    <div className="overflow-x-auto border rounded-xl">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-muted text-muted-foreground uppercase text-[10px] font-black tracking-wider border-b">
+                          <tr>
+                            <th className="p-3">Source Domain / Feed</th>
+                            <th className="p-3 text-center">Status</th>
+                            <th className="p-3 text-right">Latency</th>
+                            <th className="p-3 text-right">24h Count</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y font-medium">
+                          {feedHealth.map((feed: any) => {
+                            const domain = feed.feed_url.split('/')[2] || feed.feed_url;
+                            const isQuarantined = feed.error_count >= 3;
+                            const isWarning = feed.error_count > 0 && feed.error_count < 3;
+                            
+                            return (
+                              <tr key={feed.feed_url} className="hover:bg-muted/10">
+                                <td className="p-3 truncate max-w-[150px]" title={feed.feed_url}>
+                                  <span className="font-bold text-foreground block">{domain}</span>
+                                  <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{feed.category}</span>
+                                </td>
+                                <td className="p-3 text-center">
+                                  {isQuarantined ? (
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-red-500/10 text-red-500 border border-red-500/25">quarantined</span>
+                                  ) : isWarning ? (
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-500 border border-amber-500/25">warning</span>
+                                  ) : (
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/25">active</span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-right font-mono text-muted-foreground">
+                                  {feed.avg_response_ms}ms
+                                </td>
+                                <td className="p-3 text-right font-black text-foreground">
+                                  {feed.articles_last_24h}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </CardContent>
