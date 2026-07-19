@@ -2607,6 +2607,17 @@ app.post('/api/users/streak', async (req, res) => {
   }
 });
 
+// --- Buffer Social Media test endpoint ---
+app.get('/api/buffer/test', async (req, res) => {
+  try {
+    const { testBufferConnection } = require('./services/buffer');
+    const result = await testBufferConnection();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, message: `Server error: ${err.message}` });
+  }
+});
+
 // --- Publisher Hub metadata & feeds ---
 app.get('/api/publishers/:slug', async (req, res) => {
   try {
@@ -3183,7 +3194,7 @@ app.get('/api/sports/live', async (req, res) => {
     if (!process.env.DATABASE_URL) return res.json([]);
     const result = await pool.query(
       `SELECT match_id, competition, home_team, away_team,
-              home_score, away_score, status, match_minute,
+              home_score, away_score, status, match_minute, kickoff_at,
               match_url, updated_at, home_hype_count, away_hype_count
        FROM live_matches
        WHERE status IN ('live', 'scheduled')
