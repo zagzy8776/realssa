@@ -8,7 +8,7 @@ const getGeminiKey = () => {
   return keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
 };
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
-const GEMINI_EMBED_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent';
+const GEMINI_EMBED_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent';
 
 /**
  * A generic helper to call the Gemini API.
