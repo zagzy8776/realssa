@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   RefreshCw, ExternalLink, Trophy, Clock, X, ChevronDown, ChevronUp,
-  Newspaper, BarChart3, AlertCircle, PlayCircle
+  Newspaper, AlertCircle, PlayCircle
 } from 'lucide-react';
 import ReactPlayer from 'react-player';
 
@@ -29,11 +29,34 @@ interface Match {
   time?: string;
   league?: string;
   league_country?: string;
+  league_flag?: string;
   league_logo?: string;
   timestamp?: number;
 }
 
 type DateTab = 'live' | 'yesterday' | 'today' | 'all';
+
+const COMPETITION_META: Array<{ match: RegExp; flag: string; country: string }> = [
+  { match: /premier league|championship|fa cup/i, flag: '🇬🇧', country: 'England' },
+  { match: /la liga|copa del rey/i, flag: '🇪🇸', country: 'Spain' },
+  { match: /serie a|coppa italia/i, flag: '🇮🇹', country: 'Italy' },
+  { match: /bundesliga|dfb/i, flag: '🇩🇪', country: 'Germany' },
+  { match: /ligue 1|coupe de france/i, flag: '🇫🇷', country: 'France' },
+  { match: /eredivisie/i, flag: '🇳🇱', country: 'Netherlands' },
+  { match: /primeira liga/i, flag: '🇵🇹', country: 'Portugal' },
+  { match: /npfl|nigeria/i, flag: '🇳🇬', country: 'Nigeria' },
+  { match: /ghana/i, flag: '🇬🇭', country: 'Ghana' },
+  { match: /south africa|psl|premiership/i, flag: '🇿🇦', country: 'South Africa' },
+  { match: /caf/i, flag: '🌍', country: 'Africa' },
+  { match: /champions league|europa league/i, flag: '🇪🇺', country: 'Europe' },
+  { match: /world cup/i, flag: '🌐', country: 'International' },
+];
+
+const getCompetitionMeta = (league?: string, country?: string, flag?: string) => {
+  const embeddedFlag = league?.match(/^(?:\p{Regional_Indicator}{2}|🌍|🌐|🇪🇺)/u)?.[0];
+  const meta = COMPETITION_META.find((item) => item.match.test(league || ''));
+  return { flag: flag || embeddedFlag || meta?.flag || '⚽', country: country || meta?.country || 'Football' };
+};
 
 // Utility Functions
 const formatMatchTime = (timestamp?: number): string => {
@@ -78,14 +101,32 @@ const formatFullDate = (timestamp?: number): string => {
   });
 };
 
-// Match Detail Modal (updated – no stats)
+const TeamDisplay = ({ team, logo, score, isLive, align = 'left' }: {
+  team?: string; logo?: string; score?: number; isLive: boolean; align?: 'left' | 'right';
+}) => {
+  const [imageError, setImageError] = useState(false);
+  return (
+    <div className={`min-w-0 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+      <div className={`flex flex-col ${align === 'right' ? 'items-end' : 'items-start'}`}>
+        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-100 bg-white shadow-sm sm:h-16 sm:w-16">
+          {logo && !imageError ? (
+            <img src={logo} alt="" className="h-10 w-10 object-contain sm:h-12 sm:w-12" onError={() => setImageError(true)} />
+          ) : (
+            <span className="text-sm font-extrabold tracking-tight text-slate-400">{team?.slice(0, 2).toUpperCase() || 'FC'}</span>
+          )}
+        </div>
+        <p className="max-w-full truncate text-sm font-bold leading-tight text-slate-900 sm:text-base">{team || 'Team'}</p>
+        <p className="mt-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">{align === 'right' ? 'Home' : 'Away'}</p>
+        <span className="sr-only">{score ?? 0}{isLive ? ', live score' : ''}</span>
+      </div>
+    </div>
+  );
+};
+
 const MatchDetailModal = ({ match, onClose }: { 
   match: Match; 
   onClose: () => void;
 }) => {
-  const [homeLogoError, setHomeLogoError] = useState(false);
-  const [awayLogoError, setAwayLogoError] = useState(false);
-  const [leagueLogoError, setLeagueLogoError] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
   const [iptvUrl, setIptvUrl] = useState('');
   const [channels, setChannels] = useState<{name: string, url: string}[]>([]);
@@ -126,15 +167,16 @@ const MatchDetailModal = ({ match, onClose }: {
   const matchTime = formatMatchTime(match.timestamp);
   const fullDate = formatFullDate(match.timestamp);
   const dateCategory = getDateCategory(match.timestamp);
+  const competition = getCompetitionMeta(match.league, match.league_country, match.league_flag);
 
   const getMatchDateTime = () => {
-    if (isLive) return { label: 'Live Now', icon: '🔴', color: 'bg-green-100 text-green-800' };
+    if (isLive) return { label: match.time ? `${match.time}'` : 'Live now', color: 'bg-red-50 text-red-700 border-red-100' };
     if (isFinished) {
       const label = dateCategory === 'yesterday' ? 'Yesterday' : 'Match Ended';
-      return { label, icon: '✅', color: 'bg-gray-100 text-gray-700' };
+      return { label, color: 'bg-slate-100 text-slate-700 border-slate-200' };
     }
     const label = dateCategory === 'today' ? 'Today' : dateCategory === 'tomorrow' ? 'Tomorrow' : 'Upcoming';
-    return { label, icon: '📅', color: 'bg-blue-100 text-blue-800' };
+    return { label, color: 'bg-blue-50 text-blue-700 border-blue-100' };
   };
 
   const matchDateTime = getMatchDateTime();
@@ -150,154 +192,66 @@ const MatchDetailModal = ({ match, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-slideUp" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gradient-to-r from-green-600 to-emerald-600 text-white p-5 rounded-t-2xl">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center z-50 p-0 sm:p-5 animate-fadeIn" onClick={onClose} role="dialog" aria-modal="true" aria-label="Match details">
+      <div className="bg-white rounded-t-[28px] sm:rounded-[28px] max-w-xl w-full max-h-[92vh] overflow-y-auto shadow-2xl animate-slideUp" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-100 px-5 py-4 sm:px-7 sm:py-5">
           <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold">Match Details</h3>
-              <p className="text-xs text-white/80 mt-1">{fullDate}</p>
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-xl leading-none">{competition.flag}</span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold tracking-[0.12em] uppercase text-slate-400">{competition.country}</p>
+                <h3 className="text-base font-bold text-slate-900 truncate">{match.league || 'Football'}</h3>
+              </div>
             </div>
-            <button onClick={onClose} className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition">
+            <button onClick={onClose} className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 rounded-full transition" aria-label="Close match details">
               <X size={20} />
             </button>
           </div>
         </div>
 
-        <div className="p-6">
-          <div className={`mb-5 p-4 rounded-xl flex items-center gap-3 ${matchDateTime.color}`}>
-            <span className="text-2xl">{matchDateTime.icon}</span>
-            <div className="flex-1">
-              <p className="font-bold text-lg">{matchDateTime.label}</p>
-              {matchTime && <p className="text-sm opacity-75 mt-0.5">{matchTime}</p>}
-            </div>
-            {isLive && (
-              <span className="px-3 py-1.5 bg-red-500 text-white rounded-full text-xs font-bold animate-pulse shadow-md">
-                LIVE
-              </span>
-            )}
+        <div className="p-5 sm:p-7">
+          <div className="flex items-center justify-center gap-2 text-xs font-semibold mb-7">
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 ${matchDateTime.color}`}>
+              {isLive && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+              {matchDateTime.label}
+            </span>
+            <span className="text-slate-400">{isLive ? match.statusName : `${fullDate} · ${matchTime}`}</span>
           </div>
 
-          {match.league && (
-            <div className="mb-5 p-4 bg-gray-50 rounded-xl">
-              <div className="flex items-center gap-3">
-                {match.league_logo && !leagueLogoError ? (
-                  <img 
-                    src={match.league_logo} 
-                    alt={match.league} 
-                    className="w-8 h-8 object-contain"
-                    onError={() => setLeagueLogoError(true)}
-                  />
-                ) : (
-                  <Trophy size={20} className="text-gray-400" />
-                )}
-                <div>
-                  <p className="font-bold text-gray-900">{match.league}</p>
-                  {match.league_country && <p className="text-xs text-gray-500">{match.league_country}</p>}
-                </div>
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6 mb-8">
+            <TeamDisplay team={match.home_team} logo={match.home_team_logo} score={match.home_score} isLive={isLive} align="right" />
+            <div className="text-center min-w-[72px]">
+              <div className="text-4xl sm:text-5xl font-black tracking-tight text-slate-950 tabular-nums">
+                {isFinished || isLive ? `${match.home_score ?? 0}–${match.away_score ?? 0}` : '–'}
               </div>
+              <p className="mt-2 text-[11px] font-bold tracking-[0.12em] uppercase text-slate-400">{isLive ? 'Live' : match.statusName || 'Scheduled'}</p>
+            </div>
+            <TeamDisplay team={match.away_team} logo={match.away_team_logo} score={match.away_score} isLive={isLive} />
+          </div>
+
+          {(match.home_score_ht !== undefined || match.away_score_ht !== undefined) && (
+            <div className="mb-6 flex items-center justify-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <Clock size={15} className="text-slate-400" /> Half-time: <strong className="text-slate-900">{match.home_score_ht ?? 0}–{match.away_score_ht ?? 0}</strong>
             </div>
           )}
 
-          <div className="mb-6 space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-              <div className="flex items-center gap-4 flex-1">
-                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-sm">
-                  {match.home_team_logo && !homeLogoError ? (
-                    <img 
-                      src={match.home_team_logo} 
-                      alt={match.home_team} 
-                      className="w-10 h-10 object-contain"
-                      onError={() => setHomeLogoError(true)}
-                    />
-                  ) : (
-                    <span className="text-xl font-bold text-gray-400">
-                      {match.home_team?.substring(0, 2).toUpperCase() || 'H'}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 truncate">{match.home_team || 'Home Team'}</p>
-                  <p className="text-xs text-gray-500">Home</p>
-                </div>
-              </div>
-              <div className="text-right ml-4">
-                <p className={`text-4xl font-bold ${isLive ? 'text-green-600' : 'text-gray-900'}`}>
-                  {match.home_score ?? 0}
-                </p>
-                {match.home_score_ht !== undefined && (
-                  <p className="text-xs text-gray-400 mt-1">HT: {match.home_score_ht}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center">
-              <span className={`px-4 py-1.5 rounded-lg text-sm font-bold ${
-                isLive ? 'bg-green-100 text-green-700' : 
-                isFinished ? 'bg-gray-200 text-gray-700' : 
-                'bg-blue-100 text-blue-700'
-              }`}>
-                {match.statusName || 'VS'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-              <div className="flex items-center gap-4 flex-1">
-                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-sm">
-                  {match.away_team_logo && !awayLogoError ? (
-                    <img 
-                      src={match.away_team_logo} 
-                      alt={match.away_team} 
-                      className="w-10 h-10 object-contain"
-                      onError={() => setAwayLogoError(true)}
-                    />
-                  ) : (
-                    <span className="text-xl font-bold text-gray-400">
-                      {match.away_team?.substring(0, 2).toUpperCase() || 'A'}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 truncate">{match.away_team || 'Away Team'}</p>
-                  <p className="text-xs text-gray-500">Away</p>
-                </div>
-              </div>
-              <div className="text-right ml-4">
-                <p className={`text-4xl font-bold ${isLive ? 'text-green-600' : 'text-gray-900'}`}>
-                  {match.away_score ?? 0}
-                </p>
-                {match.away_score_ht !== undefined && (
-                  <p className="text-xs text-gray-400 mt-1">HT: {match.away_score_ht}</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button 
-              onClick={handleViewNews}
-              className="flex-1 bg-green-600 text-white py-3.5 rounded-xl font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2 shadow-md"
-            >
-              <Newspaper size={18} />
-              View News
+          <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-5">
+            <button onClick={handleViewNews} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+              <Newspaper size={17} /> News
             </button>
-            <button 
-              onClick={handleViewHighlights}
-              className="flex-1 bg-red-600 text-white py-3.5 rounded-xl font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2 shadow-md"
-            >
-              <ExternalLink size={18} />
-              Highlights
+            <button onClick={handleViewHighlights} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800">
+              <ExternalLink size={17} /> Highlights
             </button>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="mt-5">
             {!showPlayer ? (
               <button 
                 onClick={() => setShowPlayer(true)}
-                className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-md"
+                className="w-full rounded-xl bg-emerald-600 py-3.5 font-semibold text-white transition hover:bg-emerald-700 flex items-center justify-center gap-2"
               >
                 <PlayCircle size={18} />
-                Watch Live Stream (IPTV)
+                Watch live channels
               </button>
             ) : (
               <div className="space-y-3 animate-fadeIn">
@@ -360,11 +314,12 @@ const MatchCard = ({ match, onClick }: { match: Match; onClick: () => void }) =>
   const isLive = match.statusId === 2;
   const isFinished = match.statusId === 6;
   const matchTime = formatMatchTime(match.timestamp);
+  const competition = getCompetitionMeta(match.league, match.league_country, match.league_flag);
   
   return (
     <div 
       onClick={onClick}
-      className={`bg-white rounded-xl p-4 transition-all cursor-pointer border ${
+      className={`bg-white rounded-xl p-4 transition-all cursor-pointer border shadow-sm hover:-translate-y-0.5 ${
         isLive 
           ? 'border-green-400 shadow-lg shadow-green-100 ring-2 ring-green-100' 
           : isFinished 
@@ -374,6 +329,7 @@ const MatchCard = ({ match, onClick }: { match: Match; onClick: () => void }) =>
     >
       <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-base leading-none" title={competition.country}>{competition.flag}</span>
           {match.league_logo && !leagueLogoError ? (
             <img 
               src={match.league_logo} 
@@ -384,7 +340,7 @@ const MatchCard = ({ match, onClick }: { match: Match; onClick: () => void }) =>
           ) : (
             <Trophy size={14} className="text-gray-400 flex-shrink-0" />
           )}
-          <span className="text-xs font-semibold text-gray-700 truncate">
+          <span className="text-xs font-semibold text-slate-700 truncate">
             {match.league || 'Football Match'}
           </span>
         </div>
@@ -393,7 +349,7 @@ const MatchCard = ({ match, onClick }: { match: Match; onClick: () => void }) =>
           {isLive && (
             <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
               <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
-              LIVE
+              {match.time ? `${match.time}'` : 'LIVE'}
             </span>
           )}
           {!isLive && !isFinished && matchTime && (
@@ -465,12 +421,12 @@ const MatchCard = ({ match, onClick }: { match: Match; onClick: () => void }) =>
       </div>
 
       <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-        <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
+        <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide ${
           isLive ? 'bg-green-100 text-green-700' : 
           isFinished ? 'bg-gray-100 text-gray-600' : 
           'bg-blue-100 text-blue-700'
         }`}>
-          {match.statusName || 'VS'}
+          {isLive ? 'Live' : match.statusName || 'Scheduled'}
         </span>
         {match.home_score_ht !== undefined && match.away_score_ht !== undefined && (
           <span className="text-xs text-gray-400 font-medium">
@@ -515,6 +471,8 @@ const LiveScores = () => {
         statusName: m.status?.toUpperCase() || 'SCHEDULED',
         time: m.match_minute || '',
         league: m.competition || 'Football Match',
+        league_country: m.competition_country || m.country || '',
+        league_flag: m.competition_flag || m.flag || '',
         timestamp: m.kickoff_at ? Math.floor(new Date(m.kickoff_at).getTime() / 1000) : Math.floor(Date.now() / 1000),
       }));
 
