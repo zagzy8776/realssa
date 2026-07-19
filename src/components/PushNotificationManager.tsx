@@ -11,6 +11,20 @@ interface PushNotificationManagerProps {
 
 const ONESIGNAL_APP_ID = "055b6596-a96c-48e2-8cda-ff4bb6d61009";
 
+// Write category preference tags to OneSignal so the backend can target by category
+function syncCategoryTags(OneSignal: any) {
+  try {
+    const raw = localStorage.getItem('realssa_category_prefs');
+    const prefs: string[] = raw ? JSON.parse(raw) : [];
+    const ALL_CATS = ['sports','nigeria','ghana','kenya','south-africa','crypto','tech','business','culture','entertainment'];
+    const tags: Record<string, string> = { has_prefs: prefs.length > 0 ? '1' : '0' };
+    ALL_CATS.forEach(cat => { tags[`cat_${cat}`] = prefs.includes(cat) ? '1' : '0'; });
+    OneSignal.User.addTags(tags);
+  } catch (e) {
+    console.warn('Failed to sync category tags', e);
+  }
+}
+
 const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerProps) => {
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -38,6 +52,7 @@ const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerPr
           setIsSupported(true);
           const optedIn = OneSignal.User.PushSubscription?.optedIn || false;
           setIsSubscribed(optedIn);
+          if (optedIn) syncCategoryTags(OneSignal);
 
           const handleSubscriptionChange = (event: any) => {
             if (event && event.current) {
@@ -93,6 +108,7 @@ const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerPr
         const OneSignal = (window as any).OneSignal;
         if (!OneSignal) throw new Error('OneSignal SDK not loaded.');
         await OneSignal.User.PushSubscription.optIn();
+        syncCategoryTags(OneSignal);
         setIsSubscribed(true);
         toast({ title: 'Notifications Enabled', description: 'You will receive breaking news alerts!' });
       }

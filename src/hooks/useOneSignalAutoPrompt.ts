@@ -38,29 +38,49 @@ export function useOneSignalAutoPrompt() {
           }
           
         } else {
-          // Web / PWA
+          // Web / PWA — wait for OneSignal SDK to load
           let checks = 0;
           const interval = setInterval(() => {
             const OneSignalWeb = (window as any).OneSignal;
             if (OneSignalWeb && OneSignalWeb.User) {
               clearInterval(interval);
-              
+
               // Link external user ID
               console.log('Linking Web OneSignal external user ID:', deviceId);
               OneSignalWeb.login(deviceId);
 
               if (value !== 'true') {
-                setTimeout(async () => {
-                  const optedIn = OneSignalWeb.User.PushSubscription?.optedIn || false;
-                  if (!optedIn) {
-                    if (OneSignalWeb.Slidedown) {
-                      await OneSignalWeb.Slidedown.promptPush();
-                    } else {
-                      await OneSignalWeb.User.PushSubscription.optIn();
-                    }
+                // Only prompt after user has engaged: 30s on page AND scrolled at least 300px
+                let hasScrolled = false;
+                const onScroll = () => {
+                  if (window.scrollY > 300) {
+                    hasScrolled = true;
+                    window.removeEventListener('scroll', onScroll);
                   }
-                  await Preferences.set({ key: ONESIGNAL_PROMPT_KEY, value: 'true' });
-                }, 3000);
+                };
+                window.addEventListener('scroll', onScroll, { passive: true });
+
+                // Check every 5s after 30s — prompt only when both conditions met
+                setTimeout(() => {
+                  const checkReady = setInterval(async () => {
+                    if (!hasScrolled) return;
+                    clearInterval(checkReady);
+                    window.removeEventListener('scroll', onScroll);
+                    try {
+                      const optedIn = OneSignalWeb.User.PushSubscription?.optedIn || false;
+                      if (!optedIn) {
+                        if (OneSignalWeb.Slidedown) {
+                          await OneSignalWeb.Slidedown.promptPush();
+                        } else {
+                          await OneSignalWeb.User.PushSubscription.optIn();
+                        }
+                      }
+                      await Preferences.set({ key: ONESIGNAL_PROMPT_KEY, value: 'true' });
+                    } catch (promptErr) {
+                      console.warn('Push prompt failed:', promptErr);
+                    }
+                  }, 5000);
+                }, 30000); // wait 30s before starting checks
               }
             }
             checks++;

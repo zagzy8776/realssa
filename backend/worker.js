@@ -248,6 +248,14 @@ async function runMigrations() {
       );
     `);
 
+    // 9. Create buffer_posts_log table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS buffer_posts_log (
+        story_hash VARCHAR(64) PRIMARY KEY,
+        posted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+
     console.log('✅ Migrations complete.');
   } catch (err) {
     console.error('❌ Migration failed:', err.message);

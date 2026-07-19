@@ -546,9 +546,8 @@ function notificationScore(title, category, feedUrl) {
       const match = kwMatch(lower, kw);
       if (match) return 1;
     }
-    // Fallback: any new article from an authority source is worth a soft notification
-    // This ensures at least some notifications fire even on slow news days
-    return 1;
+    // No soft keyword matched — not worth a notification even from authority source
+    return 0;
   }
 
   return 0;
@@ -1109,12 +1108,28 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           }
           summaryCount++;
 
-          // Social Media Automation — post top 2 new articles to Buffer
-          if (result.rows.length > 0 && summaryCount <= 2) {
+          // Social Media Automation — post top new articles to Buffer (Max 10 per 24 hours)
+          if (result.rows.length > 0 && pool) {
             try {
-              const hook = await generateSocialHook(title, originalExcerpt);
-              if (hook) {
-                await postToBuffer(hook, `${SITE_URL}/read?url=${encodeURIComponent(externalLink)}`, image);
+              const countRes = await pool.query(
+                `SELECT COUNT(*) FROM buffer_posts_log WHERE posted_at >= NOW() - INTERVAL '24 hours'`
+              );
+              const dailyCount = parseInt(countRes.rows[0].count, 10);
+
+              if (dailyCount < 10) {
+                const hook = await generateSocialHook(title, originalExcerpt);
+                if (hook) {
+                  const success = await postToBuffer(hook, `${SITE_URL}/read?url=${encodeURIComponent(externalLink)}`, image);
+                  if (success) {
+                    await pool.query(
+                      `INSERT INTO buffer_posts_log (story_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
+                      [storyHash]
+                    );
+                    console.log(`[Buffer] Story logged to limit queue. Daily count is now ${dailyCount + 1}/10.`);
+                  }
+                }
+              } else {
+                console.log(`[Buffer] Skipping auto-post: Daily limit of 10 posts already reached.`);
               }
             } catch (bufErr) {
               console.error('Buffer post error:', bufErr.message);
@@ -1166,8 +1181,8 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           const limitCheck = await pool.query("SELECT COUNT(*) FROM notified_articles WHERE notified_at > NOW() - INTERVAL '1 hour'");
           const currentHourCount = parseInt(limitCheck.rows[0].count) || 0;
 
-          if (currentHourCount >= 3) {
-            console.log(`📭 Notification rate limiter: hourly limit reached (${currentHourCount}/3). Skipping notification.`);
+          if (currentHourCount >= 8) {
+            console.log(`📭 Notification rate limiter: hourly limit reached (${currentHourCount}/8). Skipping notification.`);
           } else {
             console.log(`🔔 Notifying [score=${bestNotifCandidate.score}]: "${bestNotifCandidate.article.title.slice(0, 60)}"`);
             await notificationService.sendBreakingNews(bestNotifCandidate.article);

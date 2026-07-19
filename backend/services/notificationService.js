@@ -69,17 +69,40 @@ class NotificationService {
         return { success: false, message: 'Skipped — ONESIGNAL_API_KEY not configured' };
       }
 
-      console.log(`📣 Sending OneSignal notification to segment/topic: ${topic}`);
+      console.log(`📣 Sending OneSignal notification to topic: ${topic}`);
 
-      // For general breaking news, just use the standard subscribed segment.
-      // Do NOT include custom segments alongside 'Subscribed Users' — OneSignal will
-      // double-deliver to users who belong to both, since 'Subscribed Users' is a
-      // built-in catch-all that bypasses custom segment deduplication.
-      const included_segments = ['All'];
+      // Map category to OneSignal segment tag filter.
+      // Users who have never set a preference get ALL notifications (included_segments: ['All']).
+      // Users who opted into specific categories only get their chosen ones.
+      const CATEGORY_TAG_MAP = {
+        'sports': 'sports',
+        'nigerian-news': 'nigeria',
+        'ghana': 'ghana',
+        'kenya': 'kenya',
+        'south-africa': 'south-africa',
+        'crypto': 'crypto',
+        'tech': 'tech',
+        'business': 'business',
+        'culture': 'culture',
+        'entertainment': 'entertainment',
+      };
+
+      const categoryTag = CATEGORY_TAG_MAP[topic];
+
+      // Build filters: target users who either (a) have this category tag = '1'
+      // OR (b) have no category preferences set at all (tag 'has_prefs' != '1')
+      let filters;
+      if (categoryTag) {
+        filters = [
+          { field: 'tag', key: `cat_${categoryTag}`, relation: '=', value: '1' },
+          { operator: 'OR' },
+          { field: 'tag', key: 'has_prefs', relation: '!=', value: '1' },
+        ];
+      }
 
       const notifPayload = {
         ...this._buildPayload(payload),
-        included_segments,
+        ...(filters ? { filters } : { included_segments: ['All'] }),
       };
 
       const response = await axios.post(
@@ -105,59 +128,40 @@ class NotificationService {
   async sendBreakingNews(news) {
     const emoji = CATEGORY_EMOJI[news.category] || '📰';
     
-    // Always use /read?url= for RSS articles (externalLink) to avoid 404s.
-    // Never strip the rss- prefix from IDs — the DB stores them with it.
     let readerUrl = `${SITE_URL}/`;
     if (news.externalLink) {
       readerUrl = `${SITE_URL}/read?url=${encodeURIComponent(news.externalLink)}&category=${encodeURIComponent(news.category || 'news')}&id=${encodeURIComponent(news.id || '')}`;
     } else if (news.id) {
       readerUrl = `${SITE_URL}/article/${news.id}`;
     }
-    
-    // Clean source names from notification title if they are prepended
-    const cleanNotifTitle = (rawTitle) => {
-      if (!rawTitle) return 'New story available';
-      return rawTitle
-        .replace(/^\s*(Breaking|News|Alert|Update)\s*[:|-]\s*/i, '')
-        .trim();
-    };
 
-    const rawTitle = news.title || news.summary || 'New story available';
-    const cleanTitle = cleanNotifTitle(rawTitle);
+    const rawTitle = (news.title || news.summary || 'New story available')
+      .replace(/^\s*(Breaking|News|Alert|Update)\s*[:|-]\s*/i, '')
+      .trim();
 
-    // Dynamic professional labeling
-    const categoryLabel = news.category 
-      ? news.category.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase()) 
-      : 'News';
-      
-    let label = `RealSSA • ${categoryLabel}`;
-    if (news.score >= 3) {
-      label = `🚨 LIVE UPDATE • ${categoryLabel.toUpperCase()}`;
-    } else if (news.score === 2) {
-      label = `🗞️ JUST IN • ${categoryLabel.toUpperCase()}`;
-    } else {
-      label = `${emoji} ${categoryLabel} • RealSSA`;
-    }
+    // Title: score prefix + clean headline (max 90 chars)
+    let titlePrefix = emoji;
+    if (news.score >= 3) titlePrefix = '🚨';
+    else if (news.score === 2) titlePrefix = '🗞️';
+    const fullTitle = `${titlePrefix} ${rawTitle}`;
+    const notifTitle = fullTitle.length > 90 ? `${fullTitle.slice(0, 87)}...` : fullTitle;
 
-    // Build notification body: show excerpt if available so users know
-    // what the article is about before tapping. Fall back to label + source.
-    const rawExcerpt = news.excerpt || news.summary || '';
-    const notifBody = rawExcerpt.length > 25
-      ? `${label}\n\n${rawExcerpt.slice(0, 110).replace(/\s\w+$/, '')}...`
-      : `${label} • ${news.source_name || 'News Source'}`;
+    // Body: source name + clean excerpt — no label padding, max 120 chars of real content
+    const rawExcerpt = (news.excerpt || news.summary || '').replace(/<[^>]+>/g, '').trim();
+    const sourceLine = news.source_name ? `${news.source_name} • RealSSA` : 'RealSSA News';
+    const notifBody = rawExcerpt.length > 20
+      ? `${sourceLine}\n${rawExcerpt.slice(0, 120).replace(/\s\S+$/, '')}…`
+      : sourceLine;
 
     const payload = {
-      // Headline is the Title (max 90 chars formatted elegantly)
-      title: cleanTitle.length > 90 ? `${cleanTitle.slice(0, 87)}...` : cleanTitle,
-      // Excerpt in the body — gives users a real reason to tap
+      title: notifTitle,
       body:  notifBody,
       url:   readerUrl,
       category: news.category || 'general',
-      image: news.image || null, // Passes the image to _buildPayload for rich notifications
-      // Score-3 front-loaded hard alerts get max OneSignal priority
+      image: news.image || null,
       ...(news.score >= 3 && { priority: 10 }),
     };
-    console.log(`🔔 Sending [score=${news.score}] push: "${payload.title.slice(0, 50)}..." | Body: "${payload.body}"`);
+    console.log(`🔔 Sending [score=${news.score}] push: "${payload.title.slice(0, 60)}"`);
     return await this.sendToTopic(news.category || 'general', payload);
   }
 
