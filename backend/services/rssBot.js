@@ -23,7 +23,7 @@ async function cleanOldArticles() {
   try {
     console.log(`[${new Date().toISOString()}] 🧹 Running 48-Hour Garbage Collector...`);
     const result = await pool.query(
-      `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '48 hours'`
+      `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`
     );
     console.log(`[${new Date().toISOString()}] 🗑️ Garbage Collector removed ${result.rowCount} old articles.`);
   } catch (err) {

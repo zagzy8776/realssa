@@ -835,8 +835,8 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
       const { category, feed, contentType } = itemResult;
       if (!feed || !feed.items) continue;
 
-      // Vercel optimization: max 2 items per feed to avoid 10s timeout. Fly.io can do 30.
-      const sliceLimit = process.env.VERCEL ? 2 : 30;
+      // Free tier: max 15 items per feed to keep cycles fast
+      const sliceLimit = process.env.VERCEL ? 2 : 15;
       for (const item of feed.items.slice(0, sliceLimit)) { 
         const externalLink = item.link || item.guid;
         if (!externalLink) continue;
@@ -953,14 +953,14 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         const author = sourceName;
         const isFeatured = notificationScore(title, category, itemResult.url) >= 2;
 
-        // Run the Smart Extractor Engine
+        // Run the Smart Extractor Engine — ONLY for articles with no RSS excerpt
+        // On free tier we skip full extraction to keep DB lean and cycles fast
         let fullContent = null;
-        if (contentType === 'article') {
-          console.log(`[Extractor] Attempting to reverse-engineer: ${externalLink}`);
+        if (contentType === 'article' && !originalExcerpt && !process.env.VERCEL) {
           const extracted = await extractArticle(externalLink);
           if (extracted && extracted.textContent) {
-            fullContent = extracted.htmlContent; // Store the HTML so we can render formatting
-            // Use the high quality image if RSS didn't provide one
+            // Only store a 1000-char summary of full content, not the whole page
+            fullContent = extracted.htmlContent ? extracted.htmlContent.slice(0, 2000) : null;
             if (!imageUrl || imageUrl === 'https://realssanews.com.ng/logo.png') {
               if (extracted.image) imageUrl = extracted.image;
             }
@@ -974,7 +974,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         let embeddingVal = null;
         let extractedEntities = [];
 
-        if (contentType === 'article' && aiProcessedCount < 5) {
+        if (contentType === 'article' && aiProcessedCount < 3) {
           try {
             console.log(`🤖 Running Gemini AI analysis for: "${title}"`);
             const analysis = await generateAIAnalysis(title, description || originalExcerpt);
@@ -1223,7 +1223,6 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
 
   // ── Recalculate Freshness Scores ──────────────────────────────────────────
   try {
-    console.log('📊 Recalculating content freshness scores...');
     await pool.query(`
       UPDATE rss_articles
       SET freshness_score = (
@@ -1231,18 +1230,17 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         (CASE WHEN is_featured = true THEN 50 ELSE 0 END) +
         (CASE WHEN source_name IN ('BBC News', 'Al Jazeera', 'Premium Times', 'Vanguard') THEN 20 ELSE 0 END)
       ) / POW(EXTRACT(EPOCH FROM (NOW() - published_at))/3600 + 2, 1.8)
-      WHERE published_at > NOW() - INTERVAL '14 days'
+      WHERE published_at > NOW() - INTERVAL '2 days'
     `);
-    console.log('✅ Freshness scores updated.');
   } catch (freshErr) {
     console.error('Freshness score update failed:', freshErr.message);
   }
 
   // --- Self-Cleaning Database ---
-  // Delete articles older than 14 days to preserve DB storage on free tier
+  // Delete articles older than 2 days to keep DB lean on free tier
   try {
     const cleanResult = await pool.query(
-      `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '14 days'`
+      `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`
     );
     if (cleanResult.rowCount > 0) {
       console.log(`🧹 Self-cleaning: Deleted ${cleanResult.rowCount} old articles to preserve storage.`);

@@ -57,11 +57,6 @@ async function extractArticle(url) {
       return null;
     }
 
-    // 1. Politeness Delay: Sleep 3 to 5 seconds before loading the page
-    const politenessDelay = Math.floor(Math.random() * 2000) + 3000;
-    console.log(`[Extractor] Enforcing ${politenessDelay}ms politeness delay for: ${url}`);
-    await new Promise(resolve => setTimeout(resolve, politenessDelay));
-
     // Get randomized stealth headers
     const headers = getStealthHeaders();
 

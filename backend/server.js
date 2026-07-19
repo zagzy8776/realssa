@@ -826,7 +826,7 @@ app.get('/api/articles', async (req, res) => {
             content_type,
             '5 min read' as read_time
           FROM rss_articles 
-          WHERE published_at > NOW() - INTERVAL '7 days'
+          WHERE published_at > NOW() - INTERVAL '2 days'
         `;
 
         const result = await pool.query(queryStr);
@@ -1106,7 +1106,7 @@ app.get('/api/articles/most-read', async (req, res) => {
               original_excerpt as excerpt, '3 min read' as read_time
        FROM rss_articles
        WHERE image IS NOT NULL AND image != ''
-         AND published_at > NOW() - INTERVAL '7 days'
+         AND published_at > NOW() - INTERVAL '2 days'
        ORDER BY view_count DESC NULLS LAST
        LIMIT 10`
     );
@@ -2546,7 +2546,7 @@ app.get('/api/news/search', async (req, res) => {
              (1 - (embedding <=> $1::vector)) AS similarity
            FROM rss_articles
            WHERE embedding IS NOT NULL
-             AND published_at > NOW() - INTERVAL '14 days'
+             AND published_at > NOW() - INTERVAL '2 days'
              ${categoryFilter}
            ORDER BY similarity DESC
            LIMIT 30`,
@@ -2613,7 +2613,7 @@ app.get('/api/news/search', async (req, res) => {
           ${localLangQuery}
         )
         ${categoryFilterFTS}
-        AND published_at > NOW() - INTERVAL '14 days'
+        AND published_at > NOW() - INTERVAL '2 days'
         ORDER BY (
           COALESCE(ts_rank(search_vector, websearch_to_tsquery('english', $1), 32), 0) * 0.6
           + EXP(-0.5 * EXTRACT(EPOCH FROM (NOW() - published_at)) / 172800.0) * 0.4
@@ -3163,7 +3163,7 @@ app.get('/api/cron/summarize', async (req, res) => {
        WHERE ai_summary IS NULL 
        AND content_type = 'article'
        AND original_excerpt IS NOT NULL
-       AND published_at > NOW() - INTERVAL '7 days'
+       AND published_at > NOW() - INTERVAL '2 days'
        ORDER BY published_at DESC
        LIMIT 3`
     );
