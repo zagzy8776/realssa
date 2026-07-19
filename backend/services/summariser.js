@@ -68,7 +68,8 @@ async function generateEmbedding(text) {
       body: JSON.stringify({
         content: {
           parts: [{ text: text.substring(0, 2000) }] // Cap characters to avoid API limits
-        }
+        },
+        outputDimensionality: 768
       }),
       signal: AbortSignal.timeout(8000),
     });
@@ -80,7 +81,7 @@ async function generateEmbedding(text) {
     }
 
     const data = await response.json();
-    return data?.embedding?.values || null;
+    return data?.embedding?.values ? data.embedding.values.slice(0, 768) : null;
   } catch (err) {
     console.warn(`Gemini Embedding failed: ${err.message}`);
     return null;
