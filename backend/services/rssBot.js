@@ -91,8 +91,8 @@ function initRssBot(sharedPool) {
   pool = sharedPool;
   console.log('🤖 RSS Aggregation Bot initialized. Running on Fly.io...');
 
-  // Run every 10 minutes continuously
-  cron.schedule('*/10 * * * *', async () => {
+  // Run every 20 minutes continuously
+  cron.schedule('*/20 * * * *', async () => {
     try {
       console.log(`[${new Date().toISOString()}] Starting scheduled RSS ingestion cycle...`);
       const results = await ingestAllFeeds(pool, rssParser);

@@ -122,6 +122,13 @@ async function postToBuffer(text, link, imageUrl, now = false) {
   }
 
   const profileIds = BUFFER_PROFILE_IDS.split(',').map(id => id.trim()).filter(Boolean);
+  
+  // Always include Instagram ID automatically
+  const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
+  if (!profileIds.includes(INSTAGRAM_ID)) {
+    profileIds.push(INSTAGRAM_ID);
+  }
+
   if (profileIds.length === 0) {
     console.warn('[Buffer] BUFFER_PROFILE_IDS is empty — skipping.');
     return false;
