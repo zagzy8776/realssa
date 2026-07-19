@@ -34,7 +34,7 @@ async function callGemini(prompt, { maxOutputTokens, temperature, timeout, respo
 
     if (!response.ok) {
       const errText = await response.text();
-      console.warn(`Gemini API error: ${response.status} ${response.statusText} - Details: ${errText}`);
+      console.warn(`Gemini API error: ${response.status} ${response.statusText} - Details: ${errText} - Key length: ${GEMINI_API_KEY?.length}, prefix: ${GEMINI_API_KEY?.slice(0, 8)}`);
       return null;
     }
 

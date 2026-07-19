@@ -31,6 +31,8 @@ interface Match {
   updated_at: string;
   match_url?: string;
   source?: string;
+  home_hype_count?: number;
+  away_hype_count?: number;
 }
 
 interface SportsArticle {
@@ -323,6 +325,255 @@ const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, o
 );
 
 /* ═══════════════════════════════════════════════════════════════════════ */
+/*  ScraperMatchPanel — full panel built from live_matches data             */
+/* ═══════════════════════════════════════════════════════════════════════ */
+const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }) => {
+  const isLive = match.status === 'live';
+  const isFin  = match.status === 'finished';
+  const isSched = match.status === 'scheduled';
+
+  const [homeHype, setHomeHype] = useState(match.home_hype_count ?? 0);
+  const [awayHype, setAwayHype] = useState(match.away_hype_count ?? 0);
+  const [voted, setVoted]       = useState<'home' | 'away' | null>(null);
+
+  const totalHype = homeHype + awayHype || 1;
+  const homePct   = Math.round((homeHype / totalHype) * 100);
+  const awayPct   = 100 - homePct;
+
+  const minute = parseInt(match.minute) || 0;
+  const progressPct = isLive ? Math.min((minute / 90) * 100, 100) : isFin ? 100 : 0;
+  const isSecondHalf = minute > 45;
+
+  const castHype = async (team: 'home' | 'away') => {
+    if (voted) return;
+    setVoted(team);
+    if (team === 'home') setHomeHype(h => h + 1);
+    else setAwayHype(a => a + 1);
+    try {
+      await fetch(apiUrl(`/api/sports/matches/${matchId}/hype`), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team }),
+      });
+    } catch { /* silent */ }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* ── Scoreboard ── */}
+      <div style={{
+        background: 'linear-gradient(160deg, #0d1520 0%, #131b2a 60%, #0f1623 100%)',
+        border: isLive ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(51,65,85,0.5)',
+        borderRadius: 18, padding: '24px 20px',
+        boxShadow: isLive ? '0 0 32px rgba(239,68,68,0.08)' : 'none',
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
+
+          {/* Home */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <TeamAvatar crest={match.home_team_crest} name={match.home_team_name} size={60} />
+            <span style={{
+              fontFamily: "'Playfair Display', Georgia, serif",
+              fontSize: 14, fontWeight: 800, color: '#f1f5f9',
+              textAlign: 'center', lineHeight: 1.3,
+            }}>{match.home_team_name}</span>
+          </div>
+
+          {/* Centre — score or kickoff */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 90 }}>
+            {isSched ? (
+              <>
+                <Clock size={24} style={{ color: '#38bdf8' }} />
+                <span style={{ color: '#38bdf8', fontSize: 18, fontWeight: 900 }}>{fmtTime(match.kickoff_at)}</span>
+                <span style={{ color: '#64748b', fontSize: 11, fontWeight: 600 }}>{fmtDate(match.kickoff_at)}</span>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 44, fontWeight: 900, color: isLive ? '#f87171' : '#f1f5f9', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                    {match.home_score}
+                  </span>
+                  <span style={{ color: '#334155', fontSize: 24, fontWeight: 300 }}>:</span>
+                  <span style={{ fontSize: 44, fontWeight: 900, color: isLive ? '#f87171' : '#f1f5f9', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                    {match.away_score}
+                  </span>
+                </div>
+                {/* Status badge */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '3px 10px', borderRadius: 999,
+                  background: isLive ? 'rgba(239,68,68,0.15)' : isFin ? 'rgba(100,116,139,0.12)' : 'rgba(56,189,248,0.1)',
+                  border: isLive ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(51,65,85,0.4)',
+                  marginTop: 2,
+                }}>
+                  {isLive && <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />}
+                  <span style={{
+                    fontSize: 10, fontWeight: 900, letterSpacing: 1, textTransform: 'uppercase',
+                    color: isLive ? '#ef4444' : isFin ? '#64748b' : '#38bdf8',
+                  }}>
+                    {isLive ? (match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE') : isFin ? 'Full Time' : 'Scheduled'}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Away */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={60} />
+            <span style={{
+              fontFamily: "'Playfair Display', Georgia, serif",
+              fontSize: 14, fontWeight: 800, color: '#f1f5f9',
+              textAlign: 'center', lineHeight: 1.3,
+            }}>{match.away_team_name}</span>
+          </div>
+        </div>
+
+        {/* ── Live minute progress bar ── */}
+        {(isLive || isFin) && (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <span>Kick Off</span>
+              <span style={{ color: isSecondHalf ? '#f59e0b' : '#475569' }}>HT</span>
+              <span>Full Time</span>
+            </div>
+            <div style={{ height: 5, borderRadius: 99, background: 'rgba(51,65,85,0.5)', overflow: 'hidden', position: 'relative' }}>
+              <div style={{
+                height: '100%', borderRadius: 99,
+                width: `${progressPct}%`,
+                background: isLive
+                  ? 'linear-gradient(90deg, #22c55e, #f59e0b)'
+                  : 'linear-gradient(90deg, #475569, #64748b)',
+                transition: 'width 1s ease',
+              }} />
+              {/* HT marker */}
+              <div style={{ position: 'absolute', top: 0, left: '50%', width: 1, height: '100%', background: 'rgba(234,179,8,0.4)' }} />
+            </div>
+            {isLive && minute > 0 && (
+              <p style={{ textAlign: 'center', fontSize: 10, color: '#64748b', marginTop: 5 }}>
+                {minute <= 45 ? `${minute} min — 1st Half` : minute === 45 ? 'Half Time' : `${minute} min — 2nd Half`}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Match Info ── */}
+      <div style={{ background: '#0d1520', border: '1px solid rgba(51,65,85,0.4)', borderRadius: 14, padding: '14px 16px' }}>
+        <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#475569', marginBottom: 12 }}>Match Info</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Competition</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+              {competitionEmoji(match.competition_name)} {match.competition_name}
+            </p>
+          </div>
+          {match.kickoff_at && (
+            <div>
+              <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Kickoff</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+                {fmtDate(match.kickoff_at)} · {fmtTime(match.kickoff_at)}
+              </p>
+            </div>
+          )}
+          <div>
+            <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Status</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: isLive ? '#ef4444' : isFin ? '#64748b' : '#38bdf8', textTransform: 'capitalize' }}>
+              {match.status}
+            </p>
+          </div>
+          {match.updated_at && (
+            <div>
+              <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Last Updated</p>
+              <p style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>
+                {new Date(match.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Community Hype Meter ── */}
+      {!isSched && (
+        <div style={{ background: '#0d1520', border: '1px solid rgba(234,179,8,0.15)', borderRadius: 14, padding: '16px' }}>
+          <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#eab308', marginBottom: 14 }}>
+            🔥 Community Hype Meter
+          </p>
+
+          {/* Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#e2e8f0', minWidth: 28, textAlign: 'right' }}>{homePct}%</span>
+            <div style={{ flex: 1, height: 10, borderRadius: 99, overflow: 'hidden', background: 'rgba(51,65,85,0.4)', display: 'flex' }}>
+              <div style={{
+                height: '100%',
+                width: `${homePct}%`,
+                background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
+                transition: 'width 0.5s ease',
+                borderRadius: '99px 0 0 99px',
+              }} />
+              <div style={{
+                height: '100%',
+                width: `${awayPct}%`,
+                background: 'linear-gradient(90deg, #f97316, #ef4444)',
+                transition: 'width 0.5s ease',
+                borderRadius: '0 99px 99px 0',
+              }} />
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#e2e8f0', minWidth: 28 }}>{awayPct}%</span>
+          </div>
+
+          {/* Team labels + vote buttons */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button
+              onClick={() => castHype('home')}
+              disabled={!!voted}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                background: voted === 'home' ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.08)',
+                border: voted === 'home' ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(59,130,246,0.2)',
+                borderRadius: 10, padding: '8px 14px', cursor: voted ? 'default' : 'pointer',
+                transition: 'all 0.15s', minWidth: 90,
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🔵</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd' }}>
+                {match.home_team_name.split(' ').slice(-1)[0]}
+              </span>
+              <span style={{ fontSize: 10, color: '#64748b' }}>{homeHype} hypes</span>
+            </button>
+
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>
+                {voted ? '✅ Voted!' : 'Tap to hype your team'}
+              </p>
+              <p style={{ fontSize: 9, color: '#334155', marginTop: 2 }}>{homeHype + awayHype} total votes</p>
+            </div>
+
+            <button
+              onClick={() => castHype('away')}
+              disabled={!!voted}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                background: voted === 'away' ? 'rgba(249,115,22,0.2)' : 'rgba(249,115,22,0.08)',
+                border: voted === 'away' ? '1px solid rgba(249,115,22,0.5)' : '1px solid rgba(249,115,22,0.2)',
+                borderRadius: 10, padding: '8px 14px', cursor: voted ? 'default' : 'pointer',
+                transition: 'all 0.15s', minWidth: 90,
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🟠</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#fdba74' }}>
+                {match.away_team_name.split(' ').slice(-1)[0]}
+              </span>
+              <span style={{ fontSize: 10, color: '#64748b' }}>{awayHype} hypes</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════ */
 /*  MatchModal — dual mode: API (full details) vs Scraper (scoreboard)     */
 /* ═══════════════════════════════════════════════════════════════════════ */
 const MatchModal = ({ matchId, match, matchDetails, h2hData, loading, onClose }: {
@@ -364,78 +615,7 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, loading, onClose }:
             </div>
 
           ) : isScraperMatch ? (
-            /* ── SCRAPER MODE: rich scoreboard from raw match data ── */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Big Scoreboard */}
-              <div style={{ background: 'linear-gradient(135deg, #131b2a, #0f1623)', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 16, padding: 24 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12 }}>
-                  {/* Home */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                    <TeamAvatar crest={match.home_team_crest} name={match.home_team_name} size={56} />
-                    <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 14, fontWeight: 700, color: '#e2e8f0', textAlign: 'center' }}>
-                      {match.home_team_name}
-                    </span>
-                  </div>
-                  {/* Score */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    {match.status === 'scheduled' ? (
-                      <>
-                        <Clock size={22} style={{ color: '#38bdf8' }} />
-                        <span style={{ color: '#38bdf8', fontSize: 15, fontWeight: 800 }}>{fmtTime(match.kickoff_at)}</span>
-                        <span style={{ color: '#64748b', fontSize: 11 }}>{fmtDate(match.kickoff_at)}</span>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 38, fontWeight: 900, color: isLive ? '#f87171' : '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{match.home_score}</span>
-                          <span style={{ color: '#475569', fontSize: 20 }}>–</span>
-                          <span style={{ fontSize: 38, fontWeight: 900, color: isLive ? '#f87171' : '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{match.away_score}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {isLive && <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />}
-                          <span style={{
-                            fontSize: 11, fontWeight: 800, letterSpacing: 1,
-                            color: isLive ? '#ef4444' : match.status === 'finished' ? '#64748b' : '#94a3b8',
-                            textTransform: 'uppercase',
-                          }}>
-                            {isLive
-                              ? (match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE')
-                              : match.status === 'finished' ? 'Full Time'
-                              : match.status}
-                          </span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  {/* Away */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                    <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={56} />
-                    <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 14, fontWeight: 700, color: '#e2e8f0', textAlign: 'center' }}>
-                      {match.away_team_name}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Scraper Meta */}
-              <div style={{ background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b', borderBottom: '1px solid rgba(51,65,85,0.4)', paddingBottom: 8 }}>Match Info</span>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Competition</span>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginTop: 2 }}>{match.competition_name}</p>
-                  </div>
-                  {match.kickoff_at && (
-                    <div>
-                      <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Kickoff</span>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginTop: 2 }}>{fmtDate(match.kickoff_at)} · {fmtTime(match.kickoff_at)}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-
-            </div>
+            <ScraperMatchPanel match={match} matchId={matchId} />
 
           ) : matchDetails ? (
             /* ── API MODE: full match details from football-data.org ── */
@@ -459,9 +639,9 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, loading, onClose }:
                       </>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 34, fontWeight: 900, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{matchDetails.score?.fullTime?.home ?? 0}</span>
+                        <span style={{ fontSize: 34, fontWeight: 900, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{matchDetails.score?.extraTime?.home ?? matchDetails.score?.regularTime?.home ?? matchDetails.score?.fullTime?.home ?? 0}</span>
                         <span style={{ color: '#475569', fontSize: 16 }}>–</span>
-                        <span style={{ fontSize: 34, fontWeight: 900, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{matchDetails.score?.fullTime?.away ?? 0}</span>
+                        <span style={{ fontSize: 34, fontWeight: 900, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{matchDetails.score?.extraTime?.away ?? matchDetails.score?.regularTime?.away ?? matchDetails.score?.fullTime?.away ?? 0}</span>
                       </div>
                     )}
                     <span style={{
