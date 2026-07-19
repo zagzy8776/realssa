@@ -136,10 +136,11 @@ async function extractArticle(url) {
  * Gemini AI Fallback Extractor
  */
 async function aiFallbackExtractor(rawHtml, url) {
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  const GEMINI_API_KEY = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
   if (!GEMINI_API_KEY) return null;
 
-  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
+  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
   
   // Strip out heavy junk to save tokens
   const cleanHtml = rawHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')

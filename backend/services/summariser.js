@@ -3,15 +3,19 @@
  * Uses Google Gemini (free tier) for all structured AI features.
  */
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const getGeminiKey = () => {
+  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  return keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
+};
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
 const GEMINI_EMBED_URL = 'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent';
 
 /**
  * A generic helper to call the Gemini API.
  */
 async function callGemini(prompt, { maxOutputTokens, temperature, timeout, responseMimeType }) {
-  if (!GEMINI_API_KEY) {
+  const apiKey = getGeminiKey();
+  if (!apiKey) {
     console.warn('GEMINI_API_KEY is not set. Skipping generation.');
     return null;
   }
@@ -22,7 +26,7 @@ async function callGemini(prompt, { maxOutputTokens, temperature, timeout, respo
       config.responseMimeType = responseMimeType;
     }
 
-    const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`${GEMINI_BASE_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -34,7 +38,7 @@ async function callGemini(prompt, { maxOutputTokens, temperature, timeout, respo
 
     if (!response.ok) {
       const errText = await response.text();
-      console.warn(`Gemini API error: ${response.status} ${response.statusText} - Details: ${errText} - Key length: ${GEMINI_API_KEY?.length}, prefix: ${GEMINI_API_KEY?.slice(0, 8)}`);
+      console.warn(`Gemini API error: ${response.status} ${response.statusText} - Details: ${errText} - Key length: ${apiKey?.length}, prefix: ${apiKey?.slice(0, 8)}`);
       return null;
     }
 
@@ -53,11 +57,12 @@ async function callGemini(prompt, { maxOutputTokens, temperature, timeout, respo
  * @returns {Promise<Array<number>|null>} Array of floats.
  */
 async function generateEmbedding(text) {
-  if (!GEMINI_API_KEY) return null;
+  const apiKey = getGeminiKey();
+  if (!apiKey) return null;
   if (!text || text.trim().length === 0) return null;
 
   try {
-    const response = await fetch(`${GEMINI_EMBED_URL}?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`${GEMINI_EMBED_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

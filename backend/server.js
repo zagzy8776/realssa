@@ -3366,6 +3366,10 @@ const notificationRoutes = require('./routes/notifications');
 // Use notification routes
 app.use('/api/notifications', notificationRoutes);
 
+// Use trending topics route
+const trendingRoutes = require('./routes/trending');
+app.use('/api/trending', trendingRoutes);
+
 // GET /api/sports/standings/:league
 app.get('/api/sports/standings/:league', async (req, res) => {
   try {

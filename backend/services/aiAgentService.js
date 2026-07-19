@@ -4,8 +4,11 @@
  * Provides structured prompt execution, fallback handling, and rate limiting.
  */
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
+const getGeminiKey = () => {
+  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  return keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
+};
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
 
 // ── Rate Limiter ──────────────────────────────────────────────────────────
 // Gemini free tier: 15 RPM, 1,500 RPD
@@ -44,7 +47,8 @@ async function _waitForSlot() {
  * @returns {string|null} The model's text response
  */
 async function callGemini(systemInstruction, userPrompt, options = {}) {
-    if (!GEMINI_API_KEY) {
+    const apiKey = getGeminiKey();
+    if (!apiKey) {
         console.warn('[AI Agent] No GEMINI_API_KEY set — returning null');
         return null;
     }
@@ -78,7 +82,7 @@ async function callGemini(systemInstruction, userPrompt, options = {}) {
             body.generationConfig.response_mime_type = 'application/json';
         }
 
-        const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
