@@ -58,26 +58,16 @@ const LazyAd: React.FC<LazyAdProps> = ({
       const timer = setTimeout(() => {
         setIsLoaded(true);
 
-        // Initialize Monetag script for proper ad serving
-        // NOTE: pop.js is currently disabled due to syntax errors
-        // if (!window.monetag) {
-        //   window.monetag = { queue: [] };
-        //   const script = document.createElement('script');
-        //   script.src = 'https://otieu.com/pop.js';
-        //   script.async = true;
-        //   
-        //   // Add error handling for script loading
-        //   script.onerror = () => {
-        //     console.warn('Failed to load ad script from otieu.com');
-        //   };
-        //   
-        //   try {
-        //     document.head.appendChild(script);
-        //   } catch (e) {
-        //     console.warn('Error appending ad script:', e);
-        //   }
-        // }
-
+        // Initialize Adsterra Banner
+        if (adType === 'banner') {
+          if (!document.querySelector('script[src*="fa5fb480d6483ddcc0077f05a658a5ec"]')) {
+            const script = document.createElement('script');
+            script.src = 'https://pl30428479.effectivecpmnetwork.com/fa5fb480d6483ddcc0077f05a658a5ec/invoke.js';
+            script.async = true;
+            script.setAttribute('data-cfasync', 'false');
+            document.body.appendChild(script);
+          }
+        }
 
         // Initialize ad script if needed
         if (window.adsbygoogle && adType === 'banner') {
@@ -103,42 +93,26 @@ const LazyAd: React.FC<LazyAdProps> = ({
             style={{
               ...style,
               minHeight: '90px',
-              backgroundColor: '#f3f4f6',
-              border: '1px solid #e5e7eb',
+              backgroundColor: '#0a0f1c',
+              border: '1px solid rgba(255,255,255,0.05)',
               borderRadius: '8px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '14px',
-              color: '#6b7280'
+              color: '#6b7280',
+              overflow: 'hidden'
             }}
           >
             {isLoaded ? (
-              <div className="ad-content">
-                <div className="ad-label" style={{ fontSize: '10px', color: '#9ca3af', marginBottom: '4px' }}>
-                  Advertisement
+              <div style={{ width: '100%', minHeight: '90px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ fontSize: '10px', color: '#4b5563', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Sponsored Link
                 </div>
-                <a
-                  href="https://otieu.com/4/10551313"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    display: 'block',
-                    textAlign: 'center'
-                  }}
-                >
-                  <div style={{ fontWeight: 'bold', color: '#FFFFFF' }}>
-                    Trending Now 🔥
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                    Click for exclusive content
-                  </div>
-                </a>
+                <div id="container-fa5fb480d6483ddcc0077f05a658a5ec" style={{ width: '100%', display: 'flex', justifyContent: 'center' }} />
               </div>
             ) : (
-              <div className="ad-loading" style={{ color: '#9ca3af' }}>
+              <div className="ad-loading" style={{ color: '#4b5563' }}>
                 Loading ad...
               </div>
             )}

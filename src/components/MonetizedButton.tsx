@@ -6,7 +6,7 @@ interface MonetizedButtonProps {
 const MonetizedButton = ({ text = "Trending Now 🔥", className = "" }: MonetizedButtonProps) => {
   return (
     <a
-      href="https://otieu.com/4/10551313"
+      href="/"
       target="_blank"
       rel="noopener noreferrer"
       className={`group relative inline-flex items-center justify-center px-6 py-2 font-bold text-white transition-all duration-200 bg-zinc-900 font-pj rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 ${className}`}
