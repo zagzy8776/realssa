@@ -1187,7 +1187,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
             console.log(`🔔 Notifying [score=${bestNotifCandidate.score}]: "${bestNotifCandidate.article.title.slice(0, 60)}"`);
             await notificationService.sendBreakingNews(bestNotifCandidate.article);
             // 3. Mark as notified
-            await pool.query('INSERT INTO notified_articles (story_hash) VALUES ($1) ON CONFLICT DO NOTHING', [articleHash]);
+            await pool.query('INSERT INTO notified_articles (story_hash, notified_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING', [articleHash]);
             // Clean up rows older than 48 hours to preserve space
             await pool.query("DELETE FROM notified_articles WHERE notified_at < NOW() - INTERVAL '48 hours'");
           }

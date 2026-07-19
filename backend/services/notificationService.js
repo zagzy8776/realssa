@@ -71,38 +71,13 @@ class NotificationService {
 
       console.log(`📣 Sending OneSignal notification to topic: ${topic}`);
 
-      // Map category to OneSignal segment tag filter.
-      // Users who have never set a preference get ALL notifications (included_segments: ['All']).
-      // Users who opted into specific categories only get their chosen ones.
-      const CATEGORY_TAG_MAP = {
-        'sports': 'sports',
-        'nigerian-news': 'nigeria',
-        'ghana': 'ghana',
-        'kenya': 'kenya',
-        'south-africa': 'south-africa',
-        'crypto': 'crypto',
-        'tech': 'tech',
-        'business': 'business',
-        'culture': 'culture',
-        'entertainment': 'entertainment',
-      };
-
-      const categoryTag = CATEGORY_TAG_MAP[topic];
-
-      // Build filters: target users who either (a) have this category tag = '1'
-      // OR (b) have no category preferences set at all (tag 'has_prefs' != '1')
-      let filters;
-      if (categoryTag) {
-        filters = [
-          { field: 'tag', key: `cat_${categoryTag}`, relation: '=', value: '1' },
-          { operator: 'OR' },
-          { field: 'tag', key: 'has_prefs', relation: '!=', value: '1' },
-        ];
-      }
-
+      // Always broadcast to ALL subscribers.
+      // Category tag filtering is written to devices via syncCategoryTags() on the frontend
+      // but we don't filter on it yet — tags must be present on every device before
+      // using filters or recipients drop to 0 on devices with no tags set.
       const notifPayload = {
         ...this._buildPayload(payload),
-        ...(filters ? { filters } : { included_segments: ['All'] }),
+        included_segments: ['All'],
       };
 
       const response = await axios.post(
