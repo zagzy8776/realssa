@@ -2013,8 +2013,72 @@ app.get('/api/sports/following/:device_id', async (req, res) => {
   }
 });
 
-// Get Social feed (Twitter/X via Nitter RSS) — DB-first
-app.get('/api/news/social', makeDbFirstRoute('social', [], 'social'));
+// Get Social feed (RealSSA Live Wire) — DB-first mapped micro-posts
+app.get('/api/news/social', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const limit = parseInt(req.query.limit) || 100;
+    
+    // Fetch articles from the database from top sources
+    const result = await pool.query(
+      `SELECT id, title, COALESCE(ai_summary, original_excerpt) AS excerpt, source_name, published_at, image, external_link, category
+       FROM rss_articles
+       WHERE source_name ILIKE '%Channels%'
+          OR source_name ILIKE '%Premium Times%'
+          OR source_name ILIKE '%BBC%'
+          OR source_name ILIKE '%SuperSport%'
+          OR source_name ILIKE '%Al Jazeera%'
+          OR source_name ILIKE '%NFF%'
+          OR source_name ILIKE '%Vanguard%'
+          OR source_name ILIKE '%TheCable%'
+          OR source_name ILIKE '%Guardian%'
+          OR source_name ILIKE '%Nairametrics%'
+          OR source_name ILIKE '%Daily Trust%'
+          OR source_name ILIKE '%BusinessDay%'
+          OR source_name ILIKE '%Sahara%'
+          OR source_name ILIKE '%Punch%'
+       ORDER BY published_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    // Map them to look like status micro-posts
+    const mapped = result.rows.map(row => {
+      let handle = 'news';
+      const sourceLower = row.source_name.toLowerCase();
+      if (sourceLower.includes('channels')) handle = 'channelstv';
+      else if (sourceLower.includes('premium times')) handle = 'PremiumTimesng';
+      else if (sourceLower.includes('vanguard')) handle = 'vanguardngrnews';
+      else if (sourceLower.includes('thecable') || sourceLower.includes('the cable')) handle = 'thecableng';
+      else if (sourceLower.includes('guardian')) handle = 'GuardianNigeria';
+      else if (sourceLower.includes('bbc')) handle = 'BBCAfrica';
+      else if (sourceLower.includes('al jazeera')) handle = 'AlJazeera';
+      else if (sourceLower.includes('supersport') || sourceLower.includes('sky sports') || sourceLower.includes('sport')) handle = 'SuperSport';
+      else if (sourceLower.includes('nairametrics')) handle = 'nairametrics';
+      else if (sourceLower.includes('daily trust')) handle = 'dailytrust';
+      else if (sourceLower.includes('businessday') || sourceLower.includes('business day')) handle = 'businessday';
+      else if (sourceLower.includes('sahara')) handle = 'saharareporters';
+      else if (sourceLower.includes('punch')) handle = 'MobilePunch';
+
+      return {
+        id: 'rss-' + row.id,
+        title: row.title,
+        excerpt: row.excerpt,
+        author: row.source_name,
+        handle: handle,
+        date: row.published_at,
+        externalLink: row.external_link,
+        image: row.image,
+        category: row.category || 'news'
+      };
+    });
+
+    res.json(mapped);
+  } catch (err) {
+    console.error('Social API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch social feeds' });
+  }
+});
 
 // Get Nigerian news — DB-first (instant)
 app.get('/api/news/nigerian', makeDbFirstRoute('nigerian', nigerianFeeds, ['nigerian-news', 'nigeria']));

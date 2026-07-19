@@ -21,11 +21,12 @@ import TrendingHashtags from "@/components/TrendingHashtags";
 import StoryGroupCard from "@/components/StoryGroupCard";
 import LocalNewsRail from "@/components/LocalNewsRail";
 import { AtAGlanceCarousel } from "@/components/AtAGlanceCarousel";
-import SocialFeedModal from "@/components/SocialFeedModal";
+import { useNavigate } from "react-router-dom";
 
 let initialLoadDone = false;
 
 const Index = () => {
+  const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState('all');
   const [stories, setStories] = useState([]);
   const [allArticles, setAllArticles] = useState([]);
@@ -33,7 +34,6 @@ const Index = () => {
   const [storyGroups, setStoryGroups] = useState([]);
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
-  const [socialOpen, setSocialOpen] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!initialLoadDone);
   const [error, setError] = useState(null);
 
@@ -447,10 +447,10 @@ const Index = () => {
         </section>
       </main>
 
-      {/* Floating Social Feed button */}
+      {/* Floating Live Wire button */}
       <button
-        onClick={() => setSocialOpen(true)}
-        title="Live Social Feed"
+        onClick={() => navigate('/wire')}
+        title="Live Broadcast Wire"
         style={{
           position: 'fixed', bottom: 88, right: 20, zIndex: 999,
           height: 42, borderRadius: 21,
@@ -462,17 +462,13 @@ const Index = () => {
           padding: '0 16px',
           transition: 'transform 0.15s, box-shadow 0.15s',
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(29,161,242,0.3)'; }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(245,158,11,0.3)'; }}
         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)'; }}
       >
-        <svg width="16" height="16" fill="#fff" viewBox="0 0 24 24">
-          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-        </svg>
-        <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>Social Feed</span>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#1DA1F2', animation: 'pulse 2s infinite', flexShrink: 0 }} />
+        <span className="text-amber-500 font-extrabold text-sm">📢</span>
+        <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>Live Wire</span>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', animation: 'pulse 2s infinite', flexShrink: 0 }} />
       </button>
-
-      <SocialFeedModal open={socialOpen} onClose={() => setSocialOpen(false)} />
 
       <Footer />
     </div>

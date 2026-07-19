@@ -22,7 +22,7 @@ const navLinks = [
   { href: "/news", label: "Breaking", icon: Newspaper },
   { href: "/sports", label: "⚽ Sports" },
   { href: "/market", label: "📊 Market Hub" },
-  { href: "/politicians", label: "🏛️ Leaders Directory" },
+  { href: "/wire", label: "📢 Live Wire" },
   { href: "/events", label: "📅 Events Calendar" },
   { href: "/world-news", label: "🌍 World", icon: Globe },
   { href: "/videos", label: "📺 Videos", icon: Radio },
