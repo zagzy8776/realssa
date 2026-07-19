@@ -12,6 +12,7 @@ const { initSportsBot } = require('./services/sportsBot');
 const notificationService = require('./services/notificationService');
 const { runMigrations } = require('./worker');
 const { runCrawler } = require('./services/crawlerService');
+const { generateRateCardSvg } = require('./services/rateCard');
 
 // SSRF protection helper
 const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;
@@ -3842,6 +3843,84 @@ app.get('/api/prices', async (req, res) => {
   } catch (err) {
     console.error('Prices API error:', err.message);
     res.status(500).json({ error: 'Failed to fetch prices' });
+  }
+});
+
+// Dynamic SVG Rate Card endpoint for viral social syndication
+app.get('/api/generate/rate-card', async (req, res) => {
+  try {
+    const svg = await generateRateCardSvg();
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300');
+    res.send(svg);
+  } catch (err) {
+    console.error('Rate Card endpoint error:', err.message);
+    res.status(500).send('<svg xmlns="http://www.w3.org/2000/svg"><text y="20">Error generating card</text></svg>');
+  }
+});
+
+// Broadcast Compiler for WhatsApp Status, Broadcasts, and Telegram syndication
+app.get('/api/admin/broadcast-text', async (req, res) => {
+  try {
+    let usdBuy = '1,640', usdSell = '1,650';
+    let gbpBuy = '2,080', gbpSell = '2,100';
+    let eurBuy = '1,780', eurSell = '1,800';
+    
+    // 1. Fetch Parallel Exchange Rates
+    const ratesRes = await pool.query(
+      `SELECT currency, street_buy, street_sell FROM parallel_rates ORDER BY updated_at DESC LIMIT 6`
+    );
+    if (ratesRes.rows.length > 0) {
+      ratesRes.rows.forEach(row => {
+        const cur = row.currency.toUpperCase();
+        if (cur === 'USD') { usdBuy = row.street_buy; usdSell = row.street_sell; }
+        else if (cur === 'GBP') { gbpBuy = row.street_buy; gbpSell = row.street_sell; }
+        else if (cur === 'EUR') { eurBuy = row.street_buy; eurSell = row.street_sell; }
+      });
+    }
+
+    // 2. Fetch top 3 breaking articles
+    const articlesRes = await pool.query(
+      `SELECT title, category FROM rss_articles ORDER BY published_at DESC LIMIT 3`
+    );
+    const topArticles = articlesRes.rows.map(a => `• ${a.title}`).join('\n');
+    const topArticlesPidgin = articlesRes.rows.map(a => `• ${a.title}`).join('\n');
+
+    const updateTimeStr = new Date().toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+
+    // 3. Compile English Broadcast Text
+    const englishText = `📈 *RealSSA Economic & News Wire Update - ${updateTimeStr}* 📈
+
+*Street FX Parallel Rates:*
+💵 *USD:* ₦${usdBuy} / ₦${usdSell}
+💷 *GBP:* ₦${gbpBuy} / ₦${gbpSell}
+💶 *EUR:* ₦${eurBuy} / ₦${eurSell}
+
+*Top Inbound Headlines:*
+${topArticles}
+
+📲 _Check live, hourly parallel rates and download the RealSSA app for hyperlocal updates: www.realssanews.com.ng_`;
+
+    // 4. Compile Wazobia Pidgin Broadcast Text
+    const pidginText = `🔥 *RealSSA Economic & News Wire Update - ${updateTimeStr}* 🔥
+
+*Parallel Market Dollar/Pounds Rate:*
+💵 *USD:* Buy at ₦${usdBuy} | Sell at ₦${usdSell}
+💷 *GBP:* Buy at ₦${gbpBuy} | Sell at ₦${gbpSell}
+💶 *EUR:* Buy at ₦${eurBuy} | Sell at ₦${eurSell}
+
+*Tempting Headlines Wetin Dey Reign Now:*
+${topArticlesPidgin}
+
+📲 _Chook eye inside hourly black market rates details and download RealSSA App: www.realssanews.com.ng_`;
+
+    res.json({
+      english: englishText,
+      pidgin: pidginText
+    });
+  } catch (err) {
+    console.error('Broadcast endpoint error:', err.message);
+    res.status(500).json({ error: 'Failed to compile broadcast text' });
   }
 });
 

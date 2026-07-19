@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Edit2, Trash2, PlusCircle, LogOut, Search, Star, Eye, EyeOff } from "lucide-react";
+import { Edit2, Trash2, PlusCircle, LogOut, Search, Star, Eye, EyeOff, Copy, Check, Share2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import CategoryBadge from "@/components/CategoryBadge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { NewsItem } from "@/data/newsData";
 
 const AdminDashboard = () => {
@@ -22,6 +23,33 @@ const AdminDashboard = () => {
   const [brokenLinks, setBrokenLinks] = useState<string[]>([]);
   const [checkingLinks, setCheckingLinks] = useState(false);
   const navigate = useNavigate();
+
+  // Growth & Syndication States
+  const [activeTab, setActiveTab] = useState<'articles' | 'growth'>('articles');
+  const [broadcasts, setBroadcasts] = useState<{ english: string; pidgin: string }>({ english: "", pidgin: "" });
+  const [loadingBroadcast, setLoadingBroadcast] = useState(false);
+  const [isCopiedEng, setIsCopiedEng] = useState(false);
+  const [isCopiedPidg, setIsCopiedPidg] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'growth') {
+      const fetchBroadcasts = async () => {
+        try {
+          setLoadingBroadcast(true);
+          const response = await fetch('/api/admin/broadcast-text');
+          if (response.ok) {
+            const data = await response.json();
+            setBroadcasts(data);
+          }
+        } catch (err) {
+          console.error("Failed to load broadcasts", err);
+        } finally {
+          setLoadingBroadcast(false);
+        }
+      };
+      fetchBroadcasts();
+    }
+  }, [activeTab]);
 
   // Check admin status and load articles
   useEffect(() => {
@@ -273,9 +301,35 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
-        {/* Action Bar */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-          <h2 className="text-2xl font-bold">Your Articles</h2>
+        {/* Tab Selector */}
+        <div className="flex gap-2 mb-6 border-b pb-2">
+          <button
+            onClick={() => setActiveTab('articles')}
+            className={`px-4 py-2 text-sm font-bold border-b-2 transition duration-150 ${
+              activeTab === 'articles'
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            📝 Content Management
+          </button>
+          <button
+            onClick={() => setActiveTab('growth')}
+            className={`px-4 py-2 text-sm font-bold border-b-2 transition duration-150 ${
+              activeTab === 'growth'
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            📢 Growth & Syndication
+          </button>
+        </div>
+
+        {activeTab === 'articles' ? (
+          <>
+            {/* Action Bar */}
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+              <h2 className="text-2xl font-bold">Your Articles</h2>
           <div className="flex flex-col sm:flex-row gap-4">
             <Button asChild className="flex items-center gap-2">
               <Link to="/post-news">
@@ -426,8 +480,153 @@ const AdminDashboard = () => {
                 )}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+          </>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-200">
+            {/* Left Column: Rate Card & Broadcast texts */}
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg font-black">Daily Viral Rate Card</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    This high-res rate card is generated dynamically from today's street parallel exchange rates. Download it to share on your WhatsApp Status, X (Twitter), or Instagram to drive viral traffic.
+                  </p>
+                  <div className="border rounded-2xl overflow-hidden bg-[#0b0813] p-2 flex justify-center max-w-md mx-auto">
+                    <img 
+                      src="/api/generate/rate-card" 
+                      alt="RealSSA Daily Rate Card" 
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <div className="flex justify-center pt-2">
+                    <a
+                      href="/api/generate/rate-card"
+                      download="realssa_rate_card.svg"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-black hover:bg-primary/95 transition shadow"
+                    >
+                      ⬇️ Download Rate Card SVG
+                    </a>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Widget Embed Syndication */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg font-black">Publisher Widget Syndication</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Provide local blogs, fintech platforms, and regional news portals with these lightweight iframe widgets. It helps syndicating our live financial tracking data while building domain backlinks.
+                  </p>
+                  
+                  <div className="space-y-4 pt-2">
+                    {/* Widget 1 */}
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-foreground block">💵 Live Parallel Exchange Rates Widget:</span>
+                      <pre className="p-3 bg-muted rounded-xl text-[10px] font-mono whitespace-pre-wrap select-all border border-border/80">
+                        {`<iframe src="https://www.realssanews.com.ng/widget/rates" width="360" height="340" style="border:none;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.15);" />`}
+                      </pre>
+                    </div>
+
+                    {/* Widget 2 */}
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-foreground block">🌾 Retail Commodities Index Widget:</span>
+                      <pre className="p-3 bg-muted rounded-xl text-[10px] font-mono whitespace-pre-wrap select-all border border-border/80">
+                        {`<iframe src="https://www.realssanews.com.ng/widget/prices" width="360" height="340" style="border:none;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.15);" />`}
+                      </pre>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column: Broadcast Text Compilers */}
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg font-black flex items-center gap-1.5">
+                    📢 One-Click Broadcast Center
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Instantly generated promotional broadcast updates structured with rich emojis and optimized call-to-actions. Copy and paste these into your WhatsApp groups, Telegram Channels, and social communities.
+                  </p>
+
+                  {loadingBroadcast ? (
+                    <div className="space-y-4">
+                      <Skeleton className="h-28 rounded-xl bg-muted" />
+                      <Skeleton className="h-28 rounded-xl bg-muted" />
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* English Copy Box */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-black uppercase text-primary">🇬🇧 Standard English Broadcast:</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(broadcasts.english);
+                              setIsCopiedEng(true);
+                              toast({
+                                title: "Copied!",
+                                description: "English broadcast copied to clipboard.",
+                              });
+                              setTimeout(() => setIsCopiedEng(false), 2000);
+                            }}
+                            className="inline-flex items-center gap-1 text-[10px] font-black text-amber-500 hover:underline"
+                          >
+                            {isCopiedEng ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            {isCopiedEng ? "Copied" : "Copy Message"}
+                          </button>
+                        </div>
+                        <textarea
+                          readOnly
+                          value={broadcasts.english}
+                          rows={6}
+                          className="w-full p-3 rounded-xl border bg-muted/40 text-xs font-mono select-all focus:outline-none resize-none leading-relaxed"
+                        />
+                      </div>
+
+                      {/* Pidgin Copy Box */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-black uppercase text-primary">🇳🇬 Wazobia Pidgin Broadcast:</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(broadcasts.pidgin);
+                              setIsCopiedPidg(true);
+                              toast({
+                                title: "Copied!",
+                                description: "Pidgin broadcast copied to clipboard.",
+                              });
+                              setTimeout(() => setIsCopiedPidg(false), 2000);
+                            }}
+                            className="inline-flex items-center gap-1 text-[10px] font-black text-amber-500 hover:underline"
+                          >
+                            {isCopiedPidg ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            {isCopiedPidg ? "Copied" : "Copy Message"}
+                          </button>
+                        </div>
+                        <textarea
+                          readOnly
+                          value={broadcasts.pidgin}
+                          rows={6}
+                          className="w-full p-3 rounded-xl border bg-muted/40 text-xs font-mono select-all focus:outline-none resize-none leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

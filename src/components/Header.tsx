@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Menu, X, ChevronDown, LogOut, Home, Newspaper, Radio, Globe, Moon, Sun, Bell, ArrowLeft } from "lucide-react";
+import { Menu, X, ChevronDown, LogOut, Home, Newspaper, Radio, Globe, Moon, Sun, Bell, ArrowLeft, Copy, Check, Key } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -62,6 +62,9 @@ const Header = () => {
   const location = useLocation();
   const { streak, longestStreak } = useStreak();
   const [isStreakOpen, setIsStreakOpen] = useState(false);
+  const [isSecureOpen, setIsSecureOpen] = useState(false);
+  const [importKey, setImportKey] = useState("");
+  const [isCopied, setIsCopied] = useState(false);
 
   const categoryPills = [
     { name: "Breaking", path: "/news" },
@@ -230,6 +233,80 @@ const Header = () => {
                   {streak > 0 
                     ? "Fantastic! You've read today's news to secure your streak. See you tomorrow!"
                     : "Read any summary article today to start your reading streak flame!"}
+                </div>
+
+                {/* Secure Identity Accordion */}
+                <div className="border-t border-border/40 pt-4 mt-1 text-left">
+                  <button
+                    onClick={() => setIsSecureOpen(!isSecureOpen)}
+                    className="w-full flex items-center justify-between text-xs font-bold text-primary hover:underline"
+                  >
+                    <span className="flex items-center gap-1">🛡️ Secure Your Streak</span>
+                    <span>{isSecureOpen ? "Hide" : "Show"}</span>
+                  </button>
+                  
+                  {isSecureOpen && (
+                    <div className="space-y-3 mt-3 animate-in fade-in duration-200">
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        Your reading streak and saved data are saved to your anonymous key. Save it to restore your profile on other devices.
+                      </p>
+                      
+                      {/* Export key */}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={localStorage.getItem('realssa_device_uuid') || ""}
+                          className="flex-1 px-3 py-1.5 rounded-lg border bg-muted/30 text-xs font-mono select-all focus:outline-none"
+                        />
+                        <button
+                          onClick={() => {
+                            const uuid = localStorage.getItem('realssa_device_uuid') || "";
+                            navigator.clipboard.writeText(uuid);
+                            setIsCopied(true);
+                            toast({
+                              title: "Key Copied!",
+                              description: "Your anonymous profile key has been copied to your clipboard.",
+                            });
+                            setTimeout(() => setIsCopied(false), 2000);
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs bg-primary text-primary-foreground font-semibold flex items-center gap-1 hover:bg-primary/95 transition duration-150"
+                        >
+                          {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                          <span>Copy</span>
+                        </button>
+                      </div>
+
+                      {/* Import key */}
+                      <div className="flex flex-col gap-1.5 pt-1.5 border-t border-border/20">
+                        <span className="text-[10px] font-bold text-muted-foreground">Restore on another device:</span>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Paste secure key here..."
+                            value={importKey}
+                            onChange={(e) => setImportKey(e.target.value)}
+                            className="flex-1 px-3 py-1.5 rounded-lg border bg-background text-xs font-mono focus:outline-none"
+                          />
+                          <button
+                            onClick={async () => {
+                              if (!importKey.trim()) return;
+                              localStorage.setItem('realssa_device_uuid', importKey.trim());
+                              toast({
+                                title: "Key Imported!",
+                                description: "Syncing your reading streak and library data...",
+                              });
+                              window.location.reload();
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs bg-secondary text-secondary-foreground font-semibold hover:bg-secondary/95 transition duration-150 border border-border flex items-center gap-1"
+                          >
+                            <Key size={12} />
+                            <span>Import</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
