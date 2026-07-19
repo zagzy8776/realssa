@@ -46,7 +46,6 @@ class NotificationService {
       headings: { en: title },
       contents: { en: body },
       url: articleUrl, // Targets both native mobile apps (Android/iOS) and web browsers
-      web_url: articleUrl, // Fallback specifically for chrome/firefox web push
       chrome_web_icon: LOGO_URL,
       chrome_web_badge: LOGO_URL,
       large_icon: LOGO_URL,
