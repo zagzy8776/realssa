@@ -1,6 +1,10 @@
 const cron = require('node-cron');
 const Parser = require('rss-parser');
 const { ingestAllFeeds } = require('./ingestion');
+const { generateSocialHook } = require('./summariser');
+const { postToBuffer } = require('./buffer');
+
+const SITE_URL = 'https://realssanews.com.ng';
 
 // Initialize RSS Parser
 const rssParser = new Parser({
@@ -87,7 +91,80 @@ async function generateDailyDigest() {
   }
 }
 
-function initRssBot(sharedPool) {
+async function runBufferCron() {
+  try {
+    console.log(`[Buffer Cron] Starting Buffer post cycle...`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS buffer_posts_log (
+        id SERIAL PRIMARY KEY,
+        story_hash TEXT UNIQUE,
+        posted_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Check daily limit
+    const countRes = await pool.query(
+      `SELECT COUNT(*) FROM buffer_posts_log WHERE posted_at >= NOW() - INTERVAL '24 hours'`
+    );
+    const dailyCount = parseInt(countRes.rows[0].count, 10);
+
+    if (dailyCount >= 10) {
+      console.log(`[Buffer Cron] Daily limit reached (${dailyCount}/10). Skipping.`);
+      return;
+    }
+
+    const remaining = 10 - dailyCount;
+
+    // Pick best unposted articles from last 2 days — prioritise featured/recent
+    const res = await pool.query(
+      `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
+              a.external_link, a.category, a.story_hash
+       FROM rss_articles a
+       LEFT JOIN buffer_posts_log b ON b.story_hash = a.story_hash
+       WHERE b.story_hash IS NULL
+         AND a.published_at > NOW() - INTERVAL '2 days'
+         AND a.content_type = 'article'
+       ORDER BY a.is_featured DESC, a.published_at DESC
+       LIMIT $1`,
+      [remaining]
+    );
+
+    if (res.rows.length === 0) {
+      console.log(`[Buffer Cron] No unposted articles found.`);
+      return;
+    }
+
+    console.log(`[Buffer Cron] Found ${res.rows.length} unposted articles. Daily count: ${dailyCount}/10.`);
+
+    for (const article of res.rows) {
+      const excerpt = article.ai_summary || article.original_excerpt || '';
+      const hook = await generateSocialHook(article.title, excerpt);
+      if (!hook) {
+        console.warn(`[Buffer Cron] Gemini returned no hook for: "${article.title.slice(0, 50)}"`);
+        continue;
+      }
+
+      const link = `${SITE_URL}/read?url=${encodeURIComponent(article.external_link)}`;
+      const success = await postToBuffer(hook, link, article.image);
+
+      if (success) {
+        await pool.query(
+          `INSERT INTO buffer_posts_log (story_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
+          [article.story_hash]
+        );
+        console.log(`[Buffer Cron] ✅ Posted: "${article.title.slice(0, 60)}"`);
+      }
+
+      // Small delay between posts to avoid hammering Buffer API
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  } catch (err) {
+    console.error('[Buffer Cron] Error:', err.message);
+  }
+}
+
+
   pool = sharedPool;
   console.log('🤖 RSS Aggregation Bot initialized. Running on Fly.io...');
 
@@ -100,6 +177,11 @@ function initRssBot(sharedPool) {
     } catch (err) {
       console.error('RSS Bot encountered an error during cycle:', err.message);
     }
+  });
+
+  // Run Buffer social posting every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    await runBufferCron();
   });
 
   // Run garbage collector every 1 hour (Minute 0)
@@ -117,8 +199,9 @@ function initRssBot(sharedPool) {
     try {
       console.log(`[${new Date().toISOString()}] Running initial RSS ingestion cycle...`);
       await ingestAllFeeds(pool, rssParser);
-      await cleanOldArticles(); // Run cleanup on startup too
-      await generateDailyDigest(); // Generate initial digest on startup
+      await cleanOldArticles();
+      await generateDailyDigest();
+      await runBufferCron();
     } catch (err) {
       console.error('RSS Bot encountered an error during initial cycle:', err.message);
     }
