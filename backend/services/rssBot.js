@@ -165,6 +165,7 @@ async function runBufferCron() {
 }
 
 
+function initRssBot(sharedPool) {
   pool = sharedPool;
   console.log('🤖 RSS Aggregation Bot initialized. Running on Fly.io...');
 
