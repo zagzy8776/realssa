@@ -1158,19 +1158,16 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
               const dailyCount = parseInt(countRes.rows[0].count, 10);
 
               if (dailyCount < 10) {
-                // Use AI hook if available, otherwise fall back to title directly
-                let hook = aiSummary
-                  ? `${aiSummary}\n\n#RealSSA #${category.replace(/-/g, '')} #News`
-                  : await generateSocialHook(title, originalExcerpt);
-                if (!hook) hook = `${title} 🔔\n\n#RealSSA #${category.replace(/-/g, '')} #News`;
-
-                const success = await postToBuffer(hook, `${SITE_URL}/read?url=${encodeURIComponent(externalLink)}`, image);
-                if (success) {
-                  await pool.query(
-                    `INSERT INTO buffer_posts_log (story_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
-                    [storyHash]
-                  );
-                  console.log(`[Buffer] ✅ Posted. Daily count is now ${dailyCount + 1}/10.`);
+                const hook = await generateSocialHook(title, originalExcerpt);
+                if (hook) {
+                  const success = await postToBuffer(hook, `${SITE_URL}/read?url=${encodeURIComponent(externalLink)}`, image);
+                  if (success) {
+                    await pool.query(
+                      `INSERT INTO buffer_posts_log (story_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
+                      [storyHash]
+                    );
+                    console.log(`[Buffer] ✅ Posted. Daily count is now ${dailyCount + 1}/10.`);
+                  }
                 }
               } else {
                 console.log(`[Buffer] Skipping auto-post: Daily limit of 10 posts already reached.`);
