@@ -974,7 +974,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         let embeddingVal = null;
         let extractedEntities = [];
 
-        if (contentType === 'article' && aiProcessedCount < 3) {
+        if (contentType === 'article' && aiProcessedCount < 20) {
           try {
             console.log(`🤖 Running Gemini AI analysis for: "${title}"`);
             const analysis = await generateAIAnalysis(title, description || originalExcerpt);
@@ -989,9 +989,6 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
                 embeddingVal = await generateEmbedding(aiSummary);
               }
               aiProcessedCount++;
-              
-              // Sleep for 4 seconds to stay under 15 requests per minute limit
-              await sleep(4000);
             }
           } catch (aiErr) {
             console.error('AI Ingestion error:', aiErr.message);
