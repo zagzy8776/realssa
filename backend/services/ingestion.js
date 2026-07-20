@@ -476,16 +476,44 @@ const HARD_KEYWORDS = [
   'fuel', 'naira', 'dollar', 'economy', 'inflation',
   'buhari', 'tinubu', 'presidency', 'senate', 'house of rep',
   'supreme court', 'efcc', 'nnpc', 'cbn',
+  // Nigerian Politics & Figures
+  'atiku', 'peter obi', 'wike', 'inec', 'apc', 'pdp', 'labour party',
+  'obasanjo', 'dangote', 'cbn governor', 'el-rufai', 'ganduje', 'fubara',
+  'sowore', 'dss', 'nsa', 'aso rock', 'national assembly', 'governorship',
+  'tribunal', 'election petition', 'by-election', 'impeachment',
+  // African Leaders & Politics
+  'ruto', 'ramaphosa', 'mahama', 'kagame', 'museveni', 'okonjo-iweala',
+  'samia', 'mnangagwa', 'lourenco', 'faye', 'ouattara', 'akufo-addo',
+  'au summit', 'african union', 'ecowas', 'sadc',
+  // Crime, Security & Terrorism
+  'bandits', 'terrorists', 'terrorism', 'boko haram', 'iswap', 'ransom',
+  'massacre', 'gunmen', 'soldiers killed', 'troops', 'military operation',
+  'bomb blast', 'suicide bomber', 'insurgency', 'separatist', 'ipob',
+  'oodua', 'secession', 'banditry', 'kidnapping', 'hostage',
+  // Economy & Finance
+  'devaluation', 'subsidy', 'petrol price', 'electricity tariff', 'blackout',
+  'minimum wage', 'unemployment', 'gdp', 'imf', 'world bank', 'debt',
+  'forex', 'exchange rate', 'interest rate', 'budget', 'tax', 'customs',
+  'stock exchange', 'nse', 'oil price', 'crude oil', 'opec',
   // Global Geopolitics & Leaders
   'trump', 'biden', 'putin', 'zelensky', 'netanyahu', 'macron', 'starmer', 'xi jinping',
   'war', 'missile', 'missiles', 'bombing', 'bombed', 'clash', 'clashes', 'sanctions', 'tariffs',
   'israel', 'gaza', 'ukraine', 'russia', 'nato', 'un', 'united nations',
   // Global Markets, Finance & Tech
-  'federal reserve', 'interest rates', 'rate cut', 'recession', 'bitcoin', 'crypto', 'btc', 'cyberattack', 'hacked', 'musk',
+  'federal reserve', 'rate cut', 'recession', 'bitcoin', 'crypto', 'btc',
+  'cyberattack', 'hacked', 'musk', 'openai', 'artificial intelligence', 'ai ban',
   // Global Disasters & Weather
   'tsunami', 'hurricane', 'typhoon', 'tornado', 'wildfire', 'outbreak', 'pandemic', 'epidemic',
-  // Major Global Sports & Entertainment
-  'champions league', 'world cup', 'premier league', 'transfer', 'afcon', 'olympics', 'oscars', 'grammys'
+  // Sports — African & Global
+  'super eagles', 'afcon', 'caf', 'fifa', 'world cup qualifier', 'world cup',
+  'champions league', 'premier league', 'transfer window', 'champions league final',
+  'ballon dor', 'olympics', 'commonwealth games', 'npfl', 'chan',
+  'osimhen', 'salah', 'mbappe', 'haaland', 'ronaldo', 'messi',
+  // Entertainment & Culture
+  'burna boy', 'wizkid', 'davido', 'afrobeats', 'nollywood', 'amvca',
+  'grammy', 'grammys', 'oscars', 'bet awards', 'headies', 'mtv africa',
+  'tiwa savage', 'asake', 'olamide', 'ckay', 'rema', 'ayra starr',
+  'netflix', 'prime video', 'disney', 'box office',
 ];
 // Soft alerts: newsworthy but prone to false positives — only notify from authority sources
 const SOFT_KEYWORDS = [
@@ -508,7 +536,7 @@ const AUTHORITY_HOSTNAMES = [
 ];
 
 // Keywords short enough to produce false substring matches — use word-boundary regex
-const WORD_BOUNDARY_KW = new Set(['fire', 'win', 'wins', 'dead', 'coup', 'strike']);
+const WORD_BOUNDARY_KW = new Set(['fire', 'win', 'wins', 'dead', 'coup', 'strike', 'tax', 'war', 'gdp', 'btc', 'apc', 'pdp', 'au']);
 
 function kwMatch(lower, kw) {
   if (WORD_BOUNDARY_KW.has(kw)) {
