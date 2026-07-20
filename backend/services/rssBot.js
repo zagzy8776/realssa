@@ -116,7 +116,7 @@ async function runBufferCron() {
 
     const remaining = 10 - dailyCount;
 
-    // Pick best unposted articles from last 2 days — prioritise featured/recent
+    // Pick best unposted articles from last 2 days — all categories, prioritise featured/recent
     const res = await pool.query(
       `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
               a.external_link, a.category, a.story_hash
@@ -124,7 +124,6 @@ async function runBufferCron() {
        LEFT JOIN buffer_posts_log b ON b.story_hash = a.story_hash
        WHERE b.story_hash IS NULL
          AND a.published_at > NOW() - INTERVAL '2 days'
-         AND a.content_type = 'article'
        ORDER BY a.is_featured DESC, a.published_at DESC
        LIMIT $1`,
       [remaining]
