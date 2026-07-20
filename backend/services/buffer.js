@@ -11,7 +11,7 @@
 const BUFFER_ACCESS_TOKEN = process.env.BUFFER_ACCESS_TOKEN || process.env.BUFFER_S_TOKEN;
 const BUFFER_PROFILE_IDS  = process.env.BUFFER_PROFILE_IDS  || process.env.BUFFER_FILE_IDS;
 
-const BUFFER_API_ENDPOINT = 'https://api.buffer.com';
+const BUFFER_API_ENDPOINT = 'https://api.buffer.com/graphql';
 
 /**
  * Check if Buffer is configured with valid credentials.
@@ -108,146 +108,127 @@ async function getBufferProfiles() {
 
 /**
  * Post a social media update to all configured Buffer profiles.
+ * Sends platform-specific text to each channel.
  *
- * @param {string} text       - The social post body (Gemini-generated hook)
- * @param {string} link       - Article URL to attach
+ * @param {object} hooks      - { twitter, instagram, facebook } platform texts
+ * @param {string} link       - Article URL (appended to twitter/facebook only)
  * @param {string} [imageUrl] - Optional thumbnail image URL
  * @param {boolean} [now]     - If true, post immediately; if false, add to Buffer queue
  * @returns {Promise<boolean>} true on success
  */
-async function postToBuffer(text, link, imageUrl, now = false) {
+async function postToBuffer(hooks, link, imageUrl, now = false) {
   if (!isBufferConfigured()) {
-    console.log('[Buffer] Not configured — skipping social post. Set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS.');
+    console.log('[Buffer] Not configured — skipping social post.');
     return false;
   }
 
-  const profileIds = BUFFER_PROFILE_IDS.split(',').map(id => id.trim()).filter(Boolean);
-  
-  // Always include Instagram ID automatically
-  const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
-  if (!profileIds.includes(INSTAGRAM_ID)) {
-    profileIds.push(INSTAGRAM_ID);
+  // Support legacy callers that pass a plain string
+  if (typeof hooks === 'string') {
+    hooks = { twitter: hooks, instagram: hooks, facebook: hooks };
   }
+
+  const profileIds = BUFFER_PROFILE_IDS.split(',').map(id => id.trim()).filter(Boolean);
+
+  // Ensure Instagram ID is always included
+  const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
+  if (!profileIds.includes(INSTAGRAM_ID)) profileIds.push(INSTAGRAM_ID);
 
   if (profileIds.length === 0) {
     console.warn('[Buffer] BUFFER_PROFILE_IDS is empty — skipping.');
     return false;
   }
 
-  // Embed the link directly in the text (works on all platforms, avoids link asset incompatibility on X/Twitter)
-  let fullText = text;
-  if (link) {
-    fullText = `${text}\n\nRead the full story: ${link}`;
-  }
-
-  // Truncate text to Twitter's 280 char limit (if posting to Twitter/X, it needs to be safe)
-  // Let's keep a reasonable limit of 275 characters so it's always safe
-  if (fullText.length > 275) {
-    fullText = fullText.slice(0, 272) + '…';
-  }
+  console.log(`[Buffer] Posting to ${profileIds.length} profiles: ${profileIds.join(', ')}`);
 
   const results = await Promise.allSettled(
-    profileIds.map(profileId => _postToProfile(profileId, fullText, imageUrl, now))
+    profileIds.map(profileId => _postToProfile(profileId, hooks, link, imageUrl, now))
   );
 
   const succeeded = results.filter(r => r.status === 'fulfilled' && r.value).length;
   const failed    = results.length - succeeded;
 
-  if (succeeded > 0) {
-    console.log(`[Buffer] ✅ Posted to ${succeeded}/${profileIds.length} profiles.`);
-  }
-  if (failed > 0) {
-    console.warn(`[Buffer] ⚠️ Failed for ${failed}/${profileIds.length} profiles.`);
-  }
+  if (succeeded > 0) console.log(`[Buffer] ✅ Posted to ${succeeded}/${profileIds.length} profiles.`);
+  if (failed > 0)    console.warn(`[Buffer] ⚠️ Failed for ${failed}/${profileIds.length} profiles.`);
 
   return succeeded > 0;
 }
 
 /**
- * Internal: post to a single Buffer profile.
+ * Internal: post to a single Buffer profile with platform-aware text.
  */
-async function _postToProfile(profileId, text, imageUrl, now) {
+async function _postToProfile(profileId, hooks, link, imageUrl, now) {
   try {
     const mode = now ? 'shareNow' : 'addToQueue';
+    const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
+    const isInstagram = profileId === INSTAGRAM_ID;
 
-    const isInstagram = profileId === '6a5c8546e2638b94d7959a2c';
+    // Instagram always needs an image — use logo as fallback rather than skipping
+    const LOGO = 'https://realssanews.com.ng/logo.png';
+    const effectiveImage = (imageUrl && imageUrl !== LOGO) ? imageUrl : LOGO;
 
-    // Instagram requires an image — skip if none provided
-    if (isInstagram && (!imageUrl || imageUrl === 'https://realssanews.com.ng/logo.png')) {
-      console.log(`[Buffer] Skipping Instagram — no article image available`);
-      return false;
+    // Pick the right text per platform
+    // Instagram: no link in caption (links don\'t work), use instagram-specific text
+    // Twitter/X: append link, enforce 280 char hard limit
+    // Facebook:  append link as attachment, use facebook text
+    let text;
+    if (isInstagram) {
+      // Instagram: no URL in caption, just the caption + hashtags
+      text = hooks.instagram || hooks.twitter;
+      // Strip any accidental URLs from IG caption
+      text = text.replace(/https?:\/\/\S+/g, '').trim();
+      // IG caption max 2200 chars but keep it punchy
+      if (text.length > 2200) text = text.slice(0, 2197) + '…';
+    } else {
+      // Twitter/X and Facebook: append the article link
+      const isTwitter = !isInstagram; // treat all non-IG as needing link
+      const baseText = isTwitter ? (hooks.twitter || hooks.facebook) : (hooks.facebook || hooks.twitter);
+      text = link ? `${baseText}\n\n${link}` : baseText;
+      // Twitter hard limit: 280 chars. Link = ~23 chars + newlines = 25 reserved.
+      // So cap total at 280.
+      if (text.length > 280) text = text.slice(0, 277) + '…';
     }
 
     const input = {
       channelId: profileId,
-      text: text,
+      text,
       schedulingType: 'automatic',
-      mode: mode,
-      saveToDraft: false
+      mode,
+      saveToDraft: false,
     };
 
-    if (isInstagram) {
-      input.type = 'post';
-    }
+    if (isInstagram) input.type = 'post';
 
-    // Attach image asset if provided
-    if (imageUrl && imageUrl !== 'https://realssanews.com.ng/logo.png') {
-      input.assets = [
-        {
-          image: {
-            url: imageUrl
-          }
-        }
-      ];
+    // Attach image — Instagram always gets one (logo fallback if needed), others only if real image
+    if (isInstagram || (effectiveImage && effectiveImage !== LOGO)) {
+      input.assets = [{ image: { url: effectiveImage } }];
     }
 
     const mutation = {
       query: `
         mutation CreatePost($input: CreatePostInput!) {
           createPost(input: $input) {
-            ... on PostActionSuccess {
-              post {
-                id
-                dueAt
-              }
-            }
-            ... on MutationError {
-              message
-            }
+            ... on PostActionSuccess { post { id dueAt } }
+            ... on MutationError { message }
           }
         }
       `,
-      variables: {
-        input: input
-      }
+      variables: { input }
     };
 
     const res = await fetch(BUFFER_API_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
       body: JSON.stringify(mutation)
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[Buffer] API error for profile ${profileId} (${res.status}):`, errText);
+      console.error(`[Buffer] API error for profile ${profileId} (${res.status}):`, await res.text());
       return false;
     }
 
     const data = await res.json();
-    if (data.errors) {
-      console.error(`[Buffer] GraphQL errors for profile ${profileId}:`, JSON.stringify(data.errors));
-      return false;
-    }
-
-    const mutationResult = data?.data?.createPost;
-    if (mutationResult?.message) {
-      console.error(`[Buffer] Post rejected/error for profile ${profileId}:`, mutationResult.message);
-      return false;
-    }
+    if (data.errors) { console.error(`[Buffer] GraphQL errors for ${profileId}:`, JSON.stringify(data.errors)); return false; }
+    if (data?.data?.createPost?.message) { console.error(`[Buffer] Post rejected for ${profileId}:`, data.data.createPost.message); return false; }
 
     return true;
   } catch (err) {
