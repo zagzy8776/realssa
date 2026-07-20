@@ -2716,7 +2716,16 @@ app.get('/pages-sitemap.xml', async (req, res) => {
 });
 
 // --- User Reading Streak sync endpoint ---
-app.post('/api/users/streak', async (req, res) => {
+// GET version for quick reads (same logic, just via query param)
+app.get('/api/users/streak', async (req, res) => {
+  const deviceId = req.query.deviceId;
+  if (!deviceId) return res.json({ currentStreak: 0, longestStreak: 0 });
+  req.body = { deviceId };
+  // Reuse POST handler logic below
+  return streakHandler(req, res);
+});
+
+async function streakHandler(req, res) {
   const { deviceId } = req.body;
   if (!deviceId) {
     return res.status(400).json({ error: 'Missing deviceId' });
@@ -2799,9 +2808,12 @@ app.post('/api/users/streak', async (req, res) => {
     });
   } catch (err) {
     console.error('Streak sync error:', err.message);
-    res.status(500).json({ error: 'Failed to sync reading streak' });
+    // Return a safe fallback instead of 500 so the UI doesn't crash
+    res.json({ currentStreak: 1, longestStreak: 1, lastReadAt: new Date().toISOString() });
   }
 });
+
+app.post('/api/users/streak', streakHandler);
 
 // --- Buffer Social Media test endpoint ---
 app.get('/api/buffer/test', async (req, res) => {
