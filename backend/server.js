@@ -2716,16 +2716,18 @@ app.get('/pages-sitemap.xml', async (req, res) => {
 });
 
 // --- User Reading Streak sync endpoint ---
-// GET version for quick reads (same logic, just via query param)
 app.get('/api/users/streak', async (req, res) => {
   const deviceId = req.query.deviceId;
   if (!deviceId) return res.json({ currentStreak: 0, longestStreak: 0 });
   req.body = { deviceId };
-  // Reuse POST handler logic below
-  return streakHandler(req, res);
+  return handleStreak(req, res);
 });
 
-async function streakHandler(req, res) {
+app.post('/api/users/streak', async (req, res) => {
+  return handleStreak(req, res);
+});
+
+async function handleStreak(req, res) {
   const { deviceId } = req.body;
   if (!deviceId) {
     return res.status(400).json({ error: 'Missing deviceId' });
@@ -2814,6 +2816,58 @@ async function streakHandler(req, res) {
 });
 
 app.post('/api/users/streak', streakHandler);
+
+// --- User Reading Streak sync endpoint ---
+async function handleStreak(req, res) {
+  const deviceId = req.body?.deviceId || req.query?.deviceId;
+  if (!deviceId) return res.json({ currentStreak: 0, longestStreak: 0 });
+  try {
+    await usersPool.query(`
+      CREATE TABLE IF NOT EXISTS user_streaks (
+        device_id TEXT PRIMARY KEY,
+        current_streak INT DEFAULT 1,
+        longest_streak INT DEFAULT 1,
+        last_read_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+    const result = await usersPool.query(
+      'SELECT current_streak, longest_streak, last_read_at FROM user_streaks WHERE device_id = $1',
+      [deviceId]
+    );
+    const now = new Date();
+    if (result.rows.length === 0) {
+      const insertRes = await usersPool.query(
+        'INSERT INTO user_streaks (device_id, current_streak, longest_streak, last_read_at) VALUES ($1, 1, 1, NOW()) RETURNING *',
+        [deviceId]
+      );
+      const row = insertRes.rows[0];
+      return res.json({ currentStreak: row.current_streak, longestStreak: row.longest_streak, lastReadAt: row.last_read_at });
+    }
+    const streak = result.rows[0];
+    const todayUTC = now.toISOString().slice(0, 10);
+    const lastDayUTC = new Date(streak.last_read_at).toISOString().slice(0, 10);
+    const dayDiff = Math.round((new Date(todayUTC) - new Date(lastDayUTC)) / 86400000);
+    let nextStreak = streak.current_streak;
+    let nextLongest = streak.longest_streak;
+    if (dayDiff === 0) {
+      await usersPool.query('UPDATE user_streaks SET last_read_at = NOW() WHERE device_id = $1', [deviceId]);
+    } else if (dayDiff === 1) {
+      nextStreak += 1;
+      if (nextStreak > nextLongest) nextLongest = nextStreak;
+      await usersPool.query('UPDATE user_streaks SET current_streak=$1, longest_streak=$2, last_read_at=NOW() WHERE device_id=$3', [nextStreak, nextLongest, deviceId]);
+    } else {
+      nextStreak = 1;
+      await usersPool.query('UPDATE user_streaks SET current_streak=1, last_read_at=NOW() WHERE device_id=$1', [deviceId]);
+    }
+    res.json({ currentStreak: nextStreak, longestStreak: nextLongest, lastReadAt: now.toISOString() });
+  } catch (err) {
+    console.error('Streak sync error:', err.message);
+    res.json({ currentStreak: 1, longestStreak: 1, lastReadAt: new Date().toISOString() });
+  }
+}
+app.get('/api/users/streak', (req, res) => handleStreak(req, res));
+app.post('/api/users/streak', (req, res) => handleStreak(req, res));
 
 // --- Buffer Social Media test endpoint ---
 app.get('/api/buffer/test', async (req, res) => {
