@@ -170,6 +170,8 @@ async function _postToProfile(profileId, text, imageUrl, now) {
   try {
     const mode = now ? 'shareNow' : 'addToQueue';
 
+    const isInstagram = profileId === '6a5c8546e2638b94d7959a2c';
+
     const input = {
       channelId: profileId,
       text: text,
@@ -177,6 +179,10 @@ async function _postToProfile(profileId, text, imageUrl, now) {
       mode: mode,
       saveToDraft: false
     };
+
+    if (isInstagram) {
+      input.mediaType = 'feed';
+    }
 
     // Attach image asset if provided
     if (imageUrl && imageUrl !== 'https://realssanews.com.ng/logo.png') {
