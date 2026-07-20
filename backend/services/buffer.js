@@ -172,6 +172,12 @@ async function _postToProfile(profileId, text, imageUrl, now) {
 
     const isInstagram = profileId === '6a5c8546e2638b94d7959a2c';
 
+    // Instagram requires an image — skip if none provided
+    if (isInstagram && (!imageUrl || imageUrl === 'https://realssanews.com.ng/logo.png')) {
+      console.log(`[Buffer] Skipping Instagram — no article image available`);
+      return false;
+    }
+
     const input = {
       channelId: profileId,
       text: text,
@@ -181,7 +187,7 @@ async function _postToProfile(profileId, text, imageUrl, now) {
     };
 
     if (isInstagram) {
-      input.mediaType = 'feed';
+      input.type = 'post';
     }
 
     // Attach image asset if provided
