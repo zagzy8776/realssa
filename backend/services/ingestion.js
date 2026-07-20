@@ -915,28 +915,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           continue;
         }
 
-        // Slow semantic pass for borderline duplicates using pgvector
-        if (isBorderlineDuplicate && pool) {
-          try {
-            const embedding = await generateEmbedding(title);
-            if (embedding && Array.isArray(embedding)) {
-              const vectorString = `[${embedding.join(',')}]`;
-              const semanticRes = await pool.query(
-                `SELECT id, title FROM rss_articles 
-                 WHERE published_at >= NOW() - INTERVAL '24 hours'
-                   AND embedding <=> $1::vector < 0.15 
-                 LIMIT 1`,
-                [vectorString]
-              );
-              if (semanticRes.rows.length > 0) {
-                console.log(`Dedup (Semantic): skipping "${title.slice(0, 60)}" (matched: "${semanticRes.rows[0].title.slice(0, 40)}")`);
-                continue;
-              }
-            }
-          } catch (embedErr) {
-            console.error('Semantic dedup check error:', embedErr.message);
-          }
-        }
+        // Semantic dedup disabled — keyword dedup is sufficient and embeddings burn Gemini quota
 
         // Add to recentTitles to prevent duplicates within the same fetch cycle
         recentTitles.push({ title });
@@ -1002,20 +981,16 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         let embeddingVal = null;
         let extractedEntities = [];
 
-        if (contentType === 'article' && aiProcessedCount < 20) {
+        // Cap at 5 AI analyses per cycle — Groq primary, Gemini fallback, keeps quota safe
+        if (contentType === 'article' && aiProcessedCount < 5) {
           try {
-            console.log(`🤖 Running Gemini AI analysis for: "${title}"`);
+            console.log(`🤖 Running AI analysis for: "${title.slice(0, 60)}"`);
             const analysis = await generateAIAnalysis(title, description || originalExcerpt);
             if (analysis) {
               aiSummary = analysis.summary;
               titleTrans = analysis.translations || {};
               summaryTrans = analysis.translations || {};
               extractedEntities = analysis.entities || [];
-
-              // Generate vector embedding
-              if (aiSummary) {
-                embeddingVal = await generateEmbedding(aiSummary);
-              }
               aiProcessedCount++;
             }
           } catch (aiErr) {
