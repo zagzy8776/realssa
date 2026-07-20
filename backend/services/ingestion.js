@@ -1168,7 +1168,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           summaryCount++;
 
           // Social Media Automation — post top new articles to Buffer (Max 10 per 24 hours)
-          if (result.rows.length > 0 && pool) {
+          if (pool) {
             try {
               await pool.query(`
                 CREATE TABLE IF NOT EXISTS buffer_posts_log (
@@ -1183,15 +1183,21 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
               const dailyCount = parseInt(countRes.rows[0].count, 10);
 
               if (dailyCount < 10) {
-                const hook = await generateSocialHook(title, originalExcerpt);
-                if (hook) {
-                  const success = await postToBuffer(hook, `${SITE_URL}/read?url=${encodeURIComponent(externalLink)}`, image);
-                  if (success) {
-                    await pool.query(
-                      `INSERT INTO buffer_posts_log (story_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
-                      [storyHash]
-                    );
-                    console.log(`[Buffer] ✅ Posted. Daily count is now ${dailyCount + 1}/10.`);
+                // Check this story hasn't been posted to Buffer before
+                const alreadyPosted = await pool.query(
+                  `SELECT 1 FROM buffer_posts_log WHERE story_hash = $1`, [storyHash]
+                );
+                if (alreadyPosted.rows.length === 0) {
+                  const hook = await generateSocialHook(title, originalExcerpt);
+                  if (hook) {
+                    const success = await postToBuffer(hook, `${SITE_URL}/read?url=${encodeURIComponent(externalLink)}`, image);
+                    if (success) {
+                      await pool.query(
+                        `INSERT INTO buffer_posts_log (story_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
+                        [storyHash]
+                      );
+                      console.log(`[Buffer] ✅ Posted. Daily count is now ${dailyCount + 1}/10.`);
+                    }
                   }
                 }
               } else {
