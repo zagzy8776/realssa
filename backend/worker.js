@@ -276,6 +276,15 @@ async function start() {
   console.log('👉 Running RSS News Aggregator');
   const { initRssBot } = require('./services/rssBot');
   initRssBot(pool);
+
+  console.log('👉 Running Rates Bot (ExchangeRate-API official rates)');
+  const { initRatesBot } = require('./services/ratesBot');
+  initRatesBot(pool);
+
+  console.log('👉 Running Prices Bot (NBS commodity prices)');
+  const { initPricesBot } = require('./services/pricesBot');
+  initPricesBot(pool);
+
   console.log('====================================');
 }
 
