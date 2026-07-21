@@ -28,6 +28,16 @@ const FEEDS = [
   '/api/news/entertainment',
   '/api/news/tech',
   '/api/news/business',
+  '/api/news/ghana',
+  '/api/news/kenya',
+  '/api/news/south-africa',
+  '/api/news/uk',
+  '/api/news/usa',
+  '/api/news/science',
+  '/api/news/lifestyle',
+  '/api/news/jobs',
+  '/api/news/crypto',
+  '/api/news/local',
 ];
 
 const PAGE_SIZE = 20;
