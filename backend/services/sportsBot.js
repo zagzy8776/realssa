@@ -73,11 +73,11 @@ async function pollMatches(pool, notificationService) {
   isPolling = true;
 
   try {
-    // Calculate date bounds (today through +14 days for better fixture coverage)
+    // Calculate date bounds — football-data.org free tier max is 10 days
     const today = new Date();
     const dateFrom = today.toISOString().split('T')[0];
     const future = new Date();
-    future.setDate(today.getDate() + 14);
+    future.setDate(today.getDate() + 9); // 9 days ahead = 10 day window inclusive
     const dateTo = future.toISOString().split('T')[0];
 
     // Fetch matches for today through +7 days
