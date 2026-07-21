@@ -147,8 +147,8 @@ const App = () => {
                 <Route path="/south-africa" element={<SouthAfrica />} />
                 <Route path="/uk" element={<UK />} />
                 <Route path="/usa" element={<USA />} />
-                <Route path="/news" element={<Newssection />} />
-                <Route path="/news-section" element={<Newssection />} />
+                <Route path="/news" element={<ForYou />} />
+                <Route path="/news-section" element={<ForYou />} />
                 <Route path="/entertainment" element={<Newssection categoryFilter="entertainment" />} />
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/read" element={<ReaderMode />} />

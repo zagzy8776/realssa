@@ -12,7 +12,6 @@ import 'swiper/css';
 
 const CATEGORIES = [
   { id: 'trending',     name: 'For You',       path: '/api/articles' },
-  { id: 'breaking',     name: 'Breaking',      path: '/api/news/breaking?diverse=true' },
   { id: 'local',        name: 'Local',         path: '/api/news/local' },
 ];
 

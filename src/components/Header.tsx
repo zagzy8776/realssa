@@ -19,7 +19,6 @@ import { useStreak } from "@/hooks/useStreak";
 
 const navLinks = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/news", label: "Breaking", icon: Newspaper },
   { href: "/sports", label: "⚽ Sports" },
   { href: "/market", label: "📊 Market Hub" },
   { href: "/wire", label: "📢 Live Wire" },
@@ -67,7 +66,7 @@ const Header = () => {
   const [isCopied, setIsCopied] = useState(false);
 
   const categoryPills = [
-    { name: "Breaking", path: "/news" },
+    { name: "Breaking", path: "/for-you" },
     { name: "Nigeria", path: "/nigeria" },
     { name: "Sports", path: "/sports" },
     { name: "Entertainment", path: "/entertainment" },
