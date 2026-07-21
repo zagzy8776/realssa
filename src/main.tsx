@@ -1,8 +1,11 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { Capacitor } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 
-CapacitorUpdater.notifyAppReady();
+if (Capacitor.isNativePlatform()) {
+  CapacitorUpdater.notifyAppReady();
+}
 import "./index.css";
 
 // Sync dark mode with system preference

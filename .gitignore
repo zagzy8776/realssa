@@ -49,5 +49,6 @@ backend/initialize_db.js
 backend/query_db.js
 backend/seed_*.js
 release-key.jks
-
-
+*.zip
+*_logs.txt
+*.timestamp-*.mjs

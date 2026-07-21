@@ -1,0 +1,19 @@
+#startup-loader {
+  position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f0f0f;
+}
+.realssa-letter {
+  font-family: "Inter", "Arial Black", sans-serif; font-weight: 900; font-size: clamp(72px, 10vw, 96px); line-height: 1; color: #fbbf24;
+  text-shadow: 0 0 40px rgba(251,191,36,1), 0 0 80px rgba(251,191,36,0.5);
+  user-select: none;
+  animation: realssaFade 1.4s ease-in-out infinite;
+}
+.realssa-sub {
+  margin-top: 1rem; color: rgba(255,255,255,0.4); font-size: 0.875rem; letter-spacing: 0.3em; text-transform: uppercase; font-weight: 600;
+  font-family: sans-serif;
+  animation: realssaFade 1.4s ease-in-out infinite;
+  animation-delay: 0.9s;
+}
+@keyframes realssaFade {
+  0%, 100% { opacity: 0.1; transform: translateY(4px); }
+  50% { opacity: 1; transform: translateY(0); }
+}

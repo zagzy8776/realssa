@@ -29,7 +29,7 @@ const config: CapacitorConfig = {
     },
     CapacitorUpdater: {
       appId: 'com.realssa.news',
-      version: '0.0.66',
+      version: '0.0.73',
       autoUpdate: 'always',
       autoSplashscreen: true
     }

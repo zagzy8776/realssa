@@ -1,7 +1,7 @@
 {
   "name": "realssa-news",
   "private": true,
-  "version": "0.0.66",
+  "version": "0.0.69",
   "type": "module",
   "scripts": {
     "dev": "vite",
