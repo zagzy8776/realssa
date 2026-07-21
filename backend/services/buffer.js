@@ -196,7 +196,7 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
       saveToDraft: false,
     };
 
-    if (isInstagram) input.type = 'post';
+    // Instagram type field removed — not supported by CreatePostInput
 
     // Attach image — Instagram always gets one (logo fallback if needed), others only if real image
     if (isInstagram || (effectiveImage && effectiveImage !== LOGO)) {
