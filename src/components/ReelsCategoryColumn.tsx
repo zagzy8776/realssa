@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiUrl } from '@/lib/api-base';
 import { fetchWithRetry } from '@/lib/fetchWithRetry';
 import ReelsCard from './ReelsCard';
@@ -25,6 +25,21 @@ export default function ReelsCategoryColumn({ fetchUrl, isActive, categoryName }
   const [loadingMore, setLoadingMore] = useState(false);
 
   const [activeVerticalIndex, setActiveVerticalIndex] = useState(0);
+  const cardStartRef = useRef<number>(Date.now());
+
+  const sendCardDwell = (article: any, seconds: number) => {
+    if (!article || seconds < 2) return;
+    const deviceId = localStorage.getItem('realssa_device_uuid') || '';
+    if (!deviceId) return;
+    const category = article.category || 'news';
+    const payload = JSON.stringify({ deviceId, category, seconds, articleId: article.id });
+    const url = apiUrl('/api/users/dwell');
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+    } else {
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+    }
+  };
 
   const fetchPage = useCallback(async (pageNum: number, append = false) => {
     if (pageNum === 1) setLoading(true);
@@ -129,6 +144,11 @@ export default function ReelsCategoryColumn({ fetchUrl, isActive, categoryName }
       style={{ height: '100%' }}
       onReachEnd={handleReachEnd}
       onSlideChange={(swiper) => {
+        // Capture dwell time for the card being left
+        const seconds = Math.round((Date.now() - cardStartRef.current) / 1000);
+        sendCardDwell(articles[activeVerticalIndex], seconds);
+        cardStartRef.current = Date.now();
+
         setActiveVerticalIndex(swiper.activeIndex);
         if (Capacitor.isNativePlatform()) {
           Haptics.impact({ style: ImpactStyle.Light });

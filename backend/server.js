@@ -2767,6 +2767,43 @@ async function handleStreak(req, res) {
 app.get('/api/users/streak', (req, res) => handleStreak(req, res));
 app.post('/api/users/streak', (req, res) => handleStreak(req, res));
 
+// --- Dwell Time Signal Capture ---
+// POST /api/users/dwell — updates category affinity based on time spent reading
+app.post('/api/users/dwell', async (req, res) => {
+  const { deviceId, category, seconds, articleId } = req.body;
+  if (!deviceId || !category || !seconds) return res.json({ ok: false });
+
+  try {
+    // Score contribution:
+    // < 10s  = -1  (skip signal, small negative so one bad headline doesn't tank category)
+    // 10-30s = +1  (mild interest)
+    // 30-60s = +3  (engaged)
+    // 60-120s= +5  (strong interest)
+    // 120s+  = +8  (deep read)
+    let contribution = 0;
+    if (seconds < 10)       contribution = -1;
+    else if (seconds < 30)  contribution = 1;
+    else if (seconds < 60)  contribution = 3;
+    else if (seconds < 120) contribution = 5;
+    else                    contribution = 8;
+
+    await usersPool.query(
+      `INSERT INTO user_category_affinities (device_id, category, score, last_interacted_at)
+       VALUES ($1, $2, GREATEST(0, $3), NOW())
+       ON CONFLICT (device_id, category)
+       DO UPDATE SET
+         score = LEAST(100, GREATEST(0, user_category_affinities.score + $3)),
+         last_interacted_at = NOW()`,
+      [deviceId, category, contribution]
+    );
+
+    res.json({ ok: true, contribution });
+  } catch (err) {
+    console.error('Dwell time error:', err.message);
+    res.json({ ok: false });
+  }
+});
+
 // --- Buffer Social Media test endpoint ---
 app.get('/api/buffer/test', async (req, res) => {
   try {

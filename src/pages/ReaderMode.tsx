@@ -9,6 +9,7 @@ import NewsCard from "@/components/NewsCard";
 import ExternalArticleComments from "@/components/ExternalArticleComments";
 import DOMPurify from "dompurify";
 import { decodeHTMLEntities } from "@/lib/utils";
+import { useDwellTime } from "@/hooks/useDwellTime";
 
 interface ExtractedArticle {
   title: string;
@@ -37,6 +38,10 @@ const ReaderMode = () => {
   const [imgError, setImgError] = useState(false);
   const [relatedNews, setRelatedNews] = useState<any[]>([]);
   const [viewCount, setViewCount] = useState<number | null>(null);
+
+  // Capture dwell time for category affinity scoring
+  const articleId = searchParams.get('id') || undefined;
+  useDwellTime(fallbackCategory || 'news', articleId);
 
   // Track view count using article id from URL param
   useEffect(() => {
