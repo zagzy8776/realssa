@@ -1,84 +1,94 @@
-const fs = require('fs');
-const path = require('path');
+/**
+ * RSS Feed Generator Service
+ * Dynamically queries PostgreSQL (rss_articles) and builds RSS 2.0 XML feeds
+ * for syndication across third-party websites, news readers, and aggregators.
+ */
 
-// Read articles from your database
-function getArticles() {
-  try {
-    const articlesPath = path.join(__dirname, 'data', 'articles.json');
-    const data = fs.readFileSync(articlesPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading articles:', error);
-    return [];
+const SITE_URL = 'https://realssanews.com.ng';
+
+/**
+ * Generate RSS XML feed for a category from PostgreSQL
+ * @param {object} pool - PostgreSQL pool connection
+ * @param {string} category - Category slug ('all', 'latest', 'nigerian-news', 'sports', etc.)
+ * @returns {Promise<string>} Valid RSS 2.0 XML string
+ */
+async function generateRSSFeedFromDB(pool, category = 'latest') {
+  let articles = [];
+
+  if (pool) {
+    try {
+      let queryStr = `
+        SELECT 'rss-' || id as id, title, COALESCE(ai_summary, original_excerpt) AS description,
+               category, image, external_link, source_name, published_at
+        FROM rss_articles
+      `;
+      let params = [];
+
+      if (category !== 'all' && category !== 'latest') {
+        queryStr += ` WHERE category = $1`;
+        params.push(category);
+      }
+
+      queryStr += ` ORDER BY published_at DESC LIMIT 30`;
+
+      const res = await pool.query(queryStr, params);
+      articles = res.rows;
+    } catch (err) {
+      console.error('[RSS Generator] Database query error:', err.message);
+    }
   }
-}
 
-// Generate RSS XML
-function generateRSSFeed(category = 'all') {
-  const articles = getArticles();
-  
-  // Filter by category if specified
-  const filtered = category === 'all' 
-    ? articles.slice(0, 20)  // Last 20 articles
-    : articles.filter(a => {
-        const articleCategory = (a.category || '').toLowerCase();
-        const searchCategory = category.toLowerCase();
-        return articleCategory === searchCategory || 
-               articleCategory.includes(searchCategory);
-      }).slice(0, 20);
-  
-  // Build RSS items
-  const items = filtered.map(article => `
+  const items = articles.map(article => {
+    const pubDate = article.published_at ? new Date(article.published_at).toUTCString() : new Date().toUTCString();
+    const articleUrl = `${SITE_URL}/article/${article.id}`;
+    const mediaTag = article.image && !/logo|icon/i.test(article.image)
+      ? `<media:content url="${escapeXml(article.image)}" medium="image"/>`
+      : '';
+
+    return `
     <item>
       <title>${escapeXml(article.title)}</title>
-      <link>https://realssa.vercel.app/article/${article.id}</link>
-      <guid isPermaLink="true">https://realssa.vercel.app/article/${article.id}</guid>
-      <description>${escapeXml(article.excerpt || article.description || article.summary || '')}</description>
-      <pubDate>${formatDate(article.date)}</pubDate>
+      <link>${articleUrl}</link>
+      <guid isPermaLink="true">${articleUrl}</guid>
+      <description>${escapeXml(article.description || '')}</description>
+      <pubDate>${pubDate}</pubDate>
       <category>${escapeXml(article.category || 'General')}</category>
-      <source url="${escapeXml(article.externalLink || '')}">${escapeXml(article.source || 'Realssa News')}</source>
-    </item>
-  `).join('');
+      <source url="${escapeXml(article.external_link || '')}">${escapeXml(article.source_name || 'RealSSA News')}</source>
+      ${mediaTag}
+    </item>`;
+  }).join('\n');
 
-  // Full RSS XML
+  const feedTitle = category === 'all' || category === 'latest'
+    ? 'RealSSA News - Breaking News & Top Headlines'
+    : `RealSSA News - ${category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ')}`;
+
   return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
-    <title>Realssa News - ${category === 'all' ? 'All News' : category.charAt(0).toUpperCase() + category.slice(1)}</title>
-    <link>https://realssa.vercel.app</link>
-    <description>Latest African news curated from top sources - Nigeria, Ghana, Kenya, South Africa, and worldwide entertainment, sports, and culture.</description>
-    <language>en</language>
+    <title>${escapeXml(feedTitle)}</title>
+    <link>${SITE_URL}</link>
+    <description>Africa's leading digital news network — breaking Nigerian news, sports, business, and global headlines.</description>
+    <language>en-ng</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
-    <atom:link href="https://realssa.vercel.app/rss/${category}.xml" rel="self" type="application/rss+xml"/>
+    <atom:link href="${SITE_URL}/rss/${category}.xml" rel="self" type="application/rss+xml"/>
     <image>
-      <url>https://realssa.vercel.app/logo.png</url>
-      <title>Realssa News</title>
-      <link>https://realssa.vercel.app</link>
+      <url>${SITE_URL}/logo.png</url>
+      <title>RealSSA News</title>
+      <link>${SITE_URL}</link>
     </image>
     ${items}
   </channel>
 </rss>`;
 }
 
-// Format date to RFC 822 format
-function formatDate(dateString) {
-  if (!dateString) return new Date().toUTCString();
-  try {
-    return new Date(dateString).toUTCString();
-  } catch {
-    return new Date().toUTCString();
-  }
-}
-
-// Escape special XML characters
 function escapeXml(text) {
   if (!text) return '';
   return text
     .replace(/&/g, '&amp;')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 }
 
-module.exports = { generateRSSFeed };
+module.exports = { generateRSSFeedFromDB };

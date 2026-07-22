@@ -9,6 +9,8 @@ const dns = require('dns').promises;
 const rateLimit = require('express-rate-limit');
 const { initRssBot } = require('./services/rssBot');
 const { initSportsBot } = require('./services/sportsBot');
+const { initIntelligenceAgent } = require('./services/aiIntelligenceAgent');
+const { initTrendingSynthesizer } = require('./services/aiTrendingSynthesizer');
 const notificationService = require('./services/notificationService');
 const { runMigrations } = require('./worker');
 const { runCrawler } = require('./services/crawlerService');
@@ -71,6 +73,7 @@ if (process.env.DATABASE_URL) {
       console.error('❌ Database connection failed:', err.message);
     } else {
       console.log('✅ Database connected:', res.rows[0]);
+      app.set('pool', pool);
 
       // Run auto-migrations first so all base tables (rss_articles, live_matches, etc.) exist
       try {
@@ -183,6 +186,10 @@ if (process.env.DATABASE_URL) {
       initRssBot(pool);
       // Initialize the Sports bot to periodically fetch matches
       initSportsBot(pool, notificationService);
+      // Initialize the AI Intelligence & Verification Agent
+      initIntelligenceAgent(pool);
+      // Initialize the AI Trending Topic Synthesizer Agent
+      initTrendingSynthesizer(pool);
     }
   });
 }
@@ -246,6 +253,17 @@ const authLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use(express.json());
+
+// Public Syndication API & RSS Feed Syndication Endpoints
+const { generateRSSFeedFromDB } = require('./rss-generator');
+app.use('/api/v1', require('./routes/publicApi'));
+
+app.get(['/rss.xml', '/rss/:category.xml'], async (req, res) => {
+  const category = (req.params.category || 'latest').replace('.xml', '');
+  const xml = await generateRSSFeedFromDB(app.get('pool'), category);
+  res.header('Content-Type', 'application/rss+xml; charset=utf-8');
+  res.send(xml);
+});
 
 // Database file paths
 const usersFilePath = path.join(__dirname, 'data', 'users.json');

@@ -162,8 +162,11 @@ async function runBufferCron() {
 
     console.log(`[Buffer Cron] Queue has ${queueCount} posts. Topping up with ${toAdd} more...`);
 
-    // Pick best unposted articles — all categories, all time (no 2-day window limit)
-    const res = await pool.query(
+    // Balanced selection: guarantees 50% Nigerian news mix in Buffer queue
+    const ngnLimit = Math.ceil(BUFFER_MAX_PER_CYCLE / 2); // 1 for Nigerian news
+    const otherLimit = BUFFER_MAX_PER_CYCLE - ngnLimit;  // 1 for World/Sports/Other
+
+    const ngnRes = await pool.query(
       `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
               a.external_link, a.category,
               COALESCE(a.story_hash, a.url_hash) AS story_hash
@@ -171,19 +174,58 @@ async function runBufferCron() {
        LEFT JOIN buffer_posts_log b ON b.story_hash = COALESCE(a.story_hash, a.url_hash)
        WHERE b.story_hash IS NULL
          AND COALESCE(a.story_hash, a.url_hash) IS NOT NULL
-       ORDER BY a.is_featured DESC, a.published_at DESC
+         AND a.category = 'nigerian-news'
+       ORDER BY a.published_at DESC
        LIMIT $1`,
-      [toAdd]
+      [ngnLimit]
     );
 
-    if (res.rows.length === 0) {
+    const otherRes = await pool.query(
+      `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
+              a.external_link, a.category,
+              COALESCE(a.story_hash, a.url_hash) AS story_hash
+       FROM rss_articles a
+       LEFT JOIN buffer_posts_log b ON b.story_hash = COALESCE(a.story_hash, a.url_hash)
+       WHERE b.story_hash IS NULL
+         AND COALESCE(a.story_hash, a.url_hash) IS NOT NULL
+         AND a.category != 'nigerian-news'
+       ORDER BY a.is_featured DESC, a.published_at DESC
+       LIMIT $1`,
+      [otherLimit]
+    );
+
+    let articlesToProcess = [...ngnRes.rows, ...otherRes.rows];
+
+    // Fallback: fill remaining slots if either query returned fewer articles
+    if (articlesToProcess.length < BUFFER_MAX_PER_CYCLE) {
+      const alreadyPickedHashes = new Set(articlesToProcess.map(a => a.story_hash));
+      const fallbackRes = await pool.query(
+        `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
+                a.external_link, a.category,
+                COALESCE(a.story_hash, a.url_hash) AS story_hash
+         FROM rss_articles a
+         LEFT JOIN buffer_posts_log b ON b.story_hash = COALESCE(a.story_hash, a.url_hash)
+         WHERE b.story_hash IS NULL
+           AND COALESCE(a.story_hash, a.url_hash) IS NOT NULL
+         ORDER BY a.published_at DESC
+         LIMIT 20`
+      );
+
+      for (const row of fallbackRes.rows) {
+        if (!alreadyPickedHashes.has(row.story_hash)) {
+          articlesToProcess.push(row);
+          alreadyPickedHashes.add(row.story_hash);
+          if (articlesToProcess.length >= BUFFER_MAX_PER_CYCLE) break;
+        }
+      }
+    }
+
+    if (articlesToProcess.length === 0) {
       console.log(`[Buffer Cron] No unposted articles found.`);
       return;
     }
 
-    // Cap to BUFFER_MAX_PER_CYCLE per run to stay at 2 req/min for AI
-    const articlesToProcess = res.rows.slice(0, BUFFER_MAX_PER_CYCLE);
-    console.log(`[Buffer Cron] Found ${res.rows.length} articles to queue. Processing ${articlesToProcess.length} this cycle.`);
+    console.log(`[Buffer Cron] Processing ${articlesToProcess.length} articles this cycle (Categories: ${articlesToProcess.map(a => a.category).join(', ')}).`);
 
     for (const article of articlesToProcess) {
       const excerpt = article.ai_summary || article.original_excerpt || '';

@@ -10,6 +10,7 @@ const { generateSummary, generateSocialHook, generateAIAnalysis, generateEmbeddi
 const { pingIndexNow } = require('./indexnow');
 const { pingWebSub } = require('./websub');
 const { pingGoogleIndexingAPI } = require('./googleIndexing');
+const { dispatchIndexingCommand } = require('./searchController');
 const notificationService = require('./notificationService');
 const { postToBuffer } = require('./buffer');
 const { extractArticle } = require('./extractor');
@@ -1172,27 +1173,11 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     }
   }
 
-  // Ping search engines if new articles were added
+  // Ping search engines via Master Search & Indexing Controller
   if (newArticleIds.length > 0) {
-    const fullUrls = newArticleIds.map(id => `${SITE_URL}/article/${id}`);
-
-    // Trigger ping for search engines (IndexNow, etc.)
-    
-    // Notifications are now handled eagerly inside the loop to avoid Vercel timeouts!
-
-
-    // Ping search engines (Non-critical, fire-and-forget to prevent Vercel 10s timeout)
-    pingIndexNow(fullUrls).catch(e => console.error('IndexNow error', e));
-    pingWebSub().catch(e => console.error('WebSub error', e));
-
-    // Google Indexing API — direct ping (up to DAILY_LIMIT per day)
-    const googlePingPromises = newArticleIds.slice(0, 20).map(id =>
-      pingGoogleIndexingAPI(id).catch(err => {
-        console.error(`Google Indexing API error for ${id}:`, err.message);
-        return null;
-      })
+    dispatchIndexingCommand(newArticleIds).catch(e =>
+      console.error('[Master Controller] Indexing dispatch error:', e.message)
     );
-    Promise.all(googlePingPromises).catch(e => console.error('Google Ping error', e));
   }
 
   // ── Recalculate Freshness Scores ──────────────────────────────────────────
