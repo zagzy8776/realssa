@@ -137,7 +137,7 @@ const NigerianNews = () => {
       <SEO 
         title="Latest Nigerian News & Breaking Updates"
         description="Stay updated with the latest political news, business updates, and breaking stories across Nigeria."
-        keywords="Latest political news in Nigeria today, Lagos business updates, Nigerian economy breaking news, Nigeria news, Naija news"
+        keywords="Latest political news in Nigeria today, Lagos business updates, Nigerian economy breaking news, Nigeria news, Naija news, best news in nigeria, best news in nigeria today, best news site in nigeria, best news app in nigeria, top news site in nigeria, top news in nigeria today, top trending news in nigeria today, top political news in nigeria today, top news headlines in nigeria today, top breaking news in nigeria today, top business news in nigeria today, best online newspaper in nigeria, today news in nigeria headlines, today news in nigeria newspapers, today news in nigeria now, today news in nigeria 2026, today news in nigeria punch, today news in nigeria video, latest news in nigeria headlines, latest news in nigeria newspapers, latest news in nigeria punch newspaper, latest news in nigeria vanguard, latest news in nigeria sun, latest news in nigeria nation, current news in nigeria now, today breaking news in nigeria now, latest news in nigeria politics"
       />
       <div className="min-h-screen bg-background flex flex-col">
         <Header />

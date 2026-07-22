@@ -11,6 +11,7 @@ const { initRssBot } = require('./services/rssBot');
 const { initSportsBot } = require('./services/sportsBot');
 const { initIntelligenceAgent } = require('./services/aiIntelligenceAgent');
 const { initTrendingSynthesizer } = require('./services/aiTrendingSynthesizer');
+const { moderateUserComment } = require('./services/aiCommunityBot');
 const notificationService = require('./services/notificationService');
 const { runMigrations } = require('./worker');
 const { runCrawler } = require('./services/crawlerService');
@@ -2997,6 +2998,17 @@ app.post('/api/comments', async (req, res) => {
   const { articleId, author, content, parentId } = req.body;
   if (!articleId || !author || !content) {
     return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Real-time AI Comment Moderation Guard
+  try {
+    const modResult = await moderateUserComment(author, content);
+    if (!modResult.approved) {
+      console.log(`🛡️ [AI Moderation] Comment blocked (${modResult.reason}): "${content.slice(0, 40)}..."`);
+      return res.status(400).json({ error: `Comment rejected: ${modResult.reason}` });
+    }
+  } catch (modErr) {
+    console.warn('[AI Moderation] Error during moderation check:', modErr.message);
   }
 
   try {

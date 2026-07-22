@@ -27,7 +27,32 @@ const DEFAULT_KEYWORDS =
   'African sports news, Premier League Africa, African football, ' +
   'tech news Nigeria, cryptocurrency Africa, Bitcoin Nigeria, ' +
   'politics Nigeria, Nigeria 2027 elections, African business news, ' +
-  'best news site Nigeria, top African news site';
+  'best news site Nigeria, top African news site, ' +
+  'best news sites, best news sites unbiased, best news sites free, best news sites without paywall, ' +
+  'best news site for stock market, best news sites for futures trading, best news sites online, ' +
+  'best news sites for business, best news sites 2026, best news sources unbiased, ' +
+  'best news sources unbiased 2026, best free unbiased news sites, best news sources reddit, ' +
+  'best free news sites reddit, best news websites free, best online news sites free, ' +
+  'best financial news sites free, best market news sites free, best international news sites free, ' +
+  'best world news sites free, best business news websites free, best news sources without paywall, ' +
+  'best news in nigeria, best news in nigeria today, best news site in nigeria, best news app in nigeria, ' +
+  'best news channel in nigeria, best news websites in nigeria, top news site in nigeria, ' +
+  'best online news in nigeria, best news platform in nigeria, top news in nigeria today, ' +
+  'top trending news in nigeria today, top political news in nigeria today, top news headlines in nigeria today, ' +
+  'top breaking news in nigeria today, top business news in nigeria today, news12, news 12 nj, ' +
+  'news 12 long island, newsday, newsmax, news 12 westchester, news new jersey, news clifton nj, ' +
+  'news12nj, news12 long island, news12 westchester, news12li, news12 weather, news12ct, news12 new jersey, ' +
+  'news12 bronx, news12 brooklyn, news today new jersey, news today nyc, news today fox, news today nj, ' +
+  'news today headlines, news 12 nj breaking news today, news 12 long island weather, newsday long island, ' +
+  'newsmax news, newsmax live, clifton news nj today, breaking news clifton nj today, ' +
+  'today news in nigeria headlines, today news in nigeria newspapers, today news in nigeria now, ' +
+  'today news in nigeria 2026, today news in nigeria headlines 2026, today news in nigeria punch, ' +
+  'today news in nigeria video, today news in nigeria headlines politics, latest news in nigeria headlines, ' +
+  'latest news in nigeria newspapers, latest news in nigeria punch newspaper, latest news in nigeria vanguard, ' +
+  'latest news in nigeria sun newspapers, latest news in nigeria nation, what is the latest news in nigeria today, ' +
+  'latest news in nigeria now, current news in nigeria now, today breaking news in nigeria now, ' +
+  'latest news in nigeria 2026, current news in nigeria today punch, latest news in nigeria politics, ' +
+  'latest breaking news in nigeria politics today';
 
 const SEO = ({
   title,

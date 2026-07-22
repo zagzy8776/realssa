@@ -11,6 +11,7 @@ const { pingIndexNow } = require('./indexnow');
 const { pingWebSub } = require('./websub');
 const { pingGoogleIndexingAPI } = require('./googleIndexing');
 const { dispatchIndexingCommand } = require('./searchController');
+const { generateDiscussionStarter } = require('./aiCommunityBot');
 const notificationService = require('./notificationService');
 const { postToBuffer } = require('./buffer');
 const { extractArticle } = require('./extractor');
@@ -1060,6 +1061,12 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           if (result.rows.length > 0) {
             const articleId = result.rows[0].id;
             newArticleIds.push(`rss-${articleId}`);
+
+            // Generate AI Discussion Starter comment for featured or AI-summarized articles
+            if (isFeatured || aiSummary) {
+              generateDiscussionStarter(pool, `rss-${articleId}`, title, aiSummary || description, category)
+                .catch(err => console.warn('Discussion starter trigger error:', err.message));
+            }
             
             // Insert extracted entities
             if (extractedEntities.length > 0) {
