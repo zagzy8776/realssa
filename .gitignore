@@ -48,6 +48,8 @@ backend/delete_*.mjs
 backend/initialize_db.js
 backend/query_db.js
 backend/seed_*.js
+backend/test_*.mjs
+check_api_calls.cjs
 release-key.jks
 *.zip
 *_logs.txt
