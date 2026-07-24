@@ -17,8 +17,11 @@ import InviteButton from "./InviteButton";
 import { useStreak } from "@/hooks/useStreak";
 
 
+import RealSSASearchModal from "./RealSSASearchModal";
+
 const navLinks = [
   { href: "/", label: "Home", icon: Home },
+  { href: "/ads", label: "📢 Advertise" },
   { href: "/sports", label: "⚽ Sports" },
   { href: "/market", label: "📊 Market Hub" },
   { href: "/wire", label: "📢 Live Wire" },
@@ -61,9 +64,22 @@ const Header = () => {
   const location = useLocation();
   const { streak, longestStreak } = useStreak();
   const [isStreakOpen, setIsStreakOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSecureOpen, setIsSecureOpen] = useState(false);
   const [importKey, setImportKey] = useState("");
   const [isCopied, setIsCopied] = useState(false);
+
+  // Global keyboard shortcut ('/' or 'Ctrl+K') to open AI Search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const categoryPills = [
     { name: "Breaking", path: "/for-you" },
@@ -140,8 +156,18 @@ const Header = () => {
             </Link>
           </div>
 
-          {/* Gamification Streak & Weather */}
-          <div className="flex items-center gap-1 md:gap-2 animate-in fade-in zoom-in duration-500">
+          {/* Gamification Streak, AI Search & Weather */}
+          <div className="flex items-center gap-1.5 md:gap-2 animate-in fade-in zoom-in duration-500">
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2.5 py-1 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm"
+              title="Search AI (Press / on keyboard)"
+            >
+              <span>🔍</span>
+              <span className="hidden sm:inline">Search AI</span>
+              <span className="hidden md:inline-block bg-amber-500/20 text-[10px] px-1.5 rounded font-mono">/</span>
+            </button>
+
             <button
               onClick={() => setIsStreakOpen(true)}
               className={`flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 rounded-full active:scale-95 transition-all cursor-pointer ${
@@ -155,6 +181,8 @@ const Header = () => {
               <WeatherWidget />
             </div>
           </div>
+
+          <RealSSASearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
           {/* Reading Streak Calendar Modal */}
           {isStreakOpen && (

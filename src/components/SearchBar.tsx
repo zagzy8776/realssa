@@ -22,6 +22,7 @@ const SearchBar = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<Article[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,7 +65,7 @@ const SearchBar = () => {
       setCurrentIndex((prevIndex) => (prevIndex + 1) % articles.length);
     }, 6000);
     return () => clearInterval(interval);
-  }, [articles.length]);
+  }, [articles]);
 
   // Autocomplete: debounce 300ms
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,55 +112,25 @@ const SearchBar = () => {
     <section className="py-8 md:py-12 bg-muted/20">
       <div className="container mx-auto px-4">
         <div className="max-w-4xl mx-auto">
-          {/* Search Input with Autocomplete */}
-          <div className="relative flex gap-2 mb-6">
-            <div className="relative flex-1">
-              <Input
-                ref={inputRef}
-                type="text"
-                placeholder="Search for news, topics, or stories..."
-                value={query}
-                onChange={handleQueryChange}
-                onKeyDown={handleKeyPress}
-                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                className="flex-1 min-h-[44px] text-base pr-8"
-              />
-              {query && (
-                <button
-                  onClick={() => { setQuery(''); setSuggestions([]); setShowSuggestions(false); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X size={16} />
-                </button>
-              )}
-              {/* Autocomplete dropdown */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-xl shadow-2xl overflow-hidden">
-                  {suggestions.map(s => (
-                    <button
-                      key={s.id}
-                      onMouseDown={() => handleSuggestionClick(s)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors text-left"
-                    >
-                      {s.image && (
-                        <img src={s.image} alt="" className="w-10 h-10 object-cover rounded flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground line-clamp-1">{s.title}</p>
-                        {s.category && <p className="text-xs text-muted-foreground capitalize">{s.category}</p>}
-                      </div>
-                      <Search size={14} className="text-muted-foreground flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
+          {/* Glowing AI Search Input Trigger */}
+          <div
+            onClick={() => setIsAiSearchOpen(true)}
+            className="relative flex items-center gap-3 bg-background border-2 border-amber-500/40 hover:border-amber-500 rounded-2xl px-4 py-3.5 shadow-lg cursor-pointer transition-all hover:shadow-amber-500/10 mb-6 group"
+          >
+            <Search className="w-5 h-5 text-amber-500 shrink-0" />
+            <div className="flex-1 text-sm md:text-base font-medium text-muted-foreground group-hover:text-foreground">
+              {query || "Ask RealSSA anything... (e.g. CBN Naira Rate, Lagos Traffic, AFCON Results)"}
             </div>
-            <Button onClick={handleSearch} className="px-6 min-h-[44px]">
-              <Search className="w-5 h-5 mr-2" />
-              Search
-            </Button>
+            <span className="bg-amber-500 text-black text-xs font-extrabold px-3 py-1 rounded-xl uppercase flex items-center gap-1 shadow">
+              ⚡ AI Search
+            </span>
           </div>
+
+          <RealSSASearchModal
+            isOpen={isAiSearchOpen}
+            onClose={() => setIsAiSearchOpen(false)}
+            initialQuery={query}
+          />
 
           {/* Rotating Headlines */}
           <div className="bg-background rounded-lg p-6 shadow-sm border">
