@@ -22,6 +22,7 @@ import StoryGroupCard from "@/components/StoryGroupCard";
 import LocalNewsRail from "@/components/LocalNewsRail";
 import { Search } from "lucide-react";
 import RealSSASearchModal from "@/components/RealSSASearchModal";
+import { useNavigate } from "react-router-dom";
 
 let initialLoadDone = false;
 
