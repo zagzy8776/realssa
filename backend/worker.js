@@ -11,10 +11,12 @@ const usersPool = new Pool({
   ssl: usersDbUrl ? { rejectUnauthorized: false } : undefined
 });
 
+const { initAllDatabases } = require('./init_all_dbs');
+
 async function runMigrations() {
   try {
-    console.log('🔄 Running auto-migrations...');
-    await pool.query('ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS story_hash VARCHAR(64)');
+    console.log('🔄 Running multi-database auto-migrations...');
+    await initAllDatabases();
 
     await pool.query(`
       DO $$

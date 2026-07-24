@@ -16,6 +16,7 @@ const notificationService = require('./services/notificationService');
 const { runMigrations } = require('./worker');
 const { runCrawler } = require('./services/crawlerService');
 const { generateRateCardSvg } = require('./services/rateCard');
+const { queryMultiDb, queryAllDbs, getPoolForCategory, getAllPools } = require('./config/multiDb');
 
 // SSRF protection helper
 const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;

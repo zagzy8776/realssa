@@ -14,6 +14,10 @@ const { execSync, spawnSync } = require('child_process');
 // Only push values that already exist in the environment. Never embed secrets.
 const KEYS = [
   'DATABASE_URL',
+  'DATABASE_URL_1',
+  'DATABASE_URL_2',
+  'DATABASE_URL_3',
+  'DATABASE_URL_4',
   'USERS_DATABASE_URL',
   'CRON_SECRET',
   'JWT_SECRET',

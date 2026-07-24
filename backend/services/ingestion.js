@@ -623,8 +623,14 @@ function isDuplicateStory(title, recentTitles) {
 const fs = require('fs');
 // Removed NODE_TLS_REJECT_UNAUTHORIZED=0 — use per-request CA handling instead
 const path = require('path');
+const { getPoolForCategory } = require('../config/multiDb');
 
 async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
+  // Use category-sharded multi-database pool if pool not explicitly provided
+  if (!pool && targetCategory) {
+    pool = getPoolForCategory(targetCategory).pool;
+  }
+
   console.log(`🔄 Starting RSS ingestion cycle...${targetCategory ? ` [Category: ${targetCategory}]` : ''}`);
   let newArticleIds = [];
   let summaryCount = 0;
@@ -632,7 +638,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
   let bestNotifCandidate = null;
   const MAX_SUMMARIES_PER_CYCLE = 12;
 
-  // Pre-fetch recent titles, url_hashes, and story_hashes for efficient de-duplication
+  // Pre-fetch recent url_hashes and story_hashes for efficient, bandwidth-optimized de-duplication
   let recentTitles = [];
   const existingUrlHashes = new Set();
   const existingStoryHashes = new Set();
@@ -640,15 +646,14 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
   if (pool) {
     try {
       const recentRes = await pool.query(
-        `SELECT title, url_hash, story_hash FROM rss_articles
-         WHERE published_at > NOW() - INTERVAL '24 hours'`
+        `SELECT url_hash, story_hash FROM rss_articles
+         WHERE published_at > NOW() - INTERVAL '12 hours'`
       );
-      recentTitles = recentRes.rows; // Keep the full row for title similarity
       for (const row of recentRes.rows) {
         if (row.url_hash) existingUrlHashes.add(row.url_hash);
         if (row.story_hash) existingStoryHashes.add(row.story_hash);
       }
-      console.log(`Dedup: Pre-fetched ${recentTitles.length} articles (${existingUrlHashes.size} url_hashes, ${existingStoryHashes.size} story_hashes).`);
+      console.log(`Dedup: Pre-fetched ${recentRes.rows.length} hashes (${existingUrlHashes.size} url_hashes, ${existingStoryHashes.size} story_hashes) [Bandwidth Optimized].`);
     } catch (e) {
       console.error('Dedup pre-fetch error:', e.message);
     }

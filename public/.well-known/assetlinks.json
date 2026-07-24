@@ -1,0 +1,11 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.realssa.news",
+      "sha256_cert_fingerprints":
+        ["A5:2E:95:B4:A1:FE:0E:88:66:8A:08:EE:34:CF:52:16:DF:9A:39:AF:4E:E8:1A:29:65:9E:33:A2:78:4A:2D:5F"]
+    }
+  }
+]
