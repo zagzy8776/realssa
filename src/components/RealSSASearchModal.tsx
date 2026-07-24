@@ -268,19 +268,22 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
                     ))}
                   </div>
                 </div>
-              </button>
-              <button
-                onClick={() => {
-                  setQuery("");
-                  setSearchResult(null);
-                }}
-                className="text-xs text-muted-foreground hover:underline"
-              >
-                Ask another question
-              </button>
+              )}
+              <div className="pt-2 border-t border-border/30 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    setSearchResult(null);
+                  }}
+                  className="text-xs text-amber-500 hover:underline font-bold"
+                >
+                  ⚡ Ask another question
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
