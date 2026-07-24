@@ -128,9 +128,9 @@ const Index = () => {
       ]);
 
       const isNotPunch = (item: any) => {
-        const sourceName = (item.source_name || item.source || '').toLowerCase();
-        const url = (item.url || '').toLowerCase();
-        return !sourceName.includes('punch') && !url.includes('punchng.com');
+        const sourceName = (item.source_name || item.source || '').toLowerCase().trim();
+        const url = (item.url || item.external_link || item.externalLink || '').toLowerCase();
+        return sourceName !== 'punch' && sourceName !== 'the punch' && !url.includes('punchng.com');
       };
 
       let loadedStories = [];
@@ -349,9 +349,9 @@ const Index = () => {
                   excerpt=""
                   category={article.category || 'news'}
                   image={getImage(article)}
-                  readTime={article.readTime || '3 min read'}
-                  date={article.date || new Date().toLocaleDateString()}
-                  externalLink={article.externalLink}
+                  readTime={article.readTime || article.read_time || '3 min read'}
+                  date={article.date || (article.published_at ? new Date(article.published_at).toLocaleDateString() : new Date().toLocaleDateString())}
+                  externalLink={article.externalLink || article.external_link}
                   storyHash={article.story_hash || article.storyHash}
                   localVerifiedCount={article.local_verified_count || article.localVerifiedCount}
                   rumorFlagCount={article.rumor_flag_count || article.rumorFlagCount}
@@ -402,12 +402,12 @@ const Index = () => {
                         <NewsCard
                           id={article.id}
                           title={article.title}
-                          excerpt={article.excerpt || ''}
+                          excerpt={article.excerpt || article.ai_summary || article.original_excerpt || ''}
                           category={article.category || 'general'}
                           image={getImage(article)}
-                          readTime={article.readTime || '3 min read'}
-                          date={article.date || new Date().toLocaleDateString()}
-                          externalLink={article.externalLink}
+                          readTime={article.readTime || article.read_time || '3 min read'}
+                          date={article.date || (article.published_at ? new Date(article.published_at).toLocaleDateString() : new Date().toLocaleDateString())}
+                          externalLink={article.externalLink || article.external_link}
                           storyHash={article.story_hash || article.storyHash}
                           localVerifiedCount={article.local_verified_count || article.localVerifiedCount}
                           rumorFlagCount={article.rumor_flag_count || article.rumorFlagCount}
