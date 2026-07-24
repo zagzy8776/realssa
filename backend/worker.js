@@ -12,11 +12,13 @@ const usersPool = new Pool({
 });
 
 const { initAllDatabases } = require('./init_all_dbs');
+const { initAiDatabase } = require('./init_ai_db');
 
 async function runMigrations() {
   try {
     console.log('🔄 Running multi-database auto-migrations...');
     await initAllDatabases();
+    await initAiDatabase();
 
     await pool.query(`
       DO $$

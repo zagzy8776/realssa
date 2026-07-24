@@ -1,6 +1,6 @@
 const { Pool } = require('pg');
 
-// Multi-Database Pool Manager for Load Balancing across 4 Neon Databases
+// Multi-Database Pool Manager for Load Balancing across 5 Neon Databases
 const DB_CONFIGS = [
   {
     id: 1,
@@ -28,8 +28,15 @@ const DB_CONFIGS = [
   }
 ];
 
+const AI_DB_CONFIG = {
+  id: 5,
+  name: 'DB5 (Sweet Brook - AI & Models Brain)',
+  url: process.env.DATABASE_URL_AI || 'postgresql://neondb_owner:npg_ESj7doa4hVMW@ep-sweet-brook-az3jbxv3.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
+  categories: ['ai-models', 'embeddings', 'entities', 'memory']
+};
+
 // Initialize pool instances with error handling
-const pools = DB_CONFIGS.map(cfg => {
+const contentPools = DB_CONFIGS.map(cfg => {
   const p = new Pool({
     connectionString: cfg.url,
     ssl: { rejectUnauthorized: false },
@@ -48,14 +55,34 @@ const pools = DB_CONFIGS.map(cfg => {
   };
 });
 
+// Dedicated AI Pool for Vector Embeddings, Model Training & Bot Memory
+const aiPoolInstance = new Pool({
+  connectionString: AI_DB_CONFIG.url,
+  ssl: { rejectUnauthorized: false },
+  max: 15,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+aiPoolInstance.on('error', (err) => {
+  console.warn(`[MultiDb Idle Error on DB5 AI Brain]: ${err.message}`);
+});
+
+const aiPoolWrapper = {
+  ...AI_DB_CONFIG,
+  pool: aiPoolInstance
+};
+
+const allPools = [...contentPools, aiPoolWrapper];
+
 let rrIndex = 0;
 
 /**
  * Get next database pool in round-robin order for general read load balancing
  */
 function getNextReadPool() {
-  const selected = pools[rrIndex % pools.length];
-  rrIndex = (rrIndex + 1) % pools.length;
+  const selected = contentPools[rrIndex % contentPools.length];
+  rrIndex = (rrIndex + 1) % contentPools.length;
   return selected;
 }
 
@@ -65,19 +92,26 @@ function getNextReadPool() {
 function getPoolForCategory(category) {
   if (!category) return getNextReadPool();
   const normalized = category.toLowerCase().trim();
-  const matched = pools.find(p => p.categories.includes(normalized));
+  const matched = contentPools.find(p => p.categories.includes(normalized));
   return matched || getNextReadPool();
 }
 
 /**
- * Execute query across pools using round-robin and automatic failover
+ * Get dedicated AI & Model Database Pool (DB5)
+ */
+function getAiPool() {
+  return aiPoolInstance;
+}
+
+/**
+ * Execute query across pools using round-robin and automatic failover across all 5 databases
  */
 async function queryMultiDb(text, params) {
   const startIndex = rrIndex;
   let lastError = null;
 
-  for (let i = 0; i < pools.length; i++) {
-    const target = pools[(startIndex + i) % pools.length];
+  for (let i = 0; i < allPools.length; i++) {
+    const target = allPools[(startIndex + i) % allPools.length];
     try {
       const res = await target.pool.query(text, params);
       return res;
@@ -87,15 +121,15 @@ async function queryMultiDb(text, params) {
     }
   }
 
-  throw lastError || new Error('All database pools failed to execute query.');
+  throw lastError || new Error('All 5 database pools failed to execute query.');
 }
 
 /**
- * Execute query on ALL database pools in parallel (used for multi-master writes/updates)
+ * Execute query on ALL database pools in parallel
  */
 async function queryAllDbs(text, params) {
   const results = await Promise.allSettled(
-    pools.map(p => p.pool.query(text, params))
+    allPools.map(p => p.pool.query(text, params))
   );
   
   const fulfilled = results.filter(r => r.status === 'fulfilled');
@@ -111,13 +145,15 @@ async function queryAllDbs(text, params) {
  * Get array of all database pools
  */
 function getAllPools() {
-  return pools;
+  return allPools;
 }
 
 module.exports = {
-  pools,
+  pools: contentPools,
+  aiPool: aiPoolInstance,
   getNextReadPool,
   getPoolForCategory,
+  getAiPool,
   queryMultiDb,
   queryAllDbs,
   getAllPools

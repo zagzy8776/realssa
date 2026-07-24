@@ -74,6 +74,19 @@ async function runIntelligenceCheck(pool) {
              WHERE id = $2`,
             [updatedSummary, article.id]
           );
+
+          // Log verification memory to DB5 AI Database
+          try {
+            const { getAiPool } = require('../config/multiDb');
+            const aiDb = getAiPool();
+            await aiDb.query(
+              `INSERT INTO ai_agent_memory (agent_name, action_type, target_id, input_summary, verification_result, confidence_score)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              ['aiIntelligenceAgent', 'fact_verification', String(article.id), article.title, verification, verification.is_developing ? 0.95 : 0.8]
+            );
+          } catch (memErr) {
+            console.warn('[AI Memory Log Notice]:', memErr.message);
+          }
         }
       } catch (articleErr) {
         console.warn(`[AI Intelligence Agent] Story verification skipped for ID ${article.id}:`, articleErr.message);
