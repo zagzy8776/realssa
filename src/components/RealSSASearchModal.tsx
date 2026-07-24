@@ -113,158 +113,161 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[999999] bg-black/90 backdrop-blur-xl flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto animate-in fade-in duration-200 cursor-pointer"
+      className="fixed inset-0 z-[999999] bg-black/90 backdrop-blur-xl h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 box-border cursor-pointer"
     >
       {/* Inner Modal Content Box (Stop propagation to prevent closing when clicking inside) */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-card border-2 border-amber-500/40 rounded-3xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl space-y-4 my-auto relative cursor-default max-h-[90vh] overflow-y-auto custom-scrollbar"
+        className="w-full max-w-2xl h-full max-h-[100dvh] sm:max-h-[92dvh] bg-card border border-amber-500/40 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col min-w-0 overflow-hidden box-border cursor-default my-auto"
       >
         
         {/* Sticky Header Bar with Title & Always-Visible Close Button */}
-        <div className="sticky top-0 z-30 flex items-center justify-between bg-card/95 backdrop-blur-md pb-3 border-b border-border/40 -mt-1 pt-1">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-extrabold text-base shrink-0">
+        <div className="w-full flex items-center justify-between p-3 sm:p-5 bg-card/95 backdrop-blur-md border-b border-border/40 shrink-0 min-w-0 box-border">
+          <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-extrabold text-sm sm:text-base shrink-0">
               ⚡
             </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold font-display flex items-center gap-1.5 leading-tight">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm sm:text-lg font-bold font-display flex items-center gap-1.5 leading-tight truncate">
                 RealSSA <span className="text-gradient-gold">AI Search</span>
               </h2>
-              <p className="text-[11px] text-muted-foreground">Neural Web & Multi-Database Engine</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground truncate">
+                Neural Web & Multi-Database Engine
+              </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="px-3.5 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 shrink-0"
+            className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 text-xs font-extrabold transition-all flex items-center gap-1 cursor-pointer shadow-md active:scale-95 shrink-0 min-w-max"
             title="Close Search (or press ESC)"
           >
             <X className="w-4 h-4" /> <span>Close</span>
           </button>
         </div>
 
-        {/* Central Search Form Input — text-base (16px) PREVENTS MOBILE ZOOMING */}
-        <form onSubmit={handleFormSubmit} className="space-y-3 pt-1">
-          <div className="relative flex items-center gap-2">
-            <div className="relative flex-1">
-              <input
-                ref={inputRef}
-                type="text"
-                placeholder="Ask anything... (e.g., CBN Naira Rate, Lagos Traffic)"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-background border-2 border-amber-500/40 focus:border-amber-500 rounded-2xl pl-11 pr-10 py-3 text-base focus:outline-none focus:ring-4 focus:ring-amber-500/20 shadow-inner font-medium text-foreground"
-              />
-              <Search className="w-5 h-5 text-amber-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              {query && (
+        {/* Scrollable Main Content Container (Dynamic 100dvh Viewport Support & pb-24 for Keyboard) */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 space-y-4 pb-24 min-w-0 box-border">
+          
+          {/* Central Search Form Input — text-base (16px) PREVENTS MOBILE ZOOMING */}
+          <form onSubmit={handleFormSubmit} className="w-full min-w-0 space-y-3 box-border">
+            <div className="w-full flex items-center gap-2 min-w-0 box-border">
+              <div className="relative flex-1 min-w-0">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  placeholder="Ask anything... (e.g., CBN Naira Rate)"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="w-full min-w-0 bg-background border-2 border-amber-500/40 focus:border-amber-500 rounded-2xl pl-10 pr-9 py-3 text-base focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-inner font-medium text-foreground box-border"
+                />
+                <Search className="w-4 h-4 text-amber-500 absolute left-3.5 top-1/2 -translate-y-1/2 shrink-0 pointer-events-none" />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !query.trim()}
+                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-extrabold text-xs sm:text-sm px-3.5 sm:px-5 py-3 rounded-2xl transition-all flex items-center gap-1.5 shadow shrink-0 min-w-max active:scale-95 cursor-pointer"
+              >
+                {loading ? (
+                  <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>Search <ArrowRight className="w-4 h-4" /></>
+                )}
+              </button>
+            </div>
+          </form>
+
+          {/* Quick Trending Search Chips */}
+          {!searchResult && !loading && (
+            <div className="w-full min-w-0 space-y-2.5 box-border">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" /> Popular Intelligence Queries
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full min-w-0 box-border">
+                {TRENDING_CHIPS.map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setQuery(chip);
+                      handleSearch(chip);
+                    }}
+                    className="bg-background border border-border hover:border-amber-500/50 hover:bg-amber-500/10 text-xs px-3.5 py-2.5 rounded-xl transition-all font-medium text-muted-foreground hover:text-amber-400 text-left truncate w-full min-w-0 box-border"
+                  >
+                    🔍 {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Loading State Skeleton */}
+          {loading && (
+            <div className="bg-background/50 border border-amber-500/30 rounded-2xl p-5 space-y-4 animate-pulse w-full min-w-0 box-border">
+              <div className="h-4 bg-amber-500/20 rounded w-1/3"></div>
+              <div className="space-y-2">
+                <div className="h-3 bg-muted rounded w-full"></div>
+                <div className="h-3 bg-muted rounded w-5/6"></div>
+                <div className="h-3 bg-muted rounded w-4/6"></div>
+              </div>
+              <div className="text-xs text-amber-500 font-mono">Synthesizing verified AI search intelligence...</div>
+            </div>
+          )}
+
+          {/* Search Results Display */}
+          {searchResult && (
+            <div className="bg-background border border-amber-500/40 rounded-2xl p-4 sm:p-6 shadow-xl space-y-5 animate-in fade-in duration-300 w-full min-w-0 box-border">
+              
+              {/* Header Badge */}
+              <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
+                <span className="bg-amber-500/20 text-amber-400 text-xs font-extrabold px-3 py-1 rounded-full uppercase border border-amber-500/30 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" /> RealSSA AI Verified Answer
+                </span>
                 <button
                   type="button"
-                  onClick={() => setQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                  onClick={handleShareWhatsApp}
+                  className="text-xs text-green-500 hover:text-green-400 font-bold flex items-center gap-1 bg-green-500/10 px-2.5 py-1 rounded-lg border border-green-500/20 cursor-pointer"
                 >
-                  <X className="w-4 h-4" />
+                  <Share2 className="w-3.5 h-3.5" /> <span>WhatsApp Share</span>
                 </button>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || !query.trim()}
-              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-extrabold text-xs sm:text-sm px-4 py-3 rounded-2xl transition-all flex items-center gap-1.5 shadow shrink-0 active:scale-95 cursor-pointer"
-            >
-              {loading ? (
-                <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>Search <ArrowRight className="w-4 h-4" /></>
-              )}
-            </button>
-          </div>
-        </form>
-
-        {/* Quick Trending Search Chips */}
-        {!searchResult && !loading && (
-          <div className="space-y-2.5 pt-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> Popular Intelligence Queries
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {TRENDING_CHIPS.map((chip, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setQuery(chip);
-                    handleSearch(chip);
-                  }}
-                  className="bg-background border border-border hover:border-amber-500/50 hover:bg-amber-500/10 text-xs px-3.5 py-2 rounded-xl transition-all font-medium text-muted-foreground hover:text-amber-400"
-                >
-                  🔍 {chip}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Loading State Skeleton */}
-        {loading && (
-          <div className="bg-background/50 border border-amber-500/30 rounded-2xl p-6 space-y-4 animate-pulse">
-            <div className="h-4 bg-amber-500/20 rounded w-1/3"></div>
-            <div className="space-y-2">
-              <div className="h-3 bg-muted rounded w-full"></div>
-              <div className="h-3 bg-muted rounded w-5/6"></div>
-              <div className="h-3 bg-muted rounded w-4/6"></div>
-            </div>
-            <div className="text-xs text-amber-500 font-mono">Synthesizing verified AI search intelligence...</div>
-          </div>
-        )}
-
-        {/* Search Results Display */}
-        {searchResult && (
-          <div className="bg-background border border-amber-500/40 rounded-2xl p-6 shadow-xl space-y-6 animate-in fade-in duration-300">
-            
-            {/* Header Badge */}
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <span className="bg-amber-500/20 text-amber-400 text-xs font-extrabold px-3 py-1 rounded-full uppercase border border-amber-500/30 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> RealSSA AI Verified Answer
-              </span>
-              <span className="text-[11px] text-muted-foreground font-mono">{searchResult.provider}</span>
-            </div>
-
-            {/* Formatted Answer Output */}
-            <div className="prose prose-invert max-w-none text-sm md:text-base leading-relaxed whitespace-pre-line text-foreground">
-              {searchResult.answer}
-            </div>
-
-            {/* Sources & Citations */}
-            {searchResult.sources && searchResult.sources.length > 0 && (
-              <div className="border-t border-border pt-4 space-y-2">
-                <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">
-                  Verified Reference Sources ({searchResult.sources.length})
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {searchResult.sources.map((src, idx) => (
-                    <a
-                      key={idx}
-                      href={src.url.startsWith('/') ? src.url : `/read?url=${encodeURIComponent(src.url)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 bg-muted/60 hover:bg-muted text-xs px-3 py-1.5 rounded-lg text-amber-400 font-medium transition-colors border border-border"
-                    >
-                      <ExternalLink className="w-3 h-3 shrink-0" />
-                      <span className="truncate max-w-[200px]">{src.title}</span>
-                    </a>
-                  ))}
-                </div>
               </div>
-            )}
 
-            {/* Share Action Footer */}
-            <div className="border-t border-border pt-4 flex items-center justify-between">
-              <button
-                onClick={handleShareWhatsApp}
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow"
-              >
-                <Share2 className="w-4 h-4" /> Share Answer on WhatsApp
+              {/* Formatted Answer Output */}
+              <div className="prose prose-invert max-w-none text-xs sm:text-sm md:text-base leading-relaxed whitespace-pre-line text-foreground break-words font-normal">
+                {searchResult.answer}
+              </div>
+
+              {/* Sources & Citations */}
+              {searchResult.sources && searchResult.sources.length > 0 && (
+                <div className="border-t border-border pt-4 space-y-2 w-full min-w-0">
+                  <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider block">
+                    Verified Reference Sources ({searchResult.sources.length})
+                  </span>
+                  <div className="flex flex-wrap gap-2 w-full min-w-0">
+                    {searchResult.sources.map((src, idx) => (
+                      <a
+                        key={idx}
+                        href={src.url.startsWith('/') ? src.url : `/read?url=${encodeURIComponent(src.url)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs bg-muted/60 hover:bg-muted text-primary hover:underline px-2.5 py-1 rounded-lg border border-border flex items-center gap-1.5 max-w-full truncate"
+                      >
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{src.title || src.url}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
               </button>
               <button
                 onClick={() => {
