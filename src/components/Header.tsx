@@ -449,171 +449,187 @@ const Header = () => {
             </div>
         </div>
 
-        {/* Native Inline Expanding AI Search Panel */}
+        {/* Native Floating Glassmorphism Overlay AI Search Panel */}
         <div className="border-t border-border/40 bg-background">
-          {!isSearchOpen ? (
-            /* Collapsed Single-Line Bar */
-            <div className="py-2.5 px-3">
-              <div
-                onClick={() => setIsSearchOpen(true)}
-                className="relative flex items-center gap-3 bg-card border border-amber-500/40 hover:border-amber-500 rounded-2xl px-4 py-2.5 shadow-sm cursor-pointer transition-all hover:shadow-amber-500/10 group max-w-4xl mx-auto"
-              >
-                <Search className="w-4 h-4 text-amber-500 shrink-0" />
-                <div className="flex-1 text-xs md:text-sm font-medium text-muted-foreground group-hover:text-foreground truncate">
-                  Ask RealSSA anything... (e.g. CBN Naira Rate, Lagos Traffic, AFCON Results)
-                </div>
-                <span className="bg-amber-500 hover:bg-amber-400 text-black text-[10px] md:text-xs font-extrabold px-3 py-1 rounded-xl uppercase flex items-center gap-1 shrink-0 shadow-sm transition-transform active:scale-95">
-                  ⚡ AI SEARCH
-                </span>
+          {/* Collapsed Single-Line Header Bar */}
+          <div className="py-2.5 px-3">
+            <div
+              onClick={() => setIsSearchOpen(true)}
+              className="relative flex items-center gap-3 bg-card border border-amber-500/40 hover:border-amber-500 rounded-2xl px-4 py-2.5 shadow-sm cursor-pointer transition-all hover:shadow-amber-500/10 group max-w-4xl mx-auto"
+            >
+              <Search className="w-4 h-4 text-amber-500 shrink-0" />
+              <div className="flex-1 text-xs md:text-sm font-medium text-muted-foreground group-hover:text-foreground truncate">
+                Ask RealSSA anything... (e.g. CBN Naira Rate, Lagos Traffic, AFCON Results)
               </div>
+              <span className="bg-amber-500 hover:bg-amber-400 text-black text-[10px] md:text-xs font-extrabold px-3 py-1 rounded-xl uppercase flex items-center gap-1 shrink-0 shadow-sm transition-transform active:scale-95">
+                ⚡ AI SEARCH
+              </span>
             </div>
-          ) : (
-            /* Expanded Native Inline Search & Results Panel */
-            <div className="bg-card/95 border-b-2 border-amber-500/50 p-4 md:p-6 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-300 max-w-4xl mx-auto rounded-b-3xl">
-              
-              {/* Header Control Row */}
-              <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-extrabold text-sm shrink-0">
-                    ⚡
-                  </div>
-                  <div>
-                    <h3 className="text-sm md:text-base font-bold font-display flex items-center gap-1.5">
-                      RealSSA <span className="text-gradient-gold">AI Search</span>
-                    </h3>
-                    <p className="text-[11px] text-muted-foreground">Neural Web & Multi-Database Synthesis</p>
-                  </div>
-                </div>
+          </div>
 
-                <button
-                  onClick={() => setIsSearchOpen(false)}
-                  className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" /> <span>Minimize</span>
-                </button>
-              </div>
-
-              {/* Native Search Input Form */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleInlineSearch(searchQuery);
-                }}
-                className="space-y-3"
+          {/* Floating Glassmorphism Overlay Panel */}
+          {isSearchOpen && (
+            <div
+              onClick={() => setIsSearchOpen(false)}
+              className="fixed inset-x-0 top-[110px] sm:top-[125px] bottom-0 z-[99999] bg-black/85 backdrop-blur-xl flex flex-col justify-start items-center p-3 sm:p-5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 cursor-pointer overscroll-none"
+            >
+              {/* Inner Floating Glass Card (Stop propagation so clicking inside doesn't close) */}
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="bg-card/95 border-2 border-amber-500/50 rounded-3xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl space-y-4 flex flex-col max-h-[100dvh] sm:max-h-[85dvh] overflow-hidden cursor-default box-border backdrop-blur-2xl"
               >
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      autoFocus
-                      placeholder="Ask anything... (e.g. CBN Naira Rate, Lagos Traffic)"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-background border-2 border-amber-500/40 focus:border-amber-500 rounded-2xl pl-10 pr-9 py-3 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-inner font-medium text-foreground"
-                    />
-                    <Search className="w-4 h-4 text-amber-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                {/* Header Control Row */}
+                <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-3 shrink-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-extrabold text-sm shrink-0">
+                      ⚡
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm sm:text-base font-bold font-display flex items-center gap-1.5 truncate">
+                        RealSSA <span className="text-gradient-gold">AI Search</span>
+                      </h3>
+                      <p className="hidden sm:block text-[11px] text-muted-foreground truncate">Neural Web & Multi-Database Engine</p>
+                    </div>
                   </div>
 
                   <button
-                    type="submit"
-                    disabled={searchLoading || !searchQuery.trim()}
-                    className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-extrabold text-xs md:text-sm px-4 py-3 rounded-2xl transition-all flex items-center gap-1 shadow shrink-0 active:scale-95 cursor-pointer"
+                    onClick={() => setIsSearchOpen(false)}
+                    className="px-3 py-1 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 text-xs font-extrabold transition-all flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 shadow-sm"
                   >
-                    {searchLoading ? (
-                      <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <>Search ⚡</>
-                    )}
+                    <X className="w-3.5 h-3.5" /> <span>Close</span>
                   </button>
                 </div>
-              </form>
 
-              {/* Trending Suggestion Chips */}
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1">
-                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider shrink-0 flex items-center gap-1">
-                  🔥 Popular:
-                </span>
-                {[
-                  "CBN Naira Exchange Rate",
-                  "Tech Startups Africa",
-                  "AFCON & Super Eagles",
-                  "Lagos Traffic & Fuel Price"
-                ].map((chip, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery(chip);
-                      handleInlineSearch(chip);
+                {/* Scrollable Main Content Container (Input, Popular Queries & AI Answers) */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1 pb-20 min-w-0 box-border">
+                  
+                  {/* Search Input Form — 16px text-base PREVENTS MOBILE ZOOMING */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleInlineSearch(searchQuery);
                     }}
-                    className="px-2.5 py-1 rounded-full bg-muted/80 hover:bg-amber-500/10 hover:border-amber-500/30 text-muted-foreground hover:text-amber-500 text-[11px] font-medium transition-all whitespace-nowrap border border-border/40 shrink-0 cursor-pointer"
+                    className="space-y-3 shrink-0"
                   >
-                    {chip}
-                  </button>
-                ))}
-              </div>
-
-              {/* Inline AI Answer Stream Card */}
-              {searchLoading && (
-                <div className="bg-background/80 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
-                  <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin shrink-0" />
-                  <span className="text-xs text-amber-500 font-bold">Synthesizing Neural Web & Database context...</span>
-                </div>
-              )}
-
-              {searchResult && (
-                <div className="bg-background border border-amber-500/40 rounded-2xl p-4 md:p-5 space-y-3 shadow-inner animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between border-b border-border/30 pb-2">
-                    <span className="bg-amber-500/10 text-amber-500 text-[10px] font-extrabold px-2.5 py-0.5 rounded-md uppercase border border-amber-500/20">
-                      ⚡ {searchResult.provider}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const shareText = `🚨 *RealSSA AI Search Answer for "${searchQuery}"*\n\n${searchResult.answer.slice(0, 300)}…\n\nSearch more on RealSSA 📰👇\nhttps://realssanews.com.ng`;
-                        window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
-                      }}
-                      className="text-xs text-green-500 hover:text-green-400 font-bold flex items-center gap-1 bg-green-500/10 px-2.5 py-1 rounded-lg border border-green-500/20 cursor-pointer"
-                    >
-                      <span>💬 Share WhatsApp</span>
-                    </button>
-                  </div>
-
-                  <div className="text-xs md:text-sm text-foreground leading-relaxed whitespace-pre-line font-normal">
-                    {searchResult.answer}
-                  </div>
-
-                  {searchResult.sources && searchResult.sources.length > 0 && (
-                    <div className="pt-2 border-t border-border/20">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-1">
-                        Verified Sources:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {searchResult.sources.slice(0, 4).map((src, idx) => (
-                          <a
-                            key={idx}
-                            href={src.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] bg-muted/60 hover:bg-muted text-primary hover:underline px-2 py-0.5 rounded-md border border-border/40 truncate max-w-[200px]"
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Ask anything... (e.g. CBN Naira Rate, Lagos Traffic)"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full bg-background border-2 border-amber-500/40 focus:border-amber-500 rounded-2xl pl-10 pr-9 py-3 text-base focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-inner font-medium text-foreground box-border"
+                        />
+                        <Search className="w-4 h-4 text-amber-500 absolute left-3.5 top-1/2 -translate-y-1/2 shrink-0 pointer-events-none" />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 shrink-0"
                           >
-                            🔗 {src.title || src.url}
-                          </a>
-                        ))}
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
+
+                      <button
+                        type="submit"
+                        disabled={searchLoading || !searchQuery.trim()}
+                        className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-extrabold text-xs sm:text-sm px-4 py-3 rounded-2xl transition-all flex items-center gap-1 shadow shrink-0 active:scale-95 cursor-pointer min-w-max"
+                      >
+                        {searchLoading ? (
+                          <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <>Search ⚡</>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Popular Intelligence Queries */}
+                  <div className="space-y-2 pt-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                      🔥 Popular Intelligence Queries
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {[
+                        "CBN Naira Exchange Rate Today",
+                        "Lagos Traffic & Fuel Price Update",
+                        "Tinubu Economic & Business Policy",
+                        "Premier League & Football Standings",
+                        "AFCON Qualifiers & Super Eagles Fixtures",
+                        "Tech Startups & Funding News Africa"
+                      ].map((chip, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSearchQuery(chip);
+                            handleInlineSearch(chip);
+                          }}
+                          className="px-3.5 py-2.5 rounded-xl bg-background hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 text-xs font-medium transition-all text-left border border-border/60 hover:border-amber-500/40 shrink-0 cursor-pointer truncate shadow-xs"
+                        >
+                          🔍 {chip}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* AI Streaming Result Card */}
+                  {searchLoading && (
+                    <div className="bg-background/80 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
+                      <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span className="text-xs text-amber-500 font-bold">Synthesizing Neural Web & Database context...</span>
+                    </div>
+                  )}
+
+                  {searchResult && (
+                    <div className="bg-background border border-amber-500/40 rounded-2xl p-4 sm:p-5 space-y-3 shadow-inner animate-in fade-in duration-300">
+                      <div className="flex items-center justify-between border-b border-border/30 pb-2 flex-wrap gap-2">
+                        <span className="bg-amber-500/10 text-amber-500 text-[10px] font-extrabold px-2.5 py-0.5 rounded-md uppercase border border-amber-500/20">
+                          ⚡ {searchResult.provider}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const shareText = `🚨 *RealSSA AI Search Answer for "${searchQuery}"*\n\n${searchResult.answer.slice(0, 300)}…\n\nSearch more on RealSSA 📰👇\nhttps://realssanews.com.ng`;
+                            window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
+                          }}
+                          className="text-xs text-green-500 hover:text-green-400 font-bold flex items-center gap-1 bg-green-500/10 px-2.5 py-1 rounded-lg border border-green-500/20 cursor-pointer"
+                        >
+                          <span>💬 Share WhatsApp</span>
+                        </button>
+                      </div>
+
+                      <div className="text-xs sm:text-sm text-foreground leading-relaxed whitespace-pre-line font-normal break-words">
+                        {searchResult.answer}
+                      </div>
+
+                      {searchResult.sources && searchResult.sources.length > 0 && (
+                        <div className="pt-2 border-t border-border/20">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-1">
+                            Verified Sources:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {searchResult.sources.slice(0, 4).map((src, idx) => (
+                              <a
+                                key={idx}
+                                href={src.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] bg-muted/60 hover:bg-muted text-primary hover:underline px-2 py-0.5 rounded-md border border-border/40 truncate max-w-[200px]"
+                              >
+                                🔗 {src.title || src.url}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
