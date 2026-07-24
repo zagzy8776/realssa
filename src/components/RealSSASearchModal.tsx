@@ -96,27 +96,47 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
     window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
   };
 
+  // Prevent background body scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-start justify-center pt-8 md:pt-16 px-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-card border border-border rounded-3xl p-6 md:p-8 max-w-3xl w-full shadow-2xl space-y-6 mb-16 relative">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-start justify-center pt-6 md:pt-16 px-4 overflow-y-auto animate-in fade-in duration-200 cursor-pointer"
+    >
+      {/* Inner Modal Content Box (Stop propagation to prevent closing when clicking inside) */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-card border border-border rounded-3xl p-5 md:p-8 max-w-3xl w-full shadow-2xl space-y-6 mb-16 relative cursor-default"
+      >
         
-        {/* Close Button */}
+        {/* Prominent High-Contrast Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="absolute top-4 right-4 md:top-6 md:right-6 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition-all flex items-center gap-1.5 z-20 cursor-pointer"
+          title="Close Search (or press ESC)"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" /> <span>Close</span>
         </button>
 
         {/* Minimalist Google-Style Branding Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-extrabold text-lg">
+        <div className="flex items-center gap-3 pr-20">
+          <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-extrabold text-lg shrink-0">
             ⚡
           </div>
           <div>
-            <h2 className="text-xl font-bold font-display flex items-center gap-2">
+            <h2 className="text-lg md:text-xl font-bold font-display flex items-center gap-2">
               RealSSA <span className="text-gradient-gold">AI Search</span>
             </h2>
             <p className="text-xs text-muted-foreground">Search anything across Africa & the global web</p>
@@ -124,27 +144,41 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
         </div>
 
         {/* Central Search Form Input */}
-        <form onSubmit={handleFormSubmit} className="relative">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Ask anything... (e.g., CBN Naira Rate, Lagos Traffic, AFCON Results)"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-background border-2 border-border focus:border-amber-500 rounded-2xl pl-12 pr-28 py-4 text-base md:text-lg focus:outline-none focus:ring-4 focus:ring-amber-500/20 shadow-inner font-medium"
-          />
-          <Search className="w-5 h-5 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2" />
-          <button
-            type="submit"
-            disabled={loading || !query.trim()}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow"
-          >
-            {loading ? (
-              <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>Search <ArrowRight className="w-3.5 h-3.5" /></>
-            )}
-          </button>
+        <form onSubmit={handleFormSubmit} className="space-y-3">
+          <div className="relative flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Ask anything... (e.g., CBN Naira Rate, Lagos Traffic, AFCON Results)"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="w-full bg-background border-2 border-border focus:border-amber-500 rounded-2xl pl-11 pr-10 py-3.5 text-sm md:text-base focus:outline-none focus:ring-4 focus:ring-amber-500/20 shadow-inner font-medium"
+              />
+              <Search className="w-5 h-5 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || !query.trim()}
+              className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-extrabold text-xs md:text-sm px-4 py-3.5 rounded-2xl transition-all flex items-center gap-1.5 shadow shrink-0"
+            >
+              {loading ? (
+                <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>Search <ArrowRight className="w-4 h-4" /></>
+              )}
+            </button>
+          </div>
         </form>
 
         {/* Quick Trending Search Chips */}
