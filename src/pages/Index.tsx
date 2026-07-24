@@ -307,14 +307,18 @@ const Index = () => {
       <ReadProgressBar />
       <Header />
       <NewsTicker />
-      <AtAGlanceCarousel activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+      
+      {/* Prominent RealSSA AI Search Hero Bar at Top of Homepage */}
+      <div className="-mb-4">
+        <SearchBar />
+      </div>
+
       <BreakingNowRail excludeIds={stories.map((s: any) => s.id)} />
       <LocalNewsRail excludeIds={stories.map((s: any) => s.id)} />
       <SocialButtons />
 
       <main>
         <HeroSection stories={stories} />
-        <SearchBar />
         {/* Trending Hashtags — powered by real-time keyword extraction */}
         <div className="container mx-auto px-4 -mt-4 mb-2">
           <TrendingHashtags />
