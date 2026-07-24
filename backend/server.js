@@ -3160,6 +3160,28 @@ app.get('/api/cron/streams', async (req, res) => {
   }
 });
 
+// GET /api/cron/viral-trend-buffer?secret=xxx
+// Stateless Viral Trend Buffer Bot (0 Bytes DB usage)
+app.get('/api/cron/viral-trend-buffer', async (req, res) => {
+  const { secret } = req.query;
+  if (secret !== CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { runViralTrendBot } = require('./services/viralTrendBufferBot');
+    const result = await runViralTrendBot();
+    return res.status(200).json({
+      success: true,
+      message: 'Stateless Viral Trend Bot completed',
+      result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Cron viral trend buffer error:', error);
+    return res.status(500).json({ error: 'Viral trend buffer failed', message: error.message });
+  }
+});
+
 // GET /api/streams/live
 // Returns active/verified live match streams for the frontend player
 app.get('/api/streams/live', async (req, res) => {
