@@ -12,23 +12,22 @@ import {
 interface CategoryOption {
   id: string;
   name: string;
-  icon: string;
   description: string;
 }
 
 const CATEGORIES: CategoryOption[] = [
-  { id: "business", name: "Business & Finance", icon: "💼", description: "Banking, fintech, investment, economy & corporate updates" },
-  { id: "tech", name: "Technology & Startups", icon: "🚀", description: "SaaS, AI, gadgets, venture capital & innovation" },
-  { id: "entertainment", name: "Entertainment & Nollywood", icon: "🎬", description: "Movies, celebrity updates, shows & events" },
-  { id: "music", name: "Afrobeats & Music", icon: "🎵", description: "New releases, concerts, artists & music industry" },
-  { id: "sports", name: "Sports & Football", icon: "⚽", description: "Premier League, NPFL, Super Eagles & global athletics" },
-  { id: "real_estate", name: "Real Estate & Property", icon: "🏢", description: "Homes, land, commercial property & developments" },
-  { id: "fashion", name: "Fashion & Lifestyle", icon: "👗", description: "Style, beauty, luxury & contemporary trends" },
-  { id: "automotive", name: "Automotive & Transport", icon: "🚗", description: "Vehicles, mobility, electric cars & logistics" },
-  { id: "health", name: "Health & Wellness", icon: "🏥", description: "Medicine, fitness, wellness & healthcare services" },
-  { id: "education", name: "Education & Careers", icon: "🎓", description: "Universities, courses, recruitment & skills" },
-  { id: "politics", name: "Politics & Governance", icon: "🏛️", description: "Public policy, government, civic updates & elections" },
-  { id: "general", name: "General News & Media", icon: "📰", description: "Broad national audience & major breaking stories" }
+  { id: "business", name: "Business & Finance", description: "Banking, fintech, investment, economy & corporate updates" },
+  { id: "tech", name: "Technology & Startups", description: "SaaS, AI, gadgets, venture capital & innovation" },
+  { id: "entertainment", name: "Entertainment & Nollywood", description: "Movies, celebrity updates, shows & events" },
+  { id: "music", name: "Afrobeats & Music", description: "New releases, concerts, artists & music industry" },
+  { id: "sports", name: "Sports & Football", description: "Premier League, NPFL, Super Eagles & global athletics" },
+  { id: "real_estate", name: "Real Estate & Property", description: "Homes, land, commercial property & developments" },
+  { id: "fashion", name: "Fashion & Lifestyle", description: "Style, beauty, luxury & contemporary trends" },
+  { id: "automotive", name: "Automotive & Transport", description: "Vehicles, mobility, electric cars & logistics" },
+  { id: "health", name: "Health & Wellness", description: "Medicine, fitness, wellness & healthcare services" },
+  { id: "education", name: "Education & Careers", description: "Universities, courses, recruitment & skills" },
+  { id: "politics", name: "Politics & Governance", description: "Public policy, government, civic updates & elections" },
+  { id: "general", name: "General News & Media", description: "Broad national audience & major breaking stories" }
 ];
 
 interface PlanTier {
@@ -299,10 +298,7 @@ export default function AdPortal() {
                   onClick={() => setIsCategoryModalOpen(true)}
                   className="w-full bg-background border border-border hover:border-amber-500 rounded-xl px-4 py-3 text-sm flex items-center justify-between text-left transition-all"
                 >
-                  <span className="flex items-center gap-2.5 font-medium">
-                    <span className="text-xl">{selectedCategory.icon}</span>
-                    <span>{selectedCategory.name}</span>
-                  </span>
+                  <span className="font-semibold text-foreground">{selectedCategory.name}</span>
                   <Layers className="w-4 h-4 text-amber-500" />
                 </button>
               </div>
@@ -382,8 +378,8 @@ export default function AdPortal() {
                     <span className="bg-amber-500 text-black text-[10px] font-extrabold px-2 py-0.5 rounded uppercase">
                       SPONSORED
                     </span>
-                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                      {selectedCategory.icon} {selectedCategory.name}
+                    <span className="text-[11px] text-muted-foreground font-semibold">
+                      {selectedCategory.name}
                     </span>
                   </div>
 
@@ -454,17 +450,14 @@ export default function AdPortal() {
                       setSelectedCategory(cat);
                       setIsCategoryModalOpen(false);
                     }}
-                    className={`cursor-pointer rounded-2xl p-4 border transition-all text-left flex items-start gap-3 ${
+                    className={`cursor-pointer rounded-2xl p-4 border transition-all text-left ${
                       selectedCategory.id === cat.id
                         ? "bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/30"
                         : "bg-background border-border hover:border-amber-500/40"
                     }`}
                   >
-                    <span className="text-2xl">{cat.icon}</span>
-                    <div>
-                      <h4 className="font-bold text-sm">{cat.name}</h4>
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{cat.description}</p>
-                    </div>
+                    <h4 className="font-bold text-sm text-foreground">{cat.name}</h4>
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{cat.description}</p>
                   </div>
                 ))}
               </div>
