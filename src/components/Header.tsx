@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Menu, X, ChevronDown, LogOut, Home, Newspaper, Radio, Globe, Moon, Sun, Bell, ArrowLeft, Copy, Check, Key } from "lucide-react";
+import { Menu, X, ChevronDown, LogOut, Home, Newspaper, Radio, Globe, Moon, Sun, Bell, ArrowLeft, Copy, Check, Key, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
