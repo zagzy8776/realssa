@@ -471,12 +471,12 @@ const Header = () => {
           {isSearchOpen && (
             <div
               onClick={() => setIsSearchOpen(false)}
-              className="fixed inset-x-0 top-[110px] sm:top-[125px] bottom-0 z-[99999] bg-black/85 backdrop-blur-xl flex flex-col justify-start items-center p-3 sm:p-5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 cursor-pointer overscroll-none"
+              className="fixed left-0 right-0 top-[110px] sm:top-[125px] bottom-0 z-[99999] bg-black/90 backdrop-blur-xl w-screen max-w-full overflow-x-hidden overflow-y-auto flex flex-col justify-start items-center p-2 sm:p-4 box-border overscroll-none cursor-pointer"
             >
               {/* Inner Floating Glass Card (Stop propagation so clicking inside doesn't close) */}
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="bg-card/95 border-2 border-amber-500/50 rounded-3xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl space-y-4 flex flex-col max-h-[100dvh] sm:max-h-[85dvh] overflow-hidden cursor-default box-border backdrop-blur-2xl"
+                className="bg-card/95 border-2 border-amber-500/50 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 max-w-xl w-full shadow-2xl space-y-4 flex flex-col max-h-[90dvh] overflow-x-hidden overflow-y-auto cursor-default box-border backdrop-blur-2xl mx-auto"
               >
                 {/* Header Control Row */}
                 <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-3 shrink-0">

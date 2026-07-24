@@ -113,12 +113,12 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[999999] bg-black/90 backdrop-blur-xl h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 box-border cursor-pointer"
+      className="fixed inset-0 left-0 right-0 z-[999999] bg-black/90 backdrop-blur-xl h-[100dvh] max-h-[100dvh] w-screen max-w-full overflow-x-hidden overflow-y-auto flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 box-border cursor-pointer overscroll-none"
     >
       {/* Inner Modal Content Box (Stop propagation to prevent closing when clicking inside) */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl h-full max-h-[100dvh] sm:max-h-[92dvh] bg-card border border-amber-500/40 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col min-w-0 overflow-hidden box-border cursor-default my-auto"
+        className="w-full max-w-xl h-full max-h-[100dvh] sm:max-h-[92dvh] bg-card border border-amber-500/40 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col min-w-0 overflow-x-hidden overflow-y-auto box-border cursor-default my-auto mx-auto"
       >
         
         {/* Sticky Header Bar with Title & Always-Visible Close Button */}
