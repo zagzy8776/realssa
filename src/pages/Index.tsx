@@ -308,23 +308,6 @@ const Index = () => {
       )}
       <ReadProgressBar />
       <Header />
-
-      {/* Wide AI Search Bar positioned in Top Yellow Strip */}
-      <div className="container mx-auto px-3 py-2 bg-background border-b border-border/40">
-        <div
-          onClick={() => setIsAiSearchOpen(true)}
-          className="relative flex items-center gap-3 bg-card border border-amber-500/40 hover:border-amber-500 rounded-xl px-3.5 py-2.5 shadow-md cursor-pointer transition-all hover:shadow-amber-500/10 group"
-        >
-          <Search className="w-4 h-4 text-amber-500 shrink-0" />
-          <div className="flex-1 text-xs md:text-sm font-medium text-muted-foreground group-hover:text-foreground truncate">
-            Ask RealSSA anything... (e.g. CBN Naira Rate, Lagos Traffic, AFCON Results)
-          </div>
-          <span className="bg-amber-500 text-black text-[10px] md:text-xs font-extrabold px-2.5 py-1 rounded-lg uppercase flex items-center gap-1 shrink-0">
-            ⚡ AI SEARCH
-          </span>
-        </div>
-      </div>
-
       <NewsTicker />
       <BreakingNowRail excludeIds={stories.map((s: any) => s.id)} />
       <LocalNewsRail excludeIds={stories.map((s: any) => s.id)} />

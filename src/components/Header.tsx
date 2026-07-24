@@ -156,18 +156,8 @@ const Header = () => {
             </Link>
           </div>
 
-          {/* Gamification Streak, AI Search & Weather */}
+          {/* Gamification Streak & Weather */}
           <div className="flex items-center gap-1.5 md:gap-2 animate-in fade-in zoom-in duration-500">
-            <button
-              onClick={() => setIsSearchOpen(true)}
-              className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2.5 py-1 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm"
-              title="Search AI (Press / on keyboard)"
-            >
-              <span>🔍</span>
-              <span className="hidden sm:inline">Search AI</span>
-              <span className="hidden md:inline-block bg-amber-500/20 text-[10px] px-1.5 rounded font-mono">/</span>
-            </button>
-
             <button
               onClick={() => setIsStreakOpen(true)}
               className={`flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 rounded-full active:scale-95 transition-all cursor-pointer ${
@@ -418,26 +408,19 @@ const Header = () => {
             </div>
         </div>
 
-        {/* Mobile Swipeable Category Pill Bar */}
-        <div className="md:hidden flex overflow-x-auto scrollbar-hide border-t border-border bg-background py-2 px-3 snap-x snap-mandatory touch-pan-x">
-          <div className="flex gap-2 min-w-max">
-            {categoryPills.map((pill, idx) => {
-              const isActive = location.pathname === pill.path;
-              return (
-                <Link
-                  key={`${pill.name}-${idx}`}
-                  to={pill.path}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-sm font-medium transition-all snap-start whitespace-nowrap h-11 flex items-center justify-center",
-                    isActive 
-                      ? "bg-primary text-primary-foreground shadow-sm pill-active" 
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  )}
-                >
-                  {pill.name}
-                </Link>
-              );
-            })}
+        {/* Wide RealSSA AI Search Bar (Replaces Category Pills Strip) */}
+        <div className="border-t border-border/40 bg-background py-2 px-3">
+          <div
+            onClick={() => setIsSearchOpen(true)}
+            className="relative flex items-center gap-3 bg-card border border-amber-500/40 hover:border-amber-500 rounded-xl px-3.5 py-2.5 shadow-sm cursor-pointer transition-all hover:shadow-amber-500/10 group max-w-4xl mx-auto"
+          >
+            <Search className="w-4 h-4 text-amber-500 shrink-0" />
+            <div className="flex-1 text-xs md:text-sm font-medium text-muted-foreground group-hover:text-foreground truncate">
+              Ask RealSSA anything... (e.g. CBN Naira Rate, Lagos Traffic, AFCON Results)
+            </div>
+            <span className="bg-amber-500 text-black text-[10px] md:text-xs font-extrabold px-2.5 py-1 rounded-lg uppercase flex items-center gap-1 shrink-0 shadow-xs">
+              ⚡ AI SEARCH
+            </span>
           </div>
         </div>
 
