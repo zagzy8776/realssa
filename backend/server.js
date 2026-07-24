@@ -2452,17 +2452,22 @@ app.get('/api/news/breaking', async (req, res) => {
         }
       }
 
-      // Step 2: Get fresh articles for AI editorial selection
-      const hoursBack = useAi ? 2 : 1;
-      const freshRes = await pool.query(
-        `SELECT 'rss-' || id as id, id as db_id, title, original_excerpt, ai_summary,
-                category, image, source_name, external_link, published_at, content_type
-         FROM rss_articles
-         WHERE published_at > NOW() - INTERVAL '${hoursBack} hours'
-           AND image IS NOT NULL AND image != ''
-         ORDER BY published_at DESC
-         LIMIT 60`
-      );
+      // Step 2: Get fresh articles for AI editorial selection across multi-DB pools
+      const hoursBack = useAi ? 24 : 12;
+      let freshRes;
+      try {
+        freshRes = await queryMultiDb(
+          `SELECT 'rss-' || id as id, id as db_id, title, original_excerpt, ai_summary,
+                  category, image, source_name, external_link, published_at, content_type
+           FROM rss_articles
+           WHERE published_at > NOW() - INTERVAL '${hoursBack} hours'
+             AND image IS NOT NULL AND image != ''
+           ORDER BY published_at DESC
+           LIMIT 60`
+        );
+      } catch (fErr) {
+        freshRes = { rows: [] };
+      }
 
       if (freshRes.rows.length >= 5 && useAi && process.env.GEMINI_API_KEY) {
         const { selectBreakingNow } = require('./services/aiHomepageEditor');
@@ -2483,7 +2488,7 @@ app.get('/api/news/breaking', async (req, res) => {
         }
       }
 
-      // Step 3: Fallback to diverse or recency-based sorting
+      // Step 3: Fallback to diverse or recency-based sorting across multi-DB pools
       let queryText = '';
       if (useDiverse) {
         queryText = `
@@ -2499,7 +2504,7 @@ app.get('/api/news/breaking', async (req, res) => {
             WHERE image IS NOT NULL AND image != ''
           ) t
           WHERE t.rn <= 2
-          ORDER BY published_at DESC
+          ORDER BY date DESC
           LIMIT 20
         `;
       } else {
@@ -2517,16 +2522,13 @@ app.get('/api/news/breaking', async (req, res) => {
         `;
       }
 
-      const dbResult = await pool.query(queryText);
-      if (dbResult.rows.length >= 5) {
-        return res.json(dbResult.rows.map(r => ({
-          id: r.id, title: r.title, excerpt: r.excerpt,
-          category: r.category, image: r.image, author: r.author,
-          externalLink: r.external_link, date: r.date,
-          contentType: r.content_type, readTime: r.read_time, source: 'rss',
-          source_name: r.author
-        })));
-      }
+      const fallbackRes = await queryMultiDb(queryText);
+      const mappedFallback = fallbackRes.rows.map(r => ({
+        ...r,
+        source_name: r.author,
+        source: 'rss'
+      }));
+      return res.json(mappedFallback);
     }
 
     // Fallback: live RSS scraping
