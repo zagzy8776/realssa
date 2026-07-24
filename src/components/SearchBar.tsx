@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ExternalLink, Clock, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import RealSSASearchModal from "./RealSSASearchModal";
 
 interface Article {
   id: string;
