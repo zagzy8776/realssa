@@ -161,6 +161,58 @@ async function generateAIAnalysis(title, excerpt) {
   return { summary: cleanText.slice(0, 200) || title, entities: [], translations: {} };
 }
 
+const FULL_ARTICLE_PROMPT = (title, cleanText) => [
+  'You are a senior investigative news editor for RealSSA News.',
+  'Synthesize and write a comprehensive, full-page long-form editorial breakdown (400 to 600 words) for this news story.',
+  'Your writing must be authoritative, captivating, clear, and engaging for African and global readers.',
+  'JSON Schema Requirements:',
+  '{',
+  '  "bullet_points": ["Key takeaway 1", "Key takeaway 2", "Key takeaway 3"],',
+  '  "full_breakdown": "3-4 detailed, rich paragraphs explaining what took place, the key figures involved, background context, and official statements.",',
+  '  "why_it_matters": "1-2 paragraphs analyzing the economic, political, or social impact on Nigeria and Africa.",',
+  '  "discussion_question": "One engaging, thought-provoking question for the community discussion section."',
+  '}',
+  `Article Title: "${title}"`,
+  `Article Context: "${cleanText}"`,
+  'Return ONLY the raw JSON block. No markdown, no ```json wrappers.'
+].join('\n');
+
+async function generateFullArticleBreakdown(title, excerpt) {
+  const cleanText = (excerpt || title || '').replace(/<[^>]+>/g, '').slice(0, 2000);
+  const prompt = FULL_ARTICLE_PROMPT(title, cleanText);
+
+  // 1. Gemini (primary - max 2500 tokens)
+  let raw = await callGemini(prompt, { maxOutputTokens: 2500, temperature: 0.3, timeout: 15000, responseMimeType: 'application/json' });
+  if (raw) {
+    try { const r = JSON.parse(raw); console.log('[FullArticleAI] ✅ Gemini'); return r; } catch {}
+  }
+
+  // 2. Groq fallback
+  raw = await callGroq(prompt, { maxTokens: 2500, temperature: 0.3 });
+  if (raw) {
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) { const r = JSON.parse(match[0]); console.log('[FullArticleAI] ✅ Groq'); return r; }
+    } catch {}
+  }
+
+  // 3. Cerebras fallback
+  raw = await callCerebras(prompt, { maxTokens: 2500, temperature: 0.3 });
+  if (raw) {
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) { const r = JSON.parse(match[0]); console.log('[FullArticleAI] ✅ Cerebras'); return r; }
+    } catch {}
+  }
+
+  return {
+    bullet_points: [title],
+    full_breakdown: cleanText || title,
+    why_it_matters: "This story has significant implications for regional policy, public interests, and economic developments.",
+    discussion_question: "What is your perspective on this developing news? Leave a comment below!"
+  };
+}
+
 async function generateSummary(title, excerpt) {
   const analysis = await generateAIAnalysis(title, excerpt);
   return analysis?.summary || null;
@@ -317,4 +369,4 @@ async function generateEmbedding(text) {
   } catch (err) { console.warn(`[Embedding] ${err.message}`); return null; }
 }
 
-module.exports = { generateSummary, generateSocialHook, generateSocialHooks, rewriteArticle, generateAIAnalysis, generateEmbedding };
+module.exports = { generateSummary, generateSocialHook, generateSocialHooks, rewriteArticle, generateAIAnalysis, generateEmbedding, generateFullArticleBreakdown };

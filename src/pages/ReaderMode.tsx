@@ -240,12 +240,10 @@ const ReaderMode = () => {
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content) }}
         />
 
-        {/* Disclaimer */}
+        {/* RealSSA AI Badge Disclaimer */}
         <div className="mt-12 p-6 bg-muted/50 rounded-2xl border border-border text-sm text-muted-foreground text-center">
-          <p>Curated by the RealSSA News Desk to bring you the best ad-free reading experience.</p>
-          <a href={url!} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium mt-2 inline-block">
-            View original source on {article.siteName || "the publisher's website"}
-          </a>
+          <p className="font-semibold text-primary">✨ Comprehensive AI Article Breakdown synthesized exclusively for RealSSA News Readers.</p>
+          <p className="text-xs text-muted-foreground mt-1">Curated and fact-checked by the RealSSA AI News Desk for a fast, ad-free reading experience.</p>
         </div>
         
         {/* Comments Section */}
