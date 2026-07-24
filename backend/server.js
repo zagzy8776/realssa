@@ -3188,7 +3188,7 @@ app.get('/api/cron/streams', async (req, res) => {
 
 // --- Self-Serve Naira Ad Exchange Endpoints ---
 app.post('/api/ads/create', async (req, res) => {
-  const { headline, description, category, imageUrl, targetLink, advertiserEmail, budgetNaira } = req.body;
+  const { companyName, headline, description, category, imageUrl, targetLink, advertiserEmail, budgetNaira } = req.body;
   if (!headline || !description || !targetLink || !advertiserEmail) {
     return res.status(400).json({ error: 'Missing required campaign fields' });
   }
@@ -3197,6 +3197,7 @@ app.post('/api/ads/create', async (req, res) => {
     await usersPool.query(`
       CREATE TABLE IF NOT EXISTS native_ads (
         id SERIAL PRIMARY KEY,
+        company_name TEXT,
         headline TEXT NOT NULL,
         description TEXT NOT NULL,
         category TEXT DEFAULT 'business',
@@ -3210,21 +3211,24 @@ app.post('/api/ads/create', async (req, res) => {
       )
     `).catch(() => {});
 
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS company_name TEXT`).catch(() => {});
+
     const insertRes = await usersPool.query(`
-      INSERT INTO native_ads (headline, description, category, image_url, target_link, advertiser_email, budget_naira)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO native_ads (company_name, headline, description, category, image_url, target_link, advertiser_email, budget_naira)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
-    `, [headline, description, category || 'business', imageUrl || null, targetLink, advertiserEmail, budgetNaira || 5000]);
+    `, [companyName || 'Featured Brand', headline, description, category || 'business', imageUrl || null, targetLink, advertiserEmail, budgetNaira || 5000]);
 
     // Dispatch social broadcast via Buffer in background
     setImmediate(async () => {
       try {
         const { postToBuffer, isBufferConfigured } = require('./services/buffer');
         if (isBufferConfigured()) {
+          const brandPrefix = companyName ? `${companyName.toUpperCase()}: ` : '';
           const hooks = {
-            twitter: `🚨 SPONSORED FEATURE: ${headline}\n\n${description.slice(0, 140)}`,
-            instagram: `📢 FEATURED BUSINESS: ${headline}\n\n${description}\n\nLink in bio 🔗\n\n#RealSSANews #Sponsored`,
-            facebook: `📢 SPONSORED: ${headline}\n\n${description}`
+            twitter: `🚨 SPONSORED: ${brandPrefix}${headline}\n\n${description.slice(0, 130)}`,
+            instagram: `📢 FEATURED ADVERTISER: ${companyName || headline}\n\n${description}\n\nLink in bio 🔗\n\n#RealSSANews #Sponsored`,
+            facebook: `📢 SPONSORED: ${companyName || ''} - ${headline}\n\n${description}`
           };
           await postToBuffer(hooks, targetLink, imageUrl, false);
         }
