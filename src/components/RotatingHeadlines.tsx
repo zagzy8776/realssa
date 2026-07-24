@@ -163,16 +163,14 @@ const RotatingHeadlines = () => {
                     </Button>
                   </Link>
                   
-                  {/* External Video Link Button */}
+                  {/* Video Link Button — Routes internally to RealSSA AI Reader */}
                   {currentHeadline.externalLink && (
-                    <a
-                      href={currentHeadline.externalLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <Link
+                      to={`/read?url=${encodeURIComponent(currentHeadline.externalLink)}&category=${encodeURIComponent(currentHeadline.category || 'news')}&id=${encodeURIComponent(currentHeadline.id || '')}`}
                       className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-md text-sm font-medium transition-colors"
                     >
-                      🎬 See Full Video
-                    </a>
+                      🎬 Watch AI Breakdown
+                    </Link>
                   )}
                 </div>
                 

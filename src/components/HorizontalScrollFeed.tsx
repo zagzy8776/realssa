@@ -86,19 +86,13 @@ const HorizontalScrollFeed = ({ title, articles }: HorizontalScrollFeedProps) =>
             </>
           );
 
-          return isExternal ? (
-            <a 
-              href={linkTo}
-              target="_blank"
-              rel="noopener noreferrer"
-              key={article.id}
-              className={className}
-            >
-              {CardContent}
-            </a>
-          ) : (
+          const internalReadUrl = article.externalLink || article.external_link
+            ? `/read?url=${encodeURIComponent(article.externalLink || article.external_link)}&category=${encodeURIComponent(article.category || 'news')}&id=${encodeURIComponent(article.id || '')}`
+            : `/article/${article.id}`;
+
+          return (
             <Link 
-              to={linkTo}
+              to={internalReadUrl}
               key={article.id}
               className={className}
             >

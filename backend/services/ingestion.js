@@ -894,6 +894,13 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         };
         const sourceName = cleanSourceName(feed.title || 'RealSSA News');
 
+        // STRICT PUNCH BAN: Drop any article from Punch completely
+        const isPunch = sourceName.toLowerCase().includes('punch') || externalLink.toLowerCase().includes('punchng.com');
+        if (isPunch) {
+          console.log(`[Punch Ban] Dropped Punch article: "${title.slice(0, 60)}"`);
+          continue;
+        }
+
         // The Fingerprint Logic (Deduplication)
         const storyHash = crypto.createHash('md5').update(title + sourceName).digest('hex');
 

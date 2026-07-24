@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
 import { fetchWithRetry } from "@/lib/fetchWithRetry";
@@ -133,11 +134,11 @@ const Nigeria = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {paginatedNews.map((item) => (
-              <a
+              <Link
                 key={item.id}
-                href={item.externalLink}
-                target="_blank"
-                rel="noopener noreferrer"
+                to={item.externalLink || (item as any).external_link 
+                  ? `/read?url=${encodeURIComponent(item.externalLink || (item as any).external_link)}&category=${encodeURIComponent(item.category || 'nigerian-news')}&id=${encodeURIComponent(item.id || '')}`
+                  : `/article/${item.id}`}
                 className="group bg-card text-foreground rounded-xl overflow-hidden shadow hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border"
               >
                 <div className="relative">
@@ -163,7 +164,7 @@ const Nigeria = () => {
                     </span>
                   </div>
                 </div>
-              </a>
+              </Link>
             ))}
           </div>
         )}
