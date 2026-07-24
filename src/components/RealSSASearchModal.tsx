@@ -113,49 +113,50 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-start justify-center pt-6 md:pt-16 px-4 overflow-y-auto animate-in fade-in duration-200 cursor-pointer"
+      className="fixed inset-0 z-[999999] bg-black/90 backdrop-blur-xl flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto animate-in fade-in duration-200 cursor-pointer"
     >
       {/* Inner Modal Content Box (Stop propagation to prevent closing when clicking inside) */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-card border border-border rounded-3xl p-5 md:p-8 max-w-3xl w-full shadow-2xl space-y-6 mb-16 relative cursor-default"
+        className="bg-card border-2 border-amber-500/40 rounded-3xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl space-y-4 my-auto relative cursor-default max-h-[90vh] overflow-y-auto custom-scrollbar"
       >
         
-        {/* Prominent High-Contrast Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 md:top-6 md:right-6 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition-all flex items-center gap-1.5 z-20 cursor-pointer"
-          title="Close Search (or press ESC)"
-        >
-          <X className="w-4 h-4" /> <span>Close</span>
-        </button>
+        {/* Sticky Header Bar with Title & Always-Visible Close Button */}
+        <div className="sticky top-0 z-30 flex items-center justify-between bg-card/95 backdrop-blur-md pb-3 border-b border-border/40 -mt-1 pt-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-extrabold text-base shrink-0">
+              ⚡
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold font-display flex items-center gap-1.5 leading-tight">
+                RealSSA <span className="text-gradient-gold">AI Search</span>
+              </h2>
+              <p className="text-[11px] text-muted-foreground">Neural Web & Multi-Database Engine</p>
+            </div>
+          </div>
 
-        {/* Minimalist Google-Style Branding Header */}
-        <div className="flex items-center gap-3 pr-20">
-          <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-extrabold text-lg shrink-0">
-            ⚡
-          </div>
-          <div>
-            <h2 className="text-lg md:text-xl font-bold font-display flex items-center gap-2">
-              RealSSA <span className="text-gradient-gold">AI Search</span>
-            </h2>
-            <p className="text-xs text-muted-foreground">Search anything across Africa & the global web</p>
-          </div>
+          <button
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 shrink-0"
+            title="Close Search (or press ESC)"
+          >
+            <X className="w-4 h-4" /> <span>Close</span>
+          </button>
         </div>
 
-        {/* Central Search Form Input */}
-        <form onSubmit={handleFormSubmit} className="space-y-3">
+        {/* Central Search Form Input — text-base (16px) PREVENTS MOBILE ZOOMING */}
+        <form onSubmit={handleFormSubmit} className="space-y-3 pt-1">
           <div className="relative flex items-center gap-2">
             <div className="relative flex-1">
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Ask anything... (e.g., CBN Naira Rate, Lagos Traffic, AFCON Results)"
+                placeholder="Ask anything... (e.g., CBN Naira Rate, Lagos Traffic)"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-background border-2 border-border focus:border-amber-500 rounded-2xl pl-11 pr-10 py-3.5 text-sm md:text-base focus:outline-none focus:ring-4 focus:ring-amber-500/20 shadow-inner font-medium"
+                className="w-full bg-background border-2 border-amber-500/40 focus:border-amber-500 rounded-2xl pl-11 pr-10 py-3 text-base focus:outline-none focus:ring-4 focus:ring-amber-500/20 shadow-inner font-medium text-foreground"
               />
-              <Search className="w-5 h-5 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-5 h-5 text-amber-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               {query && (
                 <button
                   type="button"
@@ -170,7 +171,7 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
             <button
               type="submit"
               disabled={loading || !query.trim()}
-              className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-extrabold text-xs md:text-sm px-4 py-3.5 rounded-2xl transition-all flex items-center gap-1.5 shadow shrink-0"
+              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-extrabold text-xs sm:text-sm px-4 py-3 rounded-2xl transition-all flex items-center gap-1.5 shadow shrink-0 active:scale-95 cursor-pointer"
             >
               {loading ? (
                 <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
@@ -183,11 +184,11 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
 
         {/* Quick Trending Search Chips */}
         {!searchResult && !loading && (
-          <div className="space-y-3 pt-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Popular Intelligence Queries
+          <div className="space-y-2.5 pt-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Popular Intelligence Queries
             </span>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {TRENDING_CHIPS.map((chip, idx) => (
                 <button
                   key={idx}
