@@ -3186,6 +3186,101 @@ app.get('/api/cron/streams', async (req, res) => {
   }
 });
 
+// --- Self-Serve Naira Ad Exchange Endpoints ---
+app.post('/api/ads/create', async (req, res) => {
+  const { headline, description, category, imageUrl, targetLink, advertiserEmail, budgetNaira } = req.body;
+  if (!headline || !description || !targetLink || !advertiserEmail) {
+    return res.status(400).json({ error: 'Missing required campaign fields' });
+  }
+
+  try {
+    await usersPool.query(`
+      CREATE TABLE IF NOT EXISTS native_ads (
+        id SERIAL PRIMARY KEY,
+        headline TEXT NOT NULL,
+        description TEXT NOT NULL,
+        category TEXT DEFAULT 'business',
+        image_url TEXT,
+        target_link TEXT NOT NULL,
+        advertiser_email TEXT NOT NULL,
+        budget_naira INT DEFAULT 5000,
+        status TEXT DEFAULT 'active',
+        clicks INT DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+
+    const insertRes = await usersPool.query(`
+      INSERT INTO native_ads (headline, description, category, image_url, target_link, advertiser_email, budget_naira)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [headline, description, category || 'business', imageUrl || null, targetLink, advertiserEmail, budgetNaira || 5000]);
+
+    // Dispatch social broadcast via Buffer in background
+    setImmediate(async () => {
+      try {
+        const { postToBuffer, isBufferConfigured } = require('./services/buffer');
+        if (isBufferConfigured()) {
+          const hooks = {
+            twitter: `🚨 SPONSORED FEATURE: ${headline}\n\n${description.slice(0, 140)}`,
+            instagram: `📢 FEATURED BUSINESS: ${headline}\n\n${description}\n\nLink in bio 🔗\n\n#RealSSANews #Sponsored`,
+            facebook: `📢 SPONSORED: ${headline}\n\n${description}`
+          };
+          await postToBuffer(hooks, targetLink, imageUrl, false);
+        }
+      } catch (bufErr) {
+        console.warn('[Ad Engine] Buffer broadcast notice:', bufErr.message);
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Campaign created successfully',
+      ad: insertRes.rows[0]
+    });
+  } catch (err) {
+    console.error('Ad creation error:', err.message);
+    return res.status(500).json({ error: 'Failed to create ad campaign', message: err.message });
+  }
+});
+
+app.get('/api/ads/active', async (req, res) => {
+  try {
+    const result = await usersPool.query(`
+      SELECT id, headline AS title, description AS excerpt, category, image_url AS image, target_link AS externalLink, 'SPONSORED' AS is_sponsored
+      FROM native_ads
+      WHERE status = 'active'
+      ORDER BY created_at DESC
+      LIMIT 10
+    `).catch(() => ({ rows: [] }));
+
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    return res.status(200).json([]);
+  }
+});
+
+// --- Intelligent @RealSSA_Bot Comment Assistant Endpoint ---
+app.post('/api/bot/comment-reply', async (req, res) => {
+  const { commentText, articleTitle, articleContext } = req.body;
+  if (!commentText || !articleTitle) {
+    return res.status(400).json({ error: 'Comment text and article title required' });
+  }
+
+  try {
+    const { handleCommentBotMention } = require('./services/aiCommentBotService');
+    const result = await handleCommentBotMention(commentText, articleTitle, articleContext || '');
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('@RealSSA_Bot comment endpoint error:', err.message);
+    return res.status(200).json({
+      success: true,
+      author: '@RealSSA_Bot (Verified AI)',
+      reply: 'Thanks for tagging @RealSSA_Bot! The RealSSA News Desk is actively tracking updates on this story. Stay tuned! 📰'
+    });
+  }
+});
+
 // GET /api/cron/viral-trend-buffer?secret=xxx
 // Stateless Viral Trend Buffer Bot (0 Bytes DB usage)
 app.get('/api/cron/viral-trend-buffer', async (req, res) => {

@@ -58,6 +58,7 @@ const ReadingHistory      = lazy(() => import("./pages/ReadingHistory"));
 const EntityHub           = lazy(() => import("./pages/EntityHub"));
 const LocalMarketHub      = lazy(() => import("./pages/LocalMarketHub"));
 const EventsCalendar      = lazy(() => import("./pages/EventsCalendar"));
+const AdPortal            = lazy(() => import("./pages/AdPortal"));
 const LiveWire            = lazy(() => import("./pages/LiveWire"));
 const Widgets             = lazy(() => import("./pages/Widgets"));
 
@@ -156,6 +157,7 @@ const App = () => {
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/country/:countryId" element={<CountryNews />} />
                 <Route path="/download" element={<AppDownload />} />
+                <Route path="/ads" element={<AdPortal />} />
                 <Route path="/reels" element={<Reels />} />
                 <Route path="/reading-list" element={<ReadingList />} />
                 <Route path="/reading-history" element={<ReadingHistory />} />

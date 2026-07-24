@@ -84,6 +84,36 @@ const ExternalArticleComments = ({
       if (response.ok) {
         // Reload all comments from database to fetch updated tree layout
         await fetchComments();
+
+        // Check if user tagged @RealSSA_Bot for live AI response
+        if (content.includes('@RealSSA_Bot')) {
+          try {
+            const botRes = await fetch(apiUrl('/api/bot/comment-reply'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                commentText: content,
+                articleTitle: articleTitle || 'Breaking Story'
+              })
+            });
+            const botData = await botRes.json();
+            if (botData && botData.reply) {
+              await fetch(apiUrl('/api/comments'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  articleId: articleId,
+                  author: '@RealSSA_Bot (Verified AI)',
+                  content: botData.reply,
+                  parentId: parentId
+                })
+              });
+              await fetchComments();
+            }
+          } catch (botErr) {
+            console.warn('@RealSSA_Bot reply notice:', botErr);
+          }
+        }
         
         if (parentId) {
           setReplyContent('');
