@@ -1222,14 +1222,22 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     console.error('Freshness score update failed:', freshErr.message);
   }
 
-  // --- Self-Cleaning Database ---
-  // Delete articles older than 2 days to keep DB lean on free tier
+  // --- Self-Cleaning Database Across ALL 5 Databases ---
+  // Delete articles older than 48 hours (2 days) across all 5 database clusters
   try {
-    const cleanResult = await pool.query(
-      `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`
-    );
-    if (cleanResult.rowCount > 0) {
-      console.log(`🧹 Self-cleaning: Deleted ${cleanResult.rowCount} old articles to preserve storage.`);
+    const { getAllPools } = require('../config/multiDb');
+    const allPools = getAllPools();
+    for (const item of allPools) {
+      try {
+        const cleanResult = await item.pool.query(
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`
+        );
+        if (cleanResult.rowCount > 0) {
+          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 48 hours.`);
+        }
+      } catch (pCleanErr) {
+        console.warn(`[Self-cleaning Warning on ${item.name}]: ${pCleanErr.message}`);
+      }
     }
   } catch (err) {
     console.error('Self-cleaning error:', err.message);

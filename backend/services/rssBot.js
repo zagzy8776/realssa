@@ -22,14 +22,27 @@ const rssParser = new Parser({
 
 let pool;
 
-// The 48-Hour Auto-Delete Garbage Collector (Zero-Cost Engine)
+// The 48-Hour Auto-Delete Garbage Collector across ALL 5 Databases
 async function cleanOldArticles() {
   try {
-    console.log(`[${new Date().toISOString()}] 🧹 Running 48-Hour Garbage Collector...`);
-    const result = await pool.query(
-      `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`
-    );
-    console.log(`[${new Date().toISOString()}] 🗑️ Garbage Collector removed ${result.rowCount} old articles.`);
+    console.log(`[${new Date().toISOString()}] 🧹 Running 48-Hour Garbage Collector across all 5 databases...`);
+    const { getAllPools } = require('../config/multiDb');
+    const allPools = getAllPools();
+    let totalPurged = 0;
+    for (const item of allPools) {
+      try {
+        const result = await item.pool.query(
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`
+        );
+        totalPurged += result.rowCount || 0;
+        if (result.rowCount > 0) {
+          console.log(`[${new Date().toISOString()}] 🗑️ Garbage Collector removed ${result.rowCount} old articles from ${item.name}.`);
+        }
+      } catch (pErr) {
+        console.warn(`[Garbage Collector Warning on ${item.name}]: ${pErr.message}`);
+      }
+    }
+    console.log(`[${new Date().toISOString()}] 🗑️ Total 48-Hour Garbage Collection complete: ${totalPurged} old articles removed.`);
   } catch (err) {
     console.error('❌ Garbage Collector failed:', err.message);
   }
