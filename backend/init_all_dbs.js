@@ -38,6 +38,7 @@ async function initAllDatabases() {
         ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS reaction_count INT DEFAULT 0;
         ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION DEFAULT 0;
         ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE;
+        ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS embedding TEXT;
 
         DO $$
         BEGIN

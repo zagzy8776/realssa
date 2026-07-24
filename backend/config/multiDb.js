@@ -5,7 +5,7 @@ const DB_CONFIGS = [
   {
     id: 1,
     name: 'DB1 (Royal Dream)',
-    url: process.env.DATABASE_URL_1 || 'postgresql://neondb_owner:npg_LPkdn2vhR6zs@ep-royal-dream-azab2rs9.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
+    url: process.env.DATABASE_URL_1 || 'postgresql://neondb_owner:npg_LXS6rJEbRCl2@ep-sweet-field-azj0x1ei.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
     categories: ['nigerian-news', 'sports', 'business', 'politics']
   },
   {
