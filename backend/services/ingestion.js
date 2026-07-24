@@ -1068,7 +1068,15 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
             ];
           }
 
-          const result = await pool.query(queryStr, queryValues);
+          const activePool = pool || getPoolForCategory(category).pool;
+          let result;
+          try {
+            result = await activePool.query(queryStr, queryValues);
+          } catch (pErr) {
+            console.warn(`[MultiDB Routing] Primary insert for ${category} error: ${pErr.message}. Retrying via queryMultiDb...`);
+            const { queryMultiDb } = require('../config/multiDb');
+            result = await queryMultiDb(queryStr, queryValues);
+          }
 
           if (result.rows.length > 0) {
             const articleId = result.rows[0].id;
