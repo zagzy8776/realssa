@@ -875,7 +875,16 @@ app.get('/api/articles', async (req, res) => {
           WHERE published_at > NOW() - INTERVAL '2 days'
         `;
 
-        const result = await pool.query(queryStr);
+        let result;
+        try {
+          const targetPool = getPoolForCategory('nigerian-news').pool;
+          result = await targetPool.query(queryStr);
+          if (result.rows.length === 0) {
+            result = await queryMultiDb(queryStr);
+          }
+        } catch (mErr) {
+          result = await queryMultiDb(queryStr);
+        }
         let articlesData = result.rows;
 
         // In-memory personalization and sorting
@@ -1828,31 +1837,59 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
         queryParams.push(...excludeList);
       }
 
-      const countResult = await pool.query(
-        `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
-        queryParams
-      );
+      const targetCategoryPool = getPoolForCategory(cats[0] || category).pool;
+      let countResult;
+      try {
+        countResult = await targetCategoryPool.query(
+          `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
+          queryParams
+        );
+      } catch (cErr) {
+        countResult = await queryMultiDb(
+          `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
+          queryParams
+        );
+      }
       const total = parseInt(countResult.rows[0].count, 10);
 
-      if (total >= 5) {
+      if (total >= 1) {
         const limitParamIndex = queryParams.length + 1;
         const offsetParamIndex = queryParams.length + 2;
 
-        const dbResult = await pool.query(
-          `SELECT 'rss-' || a.id AS id,
-                  a.title,
-                  COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
-                  a.category, a.image, a.source_name AS author,
-                  a.external_link, a.published_at AS date, a.content_type,
-                  a.is_featured, '5 min read' AS read_time,
-                  a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
-           FROM rss_articles a
-           LEFT JOIN source_credibility c ON a.source_name = c.source_name
-           WHERE a.category IN (${catPlaceholders}) ${excludeClause}
-           ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
-           LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
-          [...queryParams, limit, offset]
-        );
+        let dbResult;
+        try {
+          dbResult = await targetCategoryPool.query(
+            `SELECT 'rss-' || a.id AS id,
+                    a.title,
+                    COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
+                    a.category, a.image, a.source_name AS author,
+                    a.external_link, a.published_at AS date, a.content_type,
+                    a.is_featured, '5 min read' AS read_time,
+                    a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
+             FROM rss_articles a
+             LEFT JOIN source_credibility c ON a.source_name = c.source_name
+             WHERE a.category IN (${catPlaceholders}) ${excludeClause}
+             ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
+             LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+            [...queryParams, limit, offset]
+          );
+        } catch (dErr) {
+          dbResult = await queryMultiDb(
+            `SELECT 'rss-' || a.id AS id,
+                    a.title,
+                    COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
+                    a.category, a.image, a.source_name AS author,
+                    a.external_link, a.published_at AS date, a.content_type,
+                    a.is_featured, '5 min read' AS read_time,
+                    a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
+             FROM rss_articles a
+             LEFT JOIN source_credibility c ON a.source_name = c.source_name
+             WHERE a.category IN (${catPlaceholders}) ${excludeClause}
+             ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
+             LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+            [...queryParams, limit, offset]
+          );
+        }
         const rssArticles = dbResult.rows.map(r => ({
           id: r.id, title: r.title, excerpt: r.excerpt,
           category: r.category, image: r.image, author: r.author,
