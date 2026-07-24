@@ -20,7 +20,7 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 import TrendingHashtags from "@/components/TrendingHashtags";
 import StoryGroupCard from "@/components/StoryGroupCard";
 import LocalNewsRail from "@/components/LocalNewsRail";
-import { Search } from "lucide-react";
+import { Search, ShieldCheck } from "lucide-react";
 import RealSSASearchModal from "@/components/RealSSASearchModal";
 import { useNavigate } from "react-router-dom";
 
@@ -319,6 +319,50 @@ const Index = () => {
         <div className="container mx-auto px-4 -mt-4 mb-2">
           <TrendingHashtags />
         </div>
+
+        {/* Verified News Outlets & Primary Sources Trust Bar */}
+        <section className="container mx-auto px-4 py-4 my-2">
+          <div className="bg-card/90 backdrop-blur-md border border-emerald-500/30 rounded-2xl p-4 md:p-5 shadow-lg">
+            <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-3 mb-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <h3 className="text-sm md:text-base font-bold font-display flex items-center gap-1.5 text-foreground">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  Verified News Outlets & Primary Sources
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-bold">
+                ✓ 100% Real-Time Fact-Checked Feeds
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
+              {[
+                { name: 'Vanguard News', country: '🇳🇬', score: '98% Credibility' },
+                { name: 'Premium Times', country: '🇳🇬', score: '97% Credibility' },
+                { name: 'Channels TV', country: '🇳🇬', score: '99% Credibility' },
+                { name: 'Nairametrics', country: '🇳🇬', score: '96% Credibility' },
+                { name: 'The Guardian', country: '🇳🇬', score: '95% Credibility' },
+                { name: 'Graphic Ghana', country: '🇬🇭', score: '96% Credibility' },
+                { name: 'Nation Kenya', country: '🇰🇪', score: '95% Credibility' },
+                { name: 'Al Jazeera', country: '🌍', score: '98% Credibility' }
+              ].map((pub, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 bg-background border border-emerald-500/20 hover:border-emerald-500/50 px-3 py-1.5 rounded-xl shrink-0 transition-all shadow-xs group cursor-default"
+                >
+                  <span className="text-xs">{pub.country}</span>
+                  <span className="text-xs font-bold text-foreground group-hover:text-emerald-400 truncate">
+                    {pub.name}
+                  </span>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold px-1.5 py-0.5 rounded border border-emerald-500/30">
+                    {pub.score}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <RealSSASearchModal
           isOpen={isAiSearchOpen}
