@@ -21,7 +21,7 @@ const LINK_INTERCEPT: &str = r#"<script>
     if(!h||h.startsWith('#')||h.startsWith('javascript'))return;
     e.preventDefault();
     try{
-      var abs=new URL(h,window.location.href).href;
+      var abs=el.href;
       window.parent.postMessage({type:'REALSSA_NAVIGATE',url:abs},'*');
     }catch(_){}
   },true);
