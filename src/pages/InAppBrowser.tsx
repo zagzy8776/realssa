@@ -70,9 +70,8 @@ export default function InAppBrowser() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // ── Address bar ─────────────────────────────────────────────────────────────
-  const [addressValue, setAddressValue] = useState(initialUrl);
   const [addressFocused, setAddressFocused] = useState(false);
-  const [suggestions, setSuggestions] = useState<{ url: string; title: string }[]>([]);
+  const [suggestions, setSuggestions] = useState<{ url: string; title: string; isSearch?: boolean }[]>([]);
   const addressRef = useRef<HTMLInputElement>(null);
 
   // ── UI state ────────────────────────────────────────────────────────────────
@@ -81,6 +80,13 @@ export default function InAppBrowser() {
   const [controlsOpen, setControlsOpen] = useState(false);
   const [shieldActive, setShieldActive] = useState(true);
 
+  // ── Native Search results state ───────────────────────────────────────────
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(true);
+  const searchLimit = 12;
+
   // Proxy fallback URL builder
   const proxyUrl = useCallback((url: string) =>
     `${RUST_ENGINE_URL}/proxy-page?url=${encodeURIComponent(url)}`, []);
@@ -88,11 +94,19 @@ export default function InAppBrowser() {
   // ── Core load function — tries renderer first, silently falls back ──────────
   const loadUrl = useCallback(async (url: string) => {
     if (!url) return;
+    setAddressValue(url);
+    setHistoryOpen(false);
+
+    if (url.startsWith('realssa://search?q=')) {
+      setLoading(false);
+      setUsingProxy(false);
+      setPageData(null);
+      return;
+    }
+
     setLoading(true);
     setPageData(null);
     setUsingProxy(false);
-    setAddressValue(url);
-    setHistoryOpen(false);
 
     try {
       const res = await fetch(`${RUST_ENGINE_URL}/render-page?url=${encodeURIComponent(url)}`);
@@ -126,6 +140,46 @@ export default function InAppBrowser() {
       setLoading(false);
     }
   }, [proxyUrl]);
+
+  // ── Fetch results from Tavily/Exa endpoint ──────────────────────────────────
+  const fetchSearchResults = useCallback(async (query: string, offset: number) => {
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/search/web?q=${encodeURIComponent(query)}&offset=${offset}&limit=${searchLimit}`);
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setSearchResults(prev => offset === 0 ? data : [...prev, ...data]);
+        setSearchHasMore(data.length === searchLimit);
+      } else {
+        setSearchHasMore(false);
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Search Error', description: 'Failed to fetch search results.' });
+      setSearchHasMore(false);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [toast]);
+
+  // ── Trigger search results load on URI navigation ──────────────────────────
+  useEffect(() => {
+    if (currentUrl.startsWith('realssa://search?q=')) {
+      const q = decodeURIComponent(currentUrl.replace('realssa://search?q=', ''));
+      setSearchResults([]);
+      setSearchOffset(0);
+      setSearchHasMore(true);
+      fetchSearchResults(q, 0);
+    }
+  }, [currentUrl, fetchSearchResults]);
+
+  const handleLoadMoreSearch = () => {
+    const q = decodeURIComponent(currentUrl.replace('realssa://search?q=', ''));
+    const nextOffset = searchOffset + searchLimit;
+    setSearchOffset(nextOffset);
+    fetchSearchResults(q, nextOffset);
+  };
 
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -184,17 +238,39 @@ export default function InAppBrowser() {
     setSuggestions([]);
   };
 
-  // ── Address bar autocomplete from history ─────────────────────────────────
+  // ── Address bar autocomplete & live suggestions ───────────────────────────
   const handleAddressChange = (val: string) => {
     setAddressValue(val);
     if (!val.trim()) { setSuggestions([]); return; }
+    
+    // 1. History matches
     const hist = loadBrowserHistory();
     const q = val.toLowerCase();
-    setSuggestions(
-      hist
-        .filter(h => h.url.toLowerCase().includes(q) || h.title.toLowerCase().includes(q))
-        .slice(0, 5)
-    );
+    const historyMatches = hist
+      .filter(h => h.url.toLowerCase().includes(q) || h.title.toLowerCase().includes(q))
+      .map(h => ({ url: h.url, title: h.title, isSearch: false }))
+      .slice(0, 3);
+
+    // 2. Fetch live suggestions from DuckDuckGo autocomplete API
+    fetch(`https://ac.duckduckgo.com/ac/?q=${encodeURIComponent(val)}&type=list`)
+      .then(res => res.json())
+      .then((data: any) => {
+        if (Array.isArray(data) && Array.isArray(data[1])) {
+          const searchSuggestions = data[1]
+            .map((s: string) => ({
+              url: `realssa://search?q=${encodeURIComponent(s)}`,
+              title: s,
+              isSearch: true
+            }))
+            .slice(0, 5);
+          setSuggestions([...historyMatches, ...searchSuggestions]);
+        } else {
+          setSuggestions(historyMatches);
+        }
+      })
+      .catch(() => {
+        setSuggestions(historyMatches);
+      });
   };
 
   // ── Bookmark ──────────────────────────────────────────────────────────────────
@@ -319,12 +395,18 @@ export default function InAppBrowser() {
                   key={i}
                   type="button"
                   onMouseDown={() => { navigateTo(s.url); setSuggestions([]); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-amber-500/10 transition-colors text-left group"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-amber-500/10 transition-colors text-left group border-b border-border/10 last:border-0"
                 >
-                  <Globe className="w-3 h-3 text-amber-500 shrink-0" />
+                  {s.isSearch ? (
+                    <Search className="w-3 h-3 text-amber-500 shrink-0" />
+                  ) : (
+                    <Globe className="w-3 h-3 text-amber-500 shrink-0" />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-medium text-foreground truncate">{s.title}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">{getDomain(s.url)}</div>
+                    {!s.isSearch && (
+                      <div className="text-[10px] text-muted-foreground truncate">{getDomain(s.url)}</div>
+                    )}
                   </div>
                   <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-amber-400 shrink-0" />
                 </button>
@@ -521,7 +603,7 @@ export default function InAppBrowser() {
         )}
 
         {/* Custom renderer — the engine output */}
-        {!loading && pageData && !usingProxy && (
+        {!loading && pageData && !usingProxy && !currentUrl.startsWith('realssa://search?q=') && (
           <RealSSARenderer
             data={pageData}
             onNavigate={navigateTo}
@@ -533,11 +615,105 @@ export default function InAppBrowser() {
         <iframe
           ref={iframeRef}
           title={pageTitle}
-          className={`w-full flex-1 border-none bg-white ${usingProxy && !loading ? 'flex' : 'hidden'}`}
+          className={`w-full flex-1 border-none bg-white ${usingProxy && !loading && !currentUrl.startsWith('realssa://search?q=') ? 'flex' : 'hidden'}`}
           onLoad={() => setLoading(false)}
           onError={() => setLoading(false)}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox"
         />
+
+        {/* Native Search Results UI */}
+        {currentUrl.startsWith('realssa://search?q=') && (
+          <div className="max-w-2xl mx-auto w-full px-4 py-6 text-foreground flex-1 flex flex-col overflow-y-auto">
+            <div className="mb-6 pb-4 border-b border-white/10 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Sparkles className="w-4 h-4 text-amber-500" /> Neural Search Results
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Semantic results for: <span className="text-foreground font-medium italic">"{decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))}"</span>
+                </p>
+              </div>
+              {searchLoading && (
+                <div className="w-4 h-4 border border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+              )}
+            </div>
+
+            {/* Native Intent Widgets (e.g. Currency Rates) */}
+            {/naira|cbn|usd|black.*market|rate/i.test(decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))) && (
+              <div className="mb-6 p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                     💰 Currency Parallel Rates (Naira Black Market)
+                  </span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">Live</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                    <div className="text-[10px] text-muted-foreground uppercase">USD</div>
+                    <div className="text-xs font-bold text-foreground mt-0.5">1,640 / 1,650</div>
+                  </div>
+                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                    <div className="text-[10px] text-muted-foreground uppercase">GBP</div>
+                    <div className="text-xs font-bold text-foreground mt-0.5">2,080 / 2,100</div>
+                  </div>
+                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                    <div className="text-[10px] text-muted-foreground uppercase">EUR</div>
+                    <div className="text-xs font-bold text-foreground mt-0.5">1,780 / 1,800</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Results List */}
+            <div className="space-y-4 flex-1">
+              {searchResults.length === 0 && !searchLoading ? (
+                <div className="text-center py-12">
+                  <p className="text-sm text-muted-foreground">No neural results found for your query.</p>
+                </div>
+              ) : (
+                searchResults.map((r: any, i: number) => (
+                  <div 
+                    key={i} 
+                    className="p-4 bg-white/5 border border-white/5 hover:border-amber-500/20 hover:bg-amber-500/5 rounded-2xl transition-all shadow-sm group cursor-pointer"
+                    onClick={() => navigateTo(r.url)}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <img 
+                        src={`https://www.google.com/s2/favicons?sz=32&domain=${r.source}`} 
+                        alt="" 
+                        className="w-3.5 h-3.5 rounded-sm shrink-0 bg-white/10" 
+                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://www.google.com/s2/favicons?sz=32&domain=wikipedia.org'; }}
+                      />
+                      <span className="text-[10px] text-amber-500/70 font-semibold uppercase tracking-wide">
+                        {r.source}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground ml-auto">{r.date}</span>
+                    </div>
+                    <h3 className="text-sm font-bold text-foreground group-hover:text-amber-400 transition-colors line-clamp-1">
+                      {r.title}
+                    </h3>
+                    {r.snippet && (
+                      <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
+                        {r.snippet}
+                      </p>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* See More / Load More Pagination */}
+            {searchHasMore && searchResults.length > 0 && (
+              <button
+                onClick={handleLoadMoreSearch}
+                disabled={searchLoading}
+                className="mt-6 w-full py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 hover:border-amber-500/40 text-amber-400 font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50"
+              >
+                {searchLoading ? 'Searching more...' : 'See More Results'}
+              </button>
+            )}
+          </div>
+        )}
       </main>
 
       {/* ── Bottom Mobile Bar ─────────────────────────────────────────────────── */}
