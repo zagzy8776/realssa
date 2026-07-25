@@ -1,7 +1,7 @@
 /**
  * Exa API Neural Web Search Service (exaSearchService.js)
  * Canonical reference: https://docs.exa.ai/reference/search-api-guide-for-coding-agents
- * 
+ *
  * Performs high-precision neural web search with contents.highlights using Exa API.
  */
 
@@ -18,7 +18,10 @@ async function searchExa(query, options = {}) {
       type: options.type || 'auto',
       numResults: options.numResults || 10,
       contents: {
-        highlights: true
+        highlights: {
+          numSentences: 3,
+          highlightsPerUrl: 3
+        }
       }
     };
 
@@ -36,7 +39,8 @@ async function searchExa(query, options = {}) {
         'x-api-key': apiKey,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(12000)  // 12s timeout — prevents silent hangs
     });
 
     if (!response.ok) {
@@ -47,8 +51,11 @@ async function searchExa(query, options = {}) {
 
     const data = await response.json();
     if (!data || !data.results) {
+      console.warn('[Exa Search] No results in response');
       return null;
     }
+
+    console.log(`[Exa Search] ✅ Got ${data.results.length} results from Exa`);
 
     // Format Exa search results for RealSSA AI Search Engine
     const formattedResults = data.results.map(r => ({
@@ -56,7 +63,7 @@ async function searchExa(query, options = {}) {
       url: r.url,
       publishedDate: r.publishedDate || null,
       score: r.score || null,
-      highlights: Array.isArray(r.highlights) ? r.highlights.join(' ') : (r.highlights || '')
+      highlights: Array.isArray(r.highlights) ? r.highlights.join(' ') : (r.highlights || r.text || '')
     }));
 
     return {
