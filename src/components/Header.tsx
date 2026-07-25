@@ -57,6 +57,19 @@ const libraryLinks = [
   { href: "/library/societal-architecture", label: "SOCIETAL ARCHITECTURE" },
 ];
 
+const isDirectUrl = (str: string): boolean => {
+  const pattern = new RegExp(
+    '^(https?:\\/\\/)?' + // protocol
+    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain name
+    '((\\d{1,3}\\.){3}\\d{1,3}))' + // ip
+    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port/path
+    '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
+    '(\\#[-a-z\\d_]*)?$', // fragment locator
+    'i'
+  );
+  return pattern.test(str) || (str.includes('.') && !str.includes(' ') && str.length > 4);
+};
+
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -75,6 +88,16 @@ const Header = () => {
 
   const handleInlineSearch = async (queryToSearch: string) => {
     if (!queryToSearch.trim()) return;
+    const q = queryToSearch.trim();
+    if (isDirectUrl(q)) {
+      let destination = q;
+      if (!/^https?:\/\//i.test(q)) {
+        destination = `https://${q}`;
+      }
+      window.open(destination, '_blank', 'noopener,noreferrer');
+      setIsSearchOpen(false);
+      return;
+    }
     setSearchLoading(true);
     setSearchResult(null);
 

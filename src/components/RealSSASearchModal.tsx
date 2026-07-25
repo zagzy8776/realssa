@@ -20,6 +20,19 @@ const TRENDING_CHIPS = [
   "Crypto Tax Laws Nigeria"
 ];
 
+const isDirectUrl = (str: string): boolean => {
+  const pattern = new RegExp(
+    '^(https?:\\/\\/)?' + // protocol
+    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain name
+    '((\\d{1,3}\\.){3}\\d{1,3}))' + // ip
+    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port/path
+    '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
+    '(\\#[-a-z\\d_]*)?$', // fragment locator
+    'i'
+  );
+  return pattern.test(str) || (str.includes('.') && !str.includes(' ') && str.length > 4);
+};
+
 export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalProps) {
   const { toast } = useToast();
   const [query, setQuery] = useState(initialQuery);
@@ -54,6 +67,16 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
 
   const handleSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) return;
+    const q = searchQuery.trim();
+    if (isDirectUrl(q)) {
+      let destination = q;
+      if (!/^https?:\/\//i.test(q)) {
+        destination = `https://${q}`;
+      }
+      window.open(destination, '_blank', 'noopener,noreferrer');
+      onClose();
+      return;
+    }
     setLoading(true);
     setSearchResult(null);
 

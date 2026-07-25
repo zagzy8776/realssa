@@ -177,8 +177,17 @@ export default function Search() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputVal.trim()) {
-      setSearchParams({ q: inputVal.trim() });
+    const q = inputVal.trim();
+    if (q) {
+      if (isDirectUrl(q)) {
+        let destination = q;
+        if (!/^https?:\/\//i.test(q)) {
+          destination = `https://${q}`;
+        }
+        window.open(destination, '_blank', 'noopener,noreferrer');
+      } else {
+        setSearchParams({ q });
+      }
     }
   };
 
