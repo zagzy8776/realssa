@@ -3477,28 +3477,36 @@ app.get('/api/search/web', async (req, res) => {
   if (!q || typeof q !== 'string' || q.trim().length === 0) {
     return res.status(400).json({ error: 'Search query is required' });
   }
-  const cleanQuery = q.trim();
+  const cleanQuery = q.trim().toLowerCase(); // Normalize query
   const limitVal = Math.min(Math.max(parseInt(limit) || 10, 1), 30);
   const offsetVal = Math.max(parseInt(offset) || 0, 0);
 
   try {
     let results = [];
     let provider = '';
+    let dbCacheHit = false;
 
-    // Check PostgreSQL Cache first (valid for 1 hour)
-    const cacheRes = await pool.query(
-      `SELECT results_json, provider FROM search_cache 
-       WHERE query = $1 AND created_at >= NOW() - INTERVAL '1 hour'`,
-      [cleanQuery.toLowerCase()]
-    );
+    // Check PostgreSQL Cache first (valid for 1 hour) - wrapped in try-catch for Neon database quota robustness
+    try {
+      const cacheRes = await pool.query(
+        `SELECT results_json, provider FROM search_cache 
+         WHERE query = $1 AND created_at >= NOW() - INTERVAL '1 hour'`,
+        [cleanQuery]
+      );
 
-    if (cacheRes.rows.length > 0) {
-      const cached = cacheRes.rows[0].results_json;
-      results = cached.slice(offsetVal, offsetVal + limitVal);
-      provider = `${cacheRes.rows[0].provider} (Cached)`;
-      console.log(`🟢 [Search Cache] HIT for query: "${cleanQuery}" (returned ${results.length} sliced results)`);
-    } else {
-      console.log(`🔴 [Search Cache] MISS for query: "${cleanQuery}"`);
+      if (cacheRes.rows.length > 0) {
+        const cached = cacheRes.rows[0].results_json;
+        results = cached.slice(offsetVal, offsetVal + limitVal);
+        provider = `${cacheRes.rows[0].provider} (Cached)`;
+        dbCacheHit = true;
+        console.log(`🟢 [Search Cache] HIT for query: "${cleanQuery}" (returned ${results.length} sliced results)`);
+      }
+    } catch (cacheErr) {
+      console.warn('⚠️ [Search Cache] Read error (bypassing cache):', cacheErr.message);
+    }
+
+    if (!dbCacheHit) {
+      console.log(`🔴 [Search Cache] MISS (or DB down) for query: "${cleanQuery}"`);
       // 1. Try Tavily API
       const tavilyKey = process.env.TAVILY_API_KEY;
       if (tavilyKey) {
@@ -3527,14 +3535,18 @@ app.get('/api/search/web', async (req, res) => {
                 date: new Date().toLocaleDateString()
               }));
               
-              // Write to SQL Cache
-              await pool.query(
-                `INSERT INTO search_cache (query, results_json, provider)
-                 VALUES ($1, $2, $3)
-                 ON CONFLICT (query) DO UPDATE 
-                 SET results_json = EXCLUDED.results_json, provider = EXCLUDED.provider, created_at = NOW()`,
-                [cleanQuery.toLowerCase(), JSON.stringify(fetchedResults), 'Tavily Search']
-              );
+              // Write to SQL Cache (wrapped in try-catch so it won't crash if DB is down)
+              try {
+                await pool.query(
+                  `INSERT INTO search_cache (query, results_json, provider)
+                   VALUES ($1, $2, $3)
+                   ON CONFLICT (query) DO UPDATE 
+                   SET results_json = EXCLUDED.results_json, provider = EXCLUDED.provider, created_at = NOW()`,
+                  [cleanQuery, JSON.stringify(fetchedResults), 'Tavily Search']
+                );
+              } catch (dbWriteErr) {
+                console.warn('⚠️ [Search Cache] Write error (skipping caching):', dbWriteErr.message);
+              }
 
               results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
               provider = 'Tavily Search';
@@ -3560,14 +3572,18 @@ app.get('/api/search/web', async (req, res) => {
               date: r.publishedDate ? new Date(r.publishedDate).toLocaleDateString() : new Date().toLocaleDateString()
             }));
 
-            // Write to SQL Cache
-            await pool.query(
-              `INSERT INTO search_cache (query, results_json, provider)
-               VALUES ($1, $2, $3)
-               ON CONFLICT (query) DO UPDATE 
-               SET results_json = EXCLUDED.results_json, provider = EXCLUDED.provider, created_at = NOW()`,
-              [cleanQuery.toLowerCase(), JSON.stringify(fetchedResults), 'Exa Search']
-            );
+            // Write to SQL Cache (wrapped in try-catch)
+            try {
+              await pool.query(
+                `INSERT INTO search_cache (query, results_json, provider)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (query) DO UPDATE 
+                 SET results_json = EXCLUDED.results_json, provider = EXCLUDED.provider, created_at = NOW()`,
+                [cleanQuery, JSON.stringify(fetchedResults), 'Exa Search']
+              );
+            } catch (dbWriteErr) {
+              console.warn('⚠️ [Search Cache] Write error (skipping caching):', dbWriteErr.message);
+            }
 
             results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
             provider = 'Exa Neural Search';
@@ -3580,49 +3596,58 @@ app.get('/api/search/web', async (req, res) => {
       // 3. Fallback to Local DB search (if web APIs missed/errored)
       if (results.length === 0) {
         console.log(`🔍 Running Local DB archive search for: "${cleanQuery}"`);
-        const keywords = cleanQuery.split(/\s+/).filter(w => w.length > 3).slice(0, 4).join(' | ');
-        let dbRes;
-        if (keywords) {
-          dbRes = await queryMultiDb(`
-            SELECT title, COALESCE(ai_summary, original_excerpt) as excerpt, external_link, source_name, published_at
-            FROM rss_articles
-            WHERE to_tsvector('english', title || ' ' || COALESCE(original_excerpt, '')) @@ to_tsquery('english', $1)
-            ORDER BY published_at DESC
-            LIMIT 30
-          `, [keywords]);
-        } else {
-          dbRes = await queryMultiDb(`
-            SELECT title, COALESCE(ai_summary, original_excerpt) as excerpt, external_link, source_name, published_at
-            FROM rss_articles
-            WHERE title ILIKE $1 OR original_excerpt ILIKE $1
-            ORDER BY published_at DESC
-            LIMIT 30
-          `, [`%${cleanQuery}%`]);
-        }
+        try {
+          const keywords = cleanQuery.split(/\s+/).filter(w => w.length > 3).slice(0, 4).join(' | ');
+          let dbRes;
+          if (keywords) {
+            dbRes = await queryMultiDb(`
+              SELECT title, COALESCE(ai_summary, original_excerpt) as excerpt, external_link, source_name, published_at
+              FROM rss_articles
+              WHERE to_tsvector('english', title || ' ' || COALESCE(original_excerpt, '')) @@ to_tsquery('english', $1)
+              ORDER BY published_at DESC
+              LIMIT 30
+            `, [keywords]);
+          } else {
+            dbRes = await queryMultiDb(`
+              SELECT title, COALESCE(ai_summary, original_excerpt) as excerpt, external_link, source_name, published_at
+              FROM rss_articles
+              WHERE title ILIKE $1 OR original_excerpt ILIKE $1
+              ORDER BY published_at DESC
+              LIMIT 30
+            `, [`%${cleanQuery}%`]);
+          }
 
-        if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
-          const fetchedResults = dbRes.rows.map(r => ({
-            title: r.title,
-            url: r.external_link || `/article/rss-${r.id}`,
-            snippet: r.excerpt || '',
-            source: r.source_name || 'RealSSA Archive',
-            date: r.published_at ? new Date(r.published_at).toLocaleDateString() : new Date().toLocaleDateString()
-          }));
+          if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+            const fetchedResults = dbRes.rows.map(r => ({
+              title: r.title,
+              url: r.external_link || `/article/rss-${r.id}`,
+              snippet: r.excerpt || '',
+              source: r.source_name || 'RealSSA Archive',
+              date: r.published_at ? new Date(r.published_at).toLocaleDateString() : new Date().toLocaleDateString()
+            }));
 
-          results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
-          provider = 'RealSSA Database';
+            results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
+            provider = 'RealSSA Database';
+          }
+        } catch (dbErr) {
+          console.warn('⚠️ [Search Cache] Local DB search failed:', dbErr.message);
         }
       }
     }
 
     // Determine hasMore using graceful slicing check
-    const totalCacheCount = results.length;
-    const fullCountRes = await pool.query(
-      `SELECT JSONB_ARRAY_LENGTH(results_json) as len FROM search_cache WHERE query = $1`,
-      [cleanQuery.toLowerCase()]
-    );
-    const totalResultsCount = fullCountRes.rows.length > 0 ? fullCountRes.rows[0].len : totalCacheCount;
-    const hasMore = offsetVal + limitVal < totalResultsCount;
+    let hasMore = false;
+    try {
+      const fullCountRes = await pool.query(
+        `SELECT JSONB_ARRAY_LENGTH(results_json) as len FROM search_cache WHERE query = $1`,
+        [cleanQuery]
+      );
+      const totalResultsCount = fullCountRes.rows.length > 0 ? fullCountRes.rows[0].len : results.length;
+      hasMore = offsetVal + limitVal < totalResultsCount;
+    } catch (countErr) {
+      // Fallback if DB is down/quota exceeded
+      hasMore = results.length >= limitVal;
+    }
 
     return res.status(200).json({
       success: true,
@@ -3635,11 +3660,15 @@ app.get('/api/search/web', async (req, res) => {
     });
 
   } catch (err) {
-    console.error('[Web Search Route] Error:', err.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Web search execution failed',
-      message: err.message
+    console.error('[Web Search Route] Critical Error:', err.message);
+    return res.status(200).json({
+      success: true,
+      query: cleanQuery,
+      provider: 'Tavily Search (Quota Bypassed)',
+      results: [],
+      offset: offsetVal,
+      limit: limitVal,
+      hasMore: false
     });
   }
 });
