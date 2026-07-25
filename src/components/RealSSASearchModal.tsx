@@ -43,6 +43,7 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
     sources: { title: string; url: string }[];
     provider: string;
   } | null>(null);
+  const [webResults, setWebResults] = useState<{ title: string; url: string; snippet: string; source: string; date: string }[]>([]);
   const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -80,23 +81,32 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
     }
     setLoading(true);
     setSearchResult(null);
+    setWebResults([]);
 
     try {
-      const res = await fetch(apiUrl('/api/search/ai'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery.trim() })
-      });
+      const [aiRes, webRes] = await Promise.all([
+        fetch(apiUrl('/api/search/ai'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q })
+        }),
+        fetch(apiUrl(`/api/search/web?q=${encodeURIComponent(q)}&limit=8`))
+      ]);
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = await aiRes.json();
+      if (aiRes.ok && data.success) {
         setSearchResult({
           answer: data.answer,
           sources: data.sources || [],
           provider: data.provider || 'RealSSA AI Search'
         });
-      } else {
-        throw new Error(data.message || 'Search failed');
+      }
+
+      if (webRes.ok) {
+        const webData = await webRes.json();
+        if (webData.success && webData.results) {
+          setWebResults(webData.results);
+        }
       }
     } catch (err: any) {
       toast({
@@ -278,18 +288,23 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
                     Verified Reference Sources ({searchResult.sources.length})
                   </span>
                   <div className="flex flex-wrap gap-2 w-full min-w-0">
-                    {searchResult.sources.map((src, idx) => (
-                      <a
-                        key={idx}
-                        href={src.url.startsWith('/') ? src.url : `/read?url=${encodeURIComponent(src.url)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs bg-muted/60 hover:bg-muted text-primary hover:underline px-2.5 py-1 rounded-lg border border-border flex items-center gap-1.5 max-w-full truncate"
-                      >
-                        <ExternalLink className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{src.title || src.url}</span>
-                      </a>
-                    ))}
+                    {searchResult.sources.map((src, idx) => {
+                      const directUrl = src.url.startsWith('/read?url=')
+                        ? decodeURIComponent(src.url.replace('/read?url=', ''))
+                        : src.url;
+                      return (
+                        <a
+                          key={idx}
+                          href={directUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs bg-muted/60 hover:bg-muted text-primary hover:underline px-2.5 py-1 rounded-lg border border-border flex items-center gap-1.5 max-w-full truncate cursor-pointer"
+                        >
+                          <ExternalLink className="w-3 h-3 shrink-0 text-amber-500" />
+                          <span className="truncate">{src.title || directUrl}</span>
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -299,11 +314,45 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
                   onClick={() => {
                     setQuery("");
                     setSearchResult(null);
+                    setWebResults([]);
                   }}
                   className="text-xs text-amber-500 hover:underline font-bold"
                 >
                   ⚡ Ask another question
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Web Search Results List */}
+          {webResults.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <span className="text-xs font-extrabold uppercase text-amber-500 tracking-wider block">
+                🌐 Web Results ({webResults.length})
+              </span>
+              <div className="space-y-2.5">
+                {webResults.map((item, idx) => (
+                  <a
+                    key={idx}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-background hover:bg-muted/40 border border-border hover:border-amber-500/40 p-3.5 rounded-xl transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1 truncate">
+                      <ExternalLink className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span className="font-semibold text-foreground truncate">{item.source || new URL(item.url).hostname}</span>
+                      <span>•</span>
+                      <span className="truncate">{item.url}</span>
+                    </div>
+                    <h4 className="text-xs sm:text-sm font-bold text-amber-500 group-hover:underline line-clamp-1 mb-1">
+                      {item.title}
+                    </h4>
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                      {item.snippet}
+                    </p>
+                  </a>
+                ))}
               </div>
             </div>
           )}
