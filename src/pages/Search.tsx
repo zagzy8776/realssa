@@ -66,7 +66,7 @@ export default function Search() {
         destination = `https://${query}`;
       }
       console.log(`🔗 Direct URL match: redirecting to ${destination}`);
-      window.open(destination, '_blank', 'noopener,noreferrer');
+      navigate(`/read?url=${encodeURIComponent(destination)}`);
       return;
     }
 
@@ -184,7 +184,7 @@ export default function Search() {
         if (!/^https?:\/\//i.test(q)) {
           destination = `https://${q}`;
         }
-        window.open(destination, '_blank', 'noopener,noreferrer');
+        navigate(`/read?url=${encodeURIComponent(destination)}`);
       } else {
         setSearchParams({ q });
       }

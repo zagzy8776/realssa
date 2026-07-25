@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Search, X, Sparkles, Share2, ExternalLink, ArrowRight, Check } from "lucide-react";
 import { apiUrl } from "@/lib/api-base";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -35,6 +35,7 @@ const isDirectUrl = (str: string): boolean => {
 
 export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [query, setQuery] = useState(initialQuery);
   const [loading, setLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<{
@@ -73,7 +74,7 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
       if (!/^https?:\/\//i.test(q)) {
         destination = `https://${q}`;
       }
-      window.open(destination, '_blank', 'noopener,noreferrer');
+      navigate(`/read?url=${encodeURIComponent(destination)}`);
       onClose();
       return;
     }

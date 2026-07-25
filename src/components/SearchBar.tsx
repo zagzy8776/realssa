@@ -136,7 +136,7 @@ const SearchBar = () => {
                   if (!/^https?:\/\//i.test(q)) {
                     destination = `https://${q}`;
                   }
-                  window.open(destination, '_blank', 'noopener,noreferrer');
+                  navigate(`/read?url=${encodeURIComponent(destination)}`);
                 } else {
                   navigate(`/search?q=${encodeURIComponent(q)}`);
                 }
