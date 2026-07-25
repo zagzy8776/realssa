@@ -3433,7 +3433,7 @@ app.post('/api/search/ai', async (req, res) => {
     }
 
     // 3. Synthesize structured answer via Gemini AI
-    const { callGeminiText } = require('./services/aiAgentService');
+    const { callGemini: callGeminiText } = require('./services/aiAgentService');
     const prompt = [
       'You are RealSSA AI Search, the authoritative real-time intelligence engine for Africa and Global news.',
       `User Query: "${cleanQuery}"`,
