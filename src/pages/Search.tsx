@@ -120,7 +120,7 @@ export default function Search() {
       if (!response.ok) throw new Error('AI search failed');
       const data = await response.json();
       if (data.success) {
-        if (data.ai_overview === null || !data.answer) {
+        if (!data.answer || data.answer.length < 10) {
           setAiData(null);
         } else {
           setAiData({
