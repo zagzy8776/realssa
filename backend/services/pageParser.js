@@ -3,6 +3,19 @@ const { JSDOM } = require('jsdom');
 const { Readability } = require('@mozilla/readability');
 const cheerio = require('cheerio');
 
+// ─── Backend base URL for the image compression proxy ────────────────────────
+// In production this is the Fly.io backend. In dev it's localhost:5000.
+const BACKEND = process.env.BACKEND_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? 'https://realssa-backend.fly.dev'   // adjust if your Fly.io URL differs
+    : 'http://localhost:5000');
+
+// Rewrite an image src to route through /api/img (Opera Mini-style compression)
+function imgProxyUrl(src, maxW = 900) {
+  if (!src || src.startsWith('data:')) return src; // data URIs pass through directly
+  return `${BACKEND}/api/img?url=${encodeURIComponent(src)}&w=${maxW}`;
+}
+
 // ─── Known ad/tracker domains — nodes from these are silently dropped ────────
 const AD_DOMAINS = [
   'doubleclick.net', 'googleadservices.com', 'googlesyndication.com',
@@ -76,9 +89,10 @@ function walkDom($el, $, nodes, baseOrigin) {
         const caption = $node.closest('figure').find('figcaption').text().trim();
         const width = parseInt($node.attr('width') || '0');
         const height = parseInt($node.attr('height') || '0');
-        // Skip tiny tracking pixels
-        if (width < 10 || height < 10) return;
-        nodes.push({ type: 'image', src, alt, caption });
+        // Skip tiny tracking pixels (width/height set and both < 10px)
+        if (width > 0 && height > 0 && (width < 10 || height < 10)) return;
+        // Route through compression proxy — frontend gets WebP, not 3MB original
+        nodes.push({ type: 'image', src: imgProxyUrl(src, 900), alt, caption });
       }
 
     // ── Figures (wraps img + caption) ─────────────────────────────────────────

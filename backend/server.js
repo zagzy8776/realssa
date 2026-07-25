@@ -3618,7 +3618,110 @@ app.get('/api/check-frame', async (req, res) => {
   }
 });
 
+// --- RealSSA Image Compression Proxy (Opera Mini-style: fetch → WebP → serve) ---
+// Reduces images from 1-5MB originals to ~30-80KB WebP. Sharp runs on libvips (C library) so
+// this is close to Rust-level performance for image operations in our Node.js stack.
+let sharp;
+try { sharp = require('sharp'); } catch(_) { sharp = null; }
+
+const imgCache = new Map(); // { buf: Buffer, mime: string, ts: number }
+const IMG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+app.get('/api/img', async (req, res) => {
+  const rawUrl = req.query.url;
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return res.status(400).send('URL required');
+  }
+
+  let imgUrl = rawUrl.trim();
+  if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+  if (!/^https?:\/\//i.test(imgUrl)) return res.status(400).send('Invalid URL');
+
+  // SSRF protection
+  const safe = await isSafeUrl(imgUrl).catch(() => false);
+  if (!safe) return res.status(403).send('Blocked');
+
+  const maxW = Math.min(parseInt(req.query.w || '900'), 1200);
+  const quality = Math.min(parseInt(req.query.q || '78'), 90);
+  const cacheKey = `${imgUrl}|${maxW}|${quality}`;
+
+  // Cache hit
+  const cached = imgCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < IMG_CACHE_TTL) {
+    res.set('Content-Type', cached.mime);
+    res.set('Cache-Control', 'public, max-age=300');
+    res.set('X-RealSSA-Cache', 'HIT');
+    return res.send(cached.buf);
+  }
+
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 10000);
+
+    const upstream = await fetch(imgUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; RealSSABot/1.0)',
+        'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
+        'Referer': new URL(imgUrl).origin,
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    clearTimeout(tid);
+
+    if (!upstream.ok) return res.status(upstream.status).send('Upstream error');
+
+    const contentType = upstream.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) return res.status(415).send('Not an image');
+
+    const origBytes = await upstream.arrayBuffer();
+    const origBuf = Buffer.from(origBytes);
+
+    // If Sharp is available: resize + convert to WebP
+    if (sharp) {
+      try {
+        const compressed = await sharp(origBuf)
+          .resize({ width: maxW, withoutEnlargement: true })
+          .webp({ quality, effort: 3 })
+          .toBuffer();
+
+        const saving = Math.round((1 - compressed.length / origBuf.length) * 100);
+        console.log(`[img] ${new URL(imgUrl).hostname} ${Math.round(origBuf.length/1024)}KB → ${Math.round(compressed.length/1024)}KB WebP (${saving}% saved)`);
+
+        imgCache.set(cacheKey, { buf: compressed, mime: 'image/webp', ts: Date.now() });
+        if (imgCache.size > 200) {
+          // Evict oldest 50
+          [...imgCache.entries()]
+            .sort((a, b) => a[1].ts - b[1].ts)
+            .slice(0, 50)
+            .forEach(([k]) => imgCache.delete(k));
+        }
+
+        res.set('Content-Type', 'image/webp');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.set('X-RealSSA-Cache', 'MISS');
+        res.set('X-RealSSA-Saved', `${saving}%`);
+        return res.send(compressed);
+      } catch (sharpErr) {
+        console.warn('[img] Sharp failed, serving original:', sharpErr.message);
+        // Fall through to serve original
+      }
+    }
+
+    // Fallback: serve original if Sharp unavailable or fails
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.send(origBuf);
+
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).send('Image fetch timed out');
+    console.error('[img] error:', err.message);
+    return res.status(502).send('Image fetch failed');
+  }
+});
+
 // --- RealSSA In-App Browser Proxy (strips X-Frame-Options so any site loads inside our iframe) ---
+
 app.get('/api/proxy-page', async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl || typeof targetUrl !== 'string') {

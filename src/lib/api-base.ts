@@ -5,6 +5,10 @@ export const API_BASE_URL = import.meta.env?.MODE === 'development'
   ? (import.meta.env?.VITE_API_URL || 'http://localhost:5000')
   : 'https://www.realssanews.com.ng';
 
+export const RUST_ENGINE_URL = import.meta.env?.MODE === 'development'
+  ? (import.meta.env?.VITE_RUST_ENGINE_URL || 'http://localhost:8080')
+  : 'https://realssa-engine.fly.dev';
+
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   let finalUrl = `${API_BASE_URL}${normalizedPath}`;

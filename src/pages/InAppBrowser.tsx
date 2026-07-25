@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { shareContent } from '@/lib/share';
 import { saveOfflineArticle } from '@/lib/ReadingListStore';
-import { API_BASE_URL, apiUrl } from '@/lib/api-base';
+import { API_BASE_URL, apiUrl, RUST_ENGINE_URL } from '@/lib/api-base';
 import RealSSARenderer, { PageData } from '@/components/RealSSARenderer';
 
 // ─── History persistence in localStorage ─────────────────────────────────────
@@ -82,7 +82,7 @@ export default function InAppBrowser() {
 
   // Proxy fallback URL builder
   const proxyUrl = useCallback((url: string) =>
-    `${API_BASE_URL}/api/proxy-page?url=${encodeURIComponent(url)}`, []);
+    `${RUST_ENGINE_URL}/proxy-page?url=${encodeURIComponent(url)}`, []);
 
   // ── Core load function — tries renderer first, silently falls back ──────────
   const loadUrl = useCallback(async (url: string) => {
@@ -94,7 +94,7 @@ export default function InAppBrowser() {
     setHistoryOpen(false);
 
     try {
-      const res = await fetch(apiUrl(`/api/render-page?url=${encodeURIComponent(url)}`));
+      const res = await fetch(`${RUST_ENGINE_URL}/render-page?url=${encodeURIComponent(url)}`);
       if (!res.ok) throw new Error('render-page failed');
       const data: PageData = await res.json();
 

@@ -54,3 +54,5 @@ release-key.jks
 *.zip
 *_logs.txt
 *.timestamp-*.mjs
+
+.vercel
