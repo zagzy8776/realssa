@@ -530,16 +530,14 @@ export default function InAppBrowser() {
         )}
 
         {/* Proxy iframe — seamless fallback, user doesn't know */}
-        <div className={`absolute inset-0 ${usingProxy && !loading ? 'block' : 'hidden'}`}>
-          <iframe
-            ref={iframeRef}
-            title={pageTitle}
-            className="w-full h-full border-none bg-white"
-            onLoad={() => setLoading(false)}
-            onError={() => setLoading(false)}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox"
-          />
-        </div>
+        <iframe
+          ref={iframeRef}
+          title={pageTitle}
+          className={`absolute inset-0 w-full h-full border-none bg-white ${usingProxy && !loading ? 'block' : 'hidden'}`}
+          onLoad={() => setLoading(false)}
+          onError={() => setLoading(false)}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox"
+        />
       </main>
 
       {/* ── Bottom Mobile Bar ─────────────────────────────────────────────────── */}
