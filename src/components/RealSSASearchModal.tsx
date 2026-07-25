@@ -45,6 +45,7 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
   } | null>(null);
   const [webResults, setWebResults] = useState<{ title: string; url: string; snippet: string; source: string; date: string }[]>([]);
   const [copied, setCopied] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(3);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -82,6 +83,7 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
     setLoading(true);
     setSearchResult(null);
     setWebResults([]);
+    setVisibleCount(3);
 
     try {
       const [aiRes, webRes] = await Promise.all([
@@ -333,7 +335,7 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
                 🌐 Web Results ({webResults.length})
               </span>
               <div className="space-y-2.5">
-                {webResults.map((item, idx) => (
+                {webResults.slice(0, visibleCount).map((item, idx) => (
                   <button
                     key={idx}
                     type="button"
@@ -358,6 +360,19 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
                   </button>
                 ))}
               </div>
+              {/* See More Button */}
+              {visibleCount < webResults.length && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount(v => Math.min(v + 3, webResults.length))}
+                  className="w-full py-2.5 rounded-xl border border-amber-500/30 hover:border-amber-500/60 bg-amber-500/5 hover:bg-amber-500/10 text-amber-500 text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  ↓ See More Results ({webResults.length - visibleCount} remaining)
+                </button>
+              )}
+              {visibleCount >= webResults.length && webResults.length > 3 && (
+                <p className="text-center text-[11px] text-muted-foreground py-1">All {webResults.length} results shown</p>
+              )}
             </div>
           )}
         </div>

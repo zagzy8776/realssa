@@ -3369,7 +3369,85 @@ app.post('/api/bot/comment-reply', async (req, res) => {
   }
 });
 
-// --- RealSSA AI Search Engine Endpoint (Exa /answer → Tavily direct answer) ---
+// --- RealSSA Custom Rendering Engine — parse any URL into structured JSON nodes ---
+const { parsePage } = require('./services/pageParser');
+const renderCache = new Map(); // 30-min in-memory LRU cache
+
+app.get('/api/render-page', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).json({ success: false, error: 'URL required' });
+  }
+
+  let safeUrl = targetUrl.trim();
+  if (!/^https?:\/\//i.test(safeUrl)) safeUrl = `https://${safeUrl}`;
+
+  // SSRF protection
+  const safe = await isSafeUrl(safeUrl).catch(() => false);
+  if (!safe) {
+    return res.status(403).json({ success: false, requiresProxy: true, meta: {}, nodes: [] });
+  }
+
+  // Cache hit (30 min TTL)
+  const cacheKey = safeUrl.toLowerCase();
+  const cached = renderCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < 30 * 60 * 1000) {
+    return res.json({ ...cached.data, cached: true });
+  }
+
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 12000);
+
+    const upstream = await fetch(safeUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    clearTimeout(tid);
+
+    if (!upstream.ok) {
+      return res.json({ success: true, requiresProxy: true, reason: 'upstream_error', meta: {}, nodes: [] });
+    }
+
+    const contentType = upstream.headers.get('content-type') || '';
+    if (!contentType.includes('text/html')) {
+      return res.json({ success: true, requiresProxy: true, reason: 'non_html', meta: {}, nodes: [] });
+    }
+
+    const html = await upstream.text();
+    const result = await parsePage(html, safeUrl);
+
+    // Cache the result
+    renderCache.set(cacheKey, { data: result, ts: Date.now() });
+
+    // LRU eviction — keep max 500 entries
+    if (renderCache.size > 500) {
+      const oldest = [...renderCache.entries()]
+        .sort((a, b) => a[1].ts - b[1].ts)
+        .slice(0, 100)
+        .map(e => e[0]);
+      oldest.forEach(k => renderCache.delete(k));
+    }
+
+    return res.json(result);
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      return res.json({ success: true, requiresProxy: true, reason: 'timeout', meta: {}, nodes: [] });
+    }
+    console.error('[render-page] error:', err.message);
+    return res.json({ success: true, requiresProxy: true, reason: 'error', meta: {}, nodes: [] });
+  }
+});
+
+// --- RealSSA Web Search Endpoint (Tavily/Exa Web Search with SQL Caching & prefetching) ---
+
 app.post('/api/search/ai', async (req, res) => {
   const { query } = req.body;
   if (!query || typeof query !== 'string' || query.trim().length === 0) {
@@ -3540,7 +3618,116 @@ app.get('/api/check-frame', async (req, res) => {
   }
 });
 
-// --- RealSSA Web Search Endpoint (Tavily/Exa Web Search with SQL Caching & prefetching) ---
+// --- RealSSA In-App Browser Proxy (strips X-Frame-Options so any site loads inside our iframe) ---
+app.get('/api/proxy-page', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).send('<h2>No URL provided to proxy.</h2>');
+  }
+
+  let safeUrl = targetUrl;
+  if (!/^https?:\/\//i.test(safeUrl)) {
+    safeUrl = `https://${safeUrl}`;
+  }
+
+  // SSRF protection — block private/loopback IPs
+  const safe = await isSafeUrl(safeUrl).catch(() => false);
+  if (!safe) {
+    return res.status(403).send('<h2>Blocked: private or unsafe URL.</h2>');
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    const upstream = await fetch(safeUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    clearTimeout(timeoutId);
+
+    const contentType = upstream.headers.get('content-type') || 'text/html';
+
+    // For non-HTML responses (images, PDFs, etc.) — stream them directly
+    if (!contentType.includes('text/html')) {
+      res.set('Content-Type', contentType);
+      // Remove framing-block headers
+      res.removeHeader('X-Frame-Options');
+      res.removeHeader('Content-Security-Policy');
+      const buf = await upstream.arrayBuffer();
+      return res.send(Buffer.from(buf));
+    }
+
+    let html = await upstream.text();
+
+    // Parse the origin for rewriting relative URLs
+    let origin = '';
+    try {
+      const u = new URL(safeUrl);
+      origin = `${u.protocol}//${u.host}`;
+    } catch (_) {}
+
+    // --- Rewrite relative URLs to absolute so assets/links load ---
+    // 1. Inject a <base> tag so the browser resolves relative paths automatically
+    const baseTag = `<base href="${origin}/" target="_blank">`;
+    if (/<head[^>]*>/i.test(html)) {
+      html = html.replace(/(<head[^>]*>)/i, `$1\n${baseTag}`);
+    } else {
+      html = baseTag + html;
+    }
+
+    // 2. Strip any meta CSP tags inside the page that would block subresources
+    html = html.replace(/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
+
+    // 3. Inject a small script to open any link clicks inside our in-app browser
+    //    (posts the clicked href to the parent frame so InAppBrowser.tsx can navigate)
+    const interceptScript = `
+<script>
+(function() {
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('a[href]');
+    if (!el) return;
+    var href = el.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript')) return;
+    e.preventDefault();
+    try {
+      var abs = new URL(href, window.location.href).href;
+      window.parent.postMessage({ type: 'REALSSA_NAVIGATE', url: abs }, '*');
+    } catch(_) {}
+  }, true);
+})();
+</script>`;
+    if (/<\/body>/i.test(html)) {
+      html = html.replace(/<\/body>/i, `${interceptScript}\n</body>`);
+    } else {
+      html += interceptScript;
+    }
+
+    // --- Send the cleaned HTML — no framing-block headers ---
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.removeHeader('X-Frame-Options');
+    res.removeHeader('Content-Security-Policy');
+    // Explicitly tell browsers this IS allowed to be framed
+    res.set('X-Frame-Options', 'ALLOWALL');
+    return res.send(html);
+
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      return res.status(504).send(`<h2 style="font-family:sans-serif;padding:2rem">Page timed out loading. <a href="${escapeHtml(safeUrl)}" target="_blank">Open directly ↗</a></h2>`);
+    }
+    console.error('[proxy-page] error:', err.message);
+    return res.status(502).send(`<h2 style="font-family:sans-serif;padding:2rem">Could not load page. <a href="${escapeHtml(safeUrl)}" target="_blank">Open directly ↗</a></h2>`);
+  }
+});
+
+
 app.get('/api/search/web', async (req, res) => {
   const { q, offset = 0, limit = 10 } = req.query;
   if (!q || typeof q !== 'string' || q.trim().length === 0) {
