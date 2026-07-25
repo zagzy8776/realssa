@@ -3369,7 +3369,7 @@ app.post('/api/bot/comment-reply', async (req, res) => {
   }
 });
 
-// --- RealSSA AI Search Engine Endpoint (Exa /answer → Tavily+Gemini fallback) ---
+// --- RealSSA AI Search Engine Endpoint (Exa /answer → Tavily direct answer) ---
 app.post('/api/search/ai', async (req, res) => {
   const { query } = req.body;
   if (!query || typeof query !== 'string' || query.trim().length === 0) {
@@ -3378,7 +3378,7 @@ app.post('/api/search/ai', async (req, res) => {
 
   const cleanQuery = query.trim();
 
-  // 1. URL Regex Interceptor — skip AI for navigational queries
+  // URL Regex Interceptor — skip AI for navigational queries
   const isNavigational = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/i.test(cleanQuery);
   if (isNavigational) {
     return res.status(200).json({ success: true, ai_overview: null, provider: 'Navigational Route' });
@@ -3387,62 +3387,46 @@ app.post('/api/search/ai', async (req, res) => {
   console.log(`🔍 [RealSSA AI Search] Processing: "${cleanQuery}"`);
 
   try {
-    // ── Step 1: Exa /answer (search + AI summary in one call) ─────────────
+
+    // ── Step 1: Exa /answer — search + AI answer in one call, no Gemini ────
     const exaKey = process.env.EXA_API_KEY;
     if (exaKey) {
       try {
         console.log(`[AI Search] Trying Exa /answer for: "${cleanQuery}"`);
         const exaRes = await fetch('https://api.exa.ai/answer', {
           method: 'POST',
-          headers: {
-            'x-api-key': exaKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            query: cleanQuery,
-            text: true
-          }),
+          headers: { 'x-api-key': exaKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: cleanQuery, text: true }),
           signal: AbortSignal.timeout(20000)
         });
 
         if (exaRes.ok) {
           const exaData = await exaRes.json();
           if (exaData && exaData.answer && exaData.answer.length > 30) {
-            console.log(`[AI Search] ✅ Exa /answer returned answer with ${(exaData.citations || []).length} citations`);
-
-            // Format citations as sources for frontend
-            const formattedSources = (exaData.citations || []).slice(0, 5).map(c => ({
+            console.log(`[AI Search] ✅ Exa /answer OK — ${(exaData.citations || []).length} citations`);
+            const sources = (exaData.citations || []).slice(0, 5).map(c => ({
               title: c.title || c.url,
               url: `/read?url=${encodeURIComponent(c.url)}`
             }));
-
             return res.status(200).json({
-              success: true,
-              query: cleanQuery,
-              answer: exaData.answer,
-              sources: formattedSources,
-              provider: 'Exa AI Answer',
-              timestamp: new Date().toISOString()
+              success: true, query: cleanQuery,
+              answer: exaData.answer, sources,
+              provider: 'Exa AI Answer', timestamp: new Date().toISOString()
             });
           }
         } else {
-          const errText = await exaRes.text();
-          console.warn(`[AI Search] Exa /answer error (${exaRes.status}): ${errText}`);
+          console.warn(`[AI Search] Exa /answer error (${exaRes.status}): ${await exaRes.text()}`);
         }
       } catch (exaErr) {
         console.warn('[AI Search] Exa /answer failed:', exaErr.message);
       }
     }
 
-    // ── Step 2: Tavily + Gemini (fallback if Exa /answer failed) ──────────
-    let sources = [];
-    let contextText = '';
-    let providerName = 'RealSSA AI';
-
+    // ── Step 2: Tavily direct answer — no Gemini, uses Tavily's own AI ──────
     const tavilyKey = process.env.TAVILY_API_KEY;
     if (tavilyKey) {
       try {
-        console.log(`[AI Search] Fallback: Trying Tavily for: "${cleanQuery}"`);
+        console.log(`[AI Search] Fallback: Tavily for: "${cleanQuery}"`);
         const tavilyRes = await fetch('https://api.tavily.com/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3459,19 +3443,17 @@ app.post('/api/search/ai', async (req, res) => {
 
         if (tavilyRes.ok) {
           const tavilyData = await tavilyRes.json();
-          if (tavilyData && tavilyData.results && tavilyData.results.length > 0) {
-            sources = tavilyData.results.map(r => ({
+          if (tavilyData && tavilyData.answer && tavilyData.answer.length > 30) {
+            console.log(`[AI Search] ✅ Tavily direct answer OK`);
+            const sources = (tavilyData.results || []).slice(0, 5).map(r => ({
               title: r.title,
-              url: r.url,
-              snippet: r.content || ''
+              url: `/read?url=${encodeURIComponent(r.url)}`
             }));
-            contextText = 'LIVE WEB SEARCH RESULTS (Tavily):\n' +
-              sources.map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`).join('\n\n');
-            if (tavilyData.answer) {
-              contextText = `DIRECT ANSWER: ${tavilyData.answer}\n\n` + contextText;
-            }
-            providerName = 'Tavily + RealSSA AI';
-            console.log(`[AI Search] ✅ Tavily returned ${sources.length} results`);
+            return res.status(200).json({
+              success: true, query: cleanQuery,
+              answer: tavilyData.answer, sources,
+              provider: 'Tavily AI Answer', timestamp: new Date().toISOString()
+            });
           }
         }
       } catch (tavilyErr) {
@@ -3479,63 +3461,16 @@ app.post('/api/search/ai', async (req, res) => {
       }
     }
 
-    // ── Step 3: Gemini Synthesis ───────────────────────────────────────────
-    if (!contextText) {
-      console.log('[AI Search] No web results from Exa or Tavily. Returning null.');
-      return res.status(200).json({ success: true, ai_overview: null });
-    }
-
-    const { callGemini } = require('./services/aiAgentService');
-
-    const prompt = [
-      `The user searched for: "${cleanQuery}"`,
-      '',
-      'Here are real, live search results to base your answer on:',
-      contextText,
-      '',
-      'TASK: Write a structured, factual summary based ONLY on the search results above. Format it exactly as:',
-      '',
-      '📌 KEY TAKEAWAYS:',
-      '• [First important fact from the results]',
-      '• [Second important fact from the results]',
-      '• [Third important fact from the results]',
-      '',
-      'DETAILED BREAKDOWN:',
-      '[Write 2–3 informative paragraphs using facts from the search results. Be direct, specific, and accurate. Do NOT make up information. Do NOT say you are an AI.]',
-      '',
-      'CRITICAL: If the search results do not contain enough information, reply with exactly: null'
-    ].join('\n');
-
-    const aiAnswer = await callGemini(
-      'You are a precise, factual news intelligence engine. Summarize real search results accurately.',
-      prompt,
-      { maxTokens: 1200, temperature: 0.2 }
-    );
-
-    if (!aiAnswer || aiAnswer.trim().toLowerCase() === 'null' || aiAnswer.length < 30) {
-      return res.status(200).json({ success: true, ai_overview: null });
-    }
-
-    // Format sources for frontend (wrap external links in reader mode)
-    const formattedSources = sources.slice(0, 5).map(r => ({
-      title: r.title,
-      url: `/read?url=${encodeURIComponent(r.url)}`
-    }));
-
-    return res.status(200).json({
-      success: true,
-      query: cleanQuery,
-      answer: aiAnswer,
-      sources: formattedSources,
-      provider: providerName,
-      timestamp: new Date().toISOString()
-    });
+    // ── Neither returned an answer ─────────────────────────────────────────
+    console.log('[AI Search] No answer from Exa or Tavily.');
+    return res.status(200).json({ success: true, ai_overview: null });
 
   } catch (err) {
     console.error('[RealSSA AI Search] Route error:', err.message);
     return res.status(500).json({ error: 'Search processing failed', message: err.message });
   }
 });
+
 // --- RealSSA Web Search Endpoint (Tavily/Exa Web Search with SQL Caching & prefetching) ---
 app.get('/api/search/web', async (req, res) => {
   const { q, offset = 0, limit = 10 } = req.query;
