@@ -7,7 +7,7 @@ export const API_BASE_URL = import.meta.env?.MODE === 'development'
 
 export const RUST_ENGINE_URL = import.meta.env?.MODE === 'development'
   ? (import.meta.env?.VITE_RUST_ENGINE_URL || 'http://localhost:8080')
-  : 'https://realssa-engine.fly.dev';
+  : 'https://engine.realssanews.com.ng';
 
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
