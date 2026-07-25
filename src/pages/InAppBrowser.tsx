@@ -178,7 +178,7 @@ export default function InAppBrowser() {
     if (!input) return;
     const dest = looksLikeUrl(input)
       ? formatUrl(input)
-      : `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+      : `https://html.duckduckgo.com/html/?q=${encodeURIComponent(input)}`;
     navigateTo(dest);
     addressRef.current?.blur();
     setSuggestions([]);
