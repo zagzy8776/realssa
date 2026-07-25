@@ -3369,7 +3369,7 @@ app.post('/api/bot/comment-reply', async (req, res) => {
   }
 });
 
-// --- RealSSA AI Search Engine Endpoint (Exa Neural Search + DB1-DB4 Fallback + Gemini AI) ---
+// --- RealSSA AI Search Engine Endpoint (Tavily → Exa → Gemini AI) ---
 app.post('/api/search/ai', async (req, res) => {
   const { query } = req.body;
   if (!query || typeof query !== 'string' || query.trim().length === 0) {
@@ -3378,137 +3378,142 @@ app.post('/api/search/ai', async (req, res) => {
 
   const cleanQuery = query.trim();
 
-  // 1. URL Regex Interceptor
+  // 1. URL Regex Interceptor — skip AI for navigational queries
   const isNavigational = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/i.test(cleanQuery);
   if (isNavigational) {
-    console.log(`🧭 [AI Search] Detected navigational query: "${cleanQuery}". Bypassing AI Overview.`);
     return res.status(200).json({ success: true, ai_overview: null, provider: 'Navigational Route' });
   }
 
-  console.log(`🔍 [RealSSA AI Search] Processing query: "${cleanQuery}"`);
+  console.log(`🔍 [RealSSA AI Search] Processing: "${cleanQuery}"`);
 
   try {
-    let exaData = null;
-    let dbMatches = [];
-    let contextText = '';
     let sources = [];
+    let contextText = '';
+    let providerName = 'RealSSA AI';
 
-    // 1. Try Exa Neural Search API if EXA_API_KEY is available
-    try {
-      const { searchExa } = require('./services/exaSearchService');
-      exaData = await searchExa(cleanQuery, { numResults: 5 });
-      if (exaData && exaData.results && exaData.results.length > 0) {
-        contextText += 'EXA NEURAL WEB SEARCH RESULTS:\n' + 
-          exaData.results.map(r => `• ${r.title} (${r.url}): ${r.highlights}`).join('\n') + '\n\n';
-        sources.push(...exaData.results.map(r => ({ title: r.title, url: r.url })));
-      }
-    } catch (exaErr) {
-      console.warn('[RealSSA AI Search] Exa search notice:', exaErr.message);
-    }
-
-    // 2. Query Qdrant + DB1-DB4 for African news archive matches
-    try {
-      let qdrantSuccess = false;
+    // ── Step 1: Tavily (primary — best real-time web results) ──────────────
+    const tavilyKey = process.env.TAVILY_API_KEY;
+    if (tavilyKey) {
       try {
-        const { generateEmbedding } = require('./services/aiAgentService');
-        const queryVector = await generateEmbedding(cleanQuery);
-        if (queryVector) {
-          const { searchArticleVectors } = require('./services/qdrantService');
-          const matchedIds = await searchArticleVectors(queryVector, 5);
-          if (matchedIds && matchedIds.length > 0) {
-            const dbRes = await queryMultiDb(`
-              SELECT title, original_excerpt, ai_summary, external_link, category
-              FROM rss_articles
-              WHERE id = ANY($1)
-            `, [matchedIds]);
-            
-            if (dbRes.rows && dbRes.rows.length > 0) {
-              dbMatches = dbRes.rows;
-              qdrantSuccess = true;
-              console.log(`🤖 Qdrant resolved ${dbMatches.length} semantic matches for AI Search.`);
-            }
-          }
-        }
-      } catch (qErr) {
-        console.warn('[RealSSA AI Search] Qdrant search error, falling back to FTS:', qErr.message);
-      }
-
-      // Fallback to Full-Text Search if Qdrant didn't yield matches
-      if (!qdrantSuccess) {
-        const keywords = cleanQuery.split(/\s+/).filter(w => w.length > 3).slice(0, 4).join(' | ');
-        if (keywords) {
-          const dbRes = await queryMultiDb(`
-            SELECT title, original_excerpt, ai_summary, external_link, category
-            FROM rss_articles
-            WHERE to_tsvector('english', title || ' ' || COALESCE(original_excerpt, '')) @@ to_tsquery('english', $1)
-            ORDER BY published_at DESC
-            LIMIT 5
-          `, [keywords]);
-          if (dbRes.rows && dbRes.rows.length > 0) {
-            dbMatches = dbRes.rows;
-          }
-        }
-      }
-
-      if (dbMatches.length > 0) {
-        contextText += 'REALSSA NEWS ARCHIVE MATCHES:\n' + 
-          dbMatches.map(r => `• ${r.title}: ${r.ai_summary || r.original_excerpt || ''}`).join('\n') + '\n\n';
-        
-        dbMatches.forEach(r => {
-          if (r.external_link && !sources.some(s => s.url === r.external_link)) {
-            sources.push({ title: r.title, url: `/read?url=${encodeURIComponent(r.external_link)}` });
-          }
+        console.log(`[AI Search] Trying Tavily for: "${cleanQuery}"`);
+        const tavilyRes = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: tavilyKey,
+            query: cleanQuery,
+            search_depth: 'basic',
+            include_answer: true,
+            include_images: false,
+            max_results: 8
+          }),
+          signal: AbortSignal.timeout(12000)
         });
+
+        if (tavilyRes.ok) {
+          const tavilyData = await tavilyRes.json();
+          if (tavilyData && tavilyData.results && tavilyData.results.length > 0) {
+            sources = tavilyData.results.map(r => ({
+              title: r.title,
+              url: r.url,
+              snippet: r.content || ''
+            }));
+            contextText = 'LIVE WEB SEARCH RESULTS (Tavily):\n' +
+              sources.map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`).join('\n\n');
+            if (tavilyData.answer) {
+              contextText = `DIRECT ANSWER: ${tavilyData.answer}\n\n` + contextText;
+            }
+            providerName = 'Tavily + RealSSA AI';
+            console.log(`[AI Search] ✅ Tavily returned ${sources.length} results`);
+          }
+        } else {
+          const errText = await tavilyRes.text();
+          console.warn(`[AI Search] Tavily error (${tavilyRes.status}): ${errText}`);
+        }
+      } catch (tavilyErr) {
+        console.warn('[AI Search] Tavily failed:', tavilyErr.message);
       }
-    } catch (dbErr) {
-      console.warn('[RealSSA AI Search] DB search notice:', dbErr.message);
     }
 
-    // 3. Synthesize structured answer via Gemini AI
-    const { callGemini: callGeminiText } = require('./services/aiAgentService');
+    // ── Step 2: Exa Neural Search (fallback if Tavily gave nothing) ────────
+    if (sources.length === 0 && process.env.EXA_API_KEY) {
+      try {
+        console.log(`[AI Search] Trying Exa for: "${cleanQuery}"`);
+        const { searchExa } = require('./services/exaSearchService');
+        const exaData = await searchExa(cleanQuery, { numResults: 8 });
+        if (exaData && exaData.results && exaData.results.length > 0) {
+          sources = exaData.results.map(r => ({
+            title: r.title,
+            url: r.url,
+            snippet: r.highlights || ''
+          }));
+          contextText = 'LIVE WEB SEARCH RESULTS (Exa Neural Search):\n' +
+            sources.map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`).join('\n\n');
+          providerName = 'Exa + RealSSA AI';
+          console.log(`[AI Search] ✅ Exa returned ${sources.length} results`);
+        }
+      } catch (exaErr) {
+        console.warn('[AI Search] Exa failed:', exaErr.message);
+      }
+    }
+
+    // ── Step 3: Gemini Synthesis ───────────────────────────────────────────
+    if (!contextText) {
+      console.log('[AI Search] No web results from Tavily or Exa. Returning null.');
+      return res.status(200).json({ success: true, ai_overview: null });
+    }
+
+    const { callGemini } = require('./services/aiAgentService');
+
     const prompt = [
-      'You are RealSSA AI Search, the authoritative real-time intelligence engine for Africa and Global news.',
-      `User Query: "${cleanQuery}"`,
+      `The user searched for: "${cleanQuery}"`,
       '',
-      contextText ? `VERIFIED CONTEXT & SOURCES:\n${contextText}` : 'Use your internal verified knowledge base to answer accurately.',
+      'Here are real, live search results to base your answer on:',
+      contextText,
       '',
-      'INSTRUCTIONS:',
-      '- Return a structured answer with two sections:',
-      '  1. KEY TAKEAWAYS (3 bullet points highlighted with 📌)',
-      '  2. DETAILED BREAKDOWN (2 clear, informative paragraphs explaining the context, implications, and verified details)',
-      '- Use an objective, authoritative tone.',
-      '- Keep explanations clear and engaging.',
+      'TASK: Write a structured, factual summary based ONLY on the search results above. Format it exactly as:',
       '',
-      "CRITICAL RULE: If the provided search results do not contain sufficient factual data to construct a meaningful summary, or if the user's query is a simple domain name (e.g., 'facebook.com'), YOU MUST output strictly null. Do NOT generate generic placeholder text like 'tracking live updates'."
+      '📌 KEY TAKEAWAYS:',
+      '• [First important fact from the results]',
+      '• [Second important fact from the results]',
+      '• [Third important fact from the results]',
+      '',
+      'DETAILED BREAKDOWN:',
+      '[Write 2–3 informative paragraphs using facts from the search results. Be direct, specific, and accurate. Do NOT make up information. Do NOT say you are an AI.]',
+      '',
+      'CRITICAL: If the search results do not contain enough information, reply with exactly: null'
     ].join('\n');
 
-    let aiAnswer = await callGeminiText('You are RealSSA AI Search, authoritative AI search engine.', prompt);
+    const aiAnswer = await callGemini(
+      'You are a precise, factual news intelligence engine. Summarize real search results accurately.',
+      prompt,
+      { maxTokens: 1200, temperature: 0.2 }
+    );
 
-    if (!aiAnswer || aiAnswer.trim().toLowerCase() === 'null' || aiAnswer.length < 20) {
-      return res.status(200).json({
-        success: true,
-        ai_overview: null,
-        provider: 'RealSSA AI Intelligence Desk'
-      });
+    if (!aiAnswer || aiAnswer.trim().toLowerCase() === 'null' || aiAnswer.length < 30) {
+      return res.status(200).json({ success: true, ai_overview: null });
     }
+
+    // Format sources for frontend (wrap external links in reader mode)
+    const formattedSources = sources.slice(0, 5).map(r => ({
+      title: r.title,
+      url: `/read?url=${encodeURIComponent(r.url)}`
+    }));
 
     return res.status(200).json({
       success: true,
       query: cleanQuery,
       answer: aiAnswer,
-      sources: sources.slice(0, 5),
-      provider: exaData ? 'Exa Neural Search + RealSSA AI' : 'RealSSA AI Intelligence Desk',
+      sources: formattedSources,
+      provider: providerName,
       timestamp: new Date().toISOString()
     });
+
   } catch (err) {
     console.error('[RealSSA AI Search] Route error:', err.message);
-    return res.status(500).json({
-      error: 'Search processing failed',
-      message: err.message
-    });
+    return res.status(500).json({ error: 'Search processing failed', message: err.message });
   }
 });
-
 // --- RealSSA Web Search Endpoint (Tavily/Exa Web Search with SQL Caching & prefetching) ---
 app.get('/api/search/web', async (req, res) => {
   const { q, offset = 0, limit = 10 } = req.query;
