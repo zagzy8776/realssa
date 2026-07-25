@@ -1,0 +1,10 @@
+rust-engine/
+backend/
+node_modules/
+dist/
+.git/
+*.zip
+*.apk
+bundle.zip
+release-key.jks
+com.realssa.news_*.zip

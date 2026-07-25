@@ -51,7 +51,14 @@ async fn is_safe_url(url_str: &str) -> bool {
                    "::1", "0.0.0.0", "fc00:", "fd"];
     if private.iter().any(|p| host.starts_with(p)) { return false; }
 
+    // If host is an IP address, check directly
+    if host.parse::<std::net::IpAddr>().is_ok() {
+        return !private.iter().any(|p| host.starts_with(p));
+    }
+
     // DNS lookup to catch redirected private IPs
+    // If DNS resolution times out or fails (common on Fly.io internal DNS),
+    // we fallback to true if the domain looks like a public one (i.e. doesn't end with .local).
     match tokio::net::lookup_host(format!("{}:80", host)).await {
         Ok(mut addrs) => {
             if let Some(addr) = addrs.next() {
@@ -60,7 +67,11 @@ async fn is_safe_url(url_str: &str) -> bool {
             }
             true
         }
-        Err(_) => false,
+        Err(_) => {
+            // Fallback for DNS lookup failure inside container
+            // If it's a domain name and not a private TLD, let it pass.
+            !host.ends_with(".local") && !host.ends_with(".internal")
+        }
     }
 }
 

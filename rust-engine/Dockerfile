@@ -1,5 +1,5 @@
-# Build stage — full Rust toolchain
-FROM rust:1.82-slim AS builder
+# Build stage — latest stable Rust toolchain (supports edition 2024)
+FROM rust:slim AS builder
 
 WORKDIR /app
 
