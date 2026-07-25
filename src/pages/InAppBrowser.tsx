@@ -510,7 +510,7 @@ export default function InAppBrowser() {
       {/* ── Main Content Area ──────────────────────────────────────────────────── */}
       <main
         data-browser-scroll
-        className="flex-1 w-full relative overflow-y-auto overflow-x-hidden bg-[#0b0f17]"
+        className="flex-1 w-full flex flex-col relative bg-[#0b0f17] min-h-0 overflow-y-auto overflow-x-hidden"
       >
         {/* Loading state */}
         {loading && (
@@ -533,7 +533,7 @@ export default function InAppBrowser() {
         <iframe
           ref={iframeRef}
           title={pageTitle}
-          className={`absolute inset-0 w-full h-full border-none bg-white ${usingProxy && !loading ? 'block' : 'hidden'}`}
+          className={`w-full flex-1 border-none bg-white ${usingProxy && !loading ? 'flex' : 'hidden'}`}
           onLoad={() => setLoading(false)}
           onError={() => setLoading(false)}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox"
