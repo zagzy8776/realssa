@@ -60,8 +60,8 @@ const LocalMarketHub      = lazy(() => import("./pages/LocalMarketHub"));
 const EventsCalendar      = lazy(() => import("./pages/EventsCalendar"));
 const AdPortal            = lazy(() => import("./pages/AdPortal"));
 const LiveWire            = lazy(() => import("./pages/LiveWire"));
-const Widgets             = lazy(() => import("./pages/Widgets"));
 const Search              = lazy(() => import("./pages/Search"));
+const InAppBrowser        = lazy(() => import("./pages/InAppBrowser"));
 
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import OneSignalNative from 'onesignal-cordova-plugin';
@@ -170,6 +170,7 @@ const App = () => {
                 <Route path="/wire" element={<LiveWire />} />
                 <Route path="/widget/:type" element={<Widgets />} />
                 <Route path="/search" element={<Search />} />
+                <Route path="/browser" element={<InAppBrowser />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

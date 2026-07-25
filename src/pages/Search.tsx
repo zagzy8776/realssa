@@ -347,25 +347,29 @@ export default function Search() {
                           <div className="pt-3 border-t border-muted/50">
                             <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Verified Citations</h5>
                             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted">
-                              {aiData.sources.map((src, i) => (
-                                <a
-                                  key={i}
-                                  href={src.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex-shrink-0 w-[180px] p-2.5 rounded-lg border border-[#e5e7eb] dark:border-[#202737] bg-[#f9fafb] dark:bg-[#161d2d] hover:border-amber-500/40 dark:hover:border-amber-500/40 hover:bg-amber-500/[0.02] transition-all flex flex-col justify-between group"
-                                >
-                                  <span className="text-xs font-medium line-clamp-2 text-foreground group-hover:text-amber-500 transition-colors">
-                                    {src.title}
-                                  </span>
-                                  <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
-                                    <span className="truncate max-w-[120px]">
-                                      {new URL(src.url).hostname.replace('www.', '')}
+                              {aiData.sources.map((src, i) => {
+                                const targetUrl = src.url.startsWith('/read?url=')
+                                  ? decodeURIComponent(src.url.replace('/read?url=', ''))
+                                  : src.url;
+                                return (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => navigate(`/browser?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(src.title || '')}`)}
+                                    className="flex-shrink-0 w-[180px] p-2.5 rounded-lg border border-[#e5e7eb] dark:border-[#202737] bg-[#f9fafb] dark:bg-[#161d2d] hover:border-amber-500/40 dark:hover:border-amber-500/40 hover:bg-amber-500/[0.02] transition-all flex flex-col justify-between group text-left cursor-pointer"
+                                  >
+                                    <span className="text-xs font-medium line-clamp-2 text-foreground group-hover:text-amber-500 transition-colors">
+                                      {src.title}
                                     </span>
-                                    <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-amber-500" />
-                                  </div>
-                                </a>
-                              ))}
+                                    <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
+                                      <span className="truncate max-w-[120px]">
+                                        {new URL(targetUrl).hostname.replace('www.', '')}
+                                      </span>
+                                      <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-amber-500" />
+                                    </div>
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -462,14 +466,13 @@ export default function Search() {
 
                       {/* Header link */}
                       <h4 className="mb-2">
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#1a0dab] dark:text-[#8ab4f8] hover:underline text-xl font-medium line-clamp-1 leading-snug tracking-tight transition-colors"
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/browser?url=${encodeURIComponent(item.url)}&title=${encodeURIComponent(item.title || '')}`)}
+                          className="text-[#1a0dab] dark:text-[#8ab4f8] hover:underline text-xl font-medium line-clamp-1 leading-snug tracking-tight transition-colors text-left cursor-pointer"
                         >
                           {item.title}
-                        </a>
+                        </button>
                       </h4>
 
                       {/* Snippet */}

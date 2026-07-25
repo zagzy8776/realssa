@@ -293,16 +293,18 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
                         ? decodeURIComponent(src.url.replace('/read?url=', ''))
                         : src.url;
                       return (
-                        <a
+                        <button
                           key={idx}
-                          href={directUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs bg-muted/60 hover:bg-muted text-primary hover:underline px-2.5 py-1 rounded-lg border border-border flex items-center gap-1.5 max-w-full truncate cursor-pointer"
+                          type="button"
+                          onClick={() => {
+                            navigate(`/browser?url=${encodeURIComponent(directUrl)}&title=${encodeURIComponent(src.title || '')}`);
+                            onClose();
+                          }}
+                          className="text-xs bg-muted/60 hover:bg-muted text-primary hover:underline px-2.5 py-1 rounded-lg border border-border flex items-center gap-1.5 max-w-full truncate cursor-pointer text-left"
                         >
                           <ExternalLink className="w-3 h-3 shrink-0 text-amber-500" />
                           <span className="truncate">{src.title || directUrl}</span>
-                        </a>
+                        </button>
                       );
                     })}
                   </div>
@@ -332,12 +334,14 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
               </span>
               <div className="space-y-2.5">
                 {webResults.map((item, idx) => (
-                  <a
+                  <button
                     key={idx}
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block bg-background hover:bg-muted/40 border border-border hover:border-amber-500/40 p-3.5 rounded-xl transition-all group"
+                    type="button"
+                    onClick={() => {
+                      navigate(`/browser?url=${encodeURIComponent(item.url)}&title=${encodeURIComponent(item.title || '')}`);
+                      onClose();
+                    }}
+                    className="block text-left w-full bg-background hover:bg-muted/40 border border-border hover:border-amber-500/40 p-3.5 rounded-xl transition-all group cursor-pointer"
                   >
                     <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1 truncate">
                       <ExternalLink className="w-3 h-3 text-amber-500 shrink-0" />
@@ -351,7 +355,7 @@ export default function RealSSASearchModal({ isOpen, onClose, initialQuery = "" 
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                       {item.snippet}
                     </p>
-                  </a>
+                  </button>
                 ))}
               </div>
             </div>

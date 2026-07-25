@@ -3474,6 +3474,72 @@ app.post('/api/search/ai', async (req, res) => {
   }
 });
 
+// --- RealSSA Inbuilt Browser Pre-Flight Frame Inspector Endpoint ---
+const frameCache = new Map();
+
+app.get('/api/check-frame', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).json({ success: false, canFrame: false, error: 'URL parameter required' });
+  }
+
+  let domain = '';
+  try {
+    const u = new URL(targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`);
+    domain = u.hostname.toLowerCase();
+  } catch (e) {
+    return res.status(400).json({ success: false, canFrame: false, error: 'Invalid URL format' });
+  }
+
+  // 1. Check zero-cost in-memory RAM cache first (valid for 24 hours)
+  const cached = frameCache.get(domain);
+  if (cached && Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) {
+    return res.json({ success: true, canFrame: cached.canFrame, domain, cached: true });
+  }
+
+  // 2. Perform lightweight HEAD pre-flight check on target headers
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+    let checkRes = await fetch(`https://${domain}`, {
+      method: 'HEAD',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) RealSSABrowser/1.0' },
+      signal: controller.signal
+    }).catch(() => null);
+
+    clearTimeout(timeoutId);
+
+    let isBlocked = false;
+
+    if (checkRes && checkRes.headers) {
+      const xFrame = checkRes.headers.get('x-frame-options');
+      const csp = checkRes.headers.get('content-security-policy');
+
+      if (xFrame) {
+        const xf = xFrame.toUpperCase();
+        if (xf.includes('DENY') || xf.includes('SAMEORIGIN')) {
+          isBlocked = true;
+        }
+      }
+
+      if (csp && csp.toLowerCase().includes('frame-ancestors')) {
+        const cspLow = csp.toLowerCase();
+        if (cspLow.includes("frame-ancestors 'none'") || cspLow.includes("frame-ancestors 'self'")) {
+          isBlocked = true;
+        }
+      }
+    }
+
+    const canFrame = !isBlocked;
+    frameCache.set(domain, { canFrame, timestamp: Date.now() });
+    return res.json({ success: true, canFrame, domain, cached: false });
+  } catch (err) {
+    frameCache.set(domain, { canFrame: false, timestamp: Date.now() });
+    return res.json({ success: true, canFrame: false, domain, cached: false });
+  }
+});
+
 // --- RealSSA Web Search Endpoint (Tavily/Exa Web Search with SQL Caching & prefetching) ---
 app.get('/api/search/web', async (req, res) => {
   const { q, offset = 0, limit = 10 } = req.query;
