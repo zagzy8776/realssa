@@ -60,6 +60,7 @@ const LocalMarketHub      = lazy(() => import("./pages/LocalMarketHub"));
 const EventsCalendar      = lazy(() => import("./pages/EventsCalendar"));
 const AdPortal            = lazy(() => import("./pages/AdPortal"));
 const LiveWire            = lazy(() => import("./pages/LiveWire"));
+const Widgets             = lazy(() => import("./pages/Widgets"));
 const Search              = lazy(() => import("./pages/Search"));
 const InAppBrowser        = lazy(() => import("./pages/InAppBrowser"));
 
