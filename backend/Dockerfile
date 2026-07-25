@@ -4,4 +4,4 @@ COPY package*.json ./
 RUN npm install --omit=dev
 COPY . .
 EXPOSE 5000
-CMD ["node", "--max-old-space-size=450", "worker.js"]
+CMD ["node", "--max-old-space-size=450", "server.js"]
