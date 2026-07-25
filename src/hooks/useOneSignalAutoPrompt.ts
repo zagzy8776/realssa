@@ -38,54 +38,53 @@ export function useOneSignalAutoPrompt() {
           }
           
         } else {
-          // Web / PWA — wait for OneSignal SDK to load
-          let checks = 0;
-          const interval = setInterval(() => {
-            const OneSignalWeb = (window as any).OneSignal;
-            if (OneSignalWeb && OneSignalWeb.User) {
-              clearInterval(interval);
+          // Web / PWA — defer execution until OneSignal is fully initialized
+          const OneSignalDeferred = (window as any).OneSignalDeferred;
+          if (OneSignalDeferred) {
+            OneSignalDeferred.push(async (OneSignal: any) => {
+              try {
+                // Link external user ID
+                console.log('Linking Web OneSignal external user ID:', deviceId);
+                await OneSignal.login(deviceId);
 
-              // Link external user ID
-              console.log('Linking Web OneSignal external user ID:', deviceId);
-              OneSignalWeb.login(deviceId);
-
-              if (value !== 'true') {
-                // Only prompt after user has engaged: 30s on page AND scrolled at least 300px
-                let hasScrolled = false;
-                const onScroll = () => {
-                  if (window.scrollY > 300) {
-                    hasScrolled = true;
-                    window.removeEventListener('scroll', onScroll);
-                  }
-                };
-                window.addEventListener('scroll', onScroll, { passive: true });
-
-                // Check every 5s after 30s — prompt only when both conditions met
-                setTimeout(() => {
-                  const checkReady = setInterval(async () => {
-                    if (!hasScrolled) return;
-                    clearInterval(checkReady);
-                    window.removeEventListener('scroll', onScroll);
-                    try {
-                      const optedIn = OneSignalWeb.User.PushSubscription?.optedIn || false;
-                      if (!optedIn) {
-                        if (OneSignalWeb.Slidedown) {
-                          await OneSignalWeb.Slidedown.promptPush();
-                        } else {
-                          await OneSignalWeb.User.PushSubscription.optIn();
-                        }
-                      }
-                      await Preferences.set({ key: ONESIGNAL_PROMPT_KEY, value: 'true' });
-                    } catch (promptErr) {
-                      console.warn('Push prompt failed:', promptErr);
+                if (value !== 'true') {
+                  const optedIn = OneSignal.User?.PushSubscription?.optedIn || false;
+                  // Only prompt after user has engaged: 30s on page AND scrolled at least 300px
+                  let hasScrolled = false;
+                  const onScroll = () => {
+                    if (window.scrollY > 300) {
+                      hasScrolled = true;
+                      window.removeEventListener('scroll', onScroll);
                     }
-                  }, 5000);
-                }, 30000); // wait 30s before starting checks
+                  };
+                  window.addEventListener('scroll', onScroll, { passive: true });
+
+                  // Check every 5s after 30s — prompt only when both conditions met
+                  setTimeout(() => {
+                    const checkReady = setInterval(async () => {
+                      if (!hasScrolled) return;
+                      clearInterval(checkReady);
+                      window.removeEventListener('scroll', onScroll);
+                      try {
+                        if (!optedIn) {
+                          if (OneSignal.Slidedown) {
+                            await OneSignal.Slidedown.promptPush();
+                          } else {
+                            await OneSignal.User?.PushSubscription?.optIn();
+                          }
+                        }
+                        await Preferences.set({ key: ONESIGNAL_PROMPT_KEY, value: 'true' });
+                      } catch (promptErr) {
+                        console.warn('Push prompt failed:', promptErr);
+                      }
+                    }, 5000);
+                  }, 30000); // wait 30s before starting checks
+                }
+              } catch (loginErr) {
+                console.warn('OneSignal login failed:', loginErr);
               }
-            }
-            checks++;
-            if (checks > 20) clearInterval(interval);
-          }, 500);
+            });
+          }
         }
       } catch (err) {
         console.warn('Auto prompt/login failed', err);
