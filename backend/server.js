@@ -3667,6 +3667,48 @@ app.get('/api/proxy-page', async (req, res) => {
 
     let html = await upstream.text();
 
+    // ── Cloudflare challenge detection — CF sends a JS-challenge page that
+    //    can never run correctly in a proxied context. Detect and return a
+    //    styled fallback page instead of a blank screen.
+    const isCfChallenge = html.includes('cf-chl-bypass') ||
+      html.includes('cf_chl_') ||
+      html.includes('__cf_chl_rt_tk') ||
+      (html.includes('Cloudflare') && html.includes('challenge'));
+    
+    if (isCfChallenge) {
+      const cfFallback = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Browser Verification Required</title>
+<style>
+  body { background:#0b0f17; color:#e5e7eb; font-family:system-ui,sans-serif;
+    display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:1rem; }
+  .card { text-align:center; max-width:360px; }
+  .icon { font-size:3rem; margin-bottom:1rem; }
+  h2 { color:#f59e0b; font-size:1.2rem; margin:0 0 .5rem; }
+  p { color:#9ca3af; font-size:.85rem; line-height:1.6; margin:0 0 1.5rem; }
+  a { display:inline-block; background:#f59e0b; color:#000; font-weight:700;
+    padding:.6rem 1.4rem; border-radius:.75rem; text-decoration:none; font-size:.85rem; }
+  a:hover { background:#fbbf24; }
+  .domain { color:#f59e0b; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">🛡️</div>
+  <h2>Browser Verification Required</h2>
+  <p><span class="domain">${escapeHtml(new URL(safeUrl).hostname)}</span> uses Cloudflare bot protection which requires a real browser session to pass.</p>
+  <a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">Open in External Browser ↗</a>
+</div>
+</body>
+</html>`;
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.removeHeader('X-Frame-Options');
+      res.removeHeader('Content-Security-Policy');
+      res.set('X-Frame-Options', 'ALLOWALL');
+      return res.send(cfFallback);
+    }
+
     // Parse the origin for rewriting relative URLs
     let origin = '';
     try {
@@ -3674,8 +3716,7 @@ app.get('/api/proxy-page', async (req, res) => {
       origin = `${u.protocol}//${u.host}`;
     } catch (_) {}
 
-    // --- Rewrite relative URLs to absolute so assets/links load ---
-    // 1. Inject a <base> tag so the browser resolves relative paths automatically
+    // 1. Inject <base> tag so browser resolves relative asset paths automatically
     const baseTag = `<base href="${origin}/" target="_blank">`;
     if (/<head[^>]*>/i.test(html)) {
       html = html.replace(/(<head[^>]*>)/i, `$1\n${baseTag}`);
@@ -3683,38 +3724,61 @@ app.get('/api/proxy-page', async (req, res) => {
       html = baseTag + html;
     }
 
-    // 2. Strip any meta CSP tags inside the page that would block subresources
+    // 2. Strip meta CSP tags inside the page
     html = html.replace(/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
 
-    // 3. Inject a small script to open any link clicks inside our in-app browser
-    //    (posts the clicked href to the parent frame so InAppBrowser.tsx can navigate)
-    const interceptScript = `
-<script>
-(function() {
-  document.addEventListener('click', function(e) {
-    var el = e.target.closest('a[href]');
-    if (!el) return;
-    var href = el.getAttribute('href');
-    if (!href || href.startsWith('#') || href.startsWith('javascript')) return;
-    e.preventDefault();
-    try {
-      var abs = new URL(href, window.location.href).href;
-      window.parent.postMessage({ type: 'REALSSA_NAVIGATE', url: abs }, '*');
-    } catch(_) {}
-  }, true);
+    // 3. ── history.replaceState / pushState guard ──────────────────────────────
+    //    Cloudflare and other sites call replaceState with their real domain URL.
+    //    Since the iframe's origin is realssanews.com.ng this causes a SecurityError.
+    //    We wrap both methods in try-catch so errors are swallowed silently.
+    const historyGuard = `<script>
+(function(){
+  function safe(fn){
+    return function(state,title,url){
+      try{ fn.call(history,state,title,url); }catch(e){}
+    };
+  }
+  if(window.history){
+    history.replaceState = safe(history.replaceState);
+    history.pushState    = safe(history.pushState);
+  }
 })();
 </script>`;
+
+    // 4. Link interception — clicks stay inside RealSSA browser via postMessage
+    const interceptScript = `<script>
+(function(){
+  document.addEventListener('click',function(e){
+    var el=e.target.closest('a[href]');
+    if(!el) return;
+    var href=el.getAttribute('href');
+    if(!href||href.startsWith('#')||href.startsWith('javascript')) return;
+    e.preventDefault();
+    try{
+      var abs=new URL(href,window.location.href).href;
+      window.parent.postMessage({type:'REALSSA_NAVIGATE',url:abs},'*');
+    }catch(_){}
+  },true);
+})();
+</script>`;
+
+    // Inject history guard right after <head> opening, intercept at end of <body>
+    if (/<head[^>]*>/i.test(html)) {
+      html = html.replace(/(<head[^>]*>)/i, `$1\n${historyGuard}`);
+    } else {
+      html = historyGuard + html;
+    }
+
     if (/<\/body>/i.test(html)) {
       html = html.replace(/<\/body>/i, `${interceptScript}\n</body>`);
     } else {
       html += interceptScript;
     }
 
-    // --- Send the cleaned HTML — no framing-block headers ---
+    // --- Send cleaned HTML with no framing-block headers ---
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.removeHeader('X-Frame-Options');
     res.removeHeader('Content-Security-Policy');
-    // Explicitly tell browsers this IS allowed to be framed
     res.set('X-Frame-Options', 'ALLOWALL');
     return res.send(html);
 

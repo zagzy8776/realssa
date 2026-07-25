@@ -494,7 +494,7 @@ export default function InAppBrowser() {
             className="w-full h-full border-none bg-white"
             onLoad={() => setLoading(false)}
             onError={() => setLoading(false)}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
+            sandbox="allow-scripts allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox"
           />
         </div>
       </main>
