@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Search as SearchIcon, Sparkles, ChevronDown, ChevronUp, ArrowRight, ExternalLink, Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -211,7 +212,10 @@ export default function Search() {
       return `<span class="inline-block px-1 text-xs text-muted-foreground">${match}</span>`;
     });
 
-    return <div dangerouslySetInnerHTML={{ __html: formatted }} className="text-sm leading-relaxed space-y-2" />;
+    // Sanitize the formatted HTML with DOMPurify to prevent XSS (allowing target and rel attributes for citations)
+    const cleanHtml = DOMPurify.sanitize(formatted, { ADD_ATTR: ['target', 'rel'] });
+
+    return <div dangerouslySetInnerHTML={{ __html: cleanHtml }} className="text-sm leading-relaxed space-y-2" />;
   };
 
   return (
