@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ExternalLink, Clock, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import RealSSASearchModal from "./RealSSASearchModal";
 
 interface Article {
   id: string;
@@ -23,7 +22,6 @@ const SearchBar = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<Article[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,25 +111,54 @@ const SearchBar = () => {
     <section className="py-8 md:py-12 bg-muted/20">
       <div className="container mx-auto px-4">
         <div className="max-w-4xl mx-auto">
-          {/* Glowing AI Search Input Trigger */}
-          <div
-            onClick={() => setIsAiSearchOpen(true)}
-            className="relative flex items-center gap-3 bg-background border-2 border-amber-500/40 hover:border-amber-500 rounded-2xl px-4 py-3.5 shadow-lg cursor-pointer transition-all hover:shadow-amber-500/10 mb-6 group"
+          {/* Real URL-detecting Search Input */}
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = query.trim();
+              if (q) {
+                // Direct URL redirection helper
+                const isDirectUrl = (str: string): boolean => {
+                  const pattern = new RegExp(
+                    '^(https?:\\/\\/)?' + // protocol
+                    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain
+                    '((\\d{1,3}\\.){3}\\d{1,3}))' + // ip
+                    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port/path
+                    '(\\?[;&a-z\\d%_.~+=-]*)?' + // query
+                    '(\\#[-a-z\\d_]*)?$', // fragment
+                    'i'
+                  );
+                  return pattern.test(str) || (str.includes('.') && !str.includes(' ') && str.length > 4);
+                };
+
+                if (isDirectUrl(q)) {
+                  let destination = q;
+                  if (!/^https?:\/\//i.test(q)) {
+                    destination = `https://${q}`;
+                  }
+                  window.open(destination, '_blank', 'noopener,noreferrer');
+                } else {
+                  navigate(`/search?q=${encodeURIComponent(q)}`);
+                }
+              }
+            }}
+            className="relative flex items-center gap-3 bg-background border-2 border-amber-500/40 hover:border-amber-500 rounded-2xl px-4 py-2 shadow-lg mb-6 group"
           >
             <Search className="w-5 h-5 text-amber-500 shrink-0" />
-            <div className="flex-1 text-sm md:text-base font-medium text-muted-foreground group-hover:text-foreground">
-              {query || "Ask RealSSA anything... (e.g. CBN Naira Rate, Lagos Traffic, AFCON Results)"}
-            </div>
-            <span className="bg-amber-500 text-black text-xs font-extrabold px-3 py-1 rounded-xl uppercase flex items-center gap-1 shadow">
-              ⚡ AI Search
-            </span>
-          </div>
-
-          <RealSSASearchModal
-            isOpen={isAiSearchOpen}
-            onClose={() => setIsAiSearchOpen(false)}
-            initialQuery={query}
-          />
+            <input
+              type="text"
+              placeholder="Search news or paste a direct URL (e.g. www.google.com)..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm md:text-base py-1.5 focus:ring-0"
+            />
+            <button
+              type="submit"
+              className="bg-amber-500 hover:bg-amber-600 text-black text-xs font-extrabold px-4 py-2 rounded-xl uppercase flex items-center gap-1 shadow transition-all active:scale-95 shrink-0"
+            >
+              ⚡ Search
+            </button>
+          </form>
 
           {/* Rotating Headlines */}
           <div className="bg-background rounded-lg p-6 shadow-sm border">

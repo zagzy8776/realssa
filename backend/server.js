@@ -155,6 +155,27 @@ if (process.env.DATABASE_URL) {
         await pool.query(`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS full_content TEXT;`);
         console.log('✅ Extractor Engine: ensured full_content column exists.');
 
+        // Ensure has_embedding column exists for Qdrant offloading
+        await pool.query(`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS has_embedding BOOLEAN DEFAULT false;`);
+        console.log('✅ Qdrant: ensured has_embedding column exists.');
+
+        // Create search_cache table for Fly.io shared caching
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS search_cache (
+            query TEXT PRIMARY KEY,
+            results_json JSONB NOT NULL,
+            provider TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        console.log('✅ Search Cache: ensured search_cache table exists.');
+
+        // Clean up expired cache entries older than 24 hours
+        const cacheClean = await pool.query(`
+          DELETE FROM search_cache WHERE created_at < NOW() - INTERVAL '24 hours';
+        `);
+        console.log(`🧹 Search Cache: deleted ${cacheClean.rowCount} expired entries.`);
+
         // Clean up logos for the rest
         const logoCleanResult = await pool.query(`
           UPDATE rss_articles 
@@ -3353,29 +3374,59 @@ app.post('/api/search/ai', async (req, res) => {
       console.warn('[RealSSA AI Search] Exa search notice:', exaErr.message);
     }
 
-    // 2. Query DB1-DB4 for African news archive matches
+    // 2. Query Qdrant + DB1-DB4 for African news archive matches
     try {
-      const keywords = cleanQuery.split(/\s+/).filter(w => w.length > 3).slice(0, 4).join(' | ');
-      if (keywords) {
-        const dbRes = await queryMultiDb(`
-          SELECT title, original_excerpt, ai_summary, external_link, category
-          FROM rss_articles
-          WHERE to_tsvector('english', title || ' ' || COALESCE(original_excerpt, '')) @@ to_tsquery('english', $1)
-          ORDER BY published_at DESC
-          LIMIT 5
-        `, [keywords]);
-
-        if (dbRes.rows && dbRes.rows.length > 0) {
-          dbMatches = dbRes.rows;
-          contextText += 'REALSSA NEWS ARCHIVE MATCHES:\n' + 
-            dbMatches.map(r => `• ${r.title}: ${r.ai_summary || r.original_excerpt || ''}`).join('\n') + '\n\n';
-          
-          dbMatches.forEach(r => {
-            if (r.external_link && !sources.some(s => s.url === r.external_link)) {
-              sources.push({ title: r.title, url: `/read?url=${encodeURIComponent(r.external_link)}` });
+      let qdrantSuccess = false;
+      try {
+        const { generateEmbedding } = require('./services/aiAgentService');
+        const queryVector = await generateEmbedding(cleanQuery);
+        if (queryVector) {
+          const { searchArticleVectors } = require('./services/qdrantService');
+          const matchedIds = await searchArticleVectors(queryVector, 5);
+          if (matchedIds && matchedIds.length > 0) {
+            const dbRes = await queryMultiDb(`
+              SELECT title, original_excerpt, ai_summary, external_link, category
+              FROM rss_articles
+              WHERE id = ANY($1)
+            `, [matchedIds]);
+            
+            if (dbRes.rows && dbRes.rows.length > 0) {
+              dbMatches = dbRes.rows;
+              qdrantSuccess = true;
+              console.log(`🤖 Qdrant resolved ${dbMatches.length} semantic matches for AI Search.`);
             }
-          });
+          }
         }
+      } catch (qErr) {
+        console.warn('[RealSSA AI Search] Qdrant search error, falling back to FTS:', qErr.message);
+      }
+
+      // Fallback to Full-Text Search if Qdrant didn't yield matches
+      if (!qdrantSuccess) {
+        const keywords = cleanQuery.split(/\s+/).filter(w => w.length > 3).slice(0, 4).join(' | ');
+        if (keywords) {
+          const dbRes = await queryMultiDb(`
+            SELECT title, original_excerpt, ai_summary, external_link, category
+            FROM rss_articles
+            WHERE to_tsvector('english', title || ' ' || COALESCE(original_excerpt, '')) @@ to_tsquery('english', $1)
+            ORDER BY published_at DESC
+            LIMIT 5
+          `, [keywords]);
+          if (dbRes.rows && dbRes.rows.length > 0) {
+            dbMatches = dbRes.rows;
+          }
+        }
+      }
+
+      if (dbMatches.length > 0) {
+        contextText += 'REALSSA NEWS ARCHIVE MATCHES:\n' + 
+          dbMatches.map(r => `• ${r.title}: ${r.ai_summary || r.original_excerpt || ''}`).join('\n') + '\n\n';
+        
+        dbMatches.forEach(r => {
+          if (r.external_link && !sources.some(s => s.url === r.external_link)) {
+            sources.push({ title: r.title, url: `/read?url=${encodeURIComponent(r.external_link)}` });
+          }
+        });
       }
     } catch (dbErr) {
       console.warn('[RealSSA AI Search] DB search notice:', dbErr.message);
@@ -3415,6 +3466,179 @@ app.post('/api/search/ai', async (req, res) => {
     console.error('[RealSSA AI Search] Route error:', err.message);
     return res.status(500).json({
       error: 'Search processing failed',
+      message: err.message
+    });
+  }
+});
+
+// --- RealSSA Web Search Endpoint (Tavily/Exa Web Search with SQL Caching & prefetching) ---
+app.get('/api/search/web', async (req, res) => {
+  const { q, offset = 0, limit = 10 } = req.query;
+  if (!q || typeof q !== 'string' || q.trim().length === 0) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
+  const cleanQuery = q.trim();
+  const limitVal = Math.min(Math.max(parseInt(limit) || 10, 1), 30);
+  const offsetVal = Math.max(parseInt(offset) || 0, 0);
+
+  try {
+    let results = [];
+    let provider = '';
+
+    // Check PostgreSQL Cache first (valid for 1 hour)
+    const cacheRes = await pool.query(
+      `SELECT results_json, provider FROM search_cache 
+       WHERE query = $1 AND created_at >= NOW() - INTERVAL '1 hour'`,
+      [cleanQuery.toLowerCase()]
+    );
+
+    if (cacheRes.rows.length > 0) {
+      const cached = cacheRes.rows[0].results_json;
+      results = cached.slice(offsetVal, offsetVal + limitVal);
+      provider = `${cacheRes.rows[0].provider} (Cached)`;
+      console.log(`🟢 [Search Cache] HIT for query: "${cleanQuery}" (returned ${results.length} sliced results)`);
+    } else {
+      console.log(`🔴 [Search Cache] MISS for query: "${cleanQuery}"`);
+      // 1. Try Tavily API
+      const tavilyKey = process.env.TAVILY_API_KEY;
+      if (tavilyKey) {
+        console.log(`🤖 Running Tavily Web Search for: "${cleanQuery}" (fetching 30 results for caching)`);
+        try {
+          const response = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: tavilyKey,
+              query: cleanQuery,
+              search_depth: "basic",
+              include_images: false,
+              include_answer: false,
+              max_results: 30
+            })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.results) {
+              const fetchedResults = data.results.map(r => ({
+                title: r.title,
+                url: r.url,
+                snippet: r.content,
+                source: new URL(r.url).hostname.replace('www.', ''),
+                date: new Date().toLocaleDateString()
+              }));
+              
+              // Write to SQL Cache
+              await pool.query(
+                `INSERT INTO search_cache (query, results_json, provider)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (query) DO UPDATE 
+                 SET results_json = EXCLUDED.results_json, provider = EXCLUDED.provider, created_at = NOW()`,
+                [cleanQuery.toLowerCase(), JSON.stringify(fetchedResults), 'Tavily Search']
+              );
+
+              results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
+              provider = 'Tavily Search';
+            }
+          }
+        } catch (tavilyErr) {
+          console.warn('[Tavily Search] Error, falling back:', tavilyErr.message);
+        }
+      }
+
+      // 2. Try Exa API (if Tavily failed/missing)
+      if (results.length === 0 && process.env.EXA_API_KEY) {
+        console.log(`🤖 Running Exa Web Search for: "${cleanQuery}" (fetching 30 results for caching)`);
+        try {
+          const { searchExa } = require('./services/exaSearchService');
+          const exaData = await searchExa(cleanQuery, { numResults: 30 });
+          if (exaData && exaData.results && exaData.results.length > 0) {
+            const fetchedResults = exaData.results.map(r => ({
+              title: r.title,
+              url: r.url,
+              snippet: r.highlights || '',
+              source: new URL(r.url).hostname.replace('www.', ''),
+              date: r.publishedDate ? new Date(r.publishedDate).toLocaleDateString() : new Date().toLocaleDateString()
+            }));
+
+            // Write to SQL Cache
+            await pool.query(
+              `INSERT INTO search_cache (query, results_json, provider)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (query) DO UPDATE 
+               SET results_json = EXCLUDED.results_json, provider = EXCLUDED.provider, created_at = NOW()`,
+              [cleanQuery.toLowerCase(), JSON.stringify(fetchedResults), 'Exa Search']
+            );
+
+            results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
+            provider = 'Exa Neural Search';
+          }
+        } catch (exaErr) {
+          console.warn('[Exa Search] Error, falling back:', exaErr.message);
+        }
+      }
+
+      // 3. Fallback to Local DB search (if web APIs missed/errored)
+      if (results.length === 0) {
+        console.log(`🔍 Running Local DB archive search for: "${cleanQuery}"`);
+        const keywords = cleanQuery.split(/\s+/).filter(w => w.length > 3).slice(0, 4).join(' | ');
+        let dbRes;
+        if (keywords) {
+          dbRes = await queryMultiDb(`
+            SELECT title, COALESCE(ai_summary, original_excerpt) as excerpt, external_link, source_name, published_at
+            FROM rss_articles
+            WHERE to_tsvector('english', title || ' ' || COALESCE(original_excerpt, '')) @@ to_tsquery('english', $1)
+            ORDER BY published_at DESC
+            LIMIT 30
+          `, [keywords]);
+        } else {
+          dbRes = await queryMultiDb(`
+            SELECT title, COALESCE(ai_summary, original_excerpt) as excerpt, external_link, source_name, published_at
+            FROM rss_articles
+            WHERE title ILIKE $1 OR original_excerpt ILIKE $1
+            ORDER BY published_at DESC
+            LIMIT 30
+          `, [`%${cleanQuery}%`]);
+        }
+
+        if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+          const fetchedResults = dbRes.rows.map(r => ({
+            title: r.title,
+            url: r.external_link || `/article/rss-${r.id}`,
+            snippet: r.excerpt || '',
+            source: r.source_name || 'RealSSA Archive',
+            date: r.published_at ? new Date(r.published_at).toLocaleDateString() : new Date().toLocaleDateString()
+          }));
+
+          results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
+          provider = 'RealSSA Database';
+        }
+      }
+    }
+
+    // Determine hasMore using graceful slicing check
+    const totalCacheCount = results.length;
+    const fullCountRes = await pool.query(
+      `SELECT JSONB_ARRAY_LENGTH(results_json) as len FROM search_cache WHERE query = $1`,
+      [cleanQuery.toLowerCase()]
+    );
+    const totalResultsCount = fullCountRes.rows.length > 0 ? fullCountRes.rows[0].len : totalCacheCount;
+    const hasMore = offsetVal + limitVal < totalResultsCount;
+
+    return res.status(200).json({
+      success: true,
+      query: cleanQuery,
+      provider: provider,
+      results: results,
+      offset: offsetVal,
+      limit: limitVal,
+      hasMore: hasMore
+    });
+
+  } catch (err) {
+    console.error('[Web Search Route] Error:', err.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Web search execution failed',
       message: err.message
     });
   }

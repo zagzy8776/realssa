@@ -108,6 +108,10 @@ async function extractArticle(url) {
           length: aiResult.textContent.length
         };
       }
+      
+      // Fallback to Firecrawl if AI extraction also yields poor results
+      const firecrawlResult = await scrapeWithFirecrawl(url);
+      if (firecrawlResult) return firecrawlResult;
       return null;
     }
 
@@ -123,6 +127,9 @@ async function extractArticle(url) {
     };
   } catch (error) {
     console.error(`[Extractor] Error fetching/parsing ${url}:`, error.message);
+    // Try Firecrawl as safety fallback when fetch fails (e.g. Cloudflare blocks)
+    const firecrawlResult = await scrapeWithFirecrawl(url);
+    if (firecrawlResult) return firecrawlResult;
     return null;
   }
 }
@@ -167,6 +174,53 @@ async function aiFallbackExtractor(rawHtml, url) {
     }
   } catch (err) {
     console.warn(`[Extractor] AI Fallback error: ${err.message}`);
+  }
+  return null;
+}
+
+/**
+ * Scrape full article text using Firecrawl API
+ */
+async function scrapeWithFirecrawl(url) {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) return null;
+
+  console.log(`🔥 [Firecrawl] Scraping URL: ${url}`);
+  try {
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        url: url,
+        formats: ['markdown', 'html']
+      }),
+      timeout: 15000
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`[Firecrawl] API error (${response.status}):`, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data && data.success && data.data) {
+      return {
+        title: data.data.metadata?.title || new URL(url).hostname,
+        textContent: (data.data.markdown || '').trim(),
+        htmlContent: data.data.html || `<p>${(data.data.markdown || '').replace(/\n/g, '<br>')}</p>`,
+        excerpt: data.data.metadata?.description || (data.data.markdown || '').substring(0, 200) + '...',
+        byline: data.data.metadata?.author || 'Firecrawl Extracted',
+        siteName: data.data.metadata?.siteName || new URL(url).hostname,
+        image: data.data.metadata?.image || null,
+        length: (data.data.markdown || '').length
+      };
+    }
+  } catch (err) {
+    console.warn(`[Firecrawl] Scraping failed for ${url}:`, err.message);
   }
   return null;
 }

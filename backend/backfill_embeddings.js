@@ -30,7 +30,7 @@ async function backfill() {
     const result = await client.query(`
       SELECT id, title, ai_summary, original_excerpt 
       FROM rss_articles 
-      WHERE embedding IS NULL 
+      WHERE (has_embedding = false OR has_embedding IS NULL) 
       AND content_type = 'article'
       AND published_at > NOW() - INTERVAL '14 days'
       ORDER BY published_at DESC
@@ -40,6 +40,7 @@ async function backfill() {
     console.log(`Found ${articles.length} articles needing embeddings.`);
 
     let successCount = 0;
+    const { upsertArticleVector } = require('./services/qdrantService');
 
     for (let i = 0; i < articles.length; i++) {
       const art = articles[i];
@@ -56,16 +57,19 @@ async function backfill() {
         const vector = await generateEmbedding(textToEmbed);
         
         if (vector && vector.length === 768) {
-          // Format vector for pgvector
-          const vectorStr = `[${vector.join(',')}]`;
+          // Upsert vector to Qdrant Cloud
+          const qdrantSuccess = await upsertArticleVector(art.id, vector);
           
-          await client.query(
-            'UPDATE rss_articles SET embedding = $1 WHERE id = $2',
-            [vectorStr, art.id]
-          );
-          
-          successCount++;
-          console.log(`  ✅ Embedding saved for article ${art.id}`);
+          if (qdrantSuccess) {
+            await client.query(
+              'UPDATE rss_articles SET has_embedding = true WHERE id = $1',
+              [art.id]
+            );
+            successCount++;
+            console.log(`  ✅ Embedding saved in Qdrant for article ${art.id}`);
+          } else {
+            console.error(`  ❌ Failed to save vector to Qdrant for article ${art.id}`);
+          }
         } else {
           console.error(`  ❌ Failed to generate valid embedding for article ${art.id}`);
         }
@@ -79,7 +83,7 @@ async function backfill() {
       }
     }
 
-    console.log(`\n🎉 Backfill complete. Successfully embedded ${successCount}/${articles.length} articles.`);
+    console.log(`\n🎉 Backfill complete. Successfully embedded ${successCount}/${articles.length} articles in Qdrant.`);
 
   } catch (err) {
     console.error('Backfill job error:', err.message);
