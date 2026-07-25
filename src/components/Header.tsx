@@ -16,9 +16,6 @@ import WeatherWidget from "./WeatherWidget";
 import InviteButton from "./InviteButton";
 import { useStreak } from "@/hooks/useStreak";
 
-
-import RealSSASearchModal from "./RealSSASearchModal";
-
 const navLinks = [
   { href: "/", label: "Home", icon: Home },
   { href: "/ads", label: "📢 Advertise" },
@@ -234,8 +231,6 @@ const Header = () => {
               <WeatherWidget />
             </div>
           </div>
-
-          <RealSSASearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
           {/* Reading Streak Calendar Modal */}
           {isStreakOpen && (
