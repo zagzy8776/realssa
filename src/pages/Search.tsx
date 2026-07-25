@@ -120,11 +120,15 @@ export default function Search() {
       if (!response.ok) throw new Error('AI search failed');
       const data = await response.json();
       if (data.success) {
-        setAiData({
-          answer: data.answer,
-          sources: data.sources || [],
-          provider: data.provider
-        });
+        if (data.ai_overview === null || !data.answer) {
+          setAiData(null);
+        } else {
+          setAiData({
+            answer: data.answer,
+            sources: data.sources || [],
+            provider: data.provider
+          });
+        }
       }
     } catch (err) {
       console.error('AI SGE overview error:', err);

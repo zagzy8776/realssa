@@ -3377,6 +3377,14 @@ app.post('/api/search/ai', async (req, res) => {
   }
 
   const cleanQuery = query.trim();
+
+  // 1. URL Regex Interceptor
+  const isNavigational = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/i.test(cleanQuery);
+  if (isNavigational) {
+    console.log(`🧭 [AI Search] Detected navigational query: "${cleanQuery}". Bypassing AI Overview.`);
+    return res.status(200).json({ success: true, ai_overview: null, provider: 'Navigational Route' });
+  }
+
   console.log(`🔍 [RealSSA AI Search] Processing query: "${cleanQuery}"`);
 
   try {
@@ -3469,13 +3477,19 @@ app.post('/api/search/ai', async (req, res) => {
       '  1. KEY TAKEAWAYS (3 bullet points highlighted with 📌)',
       '  2. DETAILED BREAKDOWN (2 clear, informative paragraphs explaining the context, implications, and verified details)',
       '- Use an objective, authoritative tone.',
-      '- Keep explanations clear and engaging.'
+      '- Keep explanations clear and engaging.',
+      '',
+      "CRITICAL RULE: If the provided search results do not contain sufficient factual data to construct a meaningful summary, or if the user's query is a simple domain name (e.g., 'facebook.com'), YOU MUST output strictly null. Do NOT generate generic placeholder text like 'tracking live updates'."
     ].join('\n');
 
     let aiAnswer = await callGeminiText('You are RealSSA AI Search, authoritative AI search engine.', prompt);
 
-    if (!aiAnswer || aiAnswer.length < 20) {
-      aiAnswer = `📌 KEY TAKEAWAYS:\n• RealSSA AI is tracking live updates for "${cleanQuery}".\n• verified reports indicate developing updates across relevant categories.\n• Stay tuned as the RealSSA News Desk updates this intelligence stream.\n\nDETAILED BREAKDOWN:\nInformation regarding "${cleanQuery}" is being monitored in real time by RealSSA. Our 5-database cluster continues to aggregate verified updates from reliable news desks.`;
+    if (!aiAnswer || aiAnswer.trim().toLowerCase() === 'null' || aiAnswer.length < 20) {
+      return res.status(200).json({
+        success: true,
+        ai_overview: null,
+        provider: 'RealSSA AI Intelligence Desk'
+      });
     }
 
     return res.status(200).json({
