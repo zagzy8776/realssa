@@ -204,16 +204,17 @@ export default function Search() {
     ];
   };
 
-  // SGE content highlights parsing
+  // Format AI answer — supports Exa and Tavily markdown
   const formatSGEAnswer = (answer: string) => {
     if (!answer) return '';
-    
-    // Replace markdown bold, headings and bulletin highlights
+
+    // Render markdown bold and bullet points
     let formatted = answer
       .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
-      .replace(/📌 KEY TAKEAWAYS/g, '<h4 class="text-amber-500 dark:text-amber-400 font-semibold flex items-center gap-2 mb-2 text-sm uppercase tracking-wider">📌 Key Takeaways</h4>')
-      .replace(/DETAILED BREAKDOWN/g, '<h4 class="text-amber-500 dark:text-amber-400 font-semibold flex items-center gap-2 mt-4 mb-2 text-sm uppercase tracking-wider">📝 Detailed Breakdown</h4>')
-      .replace(/•\s(.*?)(?=\n|•|$)/g, '<li class="ml-4 list-disc text-muted-foreground my-1">$1</li>');
+      .replace(/^#{1,3}\s+(.*)$/gm, '<h4 class="text-amber-500 dark:text-amber-400 font-semibold mt-3 mb-1 text-sm uppercase tracking-wider">$1</h4>')
+      .replace(/^[-•]\s+(.*)/gm, '<li class="ml-4 list-disc text-muted-foreground my-1">$1</li>')
+      .replace(/\n{2,}/g, '</p><p class="mt-2">')
+      .replace(/\n/g, '<br />');
 
     // Replace [1], [2], [3] with citation superscript links
     formatted = formatted.replace(/\[([0-9]+)\]/g, (match, num) => {
@@ -225,9 +226,7 @@ export default function Search() {
       return `<span class="inline-block px-1 text-xs text-muted-foreground">${match}</span>`;
     });
 
-    // Sanitize the formatted HTML with DOMPurify to prevent XSS (allowing target and rel attributes for citations)
-    const cleanHtml = DOMPurify.sanitize(formatted, { ADD_ATTR: ['target', 'rel'] });
-
+    const cleanHtml = DOMPurify.sanitize(`<p>${formatted}</p>`, { ADD_ATTR: ['target', 'rel'] });
     return <div dangerouslySetInnerHTML={{ __html: cleanHtml }} className="text-sm leading-relaxed space-y-2" />;
   };
 
@@ -520,7 +519,7 @@ export default function Search() {
             </div>
             <h2 className="text-xl font-bold text-foreground">Discover the Web with RealSSA AI</h2>
             <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
-              Query the 5-database cluster or explore the live web using Tavily AI Search. Enter a query or paste a URL above to start.
+              AI-powered answers from the live web with verified citations. Enter any query or paste a URL above to start.
             </p>
           </div>
         )}
