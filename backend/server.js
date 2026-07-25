@@ -3429,10 +3429,13 @@ app.post('/api/search/ai', async (req, res) => {
         console.log(`[AI Search] Fallback: Tavily for: "${cleanQuery}"`);
         const tavilyRes = await fetch('https://api.tavily.com/search', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${tavilyKey}`
+          },
           body: JSON.stringify({
-            api_key: tavilyKey,
             query: cleanQuery,
+            topic: 'general',
             search_depth: 'basic',
             include_answer: true,
             include_images: false,
