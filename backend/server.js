@@ -3369,7 +3369,7 @@ app.post('/api/bot/comment-reply', async (req, res) => {
   }
 });
 
-// --- RealSSA AI Search Engine Endpoint (Tavily → Exa → Gemini AI) ---
+// --- RealSSA AI Search Engine Endpoint (Exa /answer → Tavily+Gemini fallback) ---
 app.post('/api/search/ai', async (req, res) => {
   const { query } = req.body;
   if (!query || typeof query !== 'string' || query.trim().length === 0) {
@@ -3387,15 +3387,62 @@ app.post('/api/search/ai', async (req, res) => {
   console.log(`🔍 [RealSSA AI Search] Processing: "${cleanQuery}"`);
 
   try {
+    // ── Step 1: Exa /answer (search + AI summary in one call) ─────────────
+    const exaKey = process.env.EXA_API_KEY;
+    if (exaKey) {
+      try {
+        console.log(`[AI Search] Trying Exa /answer for: "${cleanQuery}"`);
+        const exaRes = await fetch('https://api.exa.ai/answer', {
+          method: 'POST',
+          headers: {
+            'x-api-key': exaKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            query: cleanQuery,
+            text: true
+          }),
+          signal: AbortSignal.timeout(20000)
+        });
+
+        if (exaRes.ok) {
+          const exaData = await exaRes.json();
+          if (exaData && exaData.answer && exaData.answer.length > 30) {
+            console.log(`[AI Search] ✅ Exa /answer returned answer with ${(exaData.citations || []).length} citations`);
+
+            // Format citations as sources for frontend
+            const formattedSources = (exaData.citations || []).slice(0, 5).map(c => ({
+              title: c.title || c.url,
+              url: `/read?url=${encodeURIComponent(c.url)}`
+            }));
+
+            return res.status(200).json({
+              success: true,
+              query: cleanQuery,
+              answer: exaData.answer,
+              sources: formattedSources,
+              provider: 'Exa AI Answer',
+              timestamp: new Date().toISOString()
+            });
+          }
+        } else {
+          const errText = await exaRes.text();
+          console.warn(`[AI Search] Exa /answer error (${exaRes.status}): ${errText}`);
+        }
+      } catch (exaErr) {
+        console.warn('[AI Search] Exa /answer failed:', exaErr.message);
+      }
+    }
+
+    // ── Step 2: Tavily + Gemini (fallback if Exa /answer failed) ──────────
     let sources = [];
     let contextText = '';
     let providerName = 'RealSSA AI';
 
-    // ── Step 1: Tavily (primary — best real-time web results) ──────────────
     const tavilyKey = process.env.TAVILY_API_KEY;
     if (tavilyKey) {
       try {
-        console.log(`[AI Search] Trying Tavily for: "${cleanQuery}"`);
+        console.log(`[AI Search] Fallback: Trying Tavily for: "${cleanQuery}"`);
         const tavilyRes = await fetch('https://api.tavily.com/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3426,40 +3473,15 @@ app.post('/api/search/ai', async (req, res) => {
             providerName = 'Tavily + RealSSA AI';
             console.log(`[AI Search] ✅ Tavily returned ${sources.length} results`);
           }
-        } else {
-          const errText = await tavilyRes.text();
-          console.warn(`[AI Search] Tavily error (${tavilyRes.status}): ${errText}`);
         }
       } catch (tavilyErr) {
         console.warn('[AI Search] Tavily failed:', tavilyErr.message);
       }
     }
 
-    // ── Step 2: Exa Neural Search (fallback if Tavily gave nothing) ────────
-    if (sources.length === 0 && process.env.EXA_API_KEY) {
-      try {
-        console.log(`[AI Search] Trying Exa for: "${cleanQuery}"`);
-        const { searchExa } = require('./services/exaSearchService');
-        const exaData = await searchExa(cleanQuery, { numResults: 8 });
-        if (exaData && exaData.results && exaData.results.length > 0) {
-          sources = exaData.results.map(r => ({
-            title: r.title,
-            url: r.url,
-            snippet: r.highlights || ''
-          }));
-          contextText = 'LIVE WEB SEARCH RESULTS (Exa Neural Search):\n' +
-            sources.map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`).join('\n\n');
-          providerName = 'Exa + RealSSA AI';
-          console.log(`[AI Search] ✅ Exa returned ${sources.length} results`);
-        }
-      } catch (exaErr) {
-        console.warn('[AI Search] Exa failed:', exaErr.message);
-      }
-    }
-
     // ── Step 3: Gemini Synthesis ───────────────────────────────────────────
     if (!contextText) {
-      console.log('[AI Search] No web results from Tavily or Exa. Returning null.');
+      console.log('[AI Search] No web results from Exa or Tavily. Returning null.');
       return res.status(200).json({ success: true, ai_overview: null });
     }
 
