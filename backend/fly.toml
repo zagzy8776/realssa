@@ -15,3 +15,12 @@ primary_region = "lhr"
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"
+
+[http_service]
+  internal_port = 5000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["web"]
+
