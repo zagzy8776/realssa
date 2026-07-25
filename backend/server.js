@@ -1842,129 +1842,153 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
       matchingJson = matchingJson.filter(a => !excludeList.includes(a.id));
     }
 
-    // 2. Try DB first (returns in <500ms)
+    // 2. Try DB first (returns in <500ms) - wrapped in try-catch for Neon database quota resilience
+    let dbSuccess = false;
+    let rssArticles = [];
+
     if (process.env.DATABASE_URL) {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 50;
-      const offset = (page - 1) * limit;
-
-      const catPlaceholders = cats.map((_, i) => `$${i + 1}`).join(', ');
-
-      let excludeClause = '';
-      let queryParams = [...cats];
-      if (excludeList.length > 0) {
-        const placeholders = excludeList.map((_, i) => `$${cats.length + i + 1}`).join(', ');
-        excludeClause = `AND 'rss-' || id NOT IN (${placeholders})`;
-        queryParams.push(...excludeList);
-      }
-
-      const targetCategoryPool = getPoolForCategory(cats[0] || category).pool;
-      let countResult;
       try {
-        countResult = await targetCategoryPool.query(
-          `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
-          queryParams
-        );
-      } catch (cErr) {
-        countResult = await queryMultiDb(
-          `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
-          queryParams
-        );
-      }
-      const total = parseInt(countResult.rows[0].count, 10);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const offset = (page - 1) * limit;
 
-      if (total >= 1) {
-        const limitParamIndex = queryParams.length + 1;
-        const offsetParamIndex = queryParams.length + 2;
+        const catPlaceholders = cats.map((_, i) => `$${i + 1}`).join(', ');
 
-        let dbResult;
+        let excludeClause = '';
+        let queryParams = [...cats];
+        if (excludeList.length > 0) {
+          const placeholders = excludeList.map((_, i) => `$${cats.length + i + 1}`).join(', ');
+          excludeClause = `AND 'rss-' || id NOT IN (${placeholders})`;
+          queryParams.push(...excludeList);
+        }
+
+        const targetCategoryPool = getPoolForCategory(cats[0] || category).pool;
+        let countResult;
         try {
-          dbResult = await targetCategoryPool.query(
-            `SELECT 'rss-' || a.id AS id,
-                    a.title,
-                    COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
-                    a.category, a.image, a.source_name AS author,
-                    a.external_link, a.published_at AS date, a.content_type,
-                    a.is_featured, '5 min read' AS read_time,
-                    a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
-             FROM rss_articles a
-             LEFT JOIN source_credibility c ON a.source_name = c.source_name
-             WHERE a.category IN (${catPlaceholders}) ${excludeClause}
-             ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
-             LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
-            [...queryParams, limit, offset]
+          countResult = await targetCategoryPool.query(
+            `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
+            queryParams
           );
-        } catch (dErr) {
-          dbResult = await queryMultiDb(
-            `SELECT 'rss-' || a.id AS id,
-                    a.title,
-                    COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
-                    a.category, a.image, a.source_name AS author,
-                    a.external_link, a.published_at AS date, a.content_type,
-                    a.is_featured, '5 min read' AS read_time,
-                    a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
-             FROM rss_articles a
-             LEFT JOIN source_credibility c ON a.source_name = c.source_name
-             WHERE a.category IN (${catPlaceholders}) ${excludeClause}
-             ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
-             LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
-            [...queryParams, limit, offset]
+        } catch (cErr) {
+          countResult = await queryMultiDb(
+            `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
+            queryParams
           );
         }
-        const rssArticles = dbResult.rows.map(r => ({
-          id: r.id, title: r.title, excerpt: r.excerpt,
-          category: r.category, image: r.image, author: r.author,
-          externalLink: r.external_link, date: r.date,
-          contentType: r.content_type, readTime: r.read_time,
-          isFeatured: r.is_featured, source: 'rss'
-        }));
+        const total = parseInt(countResult.rows[0].count, 10);
 
-        const adminArticles = page === 1 ? matchingJson : [];
-        const combined = [...adminArticles, ...rssArticles];
-        // Sort by date descending
-        combined.sort((a, b) => new Date(b.date || b.published_at).getTime() - new Date(a.date || a.published_at).getTime());
+        if (total >= 1) {
+          const limitParamIndex = queryParams.length + 1;
+          const offsetParamIndex = queryParams.length + 2;
 
-        // Paginate in memory
-        const paginated = combined.slice(0, limit);
+          let dbResult;
+          try {
+            dbResult = await targetCategoryPool.query(
+              `SELECT 'rss-' || a.id AS id,
+                      a.title,
+                      COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
+                      a.category, a.image, a.source_name AS author,
+                      a.external_link, a.published_at AS date, a.content_type,
+                      a.is_featured, '5 min read' AS read_time,
+                      a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
+               FROM rss_articles a
+               LEFT JOIN source_credibility c ON a.source_name = c.source_name
+               WHERE a.category IN (${catPlaceholders}) ${excludeClause}
+               ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
+               LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+              [...queryParams, limit, offset]
+            );
+          } catch (dErr) {
+            dbResult = await queryMultiDb(
+              `SELECT 'rss-' || a.id AS id,
+                      a.title,
+                      COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
+                      a.category, a.image, a.source_name AS author,
+                      a.external_link, a.published_at AS date, a.content_type,
+                      a.is_featured, '5 min read' AS read_time,
+                      a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
+               FROM rss_articles a
+               LEFT JOIN source_credibility c ON a.source_name = c.source_name
+               WHERE a.category IN (${catPlaceholders}) ${excludeClause}
+               ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
+               LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+              [...queryParams, limit, offset]
+            );
+          }
+          rssArticles = dbResult.rows.map(r => ({
+            id: r.id, title: r.title, excerpt: r.excerpt,
+            category: r.category, image: r.image, author: r.author,
+            externalLink: r.external_link, date: r.date,
+            contentType: r.content_type, readTime: r.read_time,
+            isFeatured: r.is_featured, source: 'rss'
+          }));
 
-        if (req.query.paginated === 'true') {
-          await enrichArticlesWithReactions(paginated, deviceId);
-          return res.json({
-            articles: paginated,
-            pagination: {
-              currentPage: page,
-              totalPages: Math.ceil(combined.length / limit),
-              totalItems: combined.length,
-              itemsPerPage: limit
-            }
-          });
+          const adminArticles = page === 1 ? matchingJson : [];
+          const combined = [...adminArticles, ...rssArticles];
+          // Sort by date descending
+          combined.sort((a, b) => new Date(b.date || b.published_at).getTime() - new Date(a.date || a.published_at).getTime());
+
+          // Paginate in memory
+          const paginated = combined.slice(0, limit);
+
+          // Try to enrich reactions if DB is healthy, else bypass silently
+          try {
+            await enrichArticlesWithReactions(paginated, deviceId);
+          } catch (reactErr) {
+            console.warn('⚠️ [Reactions] Failed to enrich reactions:', reactErr.message);
+          }
+
+          dbSuccess = true;
+
+          if (req.query.paginated === 'true') {
+            return res.json({
+              articles: paginated,
+              pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(combined.length / limit),
+                totalItems: combined.length,
+                itemsPerPage: limit
+              }
+            });
+          }
+          return res.json(paginated);
         }
-        await enrichArticlesWithReactions(paginated, deviceId);
-        return res.json(paginated);
+      } catch (dbError) {
+        console.warn(`⚠️ [DB-First Fetcher] Database failed for ${category} news (falling back to live RSS scraping):`, dbError.message);
       }
     }
 
-    // 3. Fallback: live RSS scraping (only if DB is empty)
-    console.log(`DB empty for [${cat}], falling back to live RSS (fetching max 3 feeds)...`);
-    const liveArticles = await fetchRSSFeeds(feedList.slice(0, 3));
-    let combined = [...matchingJson, ...liveArticles];
-    if (excludeList.length > 0) {
-      combined = combined.filter(a => !excludeList.includes(a.id));
-    }
-    combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // 3. Fallback: live RSS scraping (if DB is empty or has failed)
+    if (!dbSuccess) {
+      console.log(`DB empty or offline for [${cat}], falling back to live RSS (fetching max 3 feeds)...`);
+      const liveArticles = await fetchRSSFeeds(feedList.slice(0, 3));
+      let combined = [...matchingJson, ...liveArticles];
+      if (excludeList.length > 0) {
+        combined = combined.filter(a => !excludeList.includes(a.id));
+      }
+      combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    if (req.query.paginated === 'true') {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 50;
-      const slice = combined.slice((page - 1) * limit, page * limit);
-      await enrichArticlesWithReactions(slice, deviceId);
-      return res.json({
-        articles: slice,
-        pagination: { currentPage: page, totalPages: Math.ceil(combined.length / limit), totalItems: combined.length, itemsPerPage: limit }
-      });
+      if (req.query.paginated === 'true') {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const slice = combined.slice((page - 1) * limit, page * limit);
+        try {
+          await enrichArticlesWithReactions(slice, deviceId);
+        } catch (reactErr) {
+          console.warn('⚠️ [Reactions] Failed to enrich reactions:', reactErr.message);
+        }
+        return res.json({
+          articles: slice,
+          pagination: { currentPage: page, totalPages: Math.ceil(combined.length / limit), totalItems: combined.length, itemsPerPage: limit }
+        });
+      }
+      try {
+        await enrichArticlesWithReactions(combined, deviceId);
+      } catch (reactErr) {
+        console.warn('⚠️ [Reactions] Failed to enrich reactions:', reactErr.message);
+      }
+      return res.json(combined);
     }
-    await enrichArticlesWithReactions(combined, deviceId);
-    res.json(combined);
   } catch (error) {
     console.error(`Error fetching [${cat}] news:`, error.message);
     res.status(500).json({ error: `Failed to fetch ${category} news` });
