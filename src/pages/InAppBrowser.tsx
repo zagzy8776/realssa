@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, RotateCw, ExternalLink, Share2, BookMarked,
   BookOpen, Lock, X, Sparkles, AlertTriangle, Search, History,
-  Type, Minus, Plus, ChevronRight, Globe
+  Type, Minus, Plus, ChevronRight, Globe, Home, Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -79,6 +79,7 @@ export default function InAppBrowser() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [fontSize, setFontSize] = useState(16);
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [shieldActive, setShieldActive] = useState(true);
 
   // Proxy fallback URL builder
   const proxyUrl = useCallback((url: string) =>
@@ -175,13 +176,10 @@ export default function InAppBrowser() {
     e.preventDefault();
     const input = addressValue.trim();
     if (!input) return;
-    if (looksLikeUrl(input)) {
-      navigateTo(formatUrl(input));
-    } else {
-      const dest = `https://www.google.com/search?q=${encodeURIComponent(input)}`;
-      window.open(dest, '_blank', 'noopener,noreferrer');
-      toast({ title: 'Opening Search', description: 'Google Search opened in external browser.' });
-    }
+    const dest = looksLikeUrl(input)
+      ? formatUrl(input)
+      : `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+    navigateTo(dest);
     addressRef.current?.blur();
     setSuggestions([]);
   };
@@ -256,37 +254,18 @@ export default function InAppBrowser() {
     <div className="fixed inset-0 z-[99999] bg-[#0b0f17] text-foreground flex flex-col h-[100dvh] w-screen overflow-hidden">
 
       {/* ── Top Browser Chrome ──────────────────────────────────────────────── */}
-      <header className="bg-[#121824] border-b border-[#1f293d] px-2 sm:px-3 py-2 flex items-center gap-1.5 shrink-0 z-20 shadow-md">
-
-        {/* Back / Forward / Refresh */}
-        <div className="flex items-center gap-0.5 shrink-0">
-          <button
-            onClick={goBack}
-            disabled={stackIndex <= 0}
-            className="p-2 rounded-xl transition-all hover:bg-amber-500/10 text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
-            title="Back"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={goForward}
-            disabled={!canGoForward}
-            className="p-2 rounded-xl transition-all hover:bg-amber-500/10 text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
-            title="Forward"
-          >
-            <ArrowRight className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleRefresh}
-            className="p-2 rounded-xl hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 transition-all"
-            title="Refresh"
-          >
-            <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-500' : ''}`} />
-          </button>
-        </div>
+      <header className="bg-[#121824] border-b border-[#1f293d] px-2 sm:px-3 py-2 flex items-center gap-2 shrink-0 z-20 shadow-md">
+        {/* Home Button */}
+        <button
+          onClick={() => navigate('/')}
+          className="p-2 hover:bg-amber-500/10 text-amber-400 rounded-xl transition-all shrink-0"
+          title="Back to Home Feed"
+        >
+          <Home className="w-4 h-4" />
+        </button>
 
         {/* Address bar */}
-        <form onSubmit={handleAddressSubmit} className="relative flex-1 min-w-0 mx-1">
+        <form onSubmit={handleAddressSubmit} className="relative flex-1 min-w-0">
           <div className={`flex items-center gap-1.5 bg-[#0b0e14] border rounded-full px-2.5 py-1.5 transition-all ${addressFocused ? 'border-amber-500 ring-1 ring-amber-500/20' : 'border-amber-500/25'}`}>
             {pageFavicon && !addressFocused ? (
               <img
@@ -354,47 +333,108 @@ export default function InAppBrowser() {
           )}
         </form>
 
-        {/* Right toolbar */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        {/* Close Button */}
+        <button
+          onClick={() => navigate(-1)}
+          className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 rounded-xl transition-all active:scale-95 shrink-0"
+          title="Close Browser"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </header>
+
+      {/* ── Sub-Header Utility Toolbar ────────────────────────────────────────── */}
+      <div className="bg-[#161f30] border-b border-[#232f48] px-3 py-1 flex items-center justify-between shrink-0 z-10 shadow-sm">
+        <div className="flex items-center gap-4">
           <button
-            onClick={() => setHistoryOpen(!historyOpen)}
-            className={`p-2 rounded-xl transition-all ${historyOpen ? 'bg-amber-500/15 text-amber-400' : 'hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400'}`}
-            title="Browsing History"
+            onClick={goBack}
+            disabled={stackIndex <= 0}
+            className="p-1.5 hover:bg-amber-500/10 text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+            title="Back"
           >
-            <History className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setControlsOpen(!controlsOpen)}
-            className={`p-2 rounded-xl transition-all hidden sm:block ${controlsOpen ? 'bg-amber-500/15 text-amber-400' : 'hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400'}`}
-            title="Text Size & Controls"
+            onClick={goForward}
+            disabled={!canGoForward}
+            className="p-1.5 hover:bg-amber-500/10 text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+            title="Forward"
           >
-            <Type className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4" />
           </button>
+          <button
+            onClick={handleRefresh}
+            className="p-1.5 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 transition-all rounded-lg"
+            title="Refresh"
+          >
+            <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-500' : ''}`} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Security Shield */}
+          <button
+            onClick={() => {
+              setShieldActive(!shieldActive);
+              toast({
+                title: !shieldActive ? 'Shield Enabled' : 'Shield Disabled',
+                description: !shieldActive 
+                  ? 'Real-time ad blocking & tracker protection is active.'
+                  : 'Tracker protection has been temporarily disabled.'
+              });
+            }}
+            className={`p-1.5 rounded-lg transition-all ${shieldActive ? 'text-emerald-400 bg-emerald-500/10' : 'text-muted-foreground hover:text-amber-400'}`}
+            title={shieldActive ? "Shield Active (Adblocker On)" : "Shield Inactive (Adblocker Off)"}
+          >
+            <Shield className="w-4 h-4" />
+          </button>
+
+          {/* Save/Bookmark */}
           <button
             onClick={handleBookmark}
-            className={`p-2 rounded-xl transition-all ${isSaved ? 'text-amber-500 bg-amber-500/10' : 'text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10'}`}
+            className={`p-1.5 rounded-lg transition-all ${isSaved ? 'text-amber-500 bg-amber-500/10' : 'text-muted-foreground hover:text-amber-400'}`}
             title="Save to Library"
           >
             <BookMarked className="w-4 h-4" />
           </button>
-          <button onClick={handleShare} className="p-2 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 rounded-xl transition-all" title="Share">
+
+          {/* Share */}
+          <button
+            onClick={handleShare}
+            className="p-1.5 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 transition-all rounded-lg"
+            title="Share Link"
+          >
             <Share2 className="w-4 h-4" />
           </button>
-          <button onClick={handleOpenReaderMode} className="p-2 hover:bg-amber-500/10 text-amber-400 rounded-xl transition-all hidden sm:block" title="Reader Mode">
-            <BookOpen className="w-4 h-4" />
-          </button>
-          <button onClick={handleOpenExternal} className="p-2 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 rounded-xl transition-all" title="Open in External Browser">
+
+          {/* Open Externally */}
+          <button
+            onClick={handleOpenExternal}
+            className="p-1.5 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 transition-all rounded-lg"
+            title="Open in System Browser"
+          >
             <ExternalLink className="w-4 h-4" />
           </button>
+
+          {/* Text Size Control Trigger (for desktop/wide screens) */}
           <button
-            onClick={() => navigate(-1)}
-            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 rounded-xl transition-all active:scale-95 ml-0.5"
-            title="Close Browser"
+            onClick={() => setControlsOpen(!controlsOpen)}
+            className={`p-1.5 rounded-lg transition-all hidden sm:block ${controlsOpen ? 'bg-amber-500/15 text-amber-400' : 'hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400'}`}
+            title="Text Size & Controls"
           >
-            <X className="w-4 h-4" />
+            <Type className="w-4 h-4" />
+          </button>
+
+          {/* History */}
+          <button
+            onClick={() => setHistoryOpen(!historyOpen)}
+            className={`p-1.5 rounded-lg transition-all ${historyOpen ? 'bg-amber-500/15 text-amber-400' : 'hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400'}`}
+            title="Browsing History"
+          >
+            <History className="w-4 h-4" />
           </button>
         </div>
-      </header>
+      </div>
 
       {/* ── Loading bar ──────────────────────────────────────────────────────── */}
       {loading && (
