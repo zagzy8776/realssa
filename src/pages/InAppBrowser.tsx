@@ -175,10 +175,13 @@ export default function InAppBrowser() {
     e.preventDefault();
     const input = addressValue.trim();
     if (!input) return;
-    const dest = looksLikeUrl(input)
-      ? formatUrl(input)
-      : `https://www.google.com/search?q=${encodeURIComponent(input)}`;
-    navigateTo(dest);
+    if (looksLikeUrl(input)) {
+      navigateTo(formatUrl(input));
+    } else {
+      const dest = `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+      window.open(dest, '_blank', 'noopener,noreferrer');
+      toast({ title: 'Opening Search', description: 'Google Search opened in external browser.' });
+    }
     addressRef.current?.blur();
     setSuggestions([]);
   };

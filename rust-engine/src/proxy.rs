@@ -75,9 +75,6 @@ pub async fn proxy_page(url: &str) -> Result<String> {
         .send()
         .await?;
 
-    if !resp.status().is_success() {
-        return Err(anyhow!("upstream {} returned {}", url, resp.status()));
-    }
 
     let content_type = resp
         .headers()
