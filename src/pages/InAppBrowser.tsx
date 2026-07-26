@@ -70,6 +70,7 @@ export default function InAppBrowser() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // ── Address bar ─────────────────────────────────────────────────────────────
+  const [addressValue, setAddressValue] = useState(initialUrl);
   const [addressFocused, setAddressFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<{ url: string; title: string; isSearch?: boolean }[]>([]);
   const addressRef = useRef<HTMLInputElement>(null);
