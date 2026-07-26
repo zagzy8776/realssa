@@ -3446,6 +3446,26 @@ app.get('/api/render-page', async (req, res) => {
   }
 });
 
+// --- RealSSA Autocomplete Proxy (Bypasses CORS restrictions on mobile client) ---
+app.get('/api/autocomplete', async (req, res) => {
+  const { q } = req.query;
+  if (!q || typeof q !== 'string') {
+    return res.json([]);
+  }
+
+  try {
+    const response = await fetch(`https://ac.duckduckgo.com/ac/?q=${encodeURIComponent(q)}&type=list`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    if (!response.ok) throw new Error('DuckDuckGo Autocomplete failed');
+    const data = await response.json();
+    return res.json(data);
+  } catch (err) {
+    console.error('[Autocomplete Error]:', err.message);
+    return res.json([q, []]);
+  }
+});
+
 // --- RealSSA Web Search Endpoint (Tavily/Exa Web Search with SQL Caching & prefetching) ---
 
 app.post('/api/search/ai', async (req, res) => {

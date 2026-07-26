@@ -35,6 +35,7 @@ function formatUrl(raw: string): string {
   if (!raw) return '';
   let t = raw.trim();
   if (t.startsWith('/read?url=')) t = decodeURIComponent(t.replace('/read?url=', ''));
+  if (t.startsWith('realssa://')) return t;
   if (!/^https?:\/\//i.test(t)) t = `https://${t}`;
   return t;
 }
@@ -252,8 +253,8 @@ export default function InAppBrowser() {
       .map(h => ({ url: h.url, title: h.title, isSearch: false }))
       .slice(0, 3);
 
-    // 2. Fetch live suggestions from DuckDuckGo autocomplete API
-    fetch(`https://ac.duckduckgo.com/ac/?q=${encodeURIComponent(val)}&type=list`)
+    // 2. Fetch live suggestions from our backend autocomplete proxy API (CORS-safe)
+    fetch(`${API_BASE_URL}/api/autocomplete?q=${encodeURIComponent(val)}`)
       .then(res => res.json())
       .then((data: any) => {
         if (Array.isArray(data) && Array.isArray(data[1])) {

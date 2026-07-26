@@ -100,8 +100,8 @@ const Header = () => {
       console.error(e);
     }
 
-    // 2. Fetch live suggestions from DuckDuckGo autocomplete API
-    fetch(`https://ac.duckduckgo.com/ac/?q=${encodeURIComponent(val)}&type=list`)
+    // 2. Fetch live suggestions from our backend autocomplete proxy API (CORS-safe)
+    fetch(apiUrl(`/api/autocomplete?q=${encodeURIComponent(val)}`))
       .then(res => res.json())
       .then((data: any) => {
         if (data && Array.isArray(data[1])) {
