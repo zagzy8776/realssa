@@ -13,12 +13,12 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
       return;
     }
     
-    // Phase 0: Fades in background & Star
-    const timer1 = setTimeout(() => setPhase(1), 500);
-    // Phase 1: Giant Gold R Entrance
-    const timer2 = setTimeout(() => setPhase(2), 1100);
-    // Phase 2: Drag reveal EALSSA
-    const timer3 = setTimeout(() => setPhase(3), 1900);
+    // Phase 0: Fades in background & Star (800ms)
+    const timer1 = setTimeout(() => setPhase(1), 800);
+    // Phase 1: Giant Gold R Entrance (1400ms duration)
+    const timer2 = setTimeout(() => setPhase(2), 2200);
+    // Phase 2: Drag reveal EALSSA (2000ms duration)
+    const timer3 = setTimeout(() => setPhase(3), 4200);
 
     return () => {
       clearTimeout(timer1);
@@ -129,9 +129,6 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
           transitionDuration: "1000ms"
         }}
       >
-        {/* Colorful Glow Aura behind the star */}
-        <div className="absolute w-48 h-48 rounded-full bg-gradient-to-r from-amber-500/20 via-sky-500/10 to-purple-500/15 blur-3xl opacity-80" />
-
         <svg 
           width="120" 
           height="120" 
@@ -195,7 +192,7 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
               backgroundImage: "linear-gradient(135deg, #bf953f 0%, #fcf6ba 25%, #b38728 50%, #fbf5b7 75%, #aa771c 100%)",
               textShadow: phase >= 3 ? `${-tilt.x * 12}px ${-tilt.y * 12}px 24px rgba(251,191,36,0.5)` : "0 0 40px rgba(251,191,36,0.6)",
               fontFamily: '"Inter", "Arial Black", sans-serif',
-              transitionDuration: "750ms"
+              transitionDuration: "1400ms"
             }}
           >
             R
@@ -203,29 +200,32 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
 
           {/* Draggable reveal container for "EALSSA" */}
           <div
-            className={cn(
-              "flex items-center overflow-hidden transition-all ease-out-back text-left",
-              phase >= 2 ? "w-[270px] md:w-[360px] opacity-100" : "w-0 opacity-0"
-            )}
+            className="reveal-grid overflow-hidden transition-all ease-out-back text-left"
             style={{
-              transitionDuration: "800ms"
+              display: "grid",
+              gridTemplateColumns: phase >= 2 ? "1fr" : "0fr",
+              transitionDuration: "2000ms",
+              transitionProperty: "grid-template-columns, opacity",
+              opacity: phase >= 2 ? 1 : 0
             }}
           >
-            <span
-              className={cn(
-                "font-black text-[72px] md:text-[98px] leading-none select-none text-transparent bg-clip-text tracking-wide whitespace-nowrap pl-1",
-                phase >= 3 ? "animate-shine-sweep" : ""
-              )}
-              style={{
-                backgroundImage: "linear-gradient(135deg, #bf953f 0%, #fcf6ba 25%, #b38728 50%, #fbf5b7 75%, #aa771c 100%)",
-                backgroundSize: "200% auto",
-                backgroundPosition: phase >= 3 ? `${50 + tilt.x * 50}% center` : "-100% center",
-                textShadow: phase >= 3 ? `${-tilt.x * 12}px ${-tilt.y * 12}px 24px rgba(251,191,36,0.5)` : "0 0 40px rgba(251,191,36,0.4)",
-                fontFamily: '"Inter", "Arial Black", sans-serif',
-              }}
-            >
-              EALSSA
-            </span>
+            <div className="overflow-hidden min-w-0">
+              <span
+                className={cn(
+                  "font-black text-[72px] md:text-[98px] leading-none select-none text-transparent bg-clip-text tracking-wide whitespace-nowrap pl-1 block",
+                  phase >= 3 ? "animate-shine-sweep" : ""
+                )}
+                style={{
+                  backgroundImage: "linear-gradient(135deg, #bf953f 0%, #fcf6ba 25%, #b38728 50%, #fbf5b7 75%, #aa771c 100%)",
+                  backgroundSize: "200% auto",
+                  backgroundPosition: phase >= 3 ? `${50 + tilt.x * 50}% center` : "-100% center",
+                  textShadow: phase >= 3 ? `${-tilt.x * 12}px ${-tilt.y * 12}px 24px rgba(251,191,36,0.5)` : "0 0 40px rgba(251,191,36,0.4)",
+                  fontFamily: '"Inter", "Arial Black", sans-serif',
+                }}
+              >
+                EALSSA
+              </span>
+            </div>
           </div>
 
         </div>
