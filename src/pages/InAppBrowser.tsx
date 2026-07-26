@@ -11,6 +11,7 @@ import { shareContent } from '@/lib/share';
 import { saveOfflineArticle } from '@/lib/ReadingListStore';
 import { API_BASE_URL, apiUrl, RUST_ENGINE_URL } from '@/lib/api-base';
 import RealSSARenderer, { PageData } from '@/components/RealSSARenderer';
+import SEO from '@/components/SEO';
 
 // ─── History persistence in localStorage ─────────────────────────────────────
 const HISTORY_KEY = 'realssa_browser_history';
@@ -626,6 +627,20 @@ export default function InAppBrowser() {
         </div>
       )}
 
+      {currentUrl.startsWith('realssa://search?q=') && (
+        <SEO
+          title={aiOverview?.title ? `${aiOverview.title} — AI Overview` : `Search Insights`}
+          description={aiOverview?.summary || `Search results and synthesis for: ${decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))}`}
+          claimReview={aiOverview?.disputed ? {
+            claimReviewed: `Contradictions or conflicting facts in coverage of: ${aiOverview.title}`,
+            claimantName: aiOverview.title,
+            ratingValue: 3,
+            alternateName: "Disputed range",
+            description: aiOverview.discrepancyDescription || "Conflicting reports detected between different news sources."
+          } : undefined}
+        />
+      )}
+
       {/* ── Main Content Area ──────────────────────────────────────────────────── */}
       <main
         data-browser-scroll
@@ -722,6 +737,27 @@ export default function InAppBrowser() {
                         <h3 className="text-xl font-bold text-foreground">{aiOverview.title}</h3>
                         {aiOverview.subtitle && <p className="text-sm text-amber-400 font-semibold mt-0.5">{aiOverview.subtitle}</p>}
                         <p className="text-sm text-muted-foreground mt-4 leading-relaxed font-normal">{aiOverview.summary}</p>
+
+                        {/* Uncertainty variance visual meter */}
+                        {aiOverview.disputed && (
+                          <div className="mt-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-300 flex flex-col gap-2.5">
+                            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                              <AlertTriangle className="w-4 h-4 text-amber-500" /> Conflicting Local Reports
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {aiOverview.discrepancyDescription || "Different local sources are reporting conflicting quantities or outcomes for this event."}
+                            </p>
+                            <div className="mt-1 flex flex-col gap-1">
+                              <div className="flex justify-between text-[10px] text-muted-foreground font-semibold">
+                                <span>Consensus</span>
+                                <span>High Variance</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden relative">
+                                <div className="absolute right-0 top-0 bottom-0 left-1/3 bg-gradient-to-r from-amber-500 to-red-500 rounded-full" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 

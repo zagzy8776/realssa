@@ -1,5 +1,13 @@
 import { Helmet } from 'react-helmet-async';
 
+interface ClaimReviewData {
+  claimReviewed: string;
+  claimantName?: string;
+  ratingValue: number;
+  alternateName: string;
+  description: string;
+}
+
 interface SEOProps {
   title: string;
   description: string;
@@ -12,6 +20,7 @@ interface SEOProps {
   modifiedTime?: string;
   section?: string;
   tags?: string[];
+  claimReview?: ClaimReviewData;
 }
 
 const SITE_URL = 'https://www.realssanews.com.ng';
@@ -61,6 +70,7 @@ const SEO = ({
   modifiedTime,
   section,
   tags = [],
+  claimReview,
 }: SEOProps) => {
   // Always prefix with brand for branded search
   const pageTitle = title.includes('RealSSA') ? title : `${title} | ${SITE_NAME}`;
@@ -188,6 +198,31 @@ const SEO = ({
     ]
   } : null;
 
+  const claimReviewSchema = claimReview ? {
+    '@context': 'https://schema.org',
+    '@type': 'ClaimReview',
+    'datePublished': publishedTime || new Date().toISOString(),
+    'url': canonicalUrl,
+    'claimReviewed': claimReview.claimReviewed,
+    'author': {
+      '@type': 'Organization',
+      'name': SITE_NAME,
+      'url': SITE_URL
+    },
+    'claimant': claimReview.claimantName ? {
+      '@type': 'Organization',
+      'name': claimReview.claimantName
+    } : undefined,
+    'reviewRating': {
+      '@type': 'Rating',
+      'ratingValue': claimReview.ratingValue.toString(),
+      'bestRating': '5',
+      'worstRating': '1',
+      'alternateName': claimReview.alternateName,
+      'description': claimReview.description
+    }
+  } : null;
+
   return (
     <Helmet>
       {/* ── Primary meta ── */}
@@ -255,6 +290,11 @@ const SEO = ({
       {breadcrumbSchema && (
         <script type="application/ld+json">
           {JSON.stringify(breadcrumbSchema)}
+        </script>
+      )}
+      {claimReviewSchema && (
+        <script type="application/ld+json">
+          {JSON.stringify(claimReviewSchema)}
         </script>
       )}
     </Helmet>
