@@ -39,12 +39,7 @@ const DEFAULT_KEYWORDS =
   'best news channel in nigeria, best news websites in nigeria, top news site in nigeria, ' +
   'best online news in nigeria, best news platform in nigeria, top news in nigeria today, ' +
   'top trending news in nigeria today, top political news in nigeria today, top news headlines in nigeria today, ' +
-  'top breaking news in nigeria today, top business news in nigeria today, news12, news 12 nj, ' +
-  'news 12 long island, newsday, newsmax, news 12 westchester, news new jersey, news clifton nj, ' +
-  'news12nj, news12 long island, news12 westchester, news12li, news12 weather, news12ct, news12 new jersey, ' +
-  'news12 bronx, news12 brooklyn, news today new jersey, news today nyc, news today fox, news today nj, ' +
-  'news today headlines, news 12 nj breaking news today, news 12 long island weather, newsday long island, ' +
-  'newsmax news, newsmax live, clifton news nj today, breaking news clifton nj today, ' +
+  'top breaking news in nigeria today, top business news in nigeria today, ' +
   'today news in nigeria headlines, today news in nigeria newspapers, today news in nigeria now, ' +
   'today news in nigeria 2026, today news in nigeria headlines 2026, today news in nigeria punch, ' +
   'today news in nigeria video, today news in nigeria headlines politics, latest news in nigeria headlines, ' +
