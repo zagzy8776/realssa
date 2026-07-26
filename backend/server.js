@@ -4187,7 +4187,7 @@ app.get('/api/search/ai', async (req, res) => {
   }
 
   // Generate AI Overview using Gemini
-  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
   const prompt = `You are a helpful research assistant. Synthesize the search results for the query "${cleanQuery}" and return a structured JSON object representing an AI Overview.
   The JSON object MUST follow this exact schema:
   {
