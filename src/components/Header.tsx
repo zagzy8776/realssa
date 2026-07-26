@@ -388,83 +388,17 @@ const Header = () => {
             </div>
           )}
 
-          {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-6">
-            {visibleNavLinks.map((link) => (
-              <Link
-                key={link.href}
-                to={link.href}
-                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors duration-200"
-              >
-                {link.label}
-              </Link>
-            ))}
-
-            {/* Admin Logout Button - Desktop */}
-            {isAdmin && (
-              <button
-                onClick={handleLogout}
-                className="text-sm font-medium text-muted-foreground hover:text-destructive transition-colors duration-200 flex items-center gap-2"
-              >
-                <LogOut size={16} /> Logout
-              </button>
-            )}
-
-            {/* Library Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-primary transition-colors duration-200">
-                Library <ChevronDown size={14} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {libraryLinks.map((link) => (
-                  <DropdownMenuItem key={link.href} asChild>
-                    <Link to={link.href} className="cursor-pointer">
-                      {link.label}
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </nav>
-
-            {/* Regions Dropdown — desktop */}
-            <div className="hidden lg:block">
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-primary transition-colors duration-200">
-                  Regions <ChevronDown size={14} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-52 max-h-[60vh] overflow-y-auto">
-                  {visibleRegionsLinks.map((link) => (
-                    <DropdownMenuItem key={link.href} asChild>
-                      <Link to={link.href} className="cursor-pointer">
-                        {link.label}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            {/* Desktop-only controls */}
-            <div className="hidden lg:flex items-center gap-3 ml-4">
-              <InviteButton />
-              <div className="flex items-center gap-1 border-l border-border pl-3">
-                <DarkModeToggle />
-                <PushNotificationManager iconOnly={true} />
-              </div>
-            </div>
-
-            {/* Mobile-only controls */}
-            <div className="lg:hidden flex items-center gap-1 ml-1">
-              <InviteButton variant="icon" />
-              <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2.5 text-foreground rounded-lg hover:bg-muted transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                aria-label="Toggle menu"
-              >
-                {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
-              </button>
-            </div>
+          {/* Header Action Controls (Streak, Weather, Invite, Hamburger Menu) */}
+          <div className="flex items-center gap-1.5 md:gap-2.5 ml-1 shrink-0">
+            <InviteButton variant="icon" />
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2.5 text-foreground rounded-lg hover:bg-muted transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer"
+              aria-label="Toggle menu"
+            >
+              {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
         </div>
 
         {/* Integrated RealSSA Search Bar Gateway */}
@@ -496,7 +430,6 @@ const Header = () => {
                 }}
                 onFocus={() => setIsSearchFocused(true)}
                 onBlur={() => {
-                  // Wait slightly so suggestion clicks go through before blur hides the dropdown
                   setTimeout(() => setIsSearchFocused(false), 200);
                 }}
                 className="flex-1 bg-transparent border-none text-xs md:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none py-1.5"
@@ -554,46 +487,56 @@ const Header = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation - Slide-out style */}
+        {/* Universal Navigation Drawer - Sleek Slide-out style */}
         <nav
           className={cn(
-            "lg:hidden transition-all duration-300 ease-in-out fixed inset-x-0 bottom-0 top-[136px] md:top-[160px] bg-background z-[9999] opacity-100",
-            isMenuOpen ? "max-h-[calc(100vh-136px)] overflow-y-auto pb-24 opacity-100 custom-scrollbar block" : "max-h-0 overflow-hidden opacity-0 hidden"
+            "transition-all duration-300 ease-in-out fixed right-0 bottom-0 top-14 md:top-20 bg-background/97 backdrop-blur-md border-l border-border z-[9999] w-full sm:w-80 shadow-2xl flex flex-col opacity-100",
+            isMenuOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
           )}
         >
+          <div className="flex-1 overflow-y-auto pb-24 custom-scrollbar flex flex-col gap-1 p-2">
+            
+            {/* Extended Weather Widget inside Drawer (Desktop/Tablet detail) */}
+            <div className="px-4 py-3 border-b border-border/40 mb-2">
+              <WeatherWidget />
+            </div>
 
-          <div className="flex flex-col gap-1">
-            {/* Main Navigation Links - Larger touch targets */}
+            {/* Main Navigation Links */}
             {visibleNavLinks.map((link) => (
               <Link
                 key={link.href}
                 to={link.href}
                 onClick={() => setIsMenuOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all duration-200",
+                  "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
                   "text-muted-foreground hover:text-primary hover:bg-muted",
                   "active:scale-[0.98] active:bg-muted/80"
                 )}
               >
-                {link.icon && <link.icon size={18} />}
                 <span>{link.label}</span>
               </Link>
             ))}
 
-            {/* Admin Logout Button - Mobile */}
-            {isAdmin && (
-              <button
-                onClick={handleLogout}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all duration-200",
-                  "text-muted-foreground hover:text-destructive hover:bg-muted",
-                  "active:scale-[0.98] active:bg-muted/80"
-                )}
-              >
-                <LogOut size={18} />
-                <span>Logout</span>
-              </button>
-            )}
+            {/* Regions Section */}
+            <div className="px-4 py-2 mt-2 border-t border-border/50">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Regions</p>
+              <div className="flex flex-col gap-1">
+                {visibleRegionsLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    to={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
+                      "text-muted-foreground hover:text-primary hover:bg-muted",
+                      "active:scale-[0.98] active:bg-muted/80"
+                    )}
+                  >
+                    <span>{link.label}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
 
             {/* Library Section */}
             <div className="px-4 py-2 mt-2 border-t border-border/50">
@@ -605,28 +548,42 @@ const Header = () => {
                     to={link.href}
                     onClick={() => setIsMenuOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200",
+                      "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
                       "text-muted-foreground hover:text-primary hover:bg-muted",
                       "active:scale-[0.98] active:bg-muted/80"
                     )}
                   >
-                    <Globe size={16} />
                     <span>{link.label}</span>
                   </Link>
                 ))}
               </div>
             </div>
 
+            {/* Admin Logout Button - Drawer */}
+            {isAdmin && (
+              <button
+                onClick={handleLogout}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
+                  "text-muted-foreground hover:text-destructive hover:bg-muted",
+                  "active:scale-[0.98] active:bg-muted/80"
+                )}
+              >
+                <LogOut size={18} />
+                <span>Logout</span>
+              </button>
+            )}
+
             {/* Settings Section */}
             <div className="px-4 py-3 mt-1 border-t border-border/50 pb-8">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Settings</p>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Appearance</span>
+                  <span className="text-sm font-medium text-muted-foreground">Appearance</span>
                   <DarkModeToggle />
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Push Notifications</span>
+                  <span className="text-sm font-medium text-muted-foreground">Push Notifications</span>
                   <PushNotificationManager iconOnly={false} />
                 </div>
               </div>
