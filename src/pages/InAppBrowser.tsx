@@ -222,6 +222,23 @@ export default function InAppBrowser() {
   const navigateTo = useCallback((url: string) => {
     const formatted = formatUrl(url);
     if (!formatted || formatted === currentUrl) return;
+
+    // Open betting and social media sites in the native system browser/tab (preserves CORS, WebSockets, & cookies)
+    const NATIVE_DOMAINS = [
+      'sportybet.com', 'bet9ja.com', 'betking.com', '1xbet.com', 'betway.com',
+      'facebook.com', 'instagram.com', 'tiktok.com', 'twitter.com', 'x.com'
+    ];
+    try {
+      const hostname = new URL(formatted).hostname.toLowerCase();
+      const isNative = NATIVE_DOMAINS.some(domain => hostname.includes(domain));
+      if (isNative) {
+        window.open(formatted, '_system');
+        return;
+      }
+    } catch {
+      // ignore parsing errors
+    }
+
     setStack(prev => [...prev.slice(0, stackIndex + 1), formatted]);
     setStackIndex(prev => prev + 1);
     loadUrl(formatted);
