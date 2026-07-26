@@ -4140,68 +4140,117 @@ app.get('/api/search/ai', async (req, res) => {
     });
   }
 
-  // Get search results first to give context to Gemini
-  let searchResults = [];
-  try {
-    // Try to get from search_cache
-    const cacheRes = await pool.query(
-      `SELECT results_json FROM search_cache WHERE query = $1`,
-      [cleanQuery.toLowerCase()]
-    );
-    if (cacheRes.rows.length > 0) {
-      searchResults = cacheRes.rows[0].results_json;
-    }
-  } catch (err) {
-    console.warn('Cache fetch failed:', err.message);
-  }
+  // 1. Parallel Task: Search Wikipedia for the best matching page details
+  let wikiDetails = null;
+  const fetchWiki = (async () => {
+    try {
+      // Step A: Search for the best Wikipedia title match
+      const searchRes = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQuery)}&format=json&srlimit=1`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (!searchRes.ok) return;
+      const searchData = await searchRes.json();
+      const title = searchData?.query?.search?.[0]?.title;
+      if (!title) return;
 
-  if (!searchResults || searchResults.length === 0) {
-    // Fetch directly from Tavily if cache miss
-    const tavilyKey = process.env.TAVILY_API_KEY;
-    if (tavilyKey) {
-      try {
-        const response = await fetch('https://api.tavily.com/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            api_key: tavilyKey,
-            query: cleanQuery,
-            search_depth: "basic",
-            max_results: 5
-          })
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.results) {
-            searchResults = data.results.map(r => ({
-              title: r.title,
-              url: r.url,
-              snippet: r.content
-            }));
+      // Step B: Fetch page portrait and intro description
+      const pageRes = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages|extracts&exintro&explaintext&format=json&piprop=original&titles=${encodeURIComponent(title)}&redirects=1`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (!pageRes.ok) return;
+      const pageData = await pageRes.json();
+      const pages = pageData?.query?.pages;
+      if (!pages) return;
+      const pageId = Object.keys(pages)[0];
+      const page = pages[pageId];
+      if (pageId === '-1' || !page) return;
+
+      wikiDetails = {
+        title: page.title,
+        imageUrl: page.original?.source || null,
+        wikiExtract: page.extract || null
+      };
+    } catch (wikiErr) {
+      console.warn('⚠️ [Wikipedia API] Error:', wikiErr.message);
+    }
+  })();
+
+  // 2. Parallel Task: Get Tavily/Exa search results (read cache or query APIs)
+  let searchResults = [];
+  const fetchSearch = (async () => {
+    try {
+      // Try to get from search_cache
+      const cacheRes = await pool.query(
+        `SELECT results_json FROM search_cache WHERE query = $1`,
+        [cleanQuery.toLowerCase()]
+      );
+      if (cacheRes.rows.length > 0) {
+        searchResults = cacheRes.rows[0].results_json;
+      }
+    } catch (err) {
+      console.warn('Cache fetch failed:', err.message);
+    }
+
+    if (!searchResults || searchResults.length === 0) {
+      // Fetch directly from Tavily if cache miss
+      const tavilyKey = process.env.TAVILY_API_KEY;
+      if (tavilyKey) {
+        try {
+          const response = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: tavilyKey,
+              query: cleanQuery,
+              search_depth: "basic",
+              max_results: 5
+            })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.results) {
+              searchResults = data.results.map(r => ({
+                title: r.title,
+                url: r.url,
+                snippet: r.content
+              }));
+            }
           }
+        } catch (err) {
+          console.warn('Direct search fetch failed:', err.message);
         }
-      } catch (err) {
-        console.warn('Direct search fetch failed:', err.message);
       }
     }
-  }
+  })();
 
-  // Generate AI Overview using Gemini
+  // Wait for both parallel fetches to finish
+  await Promise.allSettled([fetchWiki, fetchSearch]);
+
+  // Generate AI Overview using Gemini 3.1 Flash-Lite
   const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
-  const prompt = `You are a helpful research assistant. Synthesize the search results for the query "${cleanQuery}" and return a structured JSON object representing an AI Overview.
+  const prompt = `You are a helpful research assistant. Synthesize the search results and Wikipedia context for the query "${cleanQuery}" and return a structured JSON object representing an AI Overview.
   The JSON object MUST follow this exact schema:
   {
     "title": "Main title / Entity name (e.g. Asiwaju Bola Ahmed Tinubu)",
     "subtitle": "Role / Subtitle (e.g. President of Nigeria)",
     "summary": "A 2-3 sentence clear summary explaining the entity or answering the query.",
-    "imageUrl": "Find a relevant, public, stable image URL from the search results or wikipedia if mentioned, or return null.",
+    "imageUrl": "Use this URL: ${wikiDetails?.imageUrl || 'null'}. If it is null, search the search results context below for any valid public image URL or return null.",
     "facts": [
-      { "label": "Fact Label (e.g. Age)", "value": "Fact Value (e.g. 74 years)", "extra": "Optional extra info (e.g. Born 29 March 1952)" },
-      { "label": "Key Fact Label", "value": "Key Fact Value" }
+      { "label": "Born / Date of Birth", "value": "Fact Value (e.g. 29 March 1952)", "extra": "Optional place of birth (e.g. Lagos, Nigeria)" },
+      { "label": "Spouse", "value": "Spouse name", "extra": "e.g. Married since 1987" },
+      { "label": "Children", "value": "Names of children" },
+      { "label": "Education", "value": "Schools / Degrees" },
+      { "label": "Political Party", "value": "Party name" },
+      { "label": "Offices / Former roles", "value": "Key positions held" }
     ]
   }
   
   Do not include markdown formatting, backticks, or introductions. Return ONLY raw JSON.
+
+  Wikipedia Context:
+  ${wikiDetails?.wikiExtract || 'None'}
 
   Search results context:
   ${JSON.stringify((searchResults || []).slice(0, 5))}
@@ -4231,16 +4280,26 @@ app.get('/api/search/ai', async (req, res) => {
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     const aiOverview = JSON.parse(rawText);
 
+    // If Gemini failed to extract a title or subtitle, fall back to Wikipedia's page details
+    if (!aiOverview.title || aiOverview.title === 'null') {
+      aiOverview.title = wikiDetails?.title || cleanQuery;
+    }
+    if (!aiOverview.imageUrl || aiOverview.imageUrl === 'null') {
+      aiOverview.imageUrl = wikiDetails?.imageUrl || null;
+    }
+
     return res.status(200).json({ success: true, aiOverview });
   } catch (err) {
     console.error('AI synthesis failed:', err.message);
     return res.status(200).json({
       success: true,
       aiOverview: {
-        title: cleanQuery,
+        title: wikiDetails?.title || cleanQuery,
         subtitle: "Search Insights",
-        summary: `No AI Summary could be generated at this moment. You can view the web search results below.`,
-        imageUrl: null,
+        summary: wikiDetails?.wikiExtract 
+          ? `${wikiDetails.wikiExtract.substring(0, 300)}...`
+          : `No AI Summary could be generated at this moment. You can view the web search results below.`,
+        imageUrl: wikiDetails?.imageUrl || null,
         facts: []
       }
     });
