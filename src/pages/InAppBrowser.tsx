@@ -88,6 +88,9 @@ export default function InAppBrowser() {
   const [searchOffset, setSearchOffset] = useState(0);
   const [searchHasMore, setSearchHasMore] = useState(true);
   const searchLimit = 12;
+  const [aiOverview, setAiOverview] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [activeSearchTab, setActiveSearchTab] = useState<'all' | 'ai'>('all');
 
   // Proxy fallback URL builder
   const proxyUrl = useCallback((url: string) =>
@@ -162,6 +165,22 @@ export default function InAppBrowser() {
     }
   }, [toast]);
 
+  const fetchAiOverview = useCallback(async (query: string) => {
+    setAiLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/search/ai?q=${encodeURIComponent(query)}`);
+      if (!res.ok) throw new Error('AI Overview failed');
+      const data = await res.json();
+      if (data.success && data.aiOverview) {
+        setAiOverview(data.aiOverview);
+      }
+    } catch (err) {
+      console.error('Failed to fetch AI Overview:', err);
+    } finally {
+      setAiLoading(false);
+    }
+  }, []);
+
   // ── Trigger search results load on URI navigation ──────────────────────────
   useEffect(() => {
     if (currentUrl.startsWith('realssa://search?q=')) {
@@ -169,9 +188,12 @@ export default function InAppBrowser() {
       setSearchResults([]);
       setSearchOffset(0);
       setSearchHasMore(true);
+      setAiOverview(null);
+      setActiveSearchTab('all');
       fetchSearchResults(q, 0);
+      fetchAiOverview(q);
     }
-  }, [currentUrl, fetchSearchResults]);
+  }, [currentUrl, fetchSearchResults, fetchAiOverview]);
 
   const handleLoadMoreSearch = () => {
     const q = decodeURIComponent(currentUrl.replace('realssa://search?q=', ''));
@@ -632,84 +654,203 @@ export default function InAppBrowser() {
                   Semantic results for: <span className="text-foreground font-medium italic">"{decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))}"</span>
                 </p>
               </div>
-              {searchLoading && (
+              {(searchLoading || aiLoading) && (
                 <div className="w-4 h-4 border border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
               )}
             </div>
 
-            {/* Native Intent Widgets (e.g. Currency Rates) */}
-            {/naira|cbn|usd|black.*market|rate/i.test(decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))) && (
-              <div className="mb-6 p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl shadow-lg animate-in slide-in-from-top-2 duration-300">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                     💰 Currency Parallel Rates (Naira Black Market)
-                  </span>
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">Live</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
-                    <div className="text-[10px] text-muted-foreground uppercase">USD</div>
-                    <div className="text-xs font-bold text-foreground mt-0.5">1,640 / 1,650</div>
+            {/* Tab selector */}
+            <div className="flex gap-2 mb-6 pb-2 border-b border-white/5 shrink-0">
+              <button
+                onClick={() => setActiveSearchTab('all')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  activeSearchTab === 'all'
+                    ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
+                    : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                }`}
+              >
+                All Web Results
+              </button>
+              <button
+                onClick={() => setActiveSearchTab('ai')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  activeSearchTab === 'ai'
+                    ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
+                    : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" /> RealSSA AI Mode
+              </button>
+            </div>
+
+            {/* AI Mode Full Screen Content */}
+            {activeSearchTab === 'ai' && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl animate-in fade-in duration-300">
+                {aiLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <div className="w-8 h-8 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-3" />
+                    <p className="text-xs text-muted-foreground">RealSSA AI is synthesizing search results...</p>
                   </div>
-                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
-                    <div className="text-[10px] text-muted-foreground uppercase">GBP</div>
-                    <div className="text-xs font-bold text-foreground mt-0.5">2,080 / 2,100</div>
+                ) : aiOverview ? (
+                  <div>
+                    <div className="flex flex-col md:flex-row gap-6 mb-6">
+                      {aiOverview.imageUrl && (
+                        <img
+                          src={aiOverview.imageUrl}
+                          alt={aiOverview.title}
+                          className="w-full md:w-48 h-48 object-cover rounded-xl border border-white/10 shadow-md bg-white/5"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-foreground">{aiOverview.title}</h3>
+                        {aiOverview.subtitle && <p className="text-sm text-amber-400 font-semibold mt-0.5">{aiOverview.subtitle}</p>}
+                        <p className="text-sm text-muted-foreground mt-4 leading-relaxed font-normal">{aiOverview.summary}</p>
+                      </div>
+                    </div>
+
+                    {aiOverview.facts && aiOverview.facts.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6 pt-6 border-t border-white/5">
+                        {aiOverview.facts.map((f: any, idx: number) => (
+                          <div key={idx} className="bg-black/30 p-4 rounded-xl border border-white/5">
+                            <div className="text-[10px] text-amber-500/70 font-semibold uppercase tracking-wider">{f.label}</div>
+                            <div className="text-sm font-bold text-foreground mt-1">{f.value}</div>
+                            {f.extra && <div className="text-[11px] text-muted-foreground mt-0.5">{f.extra}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
-                    <div className="text-[10px] text-muted-foreground uppercase">EUR</div>
-                    <div className="text-xs font-bold text-foreground mt-0.5">1,780 / 1,800</div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-sm text-muted-foreground">AI Overview is not available for this query.</p>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
-            {/* Results List */}
-            <div className="space-y-4 flex-1">
-              {searchResults.length === 0 && !searchLoading ? (
-                <div className="text-center py-12">
-                  <p className="text-sm text-muted-foreground">No neural results found for your query.</p>
-                </div>
-              ) : (
-                searchResults.map((r: any, i: number) => (
-                  <div 
-                    key={i} 
-                    className="p-4 bg-white/5 border border-white/5 hover:border-amber-500/20 hover:bg-amber-500/5 rounded-2xl transition-all shadow-sm group cursor-pointer"
-                    onClick={() => navigateTo(r.url)}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <img 
-                        src={`https://www.google.com/s2/favicons?sz=32&domain=${r.source}`} 
-                        alt="" 
-                        className="w-3.5 h-3.5 rounded-sm shrink-0 bg-white/10" 
-                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://www.google.com/s2/favicons?sz=32&domain=wikipedia.org'; }}
-                      />
-                      <span className="text-[10px] text-amber-500/70 font-semibold uppercase tracking-wide">
-                        {r.source}
+            {/* All Web Results Tab Content */}
+            {activeSearchTab === 'all' && (
+              <>
+                {/* Native Intent Widgets (e.g. Currency Rates) */}
+                {/naira|cbn|usd|black.*market|rate/i.test(decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))) && (
+                  <div className="mb-6 p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                         💰 Currency Parallel Rates (Naira Black Market)
                       </span>
-                      <span className="text-[9px] text-muted-foreground ml-auto">{r.date}</span>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">Live</span>
                     </div>
-                    <h3 className="text-sm font-bold text-foreground group-hover:text-amber-400 transition-colors line-clamp-1">
-                      {r.title}
-                    </h3>
-                    {r.snippet && (
-                      <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
-                        {r.snippet}
-                      </p>
-                    )}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                        <div className="text-[10px] text-muted-foreground uppercase">USD</div>
+                        <div className="text-xs font-bold text-foreground mt-0.5">1,640 / 1,650</div>
+                      </div>
+                      <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                        <div className="text-[10px] text-muted-foreground uppercase">GBP</div>
+                        <div className="text-xs font-bold text-foreground mt-0.5">2,080 / 2,100</div>
+                      </div>
+                      <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                        <div className="text-[10px] text-muted-foreground uppercase">EUR</div>
+                        <div className="text-xs font-bold text-foreground mt-0.5">1,780 / 1,800</div>
+                      </div>
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
+                )}
 
-            {/* See More / Load More Pagination */}
-            {searchHasMore && searchResults.length > 0 && (
-              <button
-                onClick={handleLoadMoreSearch}
-                disabled={searchLoading}
-                className="mt-6 w-full py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 hover:border-amber-500/40 text-amber-400 font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50"
-              >
-                {searchLoading ? 'Searching more...' : 'See More Results'}
-              </button>
+                {/* Results List */}
+                <div className="space-y-4 flex-1">
+                  {searchResults.length === 0 && !searchLoading ? (
+                    <div className="text-center py-12">
+                      <p className="text-sm text-muted-foreground">No neural results found for your query.</p>
+                    </div>
+                  ) : (
+                    searchResults.map((r: any, i: number) => (
+                      <React.Fragment key={i}>
+                        {/* Inline AI Insight Card (Between Card 2 and 3) */}
+                        {i === 2 && aiOverview && (
+                          <div className="p-5 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl shadow-lg mb-4 animate-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-4">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> RealSSA AI Overview
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-4">
+                              {aiOverview.imageUrl && (
+                                <img
+                                  src={aiOverview.imageUrl}
+                                  alt=""
+                                  className="w-20 h-20 object-cover rounded-xl border border-white/10 shrink-0 bg-white/5"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              )}
+                              <div className="flex-1">
+                                <h4 className="text-sm font-bold text-foreground">{aiOverview.title}</h4>
+                                {aiOverview.subtitle && <p className="text-[10px] text-amber-400 font-semibold mt-0.5">{aiOverview.subtitle}</p>}
+                                <p className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-3">{aiOverview.summary}</p>
+                              </div>
+                            </div>
+                            
+                            {aiOverview.facts && aiOverview.facts.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/5">
+                                {aiOverview.facts.slice(0, 2).map((f: any, idx: number) => (
+                                  <div key={idx} className="bg-black/30 p-2.5 rounded-lg border border-white/5">
+                                    <div className="text-[9px] text-muted-foreground uppercase tracking-wider">{f.label}</div>
+                                    <div className="text-xs font-bold text-foreground mt-0.5 truncate">{f.value}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            <button 
+                              onClick={() => setActiveSearchTab('ai')}
+                              className="mt-4 w-full py-2 bg-amber-500 hover:bg-amber-600 text-black text-xs font-semibold rounded-xl transition-colors text-center"
+                            >
+                              Ask RealSSA AI More About This ↗
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Standard Result Card */}
+                        <div 
+                          className="p-4 bg-white/5 border border-white/5 hover:border-amber-500/20 hover:bg-amber-500/5 rounded-2xl transition-all shadow-sm group cursor-pointer"
+                          onClick={() => navigateTo(r.url)}
+                        >
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <img 
+                              src={`https://www.google.com/s2/favicons?sz=32&domain=${r.source}`} 
+                              alt="" 
+                              className="w-3.5 h-3.5 rounded-sm shrink-0 bg-white/10" 
+                              onError={(e) => { (e.target as HTMLImageElement).src = 'https://www.google.com/s2/favicons?sz=32&domain=wikipedia.org'; }}
+                            />
+                            <span className="text-[10px] text-amber-500/70 font-semibold uppercase tracking-wide">
+                              {r.source}
+                            </span>
+                            <span className="text-[9px] text-muted-foreground ml-auto">{r.date}</span>
+                          </div>
+                          <h3 className="text-sm font-bold text-foreground group-hover:text-amber-400 transition-colors line-clamp-1">
+                            {r.title}
+                          </h3>
+                          {r.snippet && (
+                            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
+                              {r.snippet}
+                            </p>
+                          )}
+                        </div>
+                      </React.Fragment>
+                    ))
+                  )}
+                </div>
+
+                {/* See More / Load More Pagination */}
+                {searchHasMore && searchResults.length > 0 && (
+                  <button
+                    onClick={handleLoadMoreSearch}
+                    disabled={searchLoading}
+                    className="mt-6 w-full py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 hover:border-amber-500/40 text-amber-400 font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {searchLoading ? 'Searching more...' : 'See More Results'}
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}

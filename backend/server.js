@@ -4116,6 +4116,137 @@ app.get('/api/search/web', async (req, res) => {
   }
 });
 
+
+app.get('/api/search/ai', async (req, res) => {
+  const { q } = req.query;
+  if (!q || typeof q !== 'string' || q.trim().length === 0) {
+    return res.status(400).json({ error: 'Query is required' });
+  }
+  const cleanQuery = q.trim();
+
+  // Load Gemini keys
+  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  const GEMINI_API_KEY = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
+  if (!GEMINI_API_KEY) {
+    return res.status(200).json({
+      success: true,
+      aiOverview: {
+        title: cleanQuery,
+        subtitle: "Search Insights",
+        summary: `No AI Summary could be generated (API key not configured). You can view the web search results below.`,
+        imageUrl: null,
+        facts: []
+      }
+    });
+  }
+
+  // Get search results first to give context to Gemini
+  let searchResults = [];
+  try {
+    // Try to get from search_cache
+    const cacheRes = await pool.query(
+      `SELECT results_json FROM search_cache WHERE query = $1`,
+      [cleanQuery.toLowerCase()]
+    );
+    if (cacheRes.rows.length > 0) {
+      searchResults = cacheRes.rows[0].results_json;
+    }
+  } catch (err) {
+    console.warn('Cache fetch failed:', err.message);
+  }
+
+  if (!searchResults || searchResults.length === 0) {
+    // Fetch directly from Tavily if cache miss
+    const tavilyKey = process.env.TAVILY_API_KEY;
+    if (tavilyKey) {
+      try {
+        const response = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: tavilyKey,
+            query: cleanQuery,
+            search_depth: "basic",
+            max_results: 5
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.results) {
+            searchResults = data.results.map(r => ({
+              title: r.title,
+              url: r.url,
+              snippet: r.content
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('Direct search fetch failed:', err.message);
+      }
+    }
+  }
+
+  // Generate AI Overview using Gemini
+  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  const prompt = `You are a helpful research assistant. Synthesize the search results for the query "${cleanQuery}" and return a structured JSON object representing an AI Overview.
+  The JSON object MUST follow this exact schema:
+  {
+    "title": "Main title / Entity name (e.g. Asiwaju Bola Ahmed Tinubu)",
+    "subtitle": "Role / Subtitle (e.g. President of Nigeria)",
+    "summary": "A 2-3 sentence clear summary explaining the entity or answering the query.",
+    "imageUrl": "Find a relevant, public, stable image URL from the search results or wikipedia if mentioned, or return null.",
+    "facts": [
+      { "label": "Fact Label (e.g. Age)", "value": "Fact Value (e.g. 74 years)", "extra": "Optional extra info (e.g. Born 29 March 1952)" },
+      { "label": "Key Fact Label", "value": "Key Fact Value" }
+    ]
+  }
+  
+  Do not include markdown formatting, backticks, or introductions. Return ONLY raw JSON.
+
+  Search results context:
+  ${JSON.stringify((searchResults || []).slice(0, 5))}
+  `;
+
+  try {
+    const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { 
+          responseMimeType: "application/json",
+          maxOutputTokens: 1000, 
+          temperature: 0.2 
+        }
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini API failed: ${errText}`);
+    }
+
+    const data = await response.json();
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiOverview = JSON.parse(rawText);
+
+    return res.status(200).json({ success: true, aiOverview });
+  } catch (err) {
+    console.error('AI synthesis failed:', err.message);
+    return res.status(200).json({
+      success: true,
+      aiOverview: {
+        title: cleanQuery,
+        subtitle: "Search Insights",
+        summary: `No AI Summary could be generated at this moment. You can view the web search results below.`,
+        imageUrl: null,
+        facts: []
+      }
+    });
+  }
+});
+
 // GET /api/cron/viral-trend-buffer?secret=xxx
 // Stateless Viral Trend Buffer Bot (0 Bytes DB usage)
 app.get('/api/cron/viral-trend-buffer', async (req, res) => {

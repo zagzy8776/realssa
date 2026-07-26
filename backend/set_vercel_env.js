@@ -10,6 +10,10 @@
 // placeholder), so it is safe to run this without all values set.
 
 const { execSync, spawnSync } = require('child_process');
+const path = require('path');
+
+// Load environment variables from the root .env file
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 // Only push values that already exist in the environment. Never embed secrets.
 const KEYS = [
