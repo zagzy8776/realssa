@@ -150,12 +150,9 @@ export default function InAppBrowser() {
       const res = await fetch(`${API_BASE_URL}/api/search/web?q=${encodeURIComponent(query)}&offset=${offset}&limit=${searchLimit}`);
       if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
-      if (Array.isArray(data)) {
-        setSearchResults(prev => offset === 0 ? data : [...prev, ...data]);
-        setSearchHasMore(data.length === searchLimit);
-      } else {
-        setSearchHasMore(false);
-      }
+      const resultsArray = Array.isArray(data) ? data : (data?.results || []);
+      setSearchResults(prev => offset === 0 ? resultsArray : [...prev, ...resultsArray]);
+      setSearchHasMore(data?.hasMore !== undefined ? data.hasMore : resultsArray.length === searchLimit);
     } catch (err) {
       console.error(err);
       toast({ title: 'Search Error', description: 'Failed to fetch search results.' });
