@@ -223,10 +223,9 @@ export default function InAppBrowser() {
     const formatted = formatUrl(url);
     if (!formatted || formatted === currentUrl) return;
 
-    // Open betting and social media sites in the native system browser/tab (preserves CORS, WebSockets, & cookies)
+    // Open betting sites in the native system browser/tab (preserves CORS, WebSockets, & cookies)
     const NATIVE_DOMAINS = [
-      'sportybet.com', 'bet9ja.com', 'betking.com', '1xbet.com', 'betway.com',
-      'facebook.com', 'instagram.com', 'tiktok.com', 'twitter.com', 'x.com'
+      'sportybet.com', 'bet9ja.com', 'betking.com', '1xbet.com', 'betway.com'
     ];
     try {
       const hostname = new URL(formatted).hostname.toLowerCase();
