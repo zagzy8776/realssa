@@ -498,7 +498,7 @@ const Header = () => {
             
             {/* Extended Weather Widget inside Drawer (Desktop/Tablet detail) */}
             <div className="px-4 py-3 border-b border-border/40 mb-2">
-              <WeatherWidget />
+              <WeatherWidget variant="glass" />
             </div>
 
             {/* Main Navigation Links */}
