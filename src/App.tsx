@@ -72,10 +72,7 @@ const queryClient = new QueryClient();
 const ONESIGNAL_APP_ID = "055b6596-a96c-48e2-8cda-ff4bb6d61009";
 
 const FeedWatermarkWrapper = () => {
-  const location = useLocation();
-  const isReels = location.pathname === "/reels";
-  if (isReels) return null;
-  return <FeedWatermark />;
+  return null; // Disabled watermark background overlay to resolve UX/aesthetic issue
 };
 
 // Scroll to top on every route change (fixes pages starting from bottom on navigation)

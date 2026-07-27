@@ -146,6 +146,15 @@ const Header = () => {
   const [importKey, setImportKey] = useState("");
   const [isCopied, setIsCopied] = useState(false);
 
+  const [shakeEnabled, setShakeEnabled] = useState(() => {
+    return localStorage.getItem('realssa_shake_discover_enabled') !== 'false';
+  });
+
+  const toggleShake = (val: boolean) => {
+    localStorage.setItem('realssa_shake_discover_enabled', val ? 'true' : 'false');
+    setShakeEnabled(val);
+  };
+
   // Global keyboard shortcut ('/' or 'Ctrl+K') to focus homepage Search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -607,6 +616,23 @@ const Header = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-muted-foreground">Push Notifications</span>
                   <PushNotificationManager iconOnly={false} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Shake to Discover</span>
+                  <button
+                    onClick={() => toggleShake(!shakeEnabled)}
+                    className={cn(
+                      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2",
+                      shakeEnabled ? "bg-amber-500" : "bg-muted"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out",
+                        shakeEnabled ? "translate-x-5" : "translate-x-0"
+                      )}
+                    />
+                  </button>
                 </div>
               </div>
             </div>

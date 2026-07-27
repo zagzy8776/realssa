@@ -30,7 +30,10 @@ const SimpleImage: React.FC<SimpleImageProps> = ({
   }, [src]);
 
   const handleError = () => {
-    setHasError(true);
+    if (!hasError) {
+      setHasError(true);
+      setImageSrc(fallback || '/logo.png');
+    }
   };
 
   const handleLoad = () => {

@@ -49,6 +49,17 @@ const Index = () => {
   useEffect(() => {
     fetchStories();
     
+    // Clean up stale localStorage entries (e.g. offline digest older than 48 hours)
+    try {
+      const offlineDigestStr = localStorage.getItem('realssa_offline_digest');
+      if (offlineDigestStr) {
+        const digest = JSON.parse(offlineDigestStr);
+        if (digest.timestamp && Date.now() - digest.timestamp > 2 * 24 * 60 * 60 * 1000) { // 2 days
+          localStorage.removeItem('realssa_offline_digest');
+        }
+      }
+    } catch (e) {}
+
     // Register app-close telemetry sync hooks to ensure light user profiles get saved
     const handleCloseSync = () => {
       try {
@@ -69,12 +80,6 @@ const Index = () => {
     };
 
     window.addEventListener('beforeunload', handleCloseSync);
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        handleCloseSync();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Register Capacitor Native App state change listener for resilient mobile backgrounding
     let nativeAppListener: any = null;
@@ -106,7 +111,6 @@ const Index = () => {
 
     return () => {
       window.removeEventListener('beforeunload', handleCloseSync);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (nativeAppListener) {
         nativeAppListener.remove();
       }
@@ -185,66 +189,68 @@ const Index = () => {
       setAllArticles(initialUnique);
       setLoading(false); // Stop main loading indicator once above-the-fold content renders!
 
-      // Stage 2: Lazy load secondary below-the-fold content in background
-      Promise.allSettled([
-        fetch(apiUrl(`/api/news/world?t=${ts}`)),
-        fetch(apiUrl(`/api/news/uk?t=${ts}`)),
-        fetch(apiUrl(`/api/articles/trending?category=nigerian-news&diverse=true&t=${ts}${deviceParam}`))
-      ]).then(async ([worldRes, ukRes, trendingRes]) => {
-        let loadedTrending = [];
-        if (trendingRes.status === 'fulfilled' && trendingRes.value.ok) {
-          loadedTrending = (await trendingRes.value.json()).filter(isNotPunch);
-          setTrendingArticles(loadedTrending.slice(0, 5));
-        }
-
-        let extraNews = [];
-        if (worldRes.status === 'fulfilled' && worldRes.value.ok) {
-          extraNews = [...extraNews, ...(await worldRes.value.json()).slice(0, 15)];
-        }
-        if (ukRes.status === 'fulfilled' && ukRes.value.ok) {
-          extraNews = [...extraNews, ...(await ukRes.value.json()).slice(0, 15)];
-        }
-
-        extraNews = extraNews.filter(isNotPunch);
-
-        // Merge initial news and lazy loaded news
-        let combinedNews = [...initialNews, ...extraNews].filter(isNotPunch);
-        const usedIds = new Set([
-          ...loadedStories.map(s => s.id),
-          ...loadedTrending.map(t => t.id)
-        ]);
-
-        combinedNews.sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
-        const finalUnique = combinedNews.filter((v, i, a) => 
-          !usedIds.has(v.id) && a.findIndex(t => t.title === v.title) === i
-        );
-
-        // Re-apply preferences sorting
-        try {
-          const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
-          if (prefs.topCategory) {
-            finalUnique.sort((a, b) => {
-              if (a.category === prefs.topCategory && b.category !== prefs.topCategory) return -1;
-              if (b.category === prefs.topCategory && a.category !== prefs.topCategory) return 1;
-              return 0;
-            });
+      // Stage 2: Lazy load secondary below-the-fold content in background after a 4-second delay to optimize initial paint
+      setTimeout(() => {
+        Promise.allSettled([
+          fetch(apiUrl(`/api/news/world?t=${ts}`)),
+          fetch(apiUrl(`/api/news/uk?t=${ts}`)),
+          fetch(apiUrl(`/api/articles/trending?category=nigerian-news&diverse=true&t=${ts}${deviceParam}`))
+        ]).then(async ([worldRes, ukRes, trendingRes]) => {
+          let loadedTrending = [];
+          if (trendingRes.status === 'fulfilled' && trendingRes.value.ok) {
+            loadedTrending = (await trendingRes.value.json()).filter(isNotPunch);
+            setTrendingArticles(loadedTrending.slice(0, 5));
           }
-        } catch (e) {}
 
-        setAllArticles(finalUnique);
+          let extraNews = [];
+          if (worldRes.status === 'fulfilled' && worldRes.value.ok) {
+            extraNews = [...extraNews, ...(await worldRes.value.json()).slice(0, 15)];
+          }
+          if (ukRes.status === 'fulfilled' && ukRes.value.ok) {
+            extraNews = [...extraNews, ...(await ukRes.value.json()).slice(0, 15)];
+          }
 
-        // Save visible article IDs to sessionStorage so Reels feed can exclude them
-        try {
-          const visibleIds = [
+          extraNews = extraNews.filter(isNotPunch);
+
+          // Merge initial news and lazy loaded news
+          let combinedNews = [...initialNews, ...extraNews].filter(isNotPunch);
+          const usedIds = new Set([
             ...loadedStories.map(s => s.id),
-            ...loadedTrending.slice(0, 5).map(t => t.id),
-            ...finalUnique.map(n => n.id)
-          ].filter(Boolean);
-          const uniqueIds = Array.from(new Set(visibleIds));
-          sessionStorage.setItem('home_page_article_ids', JSON.stringify(uniqueIds));
-        } catch (cacheErr) {}
+            ...loadedTrending.map(t => t.id)
+          ]);
 
-      }).catch((lazyErr) => console.error('Lazy loading failed:', lazyErr));
+          combinedNews.sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
+          const finalUnique = combinedNews.filter((v, i, a) => 
+            !usedIds.has(v.id) && a.findIndex(t => t.title === v.title) === i
+          );
+
+          // Re-apply preferences sorting
+          try {
+            const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
+            if (prefs.topCategory) {
+              finalUnique.sort((a, b) => {
+                if (a.category === prefs.topCategory && b.category !== prefs.topCategory) return -1;
+                if (b.category === prefs.topCategory && a.category !== prefs.topCategory) return 1;
+                return 0;
+              });
+            }
+          } catch (e) {}
+
+          setAllArticles(finalUnique);
+
+          // Save visible article IDs to sessionStorage so Reels feed can exclude them
+          try {
+            const visibleIds = [
+              ...loadedStories.map(s => s.id),
+              ...loadedTrending.slice(0, 5).map(t => t.id),
+              ...finalUnique.map(n => n.id)
+            ].filter(Boolean);
+            const uniqueIds = Array.from(new Set(visibleIds));
+            sessionStorage.setItem('home_page_article_ids', JSON.stringify(uniqueIds));
+          } catch (cacheErr) {}
+
+        }).catch((lazyErr) => console.error('Lazy loading failed:', lazyErr));
+      }, 4000);
 
       // Offline digest caching (WiFi only)
       try {

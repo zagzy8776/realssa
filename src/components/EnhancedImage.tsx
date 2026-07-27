@@ -38,8 +38,13 @@ const EnhancedImage: React.FC<EnhancedImageProps> = ({
 
 
   const handleError = () => {
-    setHasError(true);
-    onError?.();
+    const fallbackSrc = fallback || '/logo.png';
+    if (imageSrc !== fallbackSrc) {
+      setImageSrc(fallbackSrc);
+    } else {
+      setHasError(true);
+      onError?.();
+    }
   };
 
   const handleLoad = () => {
@@ -160,7 +165,7 @@ const EnhancedImage: React.FC<EnhancedImageProps> = ({
       {/* Error State */}
       {hasError && (
         <div 
-          className="image-error"
+          className="image-error animate-in fade-in duration-200"
           style={{
             position: 'absolute',
             top: 0,
@@ -170,25 +175,15 @@ const EnhancedImage: React.FC<EnhancedImageProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#fee2e2',
-            color: '#dc2626',
-            fontSize: '12px',
+            backgroundColor: '#1c1921', // Dark UI background matching theme
+            color: '#8b8796',
+            fontSize: '11px',
             flexDirection: 'column',
-            gap: '8px'
+            gap: '4px'
           }}
         >
-          <div>Image not available</div>
-          <div 
-            style={{
-              fontSize: '10px',
-              color: '#ef4444',
-              backgroundColor: '#fecaca',
-              padding: '2px 6px',
-              borderRadius: '999px'
-            }}
-          >
-            {alt}
-          </div>
+          <div className="font-semibold text-xs text-muted-foreground/80">RealSSA News</div>
+          <div className="text-[10px] text-muted-foreground/50 max-w-[80%] truncate">{alt || 'News Image'}</div>
         </div>
       )}
 
