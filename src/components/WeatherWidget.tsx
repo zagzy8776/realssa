@@ -1,91 +1,35 @@
 import React, { useState, useEffect } from "react";
-import { Cloud, Sun, CloudRain, Loader2, CloudSun, CloudDrizzle, CloudLightning, Compass, Droplets, Wind } from "lucide-react";
+import { Cloud, Sun, CloudRain, Loader2, CloudSun, CloudLightning, Droplets, Wind, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useWeather } from "@/hooks/useWeather";
 
 interface WeatherWidgetProps {
   variant?: "inline" | "glass";
 }
 
 export default function WeatherWidget({ variant = "inline" }: WeatherWidgetProps) {
-  const [weather, setWeather] = useState<{
-    temp: string;
-    condition: string;
-    location: string;
-    humidity: string;
-    windSpeed: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { weather, loading } = useWeather();
   const [time, setTime] = useState(new Date());
 
-  // Keep date & time ticking every minute
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const fetchWeather = async (lat?: number, lon?: number) => {
-      try {
-        const query = lat !== undefined && lon !== undefined ? `${lat},${lon}` : '';
-        const res = await fetch(`https://wttr.in/${query}?format=j1`, { signal: AbortSignal.timeout(4000) });
-        if (res.ok) {
-          const data = await res.json();
-          const current = data.current_condition[0];
-          const nearestArea = data.nearest_area?.[0];
-          const city = nearestArea?.areaName?.[0]?.value || "";
-          const country = nearestArea?.country?.[0]?.value || "";
-          
-          if (!city) throw new Error("Could not resolve location name");
-
-          setWeather({
-            temp: `${current.temp_C}°C`,
-            condition: current.weatherDesc[0].value,
-            location: country ? `${city}, ${country}` : city,
-            humidity: `${current.humidity}%`,
-            windSpeed: `${current.windspeedKmph} km/h`
-          });
-        } else {
-          throw new Error("API responded with error");
-        }
-      } catch (err) {
-        console.warn("Weather fetch failed, hiding widget:", err);
-        setWeather(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          fetchWeather(latitude, longitude);
-        },
-        (error) => {
-          console.log("Geolocation error or denied, falling back to IP lookup:", error.message);
-          fetchWeather();
-        },
-        { timeout: 5000, enableHighAccuracy: false }
-      );
-    } else {
-      fetchWeather();
-    }
-  }, []);
-
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+    return date.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
   };
 
-  if (loading) {
+  if (loading && !weather) {
     if (variant === "glass") {
       return (
         <div className="w-full h-48 rounded-[2rem] bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-3 shadow-lg">
           <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
-          <span className="text-xs text-white/55 font-medium">Syncing weather sensors...</span>
+          <span className="text-xs text-white/55 font-medium">Syncing weather...</span>
         </div>
       );
     }
@@ -97,20 +41,33 @@ export default function WeatherWidget({ variant = "inline" }: WeatherWidgetProps
     );
   }
 
-  if (!weather) return null;
+  // Soft fallback so drawer weather never disappears entirely
+  if (!weather) {
+    if (variant === "glass") {
+      return (
+        <div className="w-full p-5 rounded-[2rem] bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-2 text-center">
+          <Cloud className="w-8 h-8 text-white/40" />
+          <p className="text-sm font-semibold text-white/70">Weather unavailable</p>
+          <p className="text-[10px] text-white/45 flex items-center gap-1">
+            <RefreshCw className="w-3 h-3" />
+            Will retry next time you open the menu
+          </p>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const cond = weather.condition.toLowerCase();
-  
-  // ── Theme Categorization ───────────────────────────────────────────────────
+
   const isNight = time.getHours() >= 19 || time.getHours() < 6;
   const isRainy = cond.includes("rain") || cond.includes("shower") || cond.includes("drizzle") || cond.includes("thunder");
   const isCloudy = cond.includes("cloud") || cond.includes("overcast") || cond.includes("mist") || cond.includes("fog");
   const isSunny = !isRainy && !isCloudy && !isNight;
 
-  // Choose the best icon and color dynamically
   let WeatherIcon = Sun;
   let iconColor = "text-amber-500 animate-spin-slow";
-  
+
   if (isRainy) {
     WeatherIcon = CloudRain;
     iconColor = "text-blue-400";
@@ -127,7 +84,6 @@ export default function WeatherWidget({ variant = "inline" }: WeatherWidgetProps
     }
   }
 
-  // ── Glassmorphic Atmosphere Gradients ──────────────────────────────────────
   let cardThemeBg = "from-white/10 to-white/5 border-white/20 text-white";
   let glowColor = "rgba(255,255,255,0.05)";
 
@@ -145,7 +101,6 @@ export default function WeatherWidget({ variant = "inline" }: WeatherWidgetProps
     glowColor = "rgba(148,163,184,0.08)";
   }
 
-  // Realistic droplet coordinates for rainy weather overlay
   const rainDroplets = [
     { top: "12%", left: "8%", size: "6px" },
     { top: "25%", left: "85%", size: "8px" },
@@ -156,19 +111,17 @@ export default function WeatherWidget({ variant = "inline" }: WeatherWidgetProps
     { top: "18%", left: "55%", size: "5px" },
   ];
 
-  // ── Render Glass Variant ──────────────────────────────────────────────────
   if (variant === "glass") {
     return (
-      <div 
+      <div
         className={cn(
           "w-full p-6 rounded-[2.2rem] bg-gradient-to-br border backdrop-blur-xl relative overflow-hidden transition-all duration-500 flex flex-col items-center text-center shadow-2xl",
           cardThemeBg
         )}
         style={{
-          boxShadow: `0 20px 40px -15px ${glowColor}, inset 0 1px 2px rgba(255,255,255,0.15)`
+          boxShadow: `0 20px 40px -15px ${glowColor}, inset 0 1px 2px rgba(255,255,255,0.15)`,
         }}
       >
-        {/* Dynamic decorative backdrop radial flare */}
         {isSunny && (
           <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
         )}
@@ -176,44 +129,41 @@ export default function WeatherWidget({ variant = "inline" }: WeatherWidgetProps
           <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
         )}
 
-        {/* Rain droplets simulation */}
-        {isRainy && rainDroplets.map((d, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full bg-white/10 pointer-events-none opacity-80 backdrop-blur-[1px]"
-            style={{
-              top: d.top,
-              left: d.left,
-              width: d.size,
-              height: d.size,
-              boxShadow: "inset 0 1px 1px rgba(255,255,255,0.4), inset 0 -1px 1px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)"
-            }}
-          />
-        ))}
+        {isRainy &&
+          rainDroplets.map((d, i) => (
+            <div
+              key={i}
+              className="absolute rounded-full bg-white/10 pointer-events-none opacity-80 backdrop-blur-[1px]"
+              style={{
+                top: d.top,
+                left: d.left,
+                width: d.size,
+                height: d.size,
+                boxShadow:
+                  "inset 0 1px 1px rgba(255,255,255,0.4), inset 0 -1px 1px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)",
+              }}
+            />
+          ))}
 
-        {/* City and Local Clock Header */}
         <div className="flex flex-col gap-0.5">
           <h2 className="text-base font-bold text-white tracking-wide truncate max-w-[200px]">
-            {weather.location.split(',')[0]}
+            {weather.location.split(",")[0]}
           </h2>
           <p className="text-[10px] font-semibold text-white/60 tracking-wider">
             {formatDate(time)} • {formatTime(time)}
           </p>
         </div>
 
-        {/* Large 3D Weather Icon representation */}
         <div className="my-5 relative flex items-center justify-center">
-          {/* Subtle icon shadow glow */}
           <div className="absolute w-12 h-12 bg-white/5 rounded-full blur-xl scale-125" />
-          <WeatherIcon 
+          <WeatherIcon
             className={cn(
-              "w-14 h-14 relative z-10 filter drop-shadow-[0_8px_16px_rgba(255,255,255,0.15)]", 
+              "w-14 h-14 relative z-10 filter drop-shadow-[0_8px_16px_rgba(255,255,255,0.15)]",
               iconColor
-            )} 
+            )}
           />
         </div>
 
-        {/* Temperature and Condition Description */}
         <div className="flex flex-col gap-1">
           <span className="text-4xl font-extrabold tracking-tight text-white select-none">
             {weather.temp}
@@ -223,13 +173,12 @@ export default function WeatherWidget({ variant = "inline" }: WeatherWidgetProps
           </span>
         </div>
 
-        {/* Humidity & Wind Metrics Footer */}
         <div className="w-full mt-5 pt-3.5 border-t border-white/10 flex items-center justify-around text-white/60 text-[10px] font-bold">
           <div className="flex items-center gap-1.5">
             <Droplets className="w-3.5 h-3.5 text-sky-400" />
             <span>{weather.humidity} humidity</span>
           </div>
-          
+
           <div className="h-4 w-px bg-white/10" />
 
           <div className="flex items-center gap-1.5">
@@ -241,18 +190,17 @@ export default function WeatherWidget({ variant = "inline" }: WeatherWidgetProps
     );
   }
 
-  // ── Render Inline Pill Variant (Default) ───────────────────────────────────
   return (
-    <div 
+    <div
       className="flex items-center gap-1.5 bg-gradient-to-r from-muted/30 to-muted/10 hover:from-muted/50 hover:to-muted/20 px-2.5 py-1 md:px-3 md:py-1.5 rounded-full border border-border/50 shadow-sm transition-all duration-300 cursor-pointer select-none group"
       title={`${weather.condition} in ${weather.location}`}
     >
       <WeatherIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${iconColor}`} />
-      
+
       <span className="hidden sm:inline-block text-[10px] md:text-xs font-semibold text-foreground truncate max-w-[120px] group-hover:text-primary transition-colors">
-        {weather.location.split(',')[0]}
+        {weather.location.split(",")[0]}
       </span>
-      
+
       <span className="text-[10px] md:text-xs font-bold text-muted-foreground group-hover:text-foreground transition-colors">
         {weather.temp}
       </span>
