@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS rss_articles (
     ai_summary TEXT,
     category VARCHAR(100),
     image TEXT,
+    image_status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    image_checked_at TIMESTAMPTZ,
+    image_width INTEGER,
+    image_height INTEGER,
     author VARCHAR(200),
     source_name VARCHAR(200),
     external_link TEXT,
@@ -26,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_rss_articles_url_hash ON rss_articles(url_hash);
 CREATE INDEX IF NOT EXISTS idx_rss_articles_category ON rss_articles(category);
 CREATE INDEX IF NOT EXISTS idx_rss_articles_published ON rss_articles(published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rss_articles_content_type ON rss_articles(content_type);
+CREATE INDEX IF NOT EXISTS idx_rss_articles_image_status ON rss_articles(image_status, published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rss_articles_needs_summary ON rss_articles(id) WHERE ai_summary IS NULL AND content_type = 'article';
 
 -- Comments: This table is optimized for:

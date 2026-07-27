@@ -971,6 +971,10 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         }
         const description = originalExcerpt;
         let imageUrl = image;
+        // Never hold up ingestion on remote image requests. The client renders a
+        // local fallback immediately; the status gives background maintenance a
+        // compact queue of images that still need a network-quality check.
+        const imageStatus = isLikelyStoryImage(imageUrl) ? 'pending' : 'fallback';
         const author = sourceName;
         const isFeatured = notificationScore(title, category, itemResult.url) >= 2;
 
@@ -1076,6 +1080,18 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
             console.warn(`[MultiDB Routing] Primary insert for ${category} error: ${pErr.message}. Retrying via queryMultiDb...`);
             const { queryMultiDb } = require('../config/multiDb');
             result = await queryMultiDb(queryStr, queryValues);
+          }
+
+          // This update is intentionally best-effort so a migration lag never
+          // prevents a news article from being published.
+          if (result?.rows?.[0]?.id) {
+            activePool.query(
+              `UPDATE rss_articles
+               SET image_status = $1,
+                   image_checked_at = CASE WHEN $1 = 'fallback' THEN NOW() ELSE image_checked_at END
+               WHERE id = $2`,
+              [imageStatus, result.rows[0].id]
+            ).catch(err => console.warn('Image status update skipped:', err.message));
           }
 
           if (result.rows.length > 0) {

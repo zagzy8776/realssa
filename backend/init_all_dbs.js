@@ -39,6 +39,10 @@ async function initAllDatabases() {
         ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION DEFAULT 0;
         ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE;
         ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS embedding TEXT;
+        ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS image_status VARCHAR(16) NOT NULL DEFAULT 'pending';
+        ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS image_checked_at TIMESTAMPTZ;
+        ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS image_width INTEGER;
+        ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS image_height INTEGER;
 
         DO $$
         BEGIN
@@ -97,6 +101,7 @@ async function initAllDatabases() {
 
         CREATE INDEX IF NOT EXISTS idx_rss_articles_published ON rss_articles (published_at DESC);
         CREATE INDEX IF NOT EXISTS idx_rss_articles_cat_pub ON rss_articles (category, published_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_rss_articles_image_status ON rss_articles (image_status, published_at DESC);
       `);
 
       console.log(`  ✅ Supplementary migrations & indexes successfully applied on ${item.name}.`);

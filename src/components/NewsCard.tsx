@@ -103,8 +103,9 @@ const getSourceFromUrl = (urlStr?: string) => {
   }
 };
 
-// Global in-memory cache to prevent redundant image extractions during a single app session
-const extractedImagesCache = new Map<string, string>();
+// Always keep cards visual without making article-extraction requests from a
+// reader's device. Missing or broken source images fall back instantly.
+const CARD_FALLBACK_IMAGE = "/logo.png";
 
 const getSourceLabel = (sName?: string, auth?: string, extLink?: string) => {
   if (sName) return sName;
@@ -273,47 +274,18 @@ const NewsCard = ({
     return /(logo|icon|brand|placeholder|avatar|favicon|punchng)/i.test(url);
   };
 
-  const [currentImage, setCurrentImage] = useState(image);
+  const resolveCardImage = (url?: string) => (
+    !url || isLogoPattern(url) ? CARD_FALLBACK_IMAGE : url
+  );
+
+  const [currentImage, setCurrentImage] = useState(() => resolveCardImage(image));
 
   useEffect(() => {
-    const isLogo = isLogoPattern(image);
-    if (isLogo && externalLink) {
-      const cachedImage = extractedImagesCache.get(externalLink);
-      if (cachedImage) {
-        if (cachedImage === 'FAILED') {
-          setImgError(true);
-        } else {
-          setCurrentImage(cachedImage);
-        }
-        return;
-      }
+    setCurrentImage(resolveCardImage(image));
+    setImgError(false);
+  }, [image]);
 
-      fetch(apiUrl('/api/extract'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: externalLink })
-      })
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
-          if (data && data.image && !isLogoPattern(data.image)) {
-            extractedImagesCache.set(externalLink, data.image);
-            setCurrentImage(data.image);
-          } else {
-            extractedImagesCache.set(externalLink, 'FAILED');
-            setImgError(true);
-          }
-        })
-        .catch(() => {
-          extractedImagesCache.set(externalLink, 'FAILED');
-          setImgError(true);
-        });
-    } else {
-      setCurrentImage(image);
-      setImgError(false);
-    }
-  }, [image, externalLink]);
-
-  const hasImage = !!currentImage && !isLogoPattern(currentImage) && !imgError;
+  const hasImage = !!currentImage && !imgError;
   const imgSrc = imgError ? '' : currentImage;
 
   const linkTo = externalLink
@@ -438,7 +410,13 @@ const NewsCard = ({
                   loading="lazy"
                   decoding="async"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  onError={() => setImgError(true)}
+                  onError={() => {
+                    if (imgSrc !== CARD_FALLBACK_IMAGE) {
+                      setCurrentImage(CARD_FALLBACK_IMAGE);
+                    } else {
+                      setImgError(true);
+                    }
+                  }}
                 />
               ) : (
                 <div className="flex items-center justify-center w-full h-full" style={{ color: '#8C8494' }}>
