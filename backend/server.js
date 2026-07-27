@@ -3519,7 +3519,7 @@ app.post('/api/chat', async (req, res) => {
       const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerebrasKey}` },
-        body: JSON.stringify({ model: 'llama-3.3-70b', messages, max_tokens: 600, temperature: 0.7 }),
+        body: JSON.stringify({ model: 'gemma-4-31b', messages, max_tokens: 600, temperature: 0.7 }),
         signal: AbortSignal.timeout(10000)
       });
       const d = await r.json();
