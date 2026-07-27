@@ -52,6 +52,9 @@ const PrivacyPolicy       = lazy(() => import("./pages/PrivacyPolicy"));
 const AppDownload         = lazy(() => import("./pages/AppDownload"));
 const Reels               = lazy(() => import("./pages/Reels"));
 const ReadingList         = lazy(() => import("./pages/ReadingList"));
+const Trending            = lazy(() => import("./pages/Trending"));
+const Downloads           = lazy(() => import("./pages/Downloads"));
+const Profile             = lazy(() => import("./pages/Profile"));
 const PublisherHub        = lazy(() => import("./pages/PublisherHub"));
 const LeagueHub           = lazy(() => import("./pages/LeagueHub"));
 const ReadingHistory      = lazy(() => import("./pages/ReadingHistory"));
@@ -158,6 +161,10 @@ const App = () => {
                 <Route path="/download" element={<AppDownload />} />
                 <Route path="/ads" element={<AdPortal />} />
                 <Route path="/reels" element={<Reels />} />
+                <Route path="/trending" element={<Trending />} />
+                <Route path="/bookmarks" element={<ReadingList />} />
+                <Route path="/downloads" element={<Downloads />} />
+                <Route path="/profile" element={<Profile />} />
                 <Route path="/reading-list" element={<ReadingList />} />
                 <Route path="/reading-history" element={<ReadingHistory />} />
                 <Route path="/publisher/:slug" element={<PublisherHub />} />

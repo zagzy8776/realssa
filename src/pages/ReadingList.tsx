@@ -59,8 +59,8 @@ export default function ReadingList() {
             <Bookmark className="w-6 h-6 text-amber-600 dark:text-amber-400" />
           </div>
           <div>
-            <h1 className="text-3xl font-display font-bold">Wisdom Library</h1>
-            <p className="text-muted-foreground mt-1">Available offline. Read anywhere, anytime.</p>
+            <h1 className="text-3xl font-display font-bold">Bookmarks</h1>
+            <p className="text-muted-foreground mt-1">Saved stories. Read later, anytime.</p>
           </div>
         </div>
 
@@ -69,11 +69,11 @@ export default function ReadingList() {
         ) : articles.length === 0 ? (
           <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl">
             <Bookmark className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Your library is empty</h3>
+            <h3 className="text-xl font-semibold mb-2">No bookmarks yet</h3>
             <p className="text-muted-foreground max-w-sm mx-auto mb-6">
-              Save articles to read them later when you're offline or traveling.
+              Save articles to find them here later.
             </p>
-            <button onClick={() => navigate('/news')} className="px-6 py-2 bg-primary text-primary-foreground rounded-full font-medium">
+            <button onClick={() => navigate('/')} className="px-6 py-2 bg-primary text-primary-foreground rounded-full font-medium">
               Explore News
             </button>
           </div>

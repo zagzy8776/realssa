@@ -1,27 +1,34 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Home, Trophy, Zap, Radio } from "lucide-react";
+import { Home, Bookmark, TrendingUp, Download, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { label: "Home",   icon: Home,    path: "/" },
-  { label: "Reels",  icon: Zap,     path: "/reels" },
-  { label: "Sports", icon: Trophy,  path: "/sports" },
-  { label: "Video",  icon: Radio,   path: "/videos" },
+  { label: "Home", icon: Home, path: "/" },
+  { label: "Bookmarks", icon: Bookmark, path: "/bookmarks" },
+  { label: "Trending", icon: TrendingUp, path: "/trending" },
+  { label: "Downloads", icon: Download, path: "/downloads" },
+  { label: "Profile", icon: User, path: "/profile" },
 ];
 
 const MobileBottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Hide on admin pages and Reels (Reels has its own nav)
-  if (location.pathname.startsWith("/admin") || location.pathname.startsWith("/reels")) return null;
+  // Hide on admin, in-app browser, and immersive reels (legacy)
+  if (
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/browser") ||
+    location.pathname.startsWith("/reels")
+  ) {
+    return null;
+  }
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-background/70 supports-[backdrop-filter]:bg-background/40 backdrop-blur-xl border-t border-border/50 md:hidden shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.5)]"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-background/90 supports-[backdrop-filter]:bg-background/70 backdrop-blur-xl border-t border-border/50 md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="flex items-center justify-around h-16">
+      <div className="flex items-center justify-around h-16 px-1">
         {tabs.map(({ label, icon: Icon, path }) => {
           const isActive =
             path === "/"
@@ -32,27 +39,26 @@ const MobileBottomNav = () => {
               key={path}
               onClick={() => navigate(path)}
               className={cn(
-                "relative flex flex-col items-center justify-center gap-1 flex-1 h-full text-[10px] font-medium transition-all duration-300 ease-out",
-                "active:scale-90 active:opacity-70",
-                isActive
-                  ? "text-primary translate-y-[-2px]"
-                  : "text-muted-foreground hover:text-foreground"
+                "relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full text-[10px] font-semibold tracking-wide uppercase transition-all duration-200",
+                "active:scale-95",
+                isActive ? "text-amber-500" : "text-muted-foreground"
               )}
               aria-label={label}
+              aria-current={isActive ? "page" : undefined}
             >
               <Icon
-                size={24}
+                size={22}
                 className={cn(
-                  "transition-all duration-300",
-                  isActive && "drop-shadow-[0_4px_8px_hsl(var(--primary)/0.5)] scale-110"
+                  "transition-transform duration-200",
+                  isActive && "scale-110"
                 )}
-                strokeWidth={isActive ? 2.5 : 1.8}
+                strokeWidth={isActive ? 2.4 : 1.8}
               />
-              <span className={cn("transition-opacity duration-300", isActive ? "opacity-100 font-bold" : "opacity-80")}>{label}</span>
-              
-              {/* Active Dot Indicator */}
+              <span className={cn(isActive ? "opacity-100" : "opacity-75")}>
+                {label}
+              </span>
               {isActive && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 h-0.5 w-5 rounded-full bg-amber-500" />
               )}
             </button>
           );

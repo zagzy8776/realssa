@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Menu, X, ChevronDown, LogOut, Home, Newspaper, Radio, Globe, Moon, Sun, Bell, ArrowLeft, Copy, Check, Key, Search, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,7 +48,7 @@ const regionsLinks = [
 
 
 const libraryLinks = [
-  { href: "/reading-list", label: "WISDOM LIBRARY (SAVED)" },
+  { href: "/bookmarks", label: "BOOKMARKS (SAVED)" },
   { href: "/reading-history", label: "READING HISTORY" },
   { href: "/library/nigerian-manual", label: "THE NIGERIAN MANUAL" },
   { href: "/library/media-decode", label: "MEDIA DECODE" },
@@ -78,12 +78,23 @@ const Header = () => {
   const [isStreakOpen, setIsStreakOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showMobileSearch, setShowMobileSearch] = useState(true);
+  const autocompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+  const [suggestBox, setSuggestBox] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  // Scroll handler to collapse mobile search bar on scroll down
+  // ── Autocomplete Suggestions state ──────────────────────────────────────
+  const [suggestions, setSuggestions] = useState<{ url: string; title: string; isSearch?: boolean }[]>([]);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Scroll handler to collapse mobile search bar on scroll down (keep open while typing)
   useEffect(() => {
     let lastScrollY = window.scrollY;
     
     const handleScroll = () => {
+      if (isSearchFocused) {
+        setShowMobileSearch(true);
+        return;
+      }
       const currentScrollY = window.scrollY;
       if (currentScrollY > lastScrollY && currentScrollY > 50) {
         setShowMobileSearch(false);
@@ -95,52 +106,96 @@ const Header = () => {
     
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [isSearchFocused]);
 
-  // ── Autocomplete Suggestions state ──────────────────────────────────────
-  const [suggestions, setSuggestions] = useState<{ url: string; title: string; isSearch?: boolean }[]>([]);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  // Keep portal dropdown aligned under the search bar
+  useEffect(() => {
+    if (!isSearchFocused || suggestions.length === 0) {
+      setSuggestBox(null);
+      return;
+    }
+    const update = () => {
+      const el = searchWrapRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setSuggestBox({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [isSearchFocused, suggestions.length, searchQuery]);
 
-  // ── Autocomplete suggestions fetcher ──────────────────────────────────────
-  const handleAutocomplete = (val: string) => {
-    if (!val.trim()) { setSuggestions([]); return; }
-    
-    // 1. History matches from localStorage
-    let historyMatches: { url: string; title: string; isSearch: boolean }[] = [];
+  const getHistoryMatches = (val: string) => {
     try {
-      const histStr = localStorage.getItem('realssa_browser_history');
-      if (histStr) {
-        const hist: any[] = JSON.parse(histStr);
-        const q = val.toLowerCase();
-        historyMatches = hist
-          .filter(h => h.url.toLowerCase().includes(q) || h.title.toLowerCase().includes(q))
-          .map(h => ({ url: h.url, title: h.title, isSearch: false }))
-          .slice(0, 3);
-      }
-    } catch (e) {
-      console.error(e);
+      const histStr = localStorage.getItem("realssa_browser_history");
+      if (!histStr) return [];
+      const hist: { url: string; title: string }[] = JSON.parse(histStr);
+      const q = val.toLowerCase();
+      return hist
+        .filter((h) => h.url?.toLowerCase().includes(q) || h.title?.toLowerCase().includes(q))
+        .map((h) => ({ url: h.url, title: h.title, isSearch: false as const }))
+        .slice(0, 3);
+    } catch {
+      return [];
+    }
+  };
+
+  // ── Autocomplete — same behavior as InAppBrowser address bar ─────────────
+  const handleAutocomplete = (val: string) => {
+    if (autocompleteTimer.current) clearTimeout(autocompleteTimer.current);
+    if (!val.trim()) {
+      setSuggestions([]);
+      return;
     }
 
-    // 2. Fetch live suggestions from our backend autocomplete proxy API (CORS-safe)
-    fetch(apiUrl(`/api/autocomplete?q=${encodeURIComponent(val)}`))
-      .then(res => res.json())
-      .then((data: any) => {
-        if (data && Array.isArray(data[1])) {
-          const searchSuggestions = data[1]
-            .map((s: string) => ({
+    const trimmed = val.trim();
+    const historyMatches = getHistoryMatches(trimmed);
+    const selfSearch = {
+      url: `realssa://search?q=${encodeURIComponent(trimmed)}`,
+      title: trimmed,
+      isSearch: true as const,
+    };
+
+    // Instant feedback (history + typed query) like a real browser
+    setSuggestions([...historyMatches, selfSearch]);
+
+    autocompleteTimer.current = setTimeout(() => {
+      fetch(apiUrl(`/api/autocomplete?q=${encodeURIComponent(trimmed)}`))
+        .then((res) => res.json())
+        .then((data: unknown) => {
+          const list = Array.isArray(data) && Array.isArray(data[1]) ? (data[1] as string[]) : [];
+          const searchSuggestions = list
+            .filter((s) => s && s.toLowerCase() !== trimmed.toLowerCase())
+            .map((s) => ({
               url: `realssa://search?q=${encodeURIComponent(s)}`,
               title: s,
-              isSearch: true
+              isSearch: true as const,
             }))
             .slice(0, 5);
-          setSuggestions([...historyMatches, ...searchSuggestions]);
-        } else {
-          setSuggestions(historyMatches);
-        }
-      })
-      .catch(() => {
-        setSuggestions(historyMatches);
-      });
+          setSuggestions([...historyMatches, selfSearch, ...searchSuggestions]);
+        })
+        .catch(() => {
+          setSuggestions([...historyMatches, selfSearch]);
+        });
+    }, 180);
+  };
+
+  const goToSuggestion = (s: { url: string; title: string; isSearch?: boolean }) => {
+    const dest = s.isSearch
+      ? `realssa://search?q=${encodeURIComponent(s.title)}`
+      : s.url;
+    setSearchQuery(s.isSearch ? s.title : s.url);
+    setSuggestions([]);
+    setIsSearchFocused(false);
+    navigate(`/browser?url=${encodeURIComponent(dest)}`);
   };
 
   const [isSecureOpen, setIsSecureOpen] = useState(false);
@@ -193,7 +248,7 @@ const Header = () => {
     { name: "Entertainment", path: "/entertainment" },
     { name: "World", path: "/world-news" },
     { name: "Crypto", path: "/crypto" },
-    { name: "🎬 Reels", path: "/reels" },
+    { name: "Trending", path: "/trending" },
     { name: "Culture", path: "/culture" },
   ];
 
@@ -458,10 +513,12 @@ const Header = () => {
 
         {/* Integrated RealSSA Search Bar Gateway */}
         <div className={cn(
-          "border-t border-border/40 bg-background relative z-50 transition-all duration-300 overflow-hidden",
-          showMobileSearch ? "max-h-[80px] opacity-100" : "max-h-0 opacity-0 border-t-0 pointer-events-none md:max-h-[80px] md:opacity-100 md:border-t"
+          "border-t border-border/40 bg-background relative z-50 transition-all duration-300",
+          showMobileSearch || isSearchFocused
+            ? "max-h-[80px] opacity-100 overflow-visible"
+            : "max-h-0 opacity-0 border-t-0 pointer-events-none overflow-hidden md:max-h-[80px] md:opacity-100 md:border-t md:overflow-visible"
         )}>
-          <div className="py-2.5 px-3 max-w-4xl mx-auto relative">
+          <div ref={searchWrapRef} className="py-2.5 px-3 max-w-4xl mx-auto relative">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -486,7 +543,7 @@ const Header = () => {
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck={false}
-                  placeholder="Ask RealSSA anything..."
+                  placeholder="Search or enter URL..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -494,7 +551,10 @@ const Header = () => {
                   }}
                   onFocus={() => setIsSearchFocused(true)}
                   onBlur={() => {
-                    setTimeout(() => setIsSearchFocused(false), 200);
+                    setTimeout(() => {
+                      setIsSearchFocused(false);
+                      setSuggestions([]);
+                    }, 200);
                   }}
                   className="w-full min-w-0 bg-transparent border-none text-[16px] md:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none py-1.5 pr-7"
                 />
@@ -517,20 +577,25 @@ const Header = () => {
               </button>
             </form>
 
-            {/* Inline Suggestions Dropdown */}
-            {isSearchFocused && suggestions.length > 0 && (
-              <div className="absolute left-3 right-3 top-full mt-1 bg-[#121824] border border-border rounded-xl shadow-2xl overflow-hidden z-[99999] animate-in fade-in slide-in-from-top-1 duration-200">
+            {/* Autocomplete dropdown — portaled so sticky/overflow header can't clip it */}
+            {isSearchFocused && suggestions.length > 0 && suggestBox && createPortal(
+              <div
+                className="fixed bg-[#121824] border border-border rounded-xl shadow-2xl overflow-hidden z-[100000] animate-in fade-in slide-in-from-top-1 duration-150"
+                style={{
+                  top: suggestBox.top,
+                  left: suggestBox.left,
+                  width: suggestBox.width,
+                }}
+                role="listbox"
+                aria-label="Search suggestions"
+              >
                 {suggestions.map((s, i) => (
                   <button
-                    key={i}
+                    key={`${s.isSearch ? "s" : "h"}-${s.title}-${i}`}
                     type="button"
-                    onMouseDown={() => {
-                      setSearchQuery(s.isSearch ? s.title : s.url);
-                      const dest = s.isSearch
-                        ? `realssa://search?q=${encodeURIComponent(s.title)}`
-                        : s.url;
-                      navigate(`/browser?url=${encodeURIComponent(dest)}`);
-                      setSuggestions([]);
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      goToSuggestion(s);
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-amber-500/10 transition-colors text-left group border-b border-border/10 last:border-0"
                   >
@@ -544,11 +609,15 @@ const Header = () => {
                       {!s.isSearch && (
                         <div className="text-[10px] text-muted-foreground truncate">{s.url}</div>
                       )}
+                      {s.isSearch && s.title.toLowerCase() === searchQuery.trim().toLowerCase() && (
+                        <div className="text-[10px] text-muted-foreground truncate">Search with RealSSA</div>
+                      )}
                     </div>
-                    <ArrowRight className="w-3 h-3 text-muted-foreground group-hover:text-amber-400 shrink-0 animate-pulse" />
+                    <ArrowRight className="w-3 h-3 text-muted-foreground group-hover:text-amber-400 shrink-0" />
                   </button>
                 ))}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>

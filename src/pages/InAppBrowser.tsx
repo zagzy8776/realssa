@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
-import { Browser } from '@capacitor/browser';
+import { InAppBrowser } from '@capgo/inappbrowser';
 import {
   ArrowLeft, ArrowRight, RotateCw, ExternalLink, Share2, BookMarked,
   BookOpen, Lock, X, Sparkles, AlertTriangle, Search, History,
@@ -120,6 +120,30 @@ export default function InAppBrowser() {
   const proxyUrl = useCallback((url: string) =>
     `${RUST_ENGINE_URL}/proxy-page?url=${encodeURIComponent(url)}`, []);
 
+  // ── Route decision: news article → Reader (Mode C), everything else → native WebView (Mode B)
+  const openNative = useCallback(async (url: string, title?: string) => {
+    const SOCIAL_DOMAINS = [
+      'facebook.com', 'twitter.com', 'x.com', 'instagram.com', 'tiktok.com',
+      'google.com', 'accounts.google', 'linkedin.com', 'github.com',
+      'apple.com', 'microsoft.com', 'login.', 'auth.', 'oauth.',
+      'sportybet.com', 'bet9ja.com', 'betking.com', '1xbet.com', 'betway.com',
+      'youtube.com', 'whatsapp.com', 'telegram.org'
+    ];
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      const isSocial = SOCIAL_DOMAINS.some(d => hostname.includes(d));
+      // News articles: not social + has a path beyond root
+      const path = new URL(url).pathname;
+      const looksLikeArticle = !isSocial && path.length > 1 && path !== '/';
+      if (looksLikeArticle) {
+        navigate(`/read?url=${encodeURIComponent(url)}${title ? `&title=${encodeURIComponent(title)}` : ''}`);
+        return;
+      }
+    } catch { /* fall through to native webview */ }
+    // Social / login / complex → native WebView inside app (cookies + OAuth work)
+    await InAppBrowser.open({ url });
+  }, [navigate]);
+
   // ── Core load function — tries renderer first, silently falls back ──────────
   const loadUrl = useCallback(async (url: string) => {
     if (!url) return;
@@ -146,7 +170,7 @@ export default function InAppBrowser() {
         if (Capacitor.isNativePlatform()) {
           setLoading(false);
           setUsingProxy(false);
-          await Browser.open({ url });
+          await openNative(url, data.meta?.title);
           return;
         }
 
@@ -175,7 +199,7 @@ export default function InAppBrowser() {
         setLoading(false);
         setUsingProxy(false);
         try {
-          await Browser.open({ url });
+          await openNative(url);
           return;
         } catch (_) {}
       }
@@ -300,7 +324,7 @@ export default function InAppBrowser() {
     const formatted = formatUrl(url);
     if (!formatted || formatted === currentUrl) return;
 
-    // Open betting sites in the native system browser/tab (preserves CORS, WebSockets, & cookies)
+    // Open betting sites via native WebView (stays in app, preserves cookies)
     const NATIVE_DOMAINS = [
       'sportybet.com', 'bet9ja.com', 'betking.com', '1xbet.com', 'betway.com'
     ];
@@ -308,7 +332,7 @@ export default function InAppBrowser() {
       const hostname = new URL(formatted).hostname.toLowerCase();
       const isNative = NATIVE_DOMAINS.some(domain => hostname.includes(domain));
       if (isNative) {
-        window.open(formatted, '_system');
+        InAppBrowser.open({ url: formatted });
         return;
       }
     } catch {
