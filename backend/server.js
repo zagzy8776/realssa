@@ -566,23 +566,8 @@ app.post('/api/extract', async (req, res) => {
     res.status(500).json({ error: 'Extraction failed', message: err.message });
   }
 });
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL required' });
-  
-  // SSRF Protection
-  if (!(await isSafeUrl(url))) {
-    return res.status(400).json({ error: 'Invalid or unsafe URL' });
-  }
-
-  try {
-    // Legacy path — should not be reached (new handler above handles all cases)
-    res.status(422).json({ error: 'Could not extract article' });
-  } catch (err) {
-    res.status(500).json({ error: 'Extraction failed', message: err.message });
-  }
-});
-
-app._legacyExtractPlaceholder = (url => {  // dead code placeholder
+app._legacyExtractPlaceholder = async url => {  // dead code placeholder
+    try {
     const html = '';
 
     // Extract OG / Twitter image for the Reels card hero
@@ -710,7 +695,7 @@ app._legacyExtractPlaceholder = (url => {  // dead code placeholder
     }
     res.status(500).json({ error: 'Extraction failed', message: err.message });
   }
-});
+};
 
 // GET Daily Digest package (Top 20 cached offline articles under 200KB)
 app.get('/api/digest/daily', async (req, res) => {
