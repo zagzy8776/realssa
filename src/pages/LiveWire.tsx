@@ -204,40 +204,48 @@ export default function LiveWire() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 md:py-10 space-y-8">
         
-        {/* Banner Cover */}
-        <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 md:p-10 shadow-xl border border-white/10 relative overflow-hidden">
-          <div className="absolute -right-10 -bottom-10 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
+        {/* Banner Cover with Drifting Orbs */}
+        <div className="relative rounded-3xl p-6 md:p-10 shadow-2xl border border-white/10 overflow-hidden"
+             style={{
+               background: 'rgba(30, 25, 36, 0.72)',
+               backdropFilter: 'blur(20px)',
+               WebkitBackdropFilter: 'blur(20px)',
+             }}>
+          {/* Drifting background orbs */}
+          <div className="absolute top-[-30px] right-[-30px] w-48 h-48 bg-amber-500/10 rounded-full blur-3xl animate-orb-drift" style={{ animationDuration: '14s' }} />
+          <div className="absolute bottom-[-40px] left-[10%] w-56 h-56 bg-purple-500/8 rounded-full blur-3xl animate-orb-drift" style={{ animationDuration: '19s', animationDelay: '-4s' }} />
+          
           <div className="space-y-3 relative z-10">
-            <Badge variant="secondary" className="bg-white/20 text-white hover:bg-white/30 backdrop-blur">
+            <Badge variant="secondary" className="glass-pill px-3 py-1 text-white border-white/10 backdrop-blur">
               RealSSA Live Wire
             </Badge>
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight flex items-center gap-3">
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight flex items-center gap-3 text-white">
               <img src="/logo.png" alt="RealSSA Logo" className="h-8 md:h-12 w-auto animate-pulse" />
               Live News Wire
             </h1>
-            <p className="text-indigo-200 text-sm md:text-base max-w-2xl">
+            <p className="text-white/70 text-sm md:text-base max-w-2xl leading-relaxed">
               Real-time mapped micro-feed aggregates directly from West Africa's verified publishers and agencies. No intermediary channels, raw content only.
             </p>
           </div>
         </div>
 
         {/* Filter Toolbar */}
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-muted/20 p-4 rounded-2xl border">
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-center glass p-4 rounded-2xl border border-white/10">
           <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-500 h-4 w-4" />
             <Input
               placeholder="Search wire status updates..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-background border-border/80"
+              className="pl-10 glass-search bg-transparent border-transparent text-white placeholder:text-white/30"
             />
           </div>
           <button
             onClick={fetchWirePosts}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-background border hover:bg-muted/50 transition"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white glass-pill hover:bg-white/10 border-white/15 transition duration-150 active:scale-95"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 text-amber-500 ${loading ? 'animate-spin' : ''}`} />
             Refresh Feed
           </button>
         </div>
@@ -257,8 +265,8 @@ export default function LiveWire() {
                   onClick={() => { setActivePublisher(pub); setSearch(""); }}
                   className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border text-left transition duration-200 ${
                     activePublisher.handle === pub.handle
-                      ? "bg-primary/5 border-primary/50 shadow-sm"
-                      : "bg-card border-border/40 hover:border-border hover:bg-muted/10"
+                      ? "border-amber-500/50 glow-amber-ring bg-amber-500/5"
+                      : "bg-white/[0.03] border-white/5 hover:border-white/10 hover:bg-white/[0.06]"
                   }`}
                 >
                   {pub.logo ? (
@@ -297,8 +305,8 @@ export default function LiveWire() {
           <div className="lg:col-span-2 space-y-6">
             
             {/* Publisher bio header card */}
-            <Card className="border border-border/60 bg-muted/10">
-              <CardContent className="p-6 flex flex-col md:flex-row gap-5 items-start md:items-center">
+            <Card className="border border-white/8 bg-white/[0.03] backdrop-blur-md rounded-2xl">
+              <CardContent className="p-5 flex flex-col md:flex-row gap-5 items-start md:items-center">
                 {activePublisher.logo && (
                   <img
                     src={activePublisher.logo}
@@ -345,7 +353,7 @@ export default function LiveWire() {
                   <button
                     key={post.id}
                     onClick={() => setSelectedPost(post)}
-                    className="w-full text-left bg-card hover:bg-muted/15 border border-border/60 hover:border-primary/45 rounded-2xl p-5 transition duration-200 flex flex-col md:flex-row gap-5 hover:shadow-sm"
+                    className="w-full text-left glass-card rounded-2xl p-5 transition duration-200 flex flex-col md:flex-row gap-5 border border-white/8 relative"
                   >
                     {post.image && (
                       <img
@@ -387,7 +395,7 @@ export default function LiveWire() {
 
         {/* --- detail Dialog Modal --- */}
         <Dialog open={selectedPost !== null} onOpenChange={(open) => { if (!open) setSelectedPost(null); }}>
-          <DialogContent className="max-w-2xl bg-card border border-border/80 rounded-3xl p-0 overflow-hidden shadow-2xl">
+          <DialogContent className="max-w-2xl glass-dropdown border border-white/12 rounded-3xl p-0 overflow-hidden shadow-2xl">
             {selectedPost && (
               <div className="flex flex-col">
                 <DialogHeader className="p-6 md:p-8 border-b pb-4">
@@ -426,8 +434,8 @@ export default function LiveWire() {
                     </p>
                   </div>
                 </div>
-
-                <div className="p-6 md:p-8 border-t bg-muted/20 flex flex-col md:flex-row justify-between items-center gap-4">
+ 
+                <div className="p-6 md:p-8 border-t border-white/8 bg-white/[0.02] flex flex-col md:flex-row justify-between items-center gap-4">
                   <span className="text-[10px] text-muted-foreground font-semibold">
                     1 source channel monitored · updated real-time
                   </span>
