@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Menu, X, ChevronDown, LogOut, Home, Newspaper, Radio, Globe, Moon, Sun, Bell, ArrowLeft, Copy, Check, Key, Search, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/api-base";
@@ -155,6 +156,21 @@ const Header = () => {
     setShakeEnabled(val);
   };
 
+  // Lock body scroll and allow Escape to close streak modal
+  useEffect(() => {
+    if (!isStreakOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsStreakOpen(false);
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isStreakOpen]);
+
   // Global keyboard shortcut ('/' or 'Ctrl+K') to focus homepage Search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -248,7 +264,7 @@ const Header = () => {
           {/* Gamification Streak & Weather */}
           <div className="flex items-center gap-1.5 md:gap-2 animate-in fade-in zoom-in duration-500">
             <button
-              onClick={() => setIsStreakOpen(true)}
+              onClick={() => setIsStreakOpen((open) => !open)}
               className={`flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 rounded-full active:scale-95 transition-all cursor-pointer ${
                 streak > 0 ? 'bg-orange-100 dark:bg-orange-950/60 hover:bg-orange-200' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-250'
               }`}
@@ -261,10 +277,19 @@ const Header = () => {
             </div>
           </div>
 
-          {/* Reading Streak Calendar Modal */}
-          {isStreakOpen && (
-            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="relative w-full max-w-sm bg-gradient-to-br from-card to-background border border-border rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col gap-6 animate-in zoom-in-95 duration-250">
+          {/* Reading Streak Calendar Modal — portaled to body so backdrop-blur on header doesn't trap it on iOS */}
+          {isStreakOpen && createPortal(
+            <div
+              className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+              onClick={() => setIsStreakOpen(false)}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Reading streak"
+            >
+              <div
+                className="relative w-full max-w-sm bg-gradient-to-br from-card to-background border border-border rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col gap-6 animate-in zoom-in-95 duration-250"
+                onClick={(e) => e.stopPropagation()}
+              >
                 
                 {/* Background glow effects */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -277,6 +302,7 @@ const Header = () => {
                   <button 
                     onClick={() => setIsStreakOpen(false)}
                     className="p-1 rounded-full hover:bg-muted text-muted-foreground transition"
+                    aria-label="Close streak modal"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -413,7 +439,8 @@ const Header = () => {
                   )}
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
 
           {/* Header Action Controls (Streak, Weather, Invite, Hamburger Menu) */}
@@ -447,36 +474,44 @@ const Header = () => {
                 setIsSearchFocused(false);
                 setSuggestions([]);
               }}
-              className="relative flex items-center gap-3 bg-card border border-amber-500/40 focus-within:border-amber-500 rounded-2xl px-4 py-2 shadow-sm transition-all focus-within:shadow-amber-500/10 group"
+              className="relative flex items-center gap-2 md:gap-3 bg-card border border-amber-500/40 focus-within:border-amber-500 rounded-2xl px-3 md:px-4 py-2 shadow-sm transition-[border-color,box-shadow] focus-within:shadow-amber-500/10 group min-w-0"
             >
               <Search className="w-4 h-4 text-amber-500 shrink-0" />
-              <input
-                id="homepage-search-input"
-                type="text"
-                placeholder="Ask RealSSA anything... (e.g. CBN Naira Rate, Lagos Traffic)"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  handleAutocomplete(e.target.value);
-                }}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => {
-                  setTimeout(() => setIsSearchFocused(false), 200);
-                }}
-                className="flex-1 bg-transparent border-none text-base md:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none py-1.5"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => { setSearchQuery(''); setSuggestions([]); }}
-                  className="text-muted-foreground hover:text-foreground p-1 shrink-0"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <div className="relative flex-1 min-w-0">
+                <input
+                  id="homepage-search-input"
+                  type="search"
+                  inputMode="search"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="Ask RealSSA anything..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    handleAutocomplete(e.target.value);
+                  }}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => {
+                    setTimeout(() => setIsSearchFocused(false), 200);
+                  }}
+                  className="w-full min-w-0 bg-transparent border-none text-[16px] md:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none py-1.5 pr-7"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(''); setSuggestions([]); }}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
               <button
                 type="submit"
-                className="bg-amber-500 hover:bg-amber-400 text-black text-[10px] md:text-xs font-extrabold px-3.5 py-1.5 rounded-xl uppercase flex items-center gap-1 shrink-0 shadow-sm transition-transform active:scale-95 cursor-pointer"
+                className="bg-amber-500 hover:bg-amber-400 text-black text-[10px] md:text-xs font-extrabold px-2.5 md:px-3.5 py-1.5 rounded-xl uppercase flex items-center gap-1 shrink-0 shadow-sm transition-transform active:scale-95 cursor-pointer whitespace-nowrap"
               >
                 ⚡ SEARCH
               </button>
