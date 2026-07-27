@@ -56,7 +56,7 @@ const MobileBottomNav = () => {
           <div className="relative flex-1 flex items-center justify-center">
             <button
               onClick={() => setChatOpen(true)}
-              className="absolute -top-5 w-14 h-14 rounded-full bg-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.6)] flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 hover:shadow-[0_0_28px_rgba(245,158,11,0.8)] border-2 border-background"
+              className="absolute -top-6 w-14 h-14 rounded-full bg-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.6)] flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 hover:shadow-[0_0_28px_rgba(245,158,11,0.8)] border-2 border-background"
               aria-label="RealSSA AI"
             >
               <Sparkles className="w-5 h-5 text-black" strokeWidth={2.5} />
