@@ -4,9 +4,30 @@
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "package": "electron-builder build --dir",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "electron": "^31.0.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.realssa.desktop",
+    "productName": "RealSSA News",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "../dist/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    }
   }
 }
