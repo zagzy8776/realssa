@@ -4244,7 +4244,9 @@ app.get('/api/search/ai', async (req, res) => {
       { "label": "Education", "value": "Schools / Degrees" },
       { "label": "Political Party", "value": "Party name" },
       { "label": "Offices / Former roles", "value": "Key positions held" }
-    ]
+    ],
+    "disputed": false,
+    "discrepancyDescription": "If different search results report conflicting outcomes, quantities, dates, or numbers for the exact same event, set disputed to true (boolean) and summarize the contradiction in 1 sentence. E.g. 'Vanguard reports 15 casualties while Daily Trust reports 5.' Otherwise, set disputed to false and this field to null."
   }
   
   Do not include markdown formatting, backticks, or introductions. Return ONLY raw JSON.
@@ -4300,7 +4302,9 @@ app.get('/api/search/ai', async (req, res) => {
           ? `${wikiDetails.wikiExtract.substring(0, 300)}...`
           : `No AI Summary could be generated at this moment. You can view the web search results below.`,
         imageUrl: wikiDetails?.imageUrl || null,
-        facts: []
+        facts: [],
+        disputed: false,
+        discrepancyDescription: null
       }
     });
   }

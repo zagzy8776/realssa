@@ -57,8 +57,73 @@ a{{display:inline-block;background:#f59e0b;color:#000;font-weight:700;
 </html>"#, hostname = hostname, original_url = original_url)
 }
 
+/// Prefix cookie names with the target domain to prevent collision.
+/// e.g. "session_id=123" -> "_realssa_twitter_com_session_id=123"
+pub fn prefix_cookie(set_cookie_val: &str, target_host: &str) -> String {
+    let sanitized_host = target_host.replace('.', "_");
+    let parts: Vec<&str> = set_cookie_val.split(';').collect();
+    if parts.is_empty() { return set_cookie_val.to_string(); }
+    
+    // Clean and rebuild attributes
+    let mut new_parts = Vec::new();
+    
+    // Re-parse the KV first
+    let kv = parts[0].trim();
+    let prefixed_kv = if let Some(eq_idx) = kv.find('=') {
+        let name = &kv[..eq_idx];
+        let val = &kv[eq_idx..];
+        format!("_realssa_{}_{}", sanitized_host, name) + val
+    } else {
+        kv.to_string()
+    };
+    new_parts.push(prefixed_kv);
+    
+    for part in parts.iter().skip(1) {
+        let trimmed = part.trim();
+        let lower = trimmed.to_lowercase();
+        if lower.starts_with("domain=") {
+            // Strip domain so it binds to the proxy host
+            continue;
+        }
+        if lower == "secure" {
+            // Strip secure to allow localhost HTTP testing
+            continue;
+        }
+        if lower.starts_with("samesite=") {
+            // Override SameSite to None to allow running inside iframe
+            continue;
+        }
+        new_parts.push(trimmed.to_string());
+    }
+    
+    // Add SameSite=None & Secure for iframe cookie setting support
+    new_parts.push("SameSite=None".to_string());
+    new_parts.push("Secure".to_string());
+    
+    new_parts.join("; ")
+}
+
+/// Parse client cookies, extract and unprefix cookies matching the target domain.
+pub fn extract_prefixed_cookies(cookie_header: &str, target_host: &str) -> String {
+    let sanitized_host = target_host.replace('.', "_");
+    let prefix = format!("_realssa_{}_", sanitized_host);
+    
+    let mut extracted = Vec::new();
+    for cookie in cookie_header.split(';') {
+        let trimmed = cookie.trim();
+        if trimmed.starts_with(&prefix) {
+            let without_prefix = &trimmed[prefix.len()..];
+            extracted.push(without_prefix.to_string());
+        }
+    }
+    extracted.join("; ")
+}
+
 /// Fetch `url`, strip framing headers, inject our scripts, return modified HTML.
-pub async fn proxy_page(url: &str) -> Result<String> {
+pub async fn proxy_page(url: &str, incoming_cookies: &str) -> Result<(String, Vec<String>)> {
+    let parsed_url = reqwest::Url::parse(url)?;
+    let host = parsed_url.host_str().unwrap_or("");
+    
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
@@ -67,7 +132,10 @@ pub async fn proxy_page(url: &str) -> Result<String> {
         .danger_accept_invalid_certs(false)
         .build()?;
 
-    let resp = client
+    // Extract cookies prefixed for this host
+    let target_cookies = extract_prefixed_cookies(incoming_cookies, host);
+
+    let mut req = client
         .get(url)
         .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
         .header("Accept-Language", "en-NG,en-US;q=0.9,en;q=0.8")
@@ -79,10 +147,25 @@ pub async fn proxy_page(url: &str) -> Result<String> {
         .header("Sec-Fetch-Dest", "document")
         .header("Sec-Fetch-Mode", "navigate")
         .header("Sec-Fetch-Site", "none")
-        .header("Sec-Fetch-User", "?1")
-        .send()
-        .await?;
+        .header("Sec-Fetch-User", "?1");
 
+    if !target_cookies.is_empty() {
+        req = req.header("Cookie", target_cookies);
+    }
+
+    let resp = req.send().await?;
+
+    // Collect Set-Cookie headers
+    let mut set_cookies = Vec::new();
+    for (key, val) in resp.headers().iter() {
+        if key.as_str().to_lowercase() == "set-cookie" {
+            if let Ok(val_str) = val.to_str() {
+                // Prefix the cookie with the target host to prevent collision
+                let prefixed = prefix_cookie(val_str, host);
+                set_cookies.push(prefixed);
+            }
+        }
+    }
 
     let content_type = resp
         .headers()
@@ -104,15 +187,12 @@ pub async fn proxy_page(url: &str) -> Result<String> {
         || (html.contains("Cloudflare") && html.contains("challenge"));
 
     if is_cf {
-        let parsed = reqwest::Url::parse(url).ok();
-        let hostname = parsed.as_ref().and_then(|u| u.host_str()).unwrap_or(url);
-        return Ok(cloudflare_fallback(hostname, url));
+        let hostname = parsed_url.host_str().unwrap_or(url);
+        return Ok((cloudflare_fallback(hostname, url), set_cookies));
     }
 
     // ── Base URL for relative assets ──────────────────────────────────────────
-    let origin = reqwest::Url::parse(url)
-        .map(|u| format!("{}/", u.origin().ascii_serialization()))
-        .unwrap_or_default();
+    let origin = format!("{}/", parsed_url.origin().ascii_serialization());
 
     // 1. Inject <base> tag
     let base_tag = format!("<base href=\"{}\" target=\"_blank\">", origin);
@@ -126,7 +206,6 @@ pub async fn proxy_page(url: &str) -> Result<String> {
     }
 
     // 2. Strip meta CSP tags
-    // Simple regex-free approach: find and remove common pattern
     while let Some(start) = html.to_lowercase().find("<meta") {
         if let Some(end) = html[start..].find('>') {
             let tag = &html[start..start + end + 1].to_lowercase();
@@ -135,7 +214,7 @@ pub async fn proxy_page(url: &str) -> Result<String> {
                 continue;
             }
         }
-        break; // only strip first match if found, avoid infinite loop
+        break;
     }
 
     // 3. Inject link interception before </body>
@@ -145,5 +224,5 @@ pub async fn proxy_page(url: &str) -> Result<String> {
         html.push_str(LINK_INTERCEPT);
     }
 
-    Ok(html)
+    Ok((html, set_cookies))
 }

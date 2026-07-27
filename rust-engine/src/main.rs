@@ -280,7 +280,10 @@ async fn img_handler(
 }
 
 /// GET /proxy-page?url=<url>
-async fn proxy_page_handler(Query(params): Query<UrlQuery>) -> Response {
+async fn proxy_page_handler(
+    headers: HeaderMap,
+    Query(params): Query<UrlQuery>
+) -> Response {
     let url = params.url.trim().to_string();
     let url = if url.starts_with("http") { url } else { format!("https://{}", url) };
 
@@ -288,11 +291,24 @@ async fn proxy_page_handler(Query(params): Query<UrlQuery>) -> Response {
         return (StatusCode::FORBIDDEN, "Blocked").into_response();
     }
 
-    match proxy::proxy_page(&url).await {
-        Ok(html) => {
+    // Get client's Cookie header
+    let cookie_val = headers.get("cookie")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    match proxy::proxy_page(&url, cookie_val).await {
+        Ok((html, set_cookies)) => {
             let mut headers = HeaderMap::new();
             headers.insert("Content-Type", HeaderValue::from_static("text/html; charset=utf-8"));
             headers.insert("X-Frame-Options", HeaderValue::from_static("ALLOWALL"));
+            
+            // Forward Set-Cookie headers back to browser
+            for cookie in set_cookies {
+                if let Ok(hdr_val) = HeaderValue::from_str(&cookie) {
+                    headers.append("Set-Cookie", hdr_val);
+                }
+            }
+            
             (headers, html).into_response()
         }
         Err(e) => {

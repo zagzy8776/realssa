@@ -16,7 +16,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "timeout"] }
 
 # HTTP client (rustls = no OpenSSL dependency needed)
-reqwest = { version = "0.12", features = ["stream", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["stream", "rustls-tls", "cookies"], default-features = false }
 
 # HTML parsing — Servo's html5ever under the hood (browser-grade)
 scraper = "0.21"

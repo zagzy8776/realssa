@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import {
   ArrowLeft, ArrowRight, RotateCw, ExternalLink, Share2, BookMarked,
   BookOpen, Lock, X, Sparkles, AlertTriangle, Search, History,
@@ -70,6 +72,15 @@ export default function InAppBrowser() {
   const [usingProxy, setUsingProxy] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const webviewRef = useRef<any>(null);
+  const [isElectron, setIsElectron] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 
+        ((window as any).electronAPI || navigator.userAgent.toLowerCase().includes('electron'))) {
+      setIsElectron(true);
+    }
+  }, []);
 
   // ── Address bar ─────────────────────────────────────────────────────────────
   const [addressValue, setAddressValue] = useState(initialUrl);
@@ -120,11 +131,24 @@ export default function InAppBrowser() {
       const data: PageData = await res.json();
 
       if (data.requiresProxy) {
-        // Seamlessly mount proxy iframe — user sees nothing different
+        if (Capacitor.isNativePlatform()) {
+          setLoading(false);
+          setUsingProxy(false);
+          await Browser.open({ url });
+          return;
+        }
+
+        // Seamlessly mount proxy iframe or webview
         setUsingProxy(true);
         setPageData(null);
-        if (iframeRef.current) {
-          iframeRef.current.src = proxyUrl(url);
+        if (isElectron) {
+          if (webviewRef.current) {
+            webviewRef.current.src = url;
+          }
+        } else {
+          if (iframeRef.current) {
+            iframeRef.current.src = proxyUrl(url);
+          }
         }
         // Save to history with whatever title we have
         saveToBrowserHistory(url, data.meta?.title || getDomain(url));
@@ -135,11 +159,26 @@ export default function InAppBrowser() {
         saveToBrowserHistory(url, data.meta?.title || getDomain(url));
       }
     } catch {
+      if (Capacitor.isNativePlatform()) {
+        setLoading(false);
+        setUsingProxy(false);
+        try {
+          await Browser.open({ url });
+          return;
+        } catch (_) {}
+      }
+
       // Network error → fall back to proxy silently
       setUsingProxy(true);
       setPageData(null);
-      if (iframeRef.current) {
-        iframeRef.current.src = proxyUrl(url);
+      if (isElectron) {
+        if (webviewRef.current) {
+          webviewRef.current.src = url;
+        }
+      } else {
+        if (iframeRef.current) {
+          iframeRef.current.src = proxyUrl(url);
+        }
       }
       saveToBrowserHistory(url, getDomain(url));
     } finally {
@@ -219,6 +258,31 @@ export default function InAppBrowser() {
     return () => window.removeEventListener('message', handleMsg);
   }, [stackIndex, stack]); // eslint-disable-line
 
+  // ── Webview navigation listener for Electron ────────────────────────────────
+  useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview || !isElectron) return;
+
+    const handleNavigate = (e: any) => {
+      const newUrl = e.url;
+      setAddressValue(newUrl);
+      setStack(prev => {
+        if (prev[stackIndex] === newUrl) return prev;
+        const nextStack = [...prev.slice(0, stackIndex + 1), newUrl];
+        setStackIndex(nextStack.length - 1);
+        return nextStack;
+      });
+    };
+
+    webview.addEventListener('did-navigate', handleNavigate);
+    webview.addEventListener('did-navigate-in-page', handleNavigate);
+
+    return () => {
+      webview.removeEventListener('did-navigate', handleNavigate);
+      webview.removeEventListener('did-navigate-in-page', handleNavigate);
+    };
+  }, [isElectron, stackIndex]);
+
   // ── Navigate to a URL (adds to stack, clears forward history) ───────────────
   const navigateTo = useCallback((url: string) => {
     const formatted = formatUrl(url);
@@ -246,6 +310,10 @@ export default function InAppBrowser() {
 
   // ── Back / Forward ───────────────────────────────────────────────────────────
   const goBack = () => {
+    if (isElectron && usingProxy && webviewRef.current && webviewRef.current.canGoBack()) {
+      webviewRef.current.goBack();
+      return;
+    }
     if (stackIndex <= 0) { navigate(-1); return; }
     const newIndex = stackIndex - 1;
     setStackIndex(newIndex);
@@ -253,6 +321,10 @@ export default function InAppBrowser() {
   };
 
   const goForward = () => {
+    if (isElectron && usingProxy && webviewRef.current && webviewRef.current.canGoForward()) {
+      webviewRef.current.goForward();
+      return;
+    }
     if (stackIndex >= stack.length - 1) return;
     const newIndex = stackIndex + 1;
     setStackIndex(newIndex);
@@ -663,15 +735,24 @@ export default function InAppBrowser() {
           />
         )}
 
-        {/* Proxy iframe — seamless fallback, user doesn't know */}
-        <iframe
-          ref={iframeRef}
-          title={pageTitle}
-          className={`w-full flex-1 border-none bg-white ${usingProxy && !loading && !currentUrl.startsWith('realssa://search?q=') ? 'flex' : 'hidden'}`}
-          onLoad={() => setLoading(false)}
-          onError={() => setLoading(false)}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox"
-        />
+        {/* Proxy iframe / WebView — seamless fallback, user doesn't know */}
+        {isElectron ? (
+          React.createElement('webview', {
+            ref: webviewRef,
+            src: currentUrl,
+            style: { border: 'none', background: 'white' },
+            className: `w-full flex-1 ${usingProxy && !loading && !currentUrl.startsWith('realssa://search?q=') ? 'flex' : 'hidden'}`
+          } as any)
+        ) : (
+          <iframe
+            ref={iframeRef}
+            title={pageTitle}
+            className={`w-full flex-1 border-none bg-white ${usingProxy && !loading && !currentUrl.startsWith('realssa://search?q=') ? 'flex' : 'hidden'}`}
+            onLoad={() => setLoading(false)}
+            onError={() => setLoading(false)}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox"
+          />
+        )}
 
         {/* Native Search Results UI */}
         {currentUrl.startsWith('realssa://search?q=') && (
