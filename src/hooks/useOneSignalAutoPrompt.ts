@@ -34,11 +34,11 @@ export function useOneSignalAutoPrompt() {
                 console.log("Native Notification permission granted: " + success);
                 Preferences.set({ key: ONESIGNAL_PROMPT_KEY, value: 'true' });
               });
-            }, 3000); // Give user a moment before prompting
+            }, 60000); // Delay native prompt by 60 seconds of active usage
           }
           
         } else {
-          // Web / PWA — defer execution until OneSignal is fully initialized
+          // Defer execution until OneSignal is fully initialized
           const OneSignalDeferred = (window as any).OneSignalDeferred;
           if (OneSignalDeferred) {
             OneSignalDeferred.push(async (OneSignal: any) => {
@@ -48,8 +48,13 @@ export function useOneSignalAutoPrompt() {
                 await OneSignal.login(deviceId);
 
                 if (value !== 'true') {
+                  // Track page view count persistently
+                  let pageViews = parseInt(localStorage.getItem('realssa_page_views') || '0');
+                  pageViews += 1;
+                  localStorage.setItem('realssa_page_views', pageViews.toString());
+
                   const optedIn = OneSignal.User?.PushSubscription?.optedIn || false;
-                  // Only prompt after user has engaged: 30s on page AND scrolled at least 300px
+                  // Only prompt after user has engaged: scrolled at least 300px
                   let hasScrolled = false;
                   const onScroll = () => {
                     if (window.scrollY > 300) {
@@ -59,26 +64,29 @@ export function useOneSignalAutoPrompt() {
                   };
                   window.addEventListener('scroll', onScroll, { passive: true });
 
-                  // Check every 5s after 30s — prompt only when both conditions met
-                  setTimeout(() => {
-                    const checkReady = setInterval(async () => {
-                      if (!hasScrolled) return;
-                      clearInterval(checkReady);
-                      window.removeEventListener('scroll', onScroll);
-                      try {
-                        if (!optedIn) {
-                          if (OneSignal.Slidedown) {
-                            await OneSignal.Slidedown.promptPush();
-                          } else {
-                            await OneSignal.User?.PushSubscription?.optIn();
+                  // Require at least 3 page views before showing prompt
+                  if (pageViews >= 3) {
+                    // Check every 5s after 2 minutes of active session
+                    setTimeout(() => {
+                      const checkReady = setInterval(async () => {
+                        if (!hasScrolled) return;
+                        clearInterval(checkReady);
+                        window.removeEventListener('scroll', onScroll);
+                        try {
+                          if (!optedIn) {
+                            if (OneSignal.Slidedown) {
+                              await OneSignal.Slidedown.promptPush();
+                            } else {
+                              await OneSignal.User?.PushSubscription?.optIn();
+                            }
                           }
+                          await Preferences.set({ key: ONESIGNAL_PROMPT_KEY, value: 'true' });
+                        } catch (promptErr) {
+                          console.warn('Push prompt failed:', promptErr);
                         }
-                        await Preferences.set({ key: ONESIGNAL_PROMPT_KEY, value: 'true' });
-                      } catch (promptErr) {
-                        console.warn('Push prompt failed:', promptErr);
-                      }
-                    }, 5000);
-                  }, 30000); // wait 30s before starting checks
+                      }, 5000);
+                    }, 120000); // 2 minutes delay before checking
+                  }
                 }
               } catch (loginErr) {
                 console.warn('OneSignal login failed:', loginErr);

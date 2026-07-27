@@ -72,23 +72,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // For all other assets (JS, CSS, images), use Cache-First strategy
+  // For all other assets (JS, CSS, images), use Stale-While-Revalidate strategy
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Return cached version or fetch from network
-      return response || fetch(event.request).then((fetchResponse) => {
-        // Don't cache non-successful responses
-        if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
-          return fetchResponse;
-        }
-        
-        // Cache successful responses
-        const responseToCache = fetchResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(event.request).then((cachedResponse) => {
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => {
+          // Silent fallback if offline/failed to fetch in background
         });
-        
-        return fetchResponse;
+
+        // Return cached version immediately if available, otherwise wait for network
+        return cachedResponse || fetchPromise;
       });
     })
   );

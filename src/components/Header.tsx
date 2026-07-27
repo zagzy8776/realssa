@@ -76,6 +76,25 @@ const Header = () => {
   const { streak, longestStreak } = useStreak();
   const [isStreakOpen, setIsStreakOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showMobileSearch, setShowMobileSearch] = useState(true);
+
+  // Scroll handler to collapse mobile search bar on scroll down
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > lastScrollY && currentScrollY > 50) {
+        setShowMobileSearch(false);
+      } else {
+        setShowMobileSearch(true);
+      }
+      lastScrollY = currentScrollY;
+    };
+    
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // ── Autocomplete Suggestions state ──────────────────────────────────────
   const [suggestions, setSuggestions] = useState<{ url: string; title: string; isSearch?: boolean }[]>([]);
@@ -315,9 +334,9 @@ const Header = () => {
                 <div className="border-t border-border/40 pt-4 mt-1 text-left">
                   <button
                     onClick={() => setIsSecureOpen(!isSecureOpen)}
-                    className="w-full flex items-center justify-between text-xs font-bold text-primary hover:underline"
+                    className="w-full flex items-center justify-between text-xs font-bold text-muted-foreground hover:text-foreground hover:underline"
                   >
-                    <span className="flex items-center gap-1">🛡️ Secure Your Streak</span>
+                    <span className="flex items-center gap-1">⚙️ Advanced Settings (Restore Profile)</span>
                     <span>{isSecureOpen ? "Hide" : "Show"}</span>
                   </button>
                   
@@ -402,7 +421,10 @@ const Header = () => {
         </div>
 
         {/* Integrated RealSSA Search Bar Gateway */}
-        <div className="border-t border-border/40 bg-background relative z-50">
+        <div className={cn(
+          "border-t border-border/40 bg-background relative z-50 transition-all duration-300 overflow-hidden",
+          showMobileSearch ? "max-h-[80px] opacity-100" : "max-h-0 opacity-0 border-t-0 pointer-events-none md:max-h-[80px] md:opacity-100 md:border-t"
+        )}>
           <div className="py-2.5 px-3 max-w-4xl mx-auto relative">
             <form
               onSubmit={(e) => {

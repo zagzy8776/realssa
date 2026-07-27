@@ -12,18 +12,16 @@ interface BeforeInstallPromptEvent extends Event {
 const PWAInstallPrompt = () => {
   const [showPrompt, setShowPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [forceHide, setForceHide] = useState(false);
+  const [isDelayedMobileCheck, setIsDelayedMobileCheck] = useState(false);
 
   if (Capacitor.isNativePlatform()) return null;
 
   useEffect(() => {
-    // Auto-hide the entire component after 5 seconds
-    const timeoutId = setTimeout(() => {
-      setForceHide(true);
-      setShowPrompt(false);
-    }, 5000);
-    
-    return () => clearTimeout(timeoutId);
+    // Give 3 seconds to see if beforeinstallprompt event fires before doing fallback checks
+    const timer = setTimeout(() => {
+      setIsDelayedMobileCheck(true);
+    }, 3000);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -78,16 +76,19 @@ const PWAInstallPrompt = () => {
     alert(
       'To install RealSSA:\n\n' +
       '1. Tap the share button in your browser\n' +
-      '2. Select "Add to Home Screen"\n' +
-      '3. Tap "Add" to confirm\n\n' +
+      '2. Select "Add to Home Screen" or "Install"\n' +
+      '3. Tap "Add" or "Install" to confirm\n\n' +
       'The app will appear on your home screen!'
     );
   };
 
-  if (forceHide) return null;
+  // If we haven't received beforeinstallprompt and we haven't waited for the delay, don't show anything yet
+  if (!showPrompt && !deferredPrompt && !isDelayedMobileCheck) {
+    return null;
+  }
 
+  // Fallback checks after the delay
   if (!showPrompt && !deferredPrompt) {
-    // If we haven't received the event yet, but we are on mobile and not standalone, show a fallback prompt
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
     const isDismissed = localStorage.getItem('pwa-install-dismissed') === 'true';
@@ -120,20 +121,32 @@ const PWAInstallPrompt = () => {
       </div>
       
       <div className="flex gap-2">
-        <Button
-          onClick={handleInstallClick}
-          className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Install App
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handleManualInstall}
-          className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
-        >
-          Manual Install
-        </Button>
+        {deferredPrompt ? (
+          <>
+            <Button
+              onClick={handleInstallClick}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Install App
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleManualInstall}
+              className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+            >
+              Manual
+            </Button>
+          </>
+        ) : (
+          <Button
+            onClick={handleManualInstall}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
+          >
+            <Smartphone className="w-4 h-4 mr-2" />
+            How to Install (Manual)
+          </Button>
+        )}
       </div>
       
       <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">

@@ -12,6 +12,10 @@ export function useShakeToDiscover() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
+    // Retrieve setting preference (defaulting to enabled/true)
+    const isShakeEnabled = localStorage.getItem('realssa_shake_discover_enabled') !== 'false';
+    if (!isShakeEnabled) return;
+
     let motionListener: any = null;
 
     const setupMotion = async () => {
@@ -31,8 +35,8 @@ export function useShakeToDiscover() {
           // Calculate total acceleration (magnitude)
           const acceleration = Math.sqrt(x * x + y * y + z * z);
 
-          // Threshold for a "shake" (approx 15-20 m/s^2 depending on device)
-          if (acceleration > 18) {
+          // Increased threshold for a "shake" to 25 m/s^2 to prevent accidental triggers (walking, bumpy rides)
+          if (acceleration > 25) {
             const now = Date.now();
             // Prevent multiple triggers in a 2-second window
             if (now - lastShake.current > 2000) {

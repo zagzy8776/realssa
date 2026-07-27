@@ -74,12 +74,24 @@ export default function InAppBrowser() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const webviewRef = useRef<any>(null);
   const [isElectron, setIsElectron] = useState(false);
+  const [rates, setRates] = useState<{ currency: string; buy_rate: number; sell_rate: number; created_at?: string }[]>([]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 
         ((window as any).electronAPI || navigator.userAgent.toLowerCase().includes('electron'))) {
       setIsElectron(true);
     }
+  }, []);
+
+  useEffect(() => {
+    fetch(apiUrl('/api/rates'))
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setRates(data);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // ── Address bar ─────────────────────────────────────────────────────────────
@@ -750,7 +762,7 @@ export default function InAppBrowser() {
             className={`w-full flex-1 border-none bg-white ${usingProxy && !loading && !currentUrl.startsWith('realssa://search?q=') ? 'flex' : 'hidden'}`}
             onLoad={() => setLoading(false)}
             onError={() => setLoading(false)}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
           />
         )}
 
@@ -866,30 +878,41 @@ export default function InAppBrowser() {
             {activeSearchTab === 'all' && (
               <>
                 {/* Native Intent Widgets (e.g. Currency Rates) */}
-                {/naira|cbn|usd|black.*market|rate/i.test(decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))) && (
-                  <div className="mb-6 p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl shadow-lg animate-in slide-in-from-top-2 duration-300">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                         💰 Currency Parallel Rates (Naira Black Market)
-                      </span>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">Live</span>
+                {/naira|cbn|usd|black.*market|rate/i.test(decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))) && (() => {
+                  const usdRate = rates.find(r => r.currency?.toUpperCase() === 'USD');
+                  const gbpRate = rates.find(r => r.currency?.toUpperCase() === 'GBP');
+                  const eurRate = rates.find(r => r.currency?.toUpperCase() === 'EUR');
+                  const usdDisplay = usdRate ? `${usdRate.buy_rate.toLocaleString()} / ${usdRate.sell_rate.toLocaleString()}` : '1,640 / 1,650';
+                  const gbpDisplay = gbpRate ? `${gbpRate.buy_rate.toLocaleString()} / ${gbpRate.sell_rate.toLocaleString()}` : '2,080 / 2,100';
+                  const eurDisplay = eurRate ? `${eurRate.buy_rate.toLocaleString()} / ${eurRate.sell_rate.toLocaleString()}` : '1,780 / 1,800';
+                  const lastUpdated = rates[0]?.created_at ? new Date(rates[0].created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) : '';
+                  return (
+                    <div className="mb-6 p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                           💰 Currency Parallel Rates (Naira Black Market)
+                        </span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">
+                          {lastUpdated ? `Updated ${lastUpdated}` : 'Live'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                          <div className="text-[10px] text-muted-foreground uppercase">USD</div>
+                          <div className="text-xs font-bold text-foreground mt-0.5">{usdDisplay}</div>
+                        </div>
+                        <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                          <div className="text-[10px] text-muted-foreground uppercase">GBP</div>
+                          <div className="text-xs font-bold text-foreground mt-0.5">{gbpDisplay}</div>
+                        </div>
+                        <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                          <div className="text-[10px] text-muted-foreground uppercase">EUR</div>
+                          <div className="text-xs font-bold text-foreground mt-0.5">{eurDisplay}</div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
-                        <div className="text-[10px] text-muted-foreground uppercase">USD</div>
-                        <div className="text-xs font-bold text-foreground mt-0.5">1,640 / 1,650</div>
-                      </div>
-                      <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
-                        <div className="text-[10px] text-muted-foreground uppercase">GBP</div>
-                        <div className="text-xs font-bold text-foreground mt-0.5">2,080 / 2,100</div>
-                      </div>
-                      <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
-                        <div className="text-[10px] text-muted-foreground uppercase">EUR</div>
-                        <div className="text-xs font-bold text-foreground mt-0.5">1,780 / 1,800</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Results List */}
                 <div className="space-y-4 flex-1">

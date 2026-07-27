@@ -8,7 +8,7 @@ import LazyAd from "@/components/LazyAd";
 import NewsCard from "@/components/NewsCard";
 import NewsTicker from "@/components/NewsTicker";
 import SEO from "@/components/SEO";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import ReadProgressBar from "@/components/ReadProgressBar";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { SkeletonGrid } from "@/components/SkeletonCard";
@@ -28,6 +28,7 @@ let initialLoadDone = false;
 
 const Index = () => {
   const navigate = useNavigate();
+  const lastSyncTimeRef = useRef(0);
   const [activeFilter, setActiveFilter] = useState('all');
   const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
   const [stories, setStories] = useState([]);
@@ -51,6 +52,10 @@ const Index = () => {
     // Register app-close telemetry sync hooks to ensure light user profiles get saved
     const handleCloseSync = () => {
       try {
+        const now = Date.now();
+        // Throttle telemetry sync to once every 5 minutes (300,000 ms) to save battery/data
+        if (now - lastSyncTimeRef.current < 300000) return;
+
         const deviceId = localStorage.getItem('realssa_device_uuid');
         const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
         if (deviceId && prefs.counts) {
@@ -58,6 +63,7 @@ const Index = () => {
             apiUrl('/api/profile/sync'),
             JSON.stringify({ deviceId, counts: prefs.counts })
           );
+          lastSyncTimeRef.current = now;
         }
       } catch (err) {}
     };
@@ -77,6 +83,9 @@ const Index = () => {
         App.addListener('appStateChange', ({ isActive }) => {
           if (!isActive) {
             try {
+              const now = Date.now();
+              if (now - lastSyncTimeRef.current < 300000) return;
+
               const deviceId = localStorage.getItem('realssa_device_uuid');
               const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
               if (deviceId && prefs.counts) {
@@ -85,6 +94,8 @@ const Index = () => {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ deviceId, counts: prefs.counts }),
                   keepalive: true
+                }).then(() => {
+                  lastSyncTimeRef.current = now;
                 }).catch(() => {});
               }
             } catch (err) {}
@@ -104,7 +115,6 @@ const Index = () => {
  
   const fetchStories = async () => {
     try {
-      setLoading(true);
       setError(null);
 
       // Generate or retrieve persistent device UUID
@@ -120,31 +130,24 @@ const Index = () => {
 
       const ts = Date.now();
       const deviceParam = deviceId ? `&deviceId=${deviceId}` : '';
-      const [featuredRes, articlesRes, worldRes, ukRes, trendingRes, groupsRes] = await Promise.allSettled([
-        fetch(apiUrl(`/api/articles/featured?t=${ts}`)),
-        fetch(apiUrl(`/api/articles?t=${ts}${deviceParam}`)),
-        fetch(apiUrl(`/api/news/world?t=${ts}`)),
-        fetch(apiUrl(`/api/news/uk?t=${ts}`)),
-        fetch(apiUrl(`/api/articles/trending?category=nigerian-news&diverse=true&t=${ts}${deviceParam}`)),
-        fetch(apiUrl(`/api/stories/grouped?t=${ts}`))
-      ]);
-
+      
       const isNotPunch = (item: any) => {
         const sourceName = (item.source_name || item.source || '').toLowerCase().trim();
         const url = (item.url || item.external_link || item.externalLink || '').toLowerCase();
         return sourceName !== 'punch' && sourceName !== 'the punch' && !url.includes('punchng.com');
       };
 
+      // Stage 1: Load critical above-the-fold content immediately
+      const [featuredRes, articlesRes, groupsRes] = await Promise.allSettled([
+        fetch(apiUrl(`/api/articles/featured?t=${ts}`)),
+        fetch(apiUrl(`/api/articles?t=${ts}${deviceParam}`)),
+        fetch(apiUrl(`/api/stories/grouped?t=${ts}`))
+      ]);
+
       let loadedStories = [];
       if (featuredRes.status === 'fulfilled' && featuredRes.value.ok) {
         loadedStories = (await featuredRes.value.json()).filter(isNotPunch);
         setStories(loadedStories);
-      }
-
-      let loadedTrending = [];
-      if (trendingRes.status === 'fulfilled' && trendingRes.value.ok) {
-        loadedTrending = (await trendingRes.value.json()).filter(isNotPunch);
-        setTrendingArticles(loadedTrending.slice(0, 5));
       }
 
       if (groupsRes.status === 'fulfilled' && groupsRes.value.ok) {
@@ -155,32 +158,23 @@ const Index = () => {
         setStoryGroups(filteredGroups);
       }
 
-      let allNews = [];
-      if (articlesRes.status === 'fulfilled' && articlesRes.value.ok)
-        allNews = [...allNews, ...await articlesRes.value.json()];
-      if (worldRes.status === 'fulfilled' && worldRes.value.ok)
-        allNews = [...allNews, ...(await worldRes.value.json()).slice(0, 15)];
-      if (ukRes.status === 'fulfilled' && ukRes.value.ok)
-        allNews = [...allNews, ...(await ukRes.value.json()).slice(0, 15)];
-        
-      allNews = allNews.filter(isNotPunch);
+      let initialNews = [];
+      if (articlesRes.status === 'fulfilled' && articlesRes.value.ok) {
+        initialNews = await articlesRes.value.json();
+      }
 
-      // Exclude articles already shown in Featured and Trending sections
-      const usedIds = new Set([
-        ...loadedStories.map(s => s.id),
-        ...loadedTrending.map(t => t.id)
-      ]);
-
-      allNews.sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
-      const uniqueNews = allNews.filter((v, i, a) => 
-        !usedIds.has(v.id) && a.findIndex(t => t.title === v.title) === i
+      // Initial filter & sort (only local/critical articles)
+      let initialFiltered = initialNews.filter(isNotPunch);
+      initialFiltered.sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
+      const initialUnique = initialFiltered.filter((v, i, a) => 
+        !loadedStories.some(s => s.id === v.id) && a.findIndex(t => t.title === v.title) === i
       );
 
-
+      // Sort by user preferences
       try {
         const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
         if (prefs.topCategory) {
-          uniqueNews.sort((a, b) => {
+          initialUnique.sort((a, b) => {
             if (a.category === prefs.topCategory && b.category !== prefs.topCategory) return -1;
             if (b.category === prefs.topCategory && a.category !== prefs.topCategory) return 1;
             return 0;
@@ -188,22 +182,71 @@ const Index = () => {
         }
       } catch (e) {}
 
-      setAllArticles(uniqueNews);
+      setAllArticles(initialUnique);
+      setLoading(false); // Stop main loading indicator once above-the-fold content renders!
 
-      // Save visible article IDs to sessionStorage so Reels feed can exclude them
-      try {
-        const visibleIds = [
+      // Stage 2: Lazy load secondary below-the-fold content in background
+      Promise.allSettled([
+        fetch(apiUrl(`/api/news/world?t=${ts}`)),
+        fetch(apiUrl(`/api/news/uk?t=${ts}`)),
+        fetch(apiUrl(`/api/articles/trending?category=nigerian-news&diverse=true&t=${ts}${deviceParam}`))
+      ]).then(async ([worldRes, ukRes, trendingRes]) => {
+        let loadedTrending = [];
+        if (trendingRes.status === 'fulfilled' && trendingRes.value.ok) {
+          loadedTrending = (await trendingRes.value.json()).filter(isNotPunch);
+          setTrendingArticles(loadedTrending.slice(0, 5));
+        }
+
+        let extraNews = [];
+        if (worldRes.status === 'fulfilled' && worldRes.value.ok) {
+          extraNews = [...extraNews, ...(await worldRes.value.json()).slice(0, 15)];
+        }
+        if (ukRes.status === 'fulfilled' && ukRes.value.ok) {
+          extraNews = [...extraNews, ...(await ukRes.value.json()).slice(0, 15)];
+        }
+
+        extraNews = extraNews.filter(isNotPunch);
+
+        // Merge initial news and lazy loaded news
+        let combinedNews = [...initialNews, ...extraNews].filter(isNotPunch);
+        const usedIds = new Set([
           ...loadedStories.map(s => s.id),
-          ...loadedTrending.slice(0, 5).map(t => t.id),
-          ...uniqueNews.map(n => n.id)
-        ].filter(Boolean);
-        const uniqueIds = Array.from(new Set(visibleIds));
-        sessionStorage.setItem('home_page_article_ids', JSON.stringify(uniqueIds));
-      } catch (cacheErr) {
-        console.error('Error saving home page article ids:', cacheErr);
-      }
+          ...loadedTrending.map(t => t.id)
+        ]);
 
-      // If connected to WiFi, fetch and sync the Daily Digest package for offline mode
+        combinedNews.sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
+        const finalUnique = combinedNews.filter((v, i, a) => 
+          !usedIds.has(v.id) && a.findIndex(t => t.title === v.title) === i
+        );
+
+        // Re-apply preferences sorting
+        try {
+          const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
+          if (prefs.topCategory) {
+            finalUnique.sort((a, b) => {
+              if (a.category === prefs.topCategory && b.category !== prefs.topCategory) return -1;
+              if (b.category === prefs.topCategory && a.category !== prefs.topCategory) return 1;
+              return 0;
+            });
+          }
+        } catch (e) {}
+
+        setAllArticles(finalUnique);
+
+        // Save visible article IDs to sessionStorage so Reels feed can exclude them
+        try {
+          const visibleIds = [
+            ...loadedStories.map(s => s.id),
+            ...loadedTrending.slice(0, 5).map(t => t.id),
+            ...finalUnique.map(n => n.id)
+          ].filter(Boolean);
+          const uniqueIds = Array.from(new Set(visibleIds));
+          sessionStorage.setItem('home_page_article_ids', JSON.stringify(uniqueIds));
+        } catch (cacheErr) {}
+
+      }).catch((lazyErr) => console.error('Lazy loading failed:', lazyErr));
+
+      // Offline digest caching (WiFi only)
       try {
         const { Network } = await import('@capacitor/network');
         const netStatus = await Network.getStatus();
@@ -217,10 +260,9 @@ const Index = () => {
                   articles: digestData
                 }));
               }
-            })
-            .catch(() => {});
+            }).catch(() => {});
         }
-      } catch (netErr) {}
+      } catch (e) {}
 
       // Hide initial loading state after first successful fetch
       if (initialLoading) {
@@ -456,23 +498,11 @@ const Index = () => {
       <button
         onClick={() => navigate('/wire')}
         title="Live Broadcast Wire"
-        style={{
-          position: 'fixed', bottom: 88, right: 20, zIndex: 999,
-          height: 42, borderRadius: 21,
-          background: '#000',
-          border: '1px solid #2a2535',
-          cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '0 16px',
-          transition: 'transform 0.15s, box-shadow 0.15s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(245,158,11,0.3)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)'; }}
+        className="fixed bottom-[84px] md:bottom-8 right-4 md:right-8 z-[999] h-[42px] rounded-[21px] bg-black border border-[#2a2535] cursor-pointer shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center gap-2 px-4 transition-all duration-150 hover:scale-105 hover:shadow-[0_6px_24px_rgba(245,158,11,0.3)]"
       >
         <span className="text-amber-500 font-extrabold text-sm">📢</span>
-        <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>Live Wire</span>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', animation: 'pulse 2s infinite', flexShrink: 0 }} />
+        <span className="text-white text-xs font-bold whitespace-nowrap">Live Wire</span>
+        <span className="w-[7px] h-[7px] rounded-full bg-[#f59e0b] animate-pulse shrink-0" />
       </button>
 
       <Footer />
