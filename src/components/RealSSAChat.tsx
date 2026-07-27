@@ -150,7 +150,11 @@ export default function RealSSAChat({
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
       }}
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
     >
       {/* ── Ambient orbs ────────────────────────────── */}
       <div
@@ -368,18 +372,17 @@ export default function RealSSAChat({
           <div ref={bottomRef} />
         </div>
 
-        {/* ── Input bar ───────────────────────────── */}
         <form
           onSubmit={handleSubmit}
           className="px-4 pb-4 pt-3 shrink-0"
           style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
         >
           <div
-            className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl transition-all duration-200"
+            className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl transition-all duration-300"
             style={{
-              background: 'rgba(255,255,255,0.06)',
-              border: `1px solid ${inputFocused ? 'rgba(245,158,11,0.45)' : 'rgba(255,255,255,0.11)'}`,
-              boxShadow: inputFocused ? '0 0 0 3px rgba(245,158,11,0.10)' : 'none',
+              background: inputFocused || input.trim() ? 'rgba(255, 255, 255, 0.09)' : 'rgba(255, 255, 255, 0.05)',
+              border: `1px solid ${inputFocused ? 'rgba(245, 158, 11, 0.45)' : input.trim() ? 'rgba(255, 255, 255, 0.20)' : 'rgba(255, 255, 255, 0.09)'}`,
+              boxShadow: inputFocused ? '0 0 0 3px rgba(245, 158, 11, 0.12)' : 'none',
             }}
           >
             <input
@@ -392,7 +395,7 @@ export default function RealSSAChat({
               placeholder="Ask RealSSA anything..."
               className="flex-1 bg-transparent text-sm focus:outline-none"
               style={{
-                color: 'rgba(255,255,255,0.90)',
+                color: 'rgba(255, 255, 255, 0.90)',
                 fontSize: 15,
               }}
               disabled={loading}
@@ -400,11 +403,12 @@ export default function RealSSAChat({
             <button
               type="submit"
               disabled={!input.trim() || loading}
-              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 active:scale-90 disabled:opacity-25"
+              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 disabled:opacity-20"
               style={{
                 background: 'linear-gradient(135deg, #FBBF24, #F59E0B)',
+                transform: input.trim() && !loading ? 'scale(1)' : 'scale(0.92)',
                 boxShadow: input.trim() && !loading
-                  ? '0 0 14px rgba(245,158,11,0.45)'
+                  ? '0 4px 14px rgba(245, 158, 11, 0.40)'
                   : 'none',
               }}
             >
@@ -455,6 +459,137 @@ function SuggestionChip({
   );
 }
 
+import { Copy, Check } from 'lucide-react';
+
+// Helper to format text with bold, inline code, headers, and lists
+function parseInlineContent(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let keyIdx = 0;
+
+  while (remaining.length > 0) {
+    const boldIdx = remaining.indexOf('**');
+    const codeIdx = remaining.indexOf('`');
+
+    if (boldIdx === -1 && codeIdx === -1) {
+      parts.push(<span key={keyIdx++}>{remaining}</span>);
+      break;
+    }
+
+    if (boldIdx !== -1 && (codeIdx === -1 || boldIdx < codeIdx)) {
+      if (boldIdx > 0) {
+        parts.push(<span key={keyIdx++}>{remaining.slice(0, boldIdx)}</span>);
+      }
+      const endBoldIdx = remaining.indexOf('**', boldIdx + 2);
+      if (endBoldIdx !== -1) {
+        parts.push(
+          <strong key={keyIdx++} className="font-bold text-amber-300">
+            {remaining.slice(boldIdx + 2, endBoldIdx)}
+          </strong>
+        );
+        remaining = remaining.slice(endBoldIdx + 2);
+      } else {
+        parts.push(<span key={keyIdx++}>{remaining.slice(boldIdx)}</span>);
+        break;
+      }
+    } else {
+      if (codeIdx > 0) {
+        parts.push(<span key={keyIdx++}>{remaining.slice(0, codeIdx)}</span>);
+      }
+      const endCodeIdx = remaining.indexOf('`', codeIdx + 1);
+      if (endCodeIdx !== -1) {
+        parts.push(
+          <code
+            key={keyIdx++}
+            className="px-1.5 py-0.5 rounded bg-white/10 text-amber-200 font-mono text-[12px] border border-white/5"
+          >
+            {remaining.slice(codeIdx + 1, endCodeIdx)}
+          </code>
+        );
+        remaining = remaining.slice(endCodeIdx + 1);
+      } else {
+        parts.push(<span key={keyIdx++}>{remaining.slice(codeIdx)}</span>);
+        break;
+      }
+    }
+  }
+
+  return parts;
+}
+
+function parseMarkdownToJSX(content: string): React.ReactNode {
+  const lines = content.split('\n');
+  return (
+    <div className="space-y-1.5">
+      {lines.map((line, index) => {
+        const trimmed = line.trim();
+
+        // Empty lines
+        if (!trimmed) {
+          return <div key={index} className="h-2" />;
+        }
+
+        // Headers
+        if (line.startsWith('### ')) {
+          return (
+            <h4 key={index} className="text-sm font-extrabold text-amber-400 mt-2 mb-1">
+              {parseInlineContent(line.slice(4))}
+            </h4>
+          );
+        }
+        if (line.startsWith('## ')) {
+          return (
+            <h3 key={index} className="text-base font-black text-amber-400 mt-3 mb-1.5">
+              {parseInlineContent(line.slice(3))}
+            </h3>
+          );
+        }
+        if (line.startsWith('# ')) {
+          return (
+            <h2 key={index} className="text-lg font-black text-amber-400 mt-4 mb-2">
+              {parseInlineContent(line.slice(2))}
+            </h2>
+          );
+        }
+
+        // Bullet lists
+        if (line.startsWith('- ') || line.startsWith('* ')) {
+          return (
+            <div key={index} className="flex items-start gap-2 pl-2">
+              <span className="text-amber-500 select-none mt-1.5 text-[8px]">•</span>
+              <p className="flex-1 text-sm leading-relaxed text-white/90">
+                {parseInlineContent(line.slice(2))}
+              </p>
+            </div>
+          );
+        }
+
+        // Numbered lists
+        const numberedMatch = line.match(/^(\d+)\.\s(.*)/);
+        if (numberedMatch) {
+          return (
+            <div key={index} className="flex items-start gap-2 pl-2">
+              <span className="text-amber-400/80 font-mono text-xs select-none mt-0.5">
+                {numberedMatch[1]}.
+              </span>
+              <p className="flex-1 text-sm leading-relaxed text-white/90">
+                {parseInlineContent(numberedMatch[2])}
+              </p>
+            </div>
+          );
+        }
+
+        // Standard text
+        return (
+          <p key={index} className="text-sm leading-relaxed text-white/90">
+            {parseInlineContent(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 function ChatBubble({
   msg,
   onSourceClick,
@@ -463,56 +598,117 @@ function ChatBubble({
   onSourceClick: (url: string) => void;
 }) {
   const isUser = msg.role === 'user';
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div
-      className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}
-    >
+    <div className={`flex gap-3 items-start ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in w-full`}>
+      {/* AI Avatar */}
+      {!isUser && (
+        <div
+          className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center border border-amber-500/20"
+          style={{
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(245,158,11,0.05) 100%)',
+          }}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+        </div>
+      )}
+
       <div
-        className="max-w-[88%] px-4 py-3 text-sm leading-relaxed"
-        style={
-          isUser
-            ? {
-                background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
-                borderRadius: '18px 18px 4px 18px',
-                color: '#000',
-                fontWeight: 500,
-                boxShadow: '0 4px 18px rgba(245,158,11,0.28)',
-              }
-            : {
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.09)',
-                borderRadius: '18px 18px 18px 4px',
-                color: 'rgba(255,255,255,0.90)',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
-              }
-        }
+        className="max-w-[78%] flex flex-col group relative"
       >
-        <p className="whitespace-pre-wrap">{msg.content}</p>
-        {msg.sources && msg.sources.length > 0 && (
-          <div
-            className="mt-3 pt-3 space-y-1.5"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}
-          >
-            <p
-              className="text-[10px] uppercase tracking-wider font-semibold"
-              style={{ color: 'rgba(255,255,255,0.35)' }}
+        <div
+          className="px-4 py-3 text-sm"
+          style={
+            isUser
+              ? {
+                  background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
+                  borderRadius: '18px 4px 18px 18px',
+                  color: '#000',
+                  fontWeight: 500,
+                  boxShadow: '0 4px 16px rgba(245,158,11,0.20)',
+                }
+              : {
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '4px 18px 18px 18px',
+                  color: 'rgba(255,255,255,0.92)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                }
+          }
+        >
+          {isUser ? (
+            <p className="whitespace-pre-wrap">{msg.content}</p>
+          ) : (
+            parseMarkdownToJSX(msg.content)
+          )}
+
+          {/* Sources */}
+          {msg.sources && msg.sources.length > 0 && (
+            <div
+              className="mt-3 pt-3 space-y-1.5"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
             >
-              Sources
-            </p>
-            {msg.sources.map((src, si) => (
-              <button
-                key={si}
-                onClick={() => onSourceClick(src.url)}
-                className="flex items-center gap-1.5 text-[11px] w-full text-left transition-colors hover:opacity-80"
-                style={{ color: '#FBBF24' }}
-              >
-                <ExternalLink className="w-3 h-3 shrink-0" />
-                <span className="truncate">{src.title}</span>
-              </button>
-            ))}
+              <p className="text-[9px] uppercase tracking-wider font-extrabold text-white/30">
+                Sources
+              </p>
+              {msg.sources.map((src, si) => (
+                <button
+                  key={si}
+                  onClick={() => onSourceClick(src.url)}
+                  className="flex items-center gap-1.5 text-[11px] w-full text-left transition-colors hover:text-amber-300"
+                  style={{ color: '#FBBF24' }}
+                >
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{src.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Copy/Feedback actions for assistant messages */}
+        {!isUser && (
+          <div className="flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1 text-[10px] text-white/40 hover:text-white/70 transition-colors"
+              title="Copy answer"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3 h-3 text-emerald-400" />
+                  <span className="text-emerald-400 font-medium">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
           </div>
         )}
       </div>
+
+      {/* User Avatar */}
+      {isUser && (
+        <div
+          className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center border border-white/10"
+          style={{
+            background: 'rgba(255,255,255,0.08)',
+          }}
+        >
+          <span className="text-[10px] font-bold text-white/80">ME</span>
+        </div>
+      )}
     </div>
   );
 }
+
