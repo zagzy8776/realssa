@@ -291,8 +291,8 @@ const Header = () => {
 
   return (
     <header className={cn(
-      "sticky top-0 z-[9999] pt-[env(safe-area-inset-top)] border-b border-border transition-colors",
-      isMenuOpen ? "bg-background" : "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+      "sticky top-0 z-[9999] pt-[env(safe-area-inset-top)] border-b transition-colors",
+      isMenuOpen ? "bg-background/95" : "glass-nav"
     )}>
       <div className="container mx-auto px-3 md:px-4">
         <div className="flex items-center justify-between h-14 md:h-20">
@@ -531,7 +531,7 @@ const Header = () => {
                 setIsSearchFocused(false);
                 setSuggestions([]);
               }}
-              className="relative flex items-center gap-2 md:gap-3 bg-card border border-amber-500/40 focus-within:border-amber-500 rounded-2xl px-3 md:px-4 py-2 shadow-sm transition-[border-color,box-shadow] focus-within:shadow-amber-500/10 group min-w-0"
+              className="relative flex items-center gap-2 md:gap-3 glass-search px-3 md:px-4 py-2 focus-within:border-amber-500/50 group min-w-0"
             >
               <Search className="w-4 h-4 text-amber-500 shrink-0" />
               <div className="relative flex-1 min-w-0">
@@ -580,7 +580,7 @@ const Header = () => {
             {/* Autocomplete dropdown — portaled so sticky/overflow header can't clip it */}
             {isSearchFocused && suggestions.length > 0 && suggestBox && createPortal(
               <div
-                className="fixed bg-[#121824] border border-border rounded-xl shadow-2xl overflow-hidden z-[100000] animate-in fade-in slide-in-from-top-1 duration-150"
+                className="fixed glass-dropdown rounded-xl overflow-hidden z-[100000] animate-in fade-in slide-in-from-top-1 duration-150"
                 style={{
                   top: suggestBox.top,
                   left: suggestBox.left,

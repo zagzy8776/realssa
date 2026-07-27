@@ -55,41 +55,40 @@ const SkeletonCard: React.FC<SkeletonCardProps> = ({
   // Default news variant
   return (
     <div 
-      className={`bg-white dark:bg-[#211D26] rounded-[0px] border border-gray-200 dark:border-none shadow-sm dark:shadow-none ${className}`}
+      className={`glass-card rounded-[12px] ${className}`}
       style={{ padding: 0 }}
     >
       {/* Eyebrow placeholder */}
       <div className="flex items-center gap-1.5 px-4 pt-[14px] pb-0">
-        <div className="w-16 h-3 bg-gray-200 dark:bg-[#2C2732] rounded animate-pulse" />
+        <div className="w-16 h-3 rounded glass-skeleton" style={{ background: 'rgba(255,255,255,0.07)' }} />
       </div>
 
       {/* Image Skeleton */}
       <div className="px-4 pt-2 pb-0 w-full">
-        <div className="relative w-full aspect-video rounded-[6px] bg-gray-200 dark:bg-[#2C2732] mb-0 animate-pulse overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-[#2C2732] dark:via-[#362F3D] dark:to-[#2C2732] animate-shimmer" 
-               style={{ backgroundSize: '200% 100%' }} />
+        <div className="relative w-full aspect-video rounded-[6px] mb-0 overflow-hidden" style={{ background: 'rgba(44, 39, 50, 0.5)' }}>
+          <div className="absolute inset-0 glass-skeleton" style={{ backgroundSize: '200% 100%' }} />
         </div>
       </div>
 
       {/* Title Skeleton */}
       <div className="px-4 pt-3 pb-1 space-y-2">
-        <div className="h-5 bg-gray-200 dark:bg-[#2C2732] rounded animate-pulse w-full" />
-        <div className="h-5 bg-gray-200 dark:bg-[#2C2732] rounded animate-pulse w-3/4" />
+        <div className="h-5 rounded glass-skeleton w-full" style={{ background: 'rgba(255,255,255,0.07)' }} />
+        <div className="h-5 rounded glass-skeleton w-3/4" style={{ background: 'rgba(255,255,255,0.07)' }} />
       </div>
 
       {/* Excerpt Skeleton */}
       <div className="px-4 pt-0 pb-3 space-y-2">
-        <div className="h-3.5 bg-gray-200 dark:bg-[#2C2732] rounded mb-2 animate-pulse w-full" />
-        <div className="h-3.5 bg-gray-200 dark:bg-[#2C2732] rounded mb-2 animate-pulse w-full" />
+        <div className="h-3.5 rounded mb-2 glass-skeleton w-full" style={{ background: 'rgba(255,255,255,0.06)' }} />
+        <div className="h-3.5 rounded mb-2 glass-skeleton w-full" style={{ background: 'rgba(255,255,255,0.06)' }} />
       </div>
 
       {/* Divider */}
-      <div className="mx-4 border-t border-gray-100 dark:border-[#362F3D]" />
+      <div className="mx-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.07)' }} />
 
       {/* Footer Skeleton */}
       <div className="px-4 pt-2.5 pb-3.5 flex items-center justify-between gap-4">
-        <div className="h-3 bg-gray-200 dark:bg-[#2C2732] rounded animate-pulse w-24" />
-        <div className="h-3 bg-gray-200 dark:bg-[#2C2732] rounded animate-pulse w-20" />
+        <div className="h-3 rounded glass-skeleton w-24" style={{ background: 'rgba(255,255,255,0.07)' }} />
+        <div className="h-3 rounded glass-skeleton w-20" style={{ background: 'rgba(255,255,255,0.07)' }} />
       </div>
     </div>
   );

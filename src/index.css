@@ -476,3 +476,161 @@ body {
   will-change: transform, opacity;
   z-index: 50;
 }
+
+/* ══════════════════════════════════════════════════════════
+   GLASSMORPHISM SYSTEM — RealSSA Liquid Glass UI
+   Gold/Amber brand accent preserved throughout
+   ══════════════════════════════════════════════════════════ */
+
+/* Base glass panel — light translucent surface */
+.glass {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Glass card — for news cards and content panels */
+.glass-card {
+  background: rgba(33, 29, 38, 0.78);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  transition:
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(245, 158, 11, 0.18);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 0 0 1px rgba(245, 158, 11, 0.10);
+}
+
+/* Navigation bar glass — denser blur for persistent UI */
+.glass-nav {
+  background: rgba(33, 29, 38, 0.72);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.20);
+}
+
+/* Glass pill — for small tag/badge/chip elements */
+.glass-pill {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}
+
+/* Glass search bar */
+.glass-search {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 9999px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.glass-search:focus-within {
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.10);
+}
+
+/* Glass dropdown — for autocomplete / modals */
+.glass-dropdown {
+  background: rgba(27, 24, 32, 0.92);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Top shine layer — add via ::before on parent with position:relative */
+.glass-shine::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.02) 40%,
+    transparent 60%
+  );
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Amber glow shadows ───────────────────────────────── */
+.glow-amber {
+  box-shadow:
+    0 0 20px rgba(245, 158, 11, 0.45),
+    0 0 48px rgba(245, 158, 11, 0.18);
+}
+
+.glow-amber-sm {
+  box-shadow:
+    0 0 12px rgba(245, 158, 11, 0.40),
+    0 0 24px rgba(245, 158, 11, 0.14);
+}
+
+.glow-amber-ring {
+  box-shadow:
+    0 0 0 2px rgba(245, 158, 11, 0.35),
+    0 0 20px rgba(245, 158, 11, 0.30),
+    0 0 48px rgba(245, 158, 11, 0.12);
+}
+
+/* ── Ambient dark-mode background gradient ───────────── */
+/* Very subtle dual-toned radial glow behind all content  */
+.dark body,
+.dark html {
+  background-image:
+    radial-gradient(ellipse 80% 60% at 15% 15%, rgba(245, 158, 11, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 85%, rgba(168, 85, 247, 0.04) 0%, transparent 60%);
+}
+
+/* ── Glass shimmer animation ─────────────────────────── */
+@keyframes glass-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.glass-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: glass-shimmer 1.6s ease-in-out infinite;
+}
+
+/* ── Floating glass orb backdrop (decorative) ─────── */
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(10px, -15px) scale(1.04); }
+  66% { transform: translate(-8px, 8px) scale(0.97); }
+}
+
+.glass-orb {
+  border-radius: 9999px;
+  filter: blur(60px);
+  animation: orb-drift 12s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform;
+}

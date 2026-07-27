@@ -387,13 +387,8 @@ const NewsCard = ({
 
   return (
     <article
-      className="group overflow-hidden transition-all duration-300 hover:shadow-xl active:scale-[0.99] w-full"
-      style={{
-        backgroundColor: '#211D26',
-        borderRadius: '12px',
-        border: '1px solid #362F3D',
-        boxShadow: 'none'
-      }}
+      className="group glass-card overflow-hidden transition-all duration-300 active:scale-[0.99] w-full relative"
+      style={{ borderRadius: '12px' }}
     >
       <div className="flex flex-col w-full">
         {/* Image */}
@@ -401,7 +396,7 @@ const NewsCard = ({
           <Link to={linkTo} onClick={handleImageClick} className="block w-full">
             <div
               className="relative w-full aspect-video overflow-hidden flex items-center justify-center"
-              style={{ backgroundColor: '#2C2732', borderRadius: '12px 12px 0 0' }}
+              style={{ background: 'rgba(44, 39, 50, 0.6)', borderRadius: '12px 12px 0 0' }}
             >
               {hasImage ? (
                 <img
@@ -439,12 +434,15 @@ const NewsCard = ({
                     letterSpacing: '0.08em',
                     textTransform: 'uppercase',
                     color: '#fff',
-                    backgroundColor: isLive ? '#4FBFA8' : '#E8874A',
+                    backgroundColor: isLive ? 'rgba(79, 191, 168, 0.92)' : 'rgba(232, 135, 74, 0.95)',
                     padding: '3px 8px',
                     borderRadius: '4px',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '4px',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 2px 8px rgba(0,0,0,0.25)',
                   }}
                 >
                   {isLive && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#fff', display: 'inline-block', animation: 'pulse 1s infinite' }} />}
@@ -525,7 +523,7 @@ const NewsCard = ({
           </div>
         )}
 
-        <div style={{ borderTop: '1px solid #362F3D', margin: '0 16px' }} />
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', margin: '0 16px' }} />
 
         {/* Metadata row */}
         <div className="px-4 pt-2 pb-3 flex items-center justify-between gap-4">

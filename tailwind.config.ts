@@ -96,6 +96,15 @@ export default {
           "0%, 100%": { boxShadow: "0 0 20px hsl(43 96% 56% / 0.3)" },
           "50%": { boxShadow: "0 0 40px hsl(43 96% 56% / 0.5)" },
         },
+        "glass-shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "orb-drift": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "33%": { transform: "translate(10px, -15px) scale(1.04)" },
+          "66%": { transform: "translate(-8px, 8px) scale(0.97)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -103,6 +112,8 @@ export default {
         "fade-in": "fade-in 0.5s ease-out forwards",
         "slide-in": "slide-in 0.4s ease-out forwards",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "glass-shimmer": "glass-shimmer 1.6s ease-in-out infinite",
+        "orb-drift": "orb-drift 12s ease-in-out infinite",
       },
     },
   },
