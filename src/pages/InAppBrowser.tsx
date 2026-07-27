@@ -492,7 +492,7 @@ export default function InAppBrowser() {
                 }, 150);
               }}
               placeholder="Search or enter URL..."
-              className="flex-1 min-w-0 bg-transparent text-xs font-medium text-amber-400 placeholder:text-muted-foreground/60 focus:outline-none focus:text-white transition-colors truncate"
+              className="flex-1 min-w-0 bg-transparent text-base md:text-xs font-medium text-amber-400 placeholder:text-muted-foreground/60 focus:outline-none focus:text-white transition-colors truncate"
               autoCorrect="off"
               autoCapitalize="none"
               spellCheck={false}

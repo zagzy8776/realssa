@@ -258,7 +258,7 @@ export default function AdPortal() {
                   placeholder="e.g. Paystack Nigeria, Oando Energy, Flutterwave"
                   value={companyName}
                   onChange={e => setCompanyName(e.target.value)}
-                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
                 />
               </div>
 
@@ -271,7 +271,7 @@ export default function AdPortal() {
                   placeholder="e.g. Launching Instant Cross-Border Payments Across West Africa"
                   value={headline}
                   onChange={e => setHeadline(e.target.value)}
-                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
                 <span className="text-[10px] text-muted-foreground block text-right mt-1">{headline.length}/100</span>
               </div>
@@ -337,7 +337,7 @@ export default function AdPortal() {
                   placeholder="https://yourwebsite.com or https://wa.me/234..."
                   value={targetLink}
                   onChange={e => setTargetLink(e.target.value)}
-                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
 
@@ -349,7 +349,7 @@ export default function AdPortal() {
                   placeholder="marketing@yourcompany.com"
                   value={advertiserEmail}
                   onChange={e => setAdvertiserEmail(e.target.value)}
-                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
 

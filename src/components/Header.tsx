@@ -390,7 +390,7 @@ const Header = () => {
                             placeholder="Paste secure key here..."
                             value={importKey}
                             onChange={(e) => setImportKey(e.target.value)}
-                            className="flex-1 px-3 py-1.5 rounded-lg border bg-background text-xs font-mono focus:outline-none"
+                            className="flex-1 px-3 py-1.5 rounded-lg border bg-background text-base md:text-xs font-mono focus:outline-none"
                           />
                           <button
                             onClick={async () => {

@@ -150,7 +150,7 @@ const SearchBar = () => {
               placeholder="Search news or paste a direct URL (e.g. www.google.com)..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm md:text-base py-1.5 focus:ring-0"
+              className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-base md:text-sm py-1.5 focus:ring-0"
             />
             <button
               type="submit"
