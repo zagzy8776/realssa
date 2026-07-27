@@ -104,11 +104,8 @@ async function runIntelligenceCheck(pool) {
  * @param {object} pool - Shared PostgreSQL pool
  */
 function initIntelligenceAgent(pool) {
-  console.log('🕵️ AI Intelligence & Verification Agent initialized.');
-  
-  // Run background verification check on startup and then every 30 minutes
-  setTimeout(() => runIntelligenceCheck(pool), 15000);
-  setInterval(() => runIntelligenceCheck(pool), 30 * 60 * 1000);
+  console.log('🕵️ AI Intelligence Agent: disabled to conserve API quota.');
+  // Disabled — was burning 20 Gemini calls/hour with no real verification value
 }
 
 module.exports = { initIntelligenceAgent, runIntelligenceCheck };

@@ -134,9 +134,8 @@ async function runTrendingSynthesizer(pool) {
  * @param {object} pool - PostgreSQL pool connection
  */
 function initTrendingSynthesizer(pool) {
-  console.log('⚡ AI Trending Topic Synthesizer Agent initialized.');
-  setTimeout(() => runTrendingSynthesizer(pool), 30000);
-  setInterval(() => runTrendingSynthesizer(pool), 2 * 60 * 60 * 1000);
+  console.log('⚡ AI Trending Synthesizer: disabled to conserve API quota.');
+  // Disabled — was burning 60 Gemini calls/day generating logo.png articles
 }
 
 module.exports = { initTrendingSynthesizer, runTrendingSynthesizer };

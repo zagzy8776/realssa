@@ -87,7 +87,7 @@ const SearchBar = () => {
   const handleSearch = () => {
     if (query.trim()) {
       setShowSuggestions(false);
-      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+      navigate(`/browser?url=${encodeURIComponent(`realssa://search?q=${encodeURIComponent(query.trim())}`)}`)
     }
   };
 
@@ -100,7 +100,7 @@ const SearchBar = () => {
     setShowSuggestions(false);
     setQuery(article.title);
     const link = article.externalLink
-      ? `/read?url=${encodeURIComponent(article.externalLink)}&category=${encodeURIComponent(article.category || 'news')}&id=${encodeURIComponent(article.id)}`
+      ? `/browser?url=${encodeURIComponent(article.externalLink)}`
       : `/article/${article.id}`;
     navigate(link);
   };
@@ -136,9 +136,9 @@ const SearchBar = () => {
                   if (!/^https?:\/\//i.test(q)) {
                     destination = `https://${q}`;
                   }
-                  navigate(`/read?url=${encodeURIComponent(destination)}`);
+                  navigate(`/browser?url=${encodeURIComponent(destination)}`);
                 } else {
-                  navigate(`/search?q=${encodeURIComponent(q)}`);
+                  navigate(`/browser?url=${encodeURIComponent(`realssa://search?q=${encodeURIComponent(q)}`)}`);
                 }
               }
             }}

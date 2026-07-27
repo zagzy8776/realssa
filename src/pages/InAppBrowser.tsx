@@ -121,7 +121,12 @@ export default function InAppBrowser() {
     `${RUST_ENGINE_URL}/proxy-page?url=${encodeURIComponent(url)}`, []);
 
   // ── Route decision: news article → Reader (Mode C), everything else → native WebView (Mode B)
-  const openNative = useCallback(async (url: string, title?: string) => {
+  // Search result clicks always stay in browser — never route to Reader
+  const openNative = useCallback(async (url: string, title?: string, forceFullWeb = false) => {
+    if (forceFullWeb) {
+      await InAppBrowser.open({ url });
+      return;
+    }
     const SOCIAL_DOMAINS = [
       'facebook.com', 'twitter.com', 'x.com', 'instagram.com', 'tiktok.com',
       'google.com', 'accounts.google', 'linkedin.com', 'github.com',
@@ -132,7 +137,6 @@ export default function InAppBrowser() {
     try {
       const hostname = new URL(url).hostname.toLowerCase();
       const isSocial = SOCIAL_DOMAINS.some(d => hostname.includes(d));
-      // News articles: not social + has a path beyond root
       const path = new URL(url).pathname;
       const looksLikeArticle = !isSocial && path.length > 1 && path !== '/';
       if (looksLikeArticle) {
@@ -140,7 +144,6 @@ export default function InAppBrowser() {
         return;
       }
     } catch { /* fall through to native webview */ }
-    // Social / login / complex → native WebView inside app (cookies + OAuth work)
     await InAppBrowser.open({ url });
   }, [navigate]);
 
@@ -989,31 +992,44 @@ export default function InAppBrowser() {
                           </div>
                         )}
 
-                        {/* Standard Result Card */}
+        {/* Standard Result Card */}
                         <div 
                           className="p-4 bg-white/5 border border-white/5 hover:border-amber-500/20 hover:bg-amber-500/5 rounded-2xl transition-all shadow-sm group cursor-pointer"
-                          onClick={() => navigateTo(r.url)}
+                          onClick={() => { setStack(prev => [...prev.slice(0, stackIndex + 1), r.url]); setStackIndex(prev => prev + 1); loadUrl(r.url); }}
                         >
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <img 
-                              src={`https://www.google.com/s2/favicons?sz=32&domain=${r.source}`} 
-                              alt="" 
-                              className="w-3.5 h-3.5 rounded-sm shrink-0 bg-white/10" 
-                              onError={(e) => { (e.target as HTMLImageElement).src = 'https://www.google.com/s2/favicons?sz=32&domain=wikipedia.org'; }}
-                            />
-                            <span className="text-[10px] text-amber-500/70 font-semibold uppercase tracking-wide">
-                              {r.source}
-                            </span>
-                            <span className="text-[9px] text-muted-foreground ml-auto">{r.date}</span>
+                          <div className="flex gap-3">
+                            {/* Thumbnail via /api/img proxy */}
+                            <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/10">
+                              <img
+                                src={`${RUST_ENGINE_URL.replace('engine.', 'www.')}/api/img?url=${encodeURIComponent(`https://www.google.com/s2/favicons?sz=128&domain=${r.source}`)}&w=128&q=80`}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = `https://www.google.com/s2/favicons?sz=64&domain=${r.source}`;
+                                }}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <img
+                                  src={`https://www.google.com/s2/favicons?sz=16&domain=${r.source}`}
+                                  alt=""
+                                  className="w-3 h-3 rounded-sm shrink-0"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                                <span className="text-[10px] text-amber-500/70 font-semibold uppercase tracking-wide truncate">{r.source}</span>
+                                <span className="text-[9px] text-muted-foreground ml-auto shrink-0">{r.date}</span>
+                              </div>
+                              <h3 className="text-sm font-bold text-foreground group-hover:text-amber-400 transition-colors line-clamp-2 leading-snug">
+                                {r.title}
+                              </h3>
+                              {r.snippet && (
+                                <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-1">
+                                  {r.snippet}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <h3 className="text-sm font-bold text-foreground group-hover:text-amber-400 transition-colors line-clamp-1">
-                            {r.title}
-                          </h3>
-                          {r.snippet && (
-                            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
-                              {r.snippet}
-                            </p>
-                          )}
                         </div>
                       </React.Fragment>
                     ))

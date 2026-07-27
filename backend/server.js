@@ -508,11 +508,64 @@ app.post('/api/auth/login', (req, res) => {
 // Import summarizer for on-demand generation
 const { generateSummary, rewriteArticle, generateEmbedding, generateFullArticleBreakdown } = require('./services/summariser');
 
-// Article extraction for Reader Mode
-const { Readability } = require('@mozilla/readability');
-const { JSDOM } = require('jsdom');
+// Article extraction for Reader Mode — uses extractor.js (Readability → Gemini AI → Firecrawl)
+const { extractArticle } = require('./services/extractor');
 
 app.post('/api/extract', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL required' });
+  if (!(await isSafeUrl(url))) return res.status(400).json({ error: 'Invalid or unsafe URL' });
+
+  try {
+    // 1. Try extractor.js chain: Readability → Gemini AI fallback → Firecrawl
+    const extracted = await extractArticle(url);
+    if (extracted && extracted.textContent && extracted.textContent.length > 100) {
+      // Run AI breakdown on the extracted content
+      try {
+        const fullBreakdown = await generateFullArticleBreakdown(extracted.title, extracted.textContent);
+        if (fullBreakdown?.full_breakdown) {
+          const bulletHtml = Array.isArray(fullBreakdown.bullet_points)
+            ? fullBreakdown.bullet_points.map(b => `<li style="margin-bottom:6px;">${b}</li>`).join('')
+            : `<li>${extracted.title}</li>`;
+          extracted.content = `
+            <div class="full-ai-article space-y-6">
+              <div style="background:rgba(245,158,11,0.1);border-left:4px solid #f59e0b;padding:16px;border-radius:0 12px 12px 0;margin-bottom:24px;">
+                <h3 style="margin:0 0 8px 0;color:#f59e0b;font-weight:700;font-size:1.1rem;">📌 Key Takeaways</h3>
+                <ul style="margin:0;padding-left:20px;font-size:0.95rem;line-height:1.6;">${bulletHtml}</ul>
+              </div>
+              <div style="font-size:1.05rem;line-height:1.8;margin-bottom:24px;">
+                <h3 style="font-size:1.25rem;font-weight:700;margin-bottom:12px;">📰 Full Story Breakdown</h3>
+                <p style="white-space:pre-line;">${fullBreakdown.full_breakdown}</p>
+              </div>
+              <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);padding:20px;border-radius:16px;margin-bottom:24px;">
+                <h3 style="margin:0 0 8px 0;color:#3b82f6;font-weight:700;font-size:1.1rem;">🌍 Why It Matters to Nigeria & Africa</h3>
+                <p style="margin:0;font-size:0.95rem;line-height:1.6;">${fullBreakdown.why_it_matters}</p>
+              </div>
+            </div>`;
+          extracted.byline = 'RealSSA AI News Desk';
+        }
+      } catch (_) {}
+      return res.json(extracted);
+    }
+
+    // 2. DB fallback
+    if (process.env.DATABASE_URL) {
+      const dbRes = await pool.query(
+        'SELECT title, COALESCE(ai_summary, original_excerpt) AS content, original_excerpt, ai_summary, source_name, image FROM rss_articles WHERE external_link = $1 LIMIT 1',
+        [url]
+      );
+      if (dbRes.rows.length > 0) {
+        const row = dbRes.rows[0];
+        return res.json({ title: row.title, content: row.content, textContent: row.content, length: (row.content||'').length, excerpt: row.original_excerpt||'', byline: row.source_name||'RealSSA News Desk', siteName: row.source_name||'RealSSA', image: row.image });
+      }
+    }
+
+    res.status(422).json({ error: 'Could not extract article' });
+  } catch (err) {
+    console.error('Extract error:', err.message);
+    res.status(500).json({ error: 'Extraction failed', message: err.message });
+  }
+});
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required' });
   
@@ -522,13 +575,15 @@ app.post('/api/extract', async (req, res) => {
   }
 
   try {
-    // Spoffing Googlebot UA to bypass most paywalls and bot-blockers
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' },
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-    const html = await response.text();
+    // Legacy path — should not be reached (new handler above handles all cases)
+    res.status(422).json({ error: 'Could not extract article' });
+  } catch (err) {
+    res.status(500).json({ error: 'Extraction failed', message: err.message });
+  }
+});
+
+app._legacyExtractPlaceholder = (url => {  // dead code placeholder
+    const html = '';
 
     // Extract OG / Twitter image for the Reels card hero
     const ogPatterns = [
@@ -3444,6 +3499,84 @@ app.get('/api/render-page', async (req, res) => {
     console.error('[render-page] error:', err.message);
     return res.json({ success: true, requiresProxy: true, reason: 'error', meta: {}, nodes: [] });
   }
+});
+
+// --- RealSSA AI Chat Endpoint (Cerebras primary → Groq fallback) ---
+app.post('/api/chat', async (req, res) => {
+  const { message, history = [] } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
+
+  // Fetch recent headlines for context (last 10, no extra DB cost)
+  let newsContext = '';
+  try {
+    const nr = await pool.query(
+      `SELECT title, category, source_name FROM rss_articles
+       ORDER BY published_at DESC LIMIT 10`
+    );
+    if (nr.rows.length > 0) {
+      newsContext = '\n\nRecent RealSSA headlines:\n' +
+        nr.rows.map(r => `- [${r.category}] ${r.title} (${r.source_name})`).join('\n');
+    }
+  } catch (_) {}
+
+  const SYSTEM = `You are RealSSA AI, an intelligent assistant built into the RealSSA News app for African users. You have deep knowledge of Nigerian politics, African economics, sports, culture, and current events. You answer questions clearly and concisely, cite sources when possible, and help users understand complex topics in plain language. You speak naturally — not like a robot. When asked about news or current events, draw from the headlines provided.${newsContext}`;
+
+  const messages = [
+    { role: 'system', content: SYSTEM },
+    ...history.slice(-6).map(h => ({ role: h.role, content: h.content })),
+    { role: 'user', content: message.trim() }
+  ];
+
+  // 1. Cerebras — fastest
+  const cerebrasKey = process.env.CEREBRAS_API_KEY;
+  if (cerebrasKey) {
+    try {
+      const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerebrasKey}` },
+        body: JSON.stringify({ model: 'llama-3.3-70b', messages, max_tokens: 600, temperature: 0.7 }),
+        signal: AbortSignal.timeout(10000)
+      });
+      const d = await r.json();
+      const text = d.choices?.[0]?.message?.content?.trim();
+      if (text) return res.json({ reply: text, provider: 'cerebras' });
+    } catch (e) { console.warn('[Chat] Cerebras:', e.message); }
+  }
+
+  // 2. Groq fallback
+  const groqKey = (process.env.GROQ_API_KEY || '').split(',')[0].trim();
+  if (groqKey) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+        body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages, max_tokens: 600, temperature: 0.7 }),
+        signal: AbortSignal.timeout(10000)
+      });
+      const d = await r.json();
+      const text = d.choices?.[0]?.message?.content?.trim();
+      if (text) return res.json({ reply: text, provider: 'groq' });
+    } catch (e) { console.warn('[Chat] Groq:', e.message); }
+  }
+
+  // 3. Gemini last resort
+  const geminiKey = (process.env.GEMINI_API_KEY || '').split(',')[0].trim();
+  if (geminiKey) {
+    try {
+      const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System'}: ${m.content}`).join('\n');
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 600, temperature: 0.7 } }),
+        signal: AbortSignal.timeout(12000)
+      });
+      const d = await r.json();
+      const text = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (text) return res.json({ reply: text, provider: 'gemini' });
+    } catch (e) { console.warn('[Chat] Gemini:', e.message); }
+  }
+
+  res.status(503).json({ error: 'AI unavailable' });
 });
 
 // --- RealSSA Autocomplete Proxy (Bypasses CORS restrictions on mobile client) ---
