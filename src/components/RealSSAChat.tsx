@@ -16,37 +16,76 @@ interface RealSSAChatProps {
 }
 
 const SUGGESTIONS = [
-  'What happened in Nigeria today?',
-  'Explain the Naira exchange rate',
-  'Latest AFCON news',
-  'Who is the CBN governor?',
-  'Tinubu economic policy summary',
-  'African tech startups 2025',
+  { emoji: '🔥', text: "What's trending in Nigeria?" },
+  { emoji: '📈', text: 'Naira exchange rate today' },
+  { emoji: '⚽', text: 'Latest football news' },
+  { emoji: '💡', text: 'Explain anything to me' },
+  { emoji: '😂', text: 'Tell me something funny' },
+  { emoji: '🌍', text: 'Africa & the world today' },
 ];
 
-export default function RealSSAChat({ isOpen, onClose, initialQuery = '' }: RealSSAChatProps) {
+const GREETING =
+  "Hey there 👋 I'm RealSSA — your AI companion. Ask me anything: news, life, sports, deep questions, or even just a laugh. What's on your mind?";
+
+export default function RealSSAChat({
+  isOpen,
+  onClose,
+  initialQuery = '',
+}: RealSSAChatProps) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [greeting, setGreeting] = useState('');
+  const [greetingDone, setGreetingDone] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sentInitial = useRef(false);
+  const greetingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Modal open/close animation
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 100);
+      requestAnimationFrame(() => setVisible(true));
       document.body.style.overflow = 'hidden';
+      setTimeout(() => inputRef.current?.focus(), 350);
       if (initialQuery && !sentInitial.current) {
         sentInitial.current = true;
         send(initialQuery);
       }
     } else {
+      setVisible(false);
       document.body.style.overflow = '';
       sentInitial.current = false;
     }
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen, initialQuery]);
+
+  // Typewriter greeting (only when no messages yet)
+  useEffect(() => {
+    if (!isOpen || messages.length > 0) return;
+    setGreeting('');
+    setGreetingDone(false);
+    let i = 0;
+    const type = () => {
+      if (i < GREETING.length) {
+        i++;
+        setGreeting(GREETING.slice(0, i));
+        greetingTimer.current = setTimeout(type, 20);
+      } else {
+        setGreetingDone(true);
+      }
+    };
+    const delay = setTimeout(type, 600);
+    return () => {
+      clearTimeout(delay);
+      if (greetingTimer.current) clearTimeout(greetingTimer.current);
+    };
+  }, [isOpen, messages.length]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -66,17 +105,26 @@ export default function RealSSAChat({ isOpen, onClose, initialQuery = '' }: Real
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: q,
-          history: messages.slice(-6).map(m => ({ role: m.role, content: m.content }))
-        })
+          history: messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
+        }),
       });
       const data = await res.json();
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: data.reply || 'Sorry, I could not get a response right now.',
-        sources: data.sources
-      }]);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.reply || "Hmm, something went quiet on my end. Try again in a moment!",
+          sources: data.sources,
+        },
+      ]);
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Please try again.' }]);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Connection dropped. Give it a second and try again 🔄',
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -96,119 +144,374 @@ export default function RealSSAChat({ isOpen, onClose, initialQuery = '' }: Real
 
   return (
     <div
-      className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-[999999] flex items-end sm:items-center justify-center"
+      style={{
+        background: 'rgba(0,0,0,0.72)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+      }}
       onClick={onClose}
     >
+      {/* ── Ambient orbs ────────────────────────────── */}
       <div
-        className="w-full sm:max-w-lg h-[92dvh] sm:h-[85dvh] bg-[#0d1117] border border-amber-500/30 sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl"
+        className="absolute pointer-events-none glass-orb"
+        style={{
+          top: '8%', right: '8%',
+          width: 260, height: 260,
+          background: 'rgba(245,158,11,0.12)',
+        }}
+      />
+      <div
+        className="absolute pointer-events-none glass-orb"
+        style={{
+          bottom: '12%', left: '4%',
+          width: 320, height: 320,
+          background: 'rgba(139,92,246,0.09)',
+          animationDelay: '-5s',
+          animationDuration: '17s',
+        }}
+      />
+      <div
+        className="absolute pointer-events-none glass-orb"
+        style={{
+          top: '38%', left: '38%',
+          width: 180, height: 180,
+          background: 'rgba(245,158,11,0.05)',
+          animationDelay: '-9s',
+          animationDuration: '22s',
+        }}
+      />
+
+      {/* ── Modal panel ─────────────────────────────── */}
+      <div
+        className="relative w-full sm:max-w-lg flex flex-col overflow-hidden"
+        style={{
+          height: 'min(92dvh, 700px)',
+          background: 'rgba(14, 11, 19, 0.90)',
+          backdropFilter: 'blur(40px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          borderRadius: '24px 24px 0 0',
+          boxShadow: '0 -12px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
+          transform: visible ? 'translateY(0)' : 'translateY(100%)',
+          opacity: visible ? 1 : 0,
+          transition: 'transform 0.42s cubic-bezier(0.32,0.72,0,1), opacity 0.3s ease',
+        }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-              <Sparkles className="w-4 h-4 text-black" />
+        {/* Top shine hairline */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: '12%',
+            right: '12%',
+            height: 1,
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)',
+            borderRadius: 9999,
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        />
+
+        {/* ── Header ──────────────────────────────── */}
+        <div
+          className="flex items-center justify-between px-5 py-4 shrink-0 relative z-10"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+        >
+          <div className="flex items-center gap-3">
+            {/* Pulsing amber orb */}
+            <div className="relative w-10 h-10 shrink-0 flex items-center justify-center">
+              <span
+                className="absolute inset-0 rounded-full animate-ping"
+                style={{ background: 'rgba(245,158,11,0.22)', animationDuration: '2.8s' }}
+              />
+              <div
+                className="relative w-10 h-10 rounded-full flex items-center justify-center"
+                style={{
+                  background: 'linear-gradient(145deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%)',
+                  boxShadow: '0 0 18px rgba(245,158,11,0.55), inset 0 1px 0 rgba(255,255,255,0.32)',
+                }}
+              >
+                <span
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(255,255,255,0.28) 0%, transparent 55%)',
+                  }}
+                />
+                <Sparkles className="w-5 h-5 text-black relative z-10" strokeWidth={2.5} />
+              </div>
             </div>
+
             <div>
-              <h2 className="text-sm font-bold text-white">RealSSA AI</h2>
-              <p className="text-[10px] text-amber-400/70">Powered by Cerebras · African context</p>
+              <div className="flex items-center gap-2">
+                <h2
+                  className="text-sm font-bold text-white"
+                  style={{ letterSpacing: '0.03em' }}
+                >
+                  RealSSA
+                </h2>
+                {/* Online indicator */}
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+                </span>
+              </div>
+              <p
+                className="text-[10px] font-medium"
+                style={{ color: 'rgba(255,255,255,0.32)', letterSpacing: '0.06em' }}
+              >
+                Ask me anything
+              </p>
             </div>
           </div>
+
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all"
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-150 active:scale-90"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              border: '1px solid rgba(255,255,255,0.10)',
+            }}
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.55)' }} />
           </button>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {/* ── Messages area ───────────────────────── */}
+        <div
+          className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          {/* Welcome state */}
           {messages.length === 0 && (
             <div className="space-y-4">
-              <div className="text-center py-6">
-                <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-3">
-                  <Sparkles className="w-7 h-7 text-amber-500" />
+              {/* Typewriter greeting bubble */}
+              <div className="flex justify-start">
+                <div
+                  className="max-w-[88%] px-4 py-3 text-sm leading-relaxed"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.09)',
+                    borderRadius: '18px 18px 18px 4px',
+                    color: 'rgba(255,255,255,0.88)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <span>{greeting}</span>
+                  {!greetingDone && (
+                    <span
+                      className="inline-block w-px ml-0.5 align-middle animate-pulse"
+                      style={{ height: '1em', background: '#FBBF24' }}
+                    />
+                  )}
                 </div>
-                <h3 className="text-white font-bold text-base">Ask RealSSA AI anything</h3>
-                <p className="text-white/40 text-xs mt-1">News, politics, sports, economics — African context built in</p>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {SUGGESTIONS.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => send(s)}
-                    className="text-left px-3 py-2.5 rounded-xl bg-white/5 hover:bg-amber-500/10 border border-white/10 hover:border-amber-500/30 text-xs text-white/70 hover:text-amber-400 transition-all"
-                  >
-                    {s}
-                  </button>
+
+              {/* Suggestion chips — appear after greeting finishes */}
+              {greetingDone && (
+                <div className="flex flex-wrap gap-2">
+                  {SUGGESTIONS.map((s, i) => (
+                    <SuggestionChip
+                      key={i}
+                      emoji={s.emoji}
+                      text={s.text}
+                      delay={i * 55}
+                      onClick={() => send(s.text)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Chat messages */}
+          {messages.map((msg, i) => (
+            <ChatBubble
+              key={i}
+              msg={msg}
+              onSourceClick={openInBrowser}
+            />
+          ))}
+
+          {/* Waveform typing indicator */}
+          {loading && (
+            <div className="flex justify-start animate-fade-in">
+              <div
+                className="flex items-center gap-[3px] px-4 py-3.5"
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.09)',
+                  borderRadius: '18px 18px 18px 4px',
+                }}
+              >
+                {[0, 1, 2, 3, 4].map(j => (
+                  <span
+                    key={j}
+                    className="inline-block rounded-full"
+                    style={{
+                      width: 3,
+                      height: 16,
+                      background: '#F59E0B',
+                      animationName: 'waveform',
+                      animationDuration: '1s',
+                      animationTimingFunction: 'ease-in-out',
+                      animationIterationCount: 'infinite',
+                      animationDelay: `${j * 100}ms`,
+                    }}
+                  />
                 ))}
               </div>
             </div>
           )}
 
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                msg.role === 'user'
-                  ? 'bg-amber-500 text-black font-medium rounded-br-sm'
-                  : 'bg-white/8 text-white/90 border border-white/10 rounded-bl-sm'
-              }`}>
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-white/10 space-y-1.5">
-                    <p className="text-[10px] text-white/40 uppercase tracking-wider font-semibold">Sources</p>
-                    {msg.sources.map((src, si) => (
-                      <button
-                        key={si}
-                        onClick={() => openInBrowser(src.url)}
-                        className="flex items-center gap-1.5 text-[11px] text-amber-400 hover:text-amber-300 transition-colors w-full text-left"
-                      >
-                        <ExternalLink className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{src.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-white/8 border border-white/10 rounded-2xl rounded-bl-sm px-4 py-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
-            </div>
-          )}
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <form onSubmit={handleSubmit} className="px-4 py-3 border-t border-white/10 shrink-0">
-          <div className="flex items-center gap-2 bg-white/5 border border-white/15 focus-within:border-amber-500/50 rounded-2xl px-4 py-2.5 transition-all">
+        {/* ── Input bar ───────────────────────────── */}
+        <form
+          onSubmit={handleSubmit}
+          className="px-4 pb-4 pt-3 shrink-0"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
+        >
+          <div
+            className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl transition-all duration-200"
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: `1px solid ${inputFocused ? 'rgba(245,158,11,0.45)' : 'rgba(255,255,255,0.11)'}`,
+              boxShadow: inputFocused ? '0 0 0 3px rgba(245,158,11,0.10)' : 'none',
+            }}
+          >
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder="Ask anything..."
-              className="flex-1 bg-transparent text-white text-sm placeholder:text-white/30 focus:outline-none"
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              placeholder="Ask RealSSA anything..."
+              className="flex-1 bg-transparent text-sm focus:outline-none"
+              style={{
+                color: 'rgba(255,255,255,0.90)',
+                fontSize: 15,
+              }}
               disabled={loading}
             />
             <button
               type="submit"
               disabled={!input.trim() || loading}
-              className="w-8 h-8 rounded-xl bg-amber-500 disabled:opacity-30 flex items-center justify-center shrink-0 transition-all active:scale-95"
+              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 active:scale-90 disabled:opacity-25"
+              style={{
+                background: 'linear-gradient(135deg, #FBBF24, #F59E0B)',
+                boxShadow: input.trim() && !loading
+                  ? '0 0 14px rgba(245,158,11,0.45)'
+                  : 'none',
+              }}
             >
               <Send className="w-3.5 h-3.5 text-black" />
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Sub-components ─────────────────────────────────────── */
+
+function SuggestionChip({
+  emoji,
+  text,
+  delay,
+  onClick,
+}: {
+  emoji: string;
+  text: string;
+  delay: number;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 active:scale-95"
+      style={{
+        background: hovered ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.06)',
+        border: `1px solid ${hovered ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.12)'}`,
+        color: hovered ? '#FBBF24' : 'rgba(255,255,255,0.72)',
+        transform: hovered ? 'scale(1.04)' : 'scale(1)',
+        animationName: 'fade-in',
+        animationDuration: '0.4s',
+        animationDelay: `${delay}ms`,
+        animationFillMode: 'both',
+      }}
+    >
+      <span style={{ fontSize: 13 }}>{emoji}</span>
+      <span>{text}</span>
+    </button>
+  );
+}
+
+function ChatBubble({
+  msg,
+  onSourceClick,
+}: {
+  msg: Message;
+  onSourceClick: (url: string) => void;
+}) {
+  const isUser = msg.role === 'user';
+  return (
+    <div
+      className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}
+    >
+      <div
+        className="max-w-[88%] px-4 py-3 text-sm leading-relaxed"
+        style={
+          isUser
+            ? {
+                background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
+                borderRadius: '18px 18px 4px 18px',
+                color: '#000',
+                fontWeight: 500,
+                boxShadow: '0 4px 18px rgba(245,158,11,0.28)',
+              }
+            : {
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.09)',
+                borderRadius: '18px 18px 18px 4px',
+                color: 'rgba(255,255,255,0.90)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+              }
+        }
+      >
+        <p className="whitespace-pre-wrap">{msg.content}</p>
+        {msg.sources && msg.sources.length > 0 && (
+          <div
+            className="mt-3 pt-3 space-y-1.5"
+            style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}
+          >
+            <p
+              className="text-[10px] uppercase tracking-wider font-semibold"
+              style={{ color: 'rgba(255,255,255,0.35)' }}
+            >
+              Sources
+            </p>
+            {msg.sources.map((src, si) => (
+              <button
+                key={si}
+                onClick={() => onSourceClick(src.url)}
+                className="flex items-center gap-1.5 text-[11px] w-full text-left transition-colors hover:opacity-80"
+                style={{ color: '#FBBF24' }}
+              >
+                <ExternalLink className="w-3 h-3 shrink-0" />
+                <span className="truncate">{src.title}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
