@@ -1,7 +1,7 @@
 {
   "name": "realssa-news",
   "private": true,
-  "version": "0.0.76",
+  "version": "0.0.77",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -30,6 +30,7 @@
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@capgo/capacitor-updater": "^8.50.2",
+    "@capgo/inappbrowser": "^8.6.14",
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
     "@mozilla/readability": "^0.6.0",
