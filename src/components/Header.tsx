@@ -463,7 +463,7 @@ const Header = () => {
                 onBlur={() => {
                   setTimeout(() => setIsSearchFocused(false), 200);
                 }}
-                className="flex-1 bg-transparent border-none text-xs md:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none py-1.5"
+                className="flex-1 bg-transparent border-none text-base md:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none py-1.5"
               />
               {searchQuery && (
                 <button
