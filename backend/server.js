@@ -2208,6 +2208,7 @@ app.get('/api/news/social', async (req, res) => {
           OR source_name ILIKE '%BusinessDay%'
           OR source_name ILIKE '%Sahara%'
           OR source_name ILIKE '%Punch%'
+          OR source_name ILIKE '%Arise%'
        ORDER BY published_at DESC
        LIMIT $1`,
       [limit]
@@ -2230,6 +2231,7 @@ app.get('/api/news/social', async (req, res) => {
       else if (sourceLower.includes('businessday') || sourceLower.includes('business day')) handle = 'businessday';
       else if (sourceLower.includes('sahara')) handle = 'saharareporters';
       else if (sourceLower.includes('punch')) handle = 'MobilePunch';
+      else if (sourceLower.includes('arise')) handle = 'AriseNews';
 
       return {
         id: 'rss-' + row.id,

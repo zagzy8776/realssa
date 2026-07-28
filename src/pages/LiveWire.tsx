@@ -69,7 +69,7 @@ const PUBLISHERS: PublisherDetail[] = [
     handle: "AriseNews",
     name: "Arise News",
     bio: "Global news channel broadcasting 24 hours focusing on African, US, European & world reports.",
-    logo: "https://www.google.com/s2/favicons?sz=128&domain=arise.tv",
+    logo: "https://upload.wikimedia.org/wikipedia/commons/f/f7/Arise_news_logo.png",
     color: "#D32F2F",
     category: "News",
     website: "https://www.arise.tv",
@@ -727,7 +727,7 @@ export default function LiveWire() {
             <div className="w-full max-w-2xl min-h-screen flex flex-col relative px-4 py-6 md:py-10 space-y-6 z-10">
               
               {/* Top Navigation */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between shrink-0">
                 <button
                   onClick={() => setSelectedProfilePublisher(null)}
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white/70 hover:text-white bg-white/5 border border-white/10 transition active:scale-90"
@@ -745,7 +745,7 @@ export default function LiveWire() {
               </div>
 
               {/* Logo, Title & Follower Info */}
-              <div className="flex flex-col items-center text-center space-y-4 pt-4">
+              <div className="flex flex-col items-center text-center space-y-4 pt-4 shrink-0">
                 <div className="relative">
                   <img
                     src={selectedProfilePublisher.logo}
@@ -792,7 +792,7 @@ export default function LiveWire() {
               </div>
 
               {/* Social Channels Badge Scroller */}
-              <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              <div className="flex gap-2.5 overflow-x-auto pb-2 shrink-0" style={{ scrollbarWidth: 'none' }}>
                 {selectedProfilePublisher.socials.youtube && (
                   <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/[0.04] border border-white/8 shrink-0">
                     <Youtube className="w-4 h-4 text-red-500" />
@@ -829,7 +829,7 @@ export default function LiveWire() {
               </div>
 
               {/* Collapsible About Bio Section */}
-              <div className="glass p-5 rounded-2xl border border-white/8 space-y-2.5">
+              <div className="glass p-5 rounded-2xl border border-white/8 space-y-2.5 shrink-0">
                 <div className="flex items-center justify-between border-b border-white/5 pb-2">
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">About</h3>
                   <a 
@@ -850,7 +850,7 @@ export default function LiveWire() {
               </div>
 
               {/* Stream Feed Header & Filters */}
-              <div className="space-y-4 pt-2">
+              <div className="space-y-4 pt-2 shrink-0">
                 <div className="flex flex-col gap-2">
                   <h3 className="text-lg font-black text-white">Latest posts</h3>
                   <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>

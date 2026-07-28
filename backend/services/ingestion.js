@@ -30,6 +30,7 @@ const FEED_CATEGORIES = [
       'https://www.thecable.ng/feed/',
       'https://businessday.ng/feed/',
       'https://nairametrics.com/rss',
+      'https://www.arise.tv/feed/',
       'https://infoguidenigeria.com/rss',
       'https://pmnewsnigeria.com/rss',
       'https://asorock.com/rss',
