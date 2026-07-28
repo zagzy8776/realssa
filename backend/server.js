@@ -5041,13 +5041,51 @@ app.get('/api/sports/matches/:id/details', async (req, res) => {
   const apiKey = process.env.FOOTBALL_DATA_API_KEY;
   const isNumeric = /^\d+$/.test(matchId);
 
-  // 1. Grasp Soccerway or non-numeric matches immediately via DB fallback
+  // 1. Grasp Soccerway or non-numeric matches immediately via DB fallback & Flashscore scraping
   if (!isNumeric) {
-    const dbFallback = await getMatchDetailsFromDB(matchId);
-    if (dbFallback) {
-      return res.json({ match: dbFallback, h2h: null });
+    // Check cache first (highly ephemeral 15 seconds cache to keep stats live but not spam Flashscore)
+    if (process.env.DATABASE_URL) {
+      try {
+        const cacheResult = await pool.query(
+          `SELECT data FROM match_details_cache 
+           WHERE match_id = $1 AND fetched_at >= NOW() - INTERVAL '15 seconds'`,
+          [matchId]
+        );
+        if (cacheResult.rows.length > 0) {
+          return res.json(cacheResult.rows[0].data);
+        }
+      } catch (cacheErr) {
+        console.warn('Scraper details cache read error:', cacheErr.message);
+      }
     }
-    return res.status(404).json({ error: 'Match not found in local database' });
+
+    const dbFallback = await getMatchDetailsFromDB(matchId);
+    if (!dbFallback) {
+      return res.status(404).json({ error: 'Match not found in local database' });
+    }
+
+    // Fetch live statistics and timeline incidents on-the-fly
+    const flashDetails = await fetchFlashscoreDetails(matchId, dbFallback.homeTeam.name, dbFallback.awayTeam.name);
+
+    const combinedResponse = {
+      match: dbFallback,
+      incidents: flashDetails.incidents,
+      stats: flashDetails.stats,
+      h2h: null
+    };
+
+    // Save to cache
+    if (process.env.DATABASE_URL) {
+      await pool.query(
+        `INSERT INTO match_details_cache (match_id, data, fetched_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (match_id)
+         DO UPDATE SET data = EXCLUDED.data, fetched_at = CURRENT_TIMESTAMP`,
+        [matchId, JSON.stringify(combinedResponse)]
+      ).catch(e => console.warn('Failed to save scraper match details cache:', e.message));
+    }
+
+    return res.json(combinedResponse);
   }
 
   try {
