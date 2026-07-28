@@ -46,6 +46,15 @@ function escapeHtml(unsafe) {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+process.on('uncaughtException', (err) => {
+  console.error('❌ [Process] Uncaught Exception:', err.message, err.stack);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ [Process] Unhandled Rejection:', reason);
+});
+
+
 // Refuse to boot with a weak/default secret — fail fast instead of silently
 // falling back to a publicly-known value.
 if (!process.env.JWT_SECRET) {
@@ -5821,4 +5830,13 @@ if (!process.env.VERCEL) {
   });
 }
 
+// Global Express Error Handler
+app.use((err, req, res, next) => {
+  console.error('❌ [Express Global Error]:', err.message, err.stack);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal Server Error', message: err.message });
+  }
+});
+
 module.exports = app;
+
