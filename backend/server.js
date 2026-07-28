@@ -5006,7 +5006,7 @@ app.get('/api/sports/results', async (req, res) => {
 // ── API-SPORTS Proxy & Cache Shield Server ───────────────────────────────
 const apiSportsCache = new Map();
 
-app.all('/api/sports/proxy/v3/*', async (req, res) => {
+app.all(/^\/api\/sports\/proxy\/v3\/(.*)/, async (req, res) => {
   try {
     const endpointPath = req.params[0] || '';
     const queryParams = new URLSearchParams(req.query).toString();
