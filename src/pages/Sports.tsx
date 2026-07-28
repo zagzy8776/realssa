@@ -3,7 +3,8 @@ import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Trophy, PlayCircle, Bell, BellOff, RefreshCw, Calendar,
-  Flame, X, ChevronRight, Clock, Shield, Activity, Zap
+  Flame, X, ChevronRight, Clock, Shield, Activity, Zap,
+  BarChart3, CheckCircle2, Globe, Users, Award
 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -12,7 +13,6 @@ import NewsCard from '../components/NewsCard';
 import CategorySearch from '@/components/CategorySearch';
 import Pagination from '@/components/Pagination';
 import SEO from '@/components/SEO';
-import SportsLeagueTables from '@/components/SportsLeagueTables';
 import { fetchWithRetry } from '@/lib/fetchWithRetry';
 import { Link } from 'react-router-dom';
 
@@ -52,10 +52,10 @@ interface SportsArticle {
 const SPORTS_PER_PAGE = 8;
 
 const TABS = [
-  { id: 'all',       label: 'All',      icon: '⚽' },
-  { id: 'live',      label: 'Live',     icon: '🔴' },
-  { id: 'upcoming',  label: 'Upcoming', icon: '📅' },
-  { id: 'results',   label: 'Results',  icon: '🏁' },
+  { id: 'all',       label: 'All',      icon: Shield },
+  { id: 'live',      label: 'Live',     icon: Activity },
+  { id: 'upcoming',  label: 'Upcoming', icon: Calendar },
+  { id: 'results',   label: 'Results',  icon: CheckCircle2 },
 ];
 
 /* ─────────────────────────── Helpers ─────────────────────────────────── */
@@ -249,7 +249,7 @@ const ScoreFlash = ({ value, live }: { value: number; live: boolean }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-/*  MatchCard                                                               */
+/*  MatchCard — Responsive flex layout without premature truncation      */
 /* ═══════════════════════════════════════════════════════════════════════ */
 const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
   match: Match; isFollowing: boolean; onFollowToggle: (id: string) => void; onClick: () => void;
@@ -268,22 +268,23 @@ const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
           : 'rgba(30,41,59,0.7)',
         border: isLive ? '1px solid rgba(239,68,68,0.35)' : '1px solid rgba(51,65,85,0.6)',
         borderRadius: 14,
+        padding: '10px 12px',
         transition: 'all 0.18s',
         boxShadow: isLive ? '0 0 18px rgba(239,68,68,0.12)' : 'none',
       }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = isLive ? 'rgba(239,68,68,0.6)' : 'rgba(234,179,8,0.5)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = isLive ? 'rgba(239,68,68,0.35)' : 'rgba(51,65,85,0.6)'; (e.currentTarget as HTMLElement).style.transform = ''; }}
     >
-      <div className="flex items-center px-3 py-3 gap-1">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {/* Home team */}
-        <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, minWidth: 0 }}>
           <span
             style={{
-              color: '#e2e8f0', maxWidth: 110, fontSize: 13, fontWeight: 700,
-              fontFamily: "'Playfair Display', Georgia, serif",
+              color: '#e2e8f0', fontSize: 13, fontWeight: 700,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               textAlign: 'right',
             }}
+            title={match.home_team_name}
           >
             {match.home_team_name}
           </span>
@@ -291,10 +292,10 @@ const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
         </div>
 
         {/* Score / Time */}
-        <div style={{ minWidth: 76, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+        <div style={{ minWidth: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, flexShrink: 0 }}>
           {isSched ? (
             <>
-              <span style={{ color: '#38bdf8', fontSize: 13, fontWeight: 800 }}>{fmtTime(match.kickoff_at)}</span>
+              <span style={{ color: '#38bdf8', fontSize: 12.5, fontWeight: 800 }}>{fmtTime(match.kickoff_at)}</span>
               <span style={{ color: '#64748b', fontSize: 10, fontWeight: 600 }}>{fmtDate(match.kickoff_at)}</span>
             </>
           ) : (
@@ -318,14 +319,14 @@ const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
         </div>
 
         {/* Away team */}
-        <div className="flex-1 flex items-center gap-2 min-w-0">
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={28} />
           <span
             style={{
-              color: '#e2e8f0', maxWidth: 110, fontSize: 13, fontWeight: 700,
-              fontFamily: "'Playfair Display', Georgia, serif",
+              color: '#e2e8f0', fontSize: 13, fontWeight: 700,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}
+            title={match.away_team_name}
           >
             {match.away_team_name}
           </span>
@@ -336,7 +337,7 @@ const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
           <button
             onClick={e => { e.stopPropagation(); onFollowToggle(match.provider_match_id); }}
             style={{
-              marginLeft: 6, padding: 6, borderRadius: '50%', flexShrink: 0,
+              padding: 4, borderRadius: '50%', flexShrink: 0,
               background: isFollowing ? 'rgba(234,179,8,0.15)' : 'transparent',
               color: isFollowing ? '#eab308' : '#475569',
               border: 'none', cursor: 'pointer', transition: 'all 0.15s',
@@ -346,8 +347,6 @@ const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
             {isFollowing ? <Bell size={13} fill="currentColor" /> : <BellOff size={13} />}
           </button>
         )}
-        <ChevronRight size={12} style={{ color: '#475569', opacity: 0, flexShrink: 0, transition: 'opacity 0.15s' }}
-          className="group-hover:!opacity-100" />
       </div>
     </div>
   );
@@ -365,14 +364,13 @@ interface CompGroupProps {
 }
 const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, onMatchClick }: CompGroupProps) => (
   <div>
-    {/* Competition header — pill badge */}
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '0 2px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 2px' }}>
       <div style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)',
-        borderRadius: 999, padding: '3px 10px 3px 8px',
+        borderRadius: 999, padding: '4px 12px 4px 10px',
       }}>
-        <span style={{ fontSize: 13 }}>{competitionEmoji(competition)}</span>
+        <Trophy size={13} className="text-amber-400" />
         <span style={{
           fontSize: 11, fontWeight: 800, textTransform: 'uppercase',
           letterSpacing: '0.08em', color: '#eab308',
@@ -381,7 +379,7 @@ const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, o
         </span>
       </div>
       <div style={{ flex: 1, height: 1, background: 'linear-gradient(to right, rgba(234,179,8,0.2), transparent)' }} />
-      <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>
+      <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>
         {matches.length} match{matches.length !== 1 ? 'es' : ''}
       </span>
     </div>
@@ -401,7 +399,7 @@ const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, o
 );
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-/*  ScraperMatchPanel — full panel built from live_matches data             */
+/*  ScraperMatchPanel — Simplified Overview panel (no duplicate scoreboard) */
 /* ═══════════════════════════════════════════════════════════════════════ */
 const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }) => {
   const isLive = match.status === 'live';
@@ -435,132 +433,58 @@ const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-      {/* ── Scoreboard ── */}
-      <div style={{
-        background: 'linear-gradient(160deg, #0d1520 0%, #131b2a 60%, #0f1623 100%)',
-        border: isLive ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(51,65,85,0.5)',
-        borderRadius: 18, padding: '24px 20px',
-        boxShadow: isLive ? '0 0 32px rgba(239,68,68,0.08)' : 'none',
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
-
-          {/* Home */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            <TeamAvatar crest={match.home_team_crest} name={match.home_team_name} size={60} />
-            <span style={{
-              fontFamily: "'Playfair Display', Georgia, serif",
-              fontSize: 14, fontWeight: 800, color: '#f1f5f9',
-              textAlign: 'center', lineHeight: 1.3,
-            }}>{match.home_team_name}</span>
+      {/* ── Minute Timeline Progress Bar ── */}
+      {(isLive || isFin) && (
+        <div style={{ padding: '14px 16px', background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 800, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <span>Kick Off</span>
+            <span style={{ color: isSecondHalf ? '#f59e0b' : '#64748b' }}>Half Time</span>
+            <span>Full Time</span>
           </div>
-
-          {/* Centre — score or kickoff */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 90 }}>
-            {isSched ? (
-              <>
-                <Clock size={24} style={{ color: '#38bdf8' }} />
-                <span style={{ color: '#38bdf8', fontSize: 18, fontWeight: 900 }}>{fmtTime(match.kickoff_at)}</span>
-                <span style={{ color: '#64748b', fontSize: 11, fontWeight: 600 }}>{fmtDate(match.kickoff_at)}</span>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 44, fontWeight: 900, color: isLive ? '#f87171' : '#f1f5f9', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                    {match.home_score}
-                  </span>
-                  <span style={{ color: '#334155', fontSize: 24, fontWeight: 300 }}>:</span>
-                  <span style={{ fontSize: 44, fontWeight: 900, color: isLive ? '#f87171' : '#f1f5f9', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                    {match.away_score}
-                  </span>
-                </div>
-                {/* Status badge */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '3px 10px', borderRadius: 999,
-                  background: isLive ? 'rgba(239,68,68,0.15)' : isFin ? 'rgba(100,116,139,0.12)' : 'rgba(56,189,248,0.1)',
-                  border: isLive ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(51,65,85,0.4)',
-                  marginTop: 2,
-                }}>
-                  {isLive && <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />}
-                  <span style={{
-                    fontSize: 10, fontWeight: 900, letterSpacing: 1, textTransform: 'uppercase',
-                    color: isLive ? '#ef4444' : isFin ? '#64748b' : '#38bdf8',
-                  }}>
-                    {isLive ? (match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE') : isFin ? 'Full Time' : 'Scheduled'}
-                  </span>
-                </div>
-              </>
-            )}
+          <div style={{ height: 6, borderRadius: 99, background: 'rgba(51,65,85,0.5)', overflow: 'hidden', position: 'relative' }}>
+            <div style={{
+              height: '100%', borderRadius: 99,
+              width: `${progressPct}%`,
+              background: isLive
+                ? 'linear-gradient(90deg, #22c55e, #f59e0b)'
+                : 'linear-gradient(90deg, #475569, #64748b)',
+              transition: 'width 1s ease',
+            }} />
+            <div style={{ position: 'absolute', top: 0, left: '50%', width: 2, height: '100%', background: 'rgba(234,179,8,0.5)' }} />
           </div>
-
-          {/* Away */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={60} />
-            <span style={{
-              fontFamily: "'Playfair Display', Georgia, serif",
-              fontSize: 14, fontWeight: 800, color: '#f1f5f9',
-              textAlign: 'center', lineHeight: 1.3,
-            }}>{match.away_team_name}</span>
-          </div>
+          {isLive && minute > 0 && (
+            <p style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#94a3b8', marginTop: 6 }}>
+              {minute <= 45 ? `${minute}' — 1st Half` : minute === 45 ? 'Half Time' : `${minute}' — 2nd Half`}
+            </p>
+          )}
         </div>
+      )}
 
-        {/* ── Live minute progress bar ── */}
-        {(isLive || isFin) && (
-          <div style={{ marginTop: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              <span>Kick Off</span>
-              <span style={{ color: isSecondHalf ? '#f59e0b' : '#475569' }}>HT</span>
-              <span>Full Time</span>
-            </div>
-            <div style={{ height: 5, borderRadius: 99, background: 'rgba(51,65,85,0.5)', overflow: 'hidden', position: 'relative' }}>
-              <div style={{
-                height: '100%', borderRadius: 99,
-                width: `${progressPct}%`,
-                background: isLive
-                  ? 'linear-gradient(90deg, #22c55e, #f59e0b)'
-                  : 'linear-gradient(90deg, #475569, #64748b)',
-                transition: 'width 1s ease',
-              }} />
-              {/* HT marker */}
-              <div style={{ position: 'absolute', top: 0, left: '50%', width: 1, height: '100%', background: 'rgba(234,179,8,0.4)' }} />
-            </div>
-            {isLive && minute > 0 && (
-              <p style={{ textAlign: 'center', fontSize: 10, color: '#64748b', marginTop: 5 }}>
-                {minute <= 45 ? `${minute} min — 1st Half` : minute === 45 ? 'Half Time' : `${minute} min — 2nd Half`}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Match Info ── */}
-      <div style={{ background: '#0d1520', border: '1px solid rgba(51,65,85,0.4)', borderRadius: 14, padding: '14px 16px' }}>
-        <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#475569', marginBottom: 12 }}>Match Info</p>
+      {/* ── Match Info Summary ── */}
+      <div style={{ background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 14, padding: '14px 16px' }}>
+        <p style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: 12 }}>Match Summary</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
-            <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Competition</p>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
-              {competitionEmoji(match.competition_name)} {match.competition_name}
-            </p>
+            <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>Competition</p>
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: '#e2e8f0' }}>{match.competition_name}</p>
           </div>
           {match.kickoff_at && (
             <div>
-              <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Kickoff</p>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+              <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>Kickoff</p>
+              <p style={{ fontSize: 12.5, fontWeight: 700, color: '#e2e8f0' }}>
                 {fmtDate(match.kickoff_at)} · {fmtTime(match.kickoff_at)}
               </p>
             </div>
           )}
           <div>
-            <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Status</p>
-            <p style={{ fontSize: 13, fontWeight: 700, color: isLive ? '#ef4444' : isFin ? '#64748b' : '#38bdf8', textTransform: 'capitalize' }}>
+            <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>Status</p>
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: isLive ? '#ef4444' : isFin ? '#64748b' : '#38bdf8', textTransform: 'capitalize' }}>
               {match.status}
             </p>
           </div>
           {match.updated_at && (
             <div>
-              <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Last Updated</p>
+              <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>Last Updated</p>
               <p style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>
                 {new Date(match.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
@@ -571,15 +495,17 @@ const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }
 
       {/* ── Community Hype Meter ── */}
       {!isSched && (
-        <div style={{ background: '#0d1520', border: '1px solid rgba(234,179,8,0.15)', borderRadius: 14, padding: '16px' }}>
-          <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#eab308', marginBottom: 14 }}>
-            🔥 Community Hype Meter
-          </p>
+        <div style={{ background: '#131b2a', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 14, padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+            <Flame size={15} className="text-amber-400" />
+            <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#eab308' }}>
+              Community Hype Meter
+            </span>
+          </div>
 
-          {/* Bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#e2e8f0', minWidth: 28, textAlign: 'right' }}>{homePct}%</span>
-            <div style={{ flex: 1, height: 10, borderRadius: 99, overflow: 'hidden', background: 'rgba(51,65,85,0.4)', display: 'flex' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#e2e8f0', minWidth: 32, textAlign: 'right' }}>{homePct}%</span>
+            <div style={{ flex: 1, height: 8, borderRadius: 99, overflow: 'hidden', background: 'rgba(51,65,85,0.4)', display: 'flex' }}>
               <div style={{
                 height: '100%',
                 width: `${homePct}%`,
@@ -595,56 +521,119 @@ const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }
                 borderRadius: '0 99px 99px 0',
               }} />
             </div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#e2e8f0', minWidth: 28 }}>{awayPct}%</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#e2e8f0', minWidth: 32 }}>{awayPct}%</span>
           </div>
 
-          {/* Team labels + vote buttons */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button
               onClick={() => castHype('home')}
               disabled={!!voted}
               style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                display: 'flex', alignItems: 'center', gap: 6,
                 background: voted === 'home' ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.08)',
                 border: voted === 'home' ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(59,130,246,0.2)',
                 borderRadius: 10, padding: '8px 14px', cursor: voted ? 'default' : 'pointer',
-                transition: 'all 0.15s', minWidth: 90,
+                transition: 'all 0.15s',
               }}
             >
-              <span style={{ fontSize: 18 }}>🔵</span>
-              <span style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd' }}>
-                {match.home_team_name.split(' ').slice(-1)[0]}
-              </span>
-              <span style={{ fontSize: 10, color: '#64748b' }}>{homeHype} hypes</span>
+              <TeamAvatar crest={match.home_team_crest} name={match.home_team_name} size={18} />
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd' }}>{match.home_team_name}</span>
             </button>
 
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>
-                {voted ? '✅ Voted!' : 'Tap to hype your team'}
-              </p>
-              <p style={{ fontSize: 9, color: '#334155', marginTop: 2 }}>{homeHype + awayHype} total votes</p>
-            </div>
+            <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>
+              {voted ? 'Voted' : 'Tap to vote'}
+            </span>
 
             <button
               onClick={() => castHype('away')}
               disabled={!!voted}
               style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                display: 'flex', alignItems: 'center', gap: 6,
                 background: voted === 'away' ? 'rgba(249,115,22,0.2)' : 'rgba(249,115,22,0.08)',
                 border: voted === 'away' ? '1px solid rgba(249,115,22,0.5)' : '1px solid rgba(249,115,22,0.2)',
                 borderRadius: 10, padding: '8px 14px', cursor: voted ? 'default' : 'pointer',
-                transition: 'all 0.15s', minWidth: 90,
+                transition: 'all 0.15s',
               }}
             >
-              <span style={{ fontSize: 18 }}>🟠</span>
-              <span style={{ fontSize: 11, fontWeight: 800, color: '#fdba74' }}>
-                {match.away_team_name.split(' ').slice(-1)[0]}
-              </span>
-              <span style={{ fontSize: 10, color: '#64748b' }}>{awayHype} hypes</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#fdba74' }}>{match.away_team_name}</span>
+              <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={18} />
             </button>
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/*  MatchStandingsTable — Native dark glass standings table                  */
+/* ═══════════════════════════════════════════════════════════════════════ */
+const MatchStandingsTable = ({ competition }: { competition: string }) => {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const comp = competition.toLowerCase();
+    let slug = 'epl';
+    if (comp.includes('npfl') || comp.includes('nigeria')) slug = 'npfl';
+    else if (comp.includes('la liga') || comp.includes('laliga')) slug = 'laliga';
+    else if (comp.includes('bundesliga')) slug = 'bundesliga';
+    else if (comp.includes('serie a')) slug = 'seriea';
+    else if (comp.includes('caf')) slug = 'caf-cl';
+
+    fetch(apiUrl(`/api/sports/standings/${slug}`))
+      .then(r => r.json())
+      .then(data => setRows(data.standings || []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [competition]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '32px 0', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+        Loading league standings...
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div style={{ padding: '32px 16px', textAlign: 'center', background: '#131b2a', borderRadius: 14, border: '1px dashed rgba(51,65,85,0.6)' }}>
+        <Trophy size={28} style={{ margin: '0 auto 10px', color: '#64748b' }} />
+        <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>Standings Unavailable</p>
+        <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>League standings update following official match completions.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ overflowX: 'auto', background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 14, padding: 12 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid rgba(51,65,85,0.6)', color: '#64748b', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <th style={{ padding: '8px 6px', width: 28 }}>#</th>
+            <th style={{ padding: '8px 8px' }}>Team</th>
+            <th style={{ padding: '8px 6px', textAlign: 'center' }}>P</th>
+            <th style={{ padding: '8px 6px', textAlign: 'center' }}>W</th>
+            <th style={{ padding: '8px 6px', textAlign: 'center' }}>D</th>
+            <th style={{ padding: '8px 6px', textAlign: 'center' }}>L</th>
+            <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 800, color: '#e2e8f0' }}>PTS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid rgba(51,65,85,0.3)', background: i % 2 === 0 ? 'transparent' : 'rgba(30,41,59,0.3)' }}>
+              <td style={{ padding: '8px 6px', fontWeight: 700, color: i < 4 ? '#38bdf8' : '#94a3b8' }}>{row.position || i + 1}</td>
+              <td style={{ padding: '8px 8px', fontWeight: 700, color: '#e2e8f0' }}>{row.team}</td>
+              <td style={{ padding: '8px 6px', textAlign: 'center', color: '#94a3b8' }}>{row.played}</td>
+              <td style={{ padding: '8px 6px', textAlign: 'center', color: '#94a3b8' }}>{row.won}</td>
+              <td style={{ padding: '8px 6px', textAlign: 'center', color: '#94a3b8' }}>{row.drawn}</td>
+              <td style={{ padding: '8px 6px', textAlign: 'center', color: '#94a3b8' }}>{row.lost}</td>
+              <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 900, color: '#eab308' }}>{row.points}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
@@ -664,7 +653,6 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
 }) => {
   const [modalTab, setModalTab] = useState<'overview' | 'stats' | 'table' | 'h2h'>('overview');
 
-  const isScraperMatch = match?.source === 'scraper';
   const isLive = match?.status === 'live' || matchDetails?.status === 'IN_PLAY';
   const isFin = match?.status === 'finished' || matchDetails?.status === 'FINISHED';
   const isSched = match?.status === 'scheduled' || matchDetails?.status === 'SCHEDULED' || matchDetails?.status === 'scheduled';
@@ -679,7 +667,6 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
 
   const competitionName = match?.competition_name || matchDetails?.competition?.name || 'Match Details';
 
-  // Group statistics into intuitive categories
   const groupedStats = useMemo(() => {
     if (!matchStats || matchStats.length === 0) return null;
     const categories: Record<string, any[]> = {
@@ -710,18 +697,18 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}
       onClick={onClose}
     >
       <div
-        style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', maxHeight: '92vh', overflow: 'hidden', background: '#0d1520', border: '1px solid rgba(51,65,85,0.8)', borderRadius: 24, boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
+        style={{ width: '100%', maxWidth: 540, display: 'flex', flexDirection: 'column', maxHeight: '92vh', overflow: 'hidden', background: '#0d1520', border: '1px solid rgba(51,65,85,0.8)', borderRadius: 24, boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* ── Modal Header ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid rgba(51,65,85,0.5)', background: 'rgba(15,22,35,0.9)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid rgba(51,65,85,0.5)', background: 'rgba(15,22,35,0.9)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>{competitionEmoji(competitionName)}</span>
-            <span style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#eab308' }}>
+            <Trophy size={15} className="text-amber-400" />
+            <span style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#eab308' }}>
               {competitionName}
             </span>
           </div>
@@ -730,37 +717,37 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
           </button>
         </div>
 
-        {/* ── Matchup Hero Banner ── */}
+        {/* ── Matchup Hero Banner (SINGLE AUTHORITATIVE SCOREBOARD) ── */}
         <div style={{
-          padding: '20px 20px 16px',
+          padding: '20px 16px 16px',
           background: 'linear-gradient(180deg, #131d2e 0%, #0d1520 100%)',
           borderBottom: '1px solid rgba(51,65,85,0.5)'
         }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 10 }}>
             {/* Home */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
               <TeamAvatar crest={homeCrest} name={homeName} size={54} />
-              <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 13, fontWeight: 800, color: '#f1f5f9', textAlign: 'center', lineHeight: 1.3 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#f1f5f9', textAlign: 'center', lineHeight: 1.3 }}>
                 {homeName}
               </span>
             </div>
 
             {/* Center Score / Time */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 100 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 90 }}>
               {isSched ? (
                 <>
-                  <Clock size={22} style={{ color: '#38bdf8' }} />
+                  <Clock size={20} style={{ color: '#38bdf8' }} />
                   <span style={{ color: '#38bdf8', fontSize: 16, fontWeight: 900 }}>{fmtTime(match?.kickoff_at || matchDetails?.utcDate)}</span>
                   <span style={{ color: '#64748b', fontSize: 10, fontWeight: 600 }}>{fmtDate(match?.kickoff_at || matchDetails?.utcDate)}</span>
                 </>
               ) : (
                 <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 38, fontWeight: 900, color: isLive ? '#f87171' : '#f1f5f9', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 36, fontWeight: 900, color: isLive ? '#f87171' : '#f1f5f9', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
                       {homeScore}
                     </span>
-                    <span style={{ color: '#475569', fontSize: 20, fontWeight: 300 }}>:</span>
-                    <span style={{ fontSize: 38, fontWeight: 900, color: isLive ? '#f87171' : '#f1f5f9', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                    <span style={{ color: '#475569', fontSize: 18, fontWeight: 300 }}>:</span>
+                    <span style={{ fontSize: 36, fontWeight: 900, color: isLive ? '#f87171' : '#f1f5f9', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
                       {awayScore}
                     </span>
                   </div>
@@ -781,9 +768,9 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
             </div>
 
             {/* Away */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
               <TeamAvatar crest={awayCrest} name={awayName} size={54} />
-              <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 13, fontWeight: 800, color: '#f1f5f9', textAlign: 'center', lineHeight: 1.3 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#f1f5f9', textAlign: 'center', lineHeight: 1.3 }}>
                 {awayName}
               </span>
             </div>
@@ -791,28 +778,29 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
         </div>
 
         {/* ── Modal Tabs Bar ── */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#0f172a' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#0f172a', overflowX: 'auto', scrollbarWidth: 'none' }}>
           {[
-            { id: 'overview',   label: 'Overview',   icon: '📊' },
-            { id: 'stats',      label: 'Statistics', icon: '📈' },
-            { id: 'table',      label: 'Table',      icon: '🏆' },
-            { id: 'h2h',        label: 'H2H',        icon: '🤝' },
+            { id: 'overview',   label: 'Overview',   icon: BarChart3 },
+            { id: 'stats',      label: 'Statistics', icon: Activity },
+            { id: 'table',      label: 'Standings',  icon: Trophy },
+            { id: 'h2h',        label: 'H2H',        icon: Users },
           ].map(tb => {
+            const Icon = tb.icon;
             const active = modalTab === tb.id;
             return (
               <button
                 key={tb.id}
                 onClick={() => setModalTab(tb.id as any)}
                 style={{
-                  flex: 1, padding: '11px 4px', fontSize: 12, fontWeight: 800,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                  flex: 1, minWidth: 80, padding: '12px 6px', fontSize: 12, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   color: active ? '#eab308' : '#94a3b8',
                   borderBottom: active ? '2px solid #eab308' : '2px solid transparent',
                   background: active ? 'rgba(234,179,8,0.06)' : 'transparent',
-                  border: 'none', cursor: 'pointer', transition: 'all 0.15s'
+                  border: 'none', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap'
                 }}
               >
-                <span>{tb.icon}</span>
+                <Icon size={14} />
                 <span>{tb.label}</span>
               </button>
             );
@@ -820,11 +808,11 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
         </div>
 
         {/* ── Modal Body Content ── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
           {loading ? (
             <div style={{ padding: '32px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[1, 2, 3].map(i => (
-                <div key={i} style={{ height: 60, borderRadius: 12, background: '#1e293b', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                <div key={i} style={{ height: 50, borderRadius: 12, background: '#1e293b', animation: 'pulse 1.5s ease-in-out infinite' }} />
               ))}
             </div>
           ) : (
@@ -858,19 +846,19 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
                         {matchDetails.venue && (
                           <div>
                             <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Venue</span>
-                            <p style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>🏟️ {matchDetails.venue}</p>
+                            <p style={{ fontSize: 12.5, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>{matchDetails.venue}</p>
                           </div>
                         )}
                         {matchDetails.matchday && (
                           <div>
                             <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Matchday</span>
-                            <p style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>Round {matchDetails.matchday}</p>
+                            <p style={{ fontSize: 12.5, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>Round {matchDetails.matchday}</p>
                           </div>
                         )}
                         {matchDetails.referees?.length > 0 && (
                           <div style={{ gridColumn: 'span 2' }}>
                             <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Referee</span>
-                            <p style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>🟨 {matchDetails.referees.map((r: any) => r.name).join(', ')}</p>
+                            <p style={{ fontSize: 12.5, fontWeight: 600, color: '#e2e8f0', marginTop: 2 }}>{matchDetails.referees.map((r: any) => r.name).join(', ')}</p>
                           </div>
                         )}
                       </div>
@@ -879,22 +867,9 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
                 </div>
               )}
 
-              {/* ── TAB 2: STATISTICS ── */}
+              {/* ── TAB 2: STATISTICS (FLAT, NO DUPLICATE TEAMS HEADER) ── */}
               {modalTab === 'stats' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {/* Teams Bar Header */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#131b2a', borderRadius: 12, border: '1px solid rgba(51,65,85,0.5)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <TeamAvatar crest={homeCrest} name={homeName} size={24} />
-                      <span style={{ fontSize: 12, fontWeight: 800, color: '#38bdf8' }}>{homeName}</span>
-                    </div>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>VS</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: '#f97316' }}>{awayName}</span>
-                      <TeamAvatar crest={awayCrest} name={awayName} size={24} />
-                    </div>
-                  </div>
-
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {groupedStats ? (
                     Object.entries(groupedStats).map(([catName, statsList]) => {
                       if (statsList.length === 0) return null;
@@ -919,10 +894,10 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
                 </div>
               )}
 
-              {/* ── TAB 3: TABLE (STANDINGS) ── */}
+              {/* ── TAB 3: STANDINGS TABLE ── */}
               {modalTab === 'table' && (
                 <div>
-                  <SportsLeagueTables />
+                  <MatchStandingsTable competition={competitionName} />
                 </div>
               )}
 
@@ -1216,24 +1191,25 @@ const Sports = () => {
 
           {/* ── Pill Tab Bar ── */}
           <div style={{ borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#080e1a', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' }}>
               {TABS.map(tab => {
                 const isActive = activeTab === tab.id;
+                const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
                       padding: '6px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
                       fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap', transition: 'all 0.18s',
                       background: isActive ? 'linear-gradient(135deg, rgba(234,179,8,0.2), rgba(234,179,8,0.08))' : 'transparent',
-                      color: isActive ? '#eab308' : '#475569',
+                      color: isActive ? '#eab308' : '#94a3b8',
                       boxShadow: isActive ? 'inset 0 0 0 1px rgba(234,179,8,0.4)' : 'none',
                     }}
                   >
-                    <span style={{ fontSize: 13 }}>{tab.icon}</span>
-                    {tab.label}
+                    <Icon size={13} className={tab.id === 'live' && liveMatches.length > 0 ? 'text-red-400 animate-pulse' : ''} />
+                    <span>{tab.label}</span>
                     {tab.id === 'live' && liveMatches.length > 0 && (
                       <span style={{ background: '#ef4444', color: 'white', fontSize: 9, fontWeight: 900, borderRadius: 999, padding: '1px 5px', marginLeft: 2 }}>
                         {liveMatches.length}

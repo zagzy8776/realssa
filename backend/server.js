@@ -4972,6 +4972,70 @@ app.get('/api/sports/results', async (req, res) => {
 });
 
 
+// Helper for live Flashscore details & statistics scraping
+async function fetchFlashscoreDetails(matchId, homeTeam, awayTeam) {
+  try {
+    const url = `https://www.flashscore.mobi/match/${matchId}/`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    if (!res.ok) return { stats: [], incidents: [] };
+    const html = await res.text();
+
+    const incidents = [];
+    const stats = [];
+
+    // Parse DOM incidents timeline (goals, cards, substitutions)
+    const incidentMatches = html.matchAll(/<div class="match-incident[^"]*">([\s\S]*?)<\/div>/gi);
+    for (const match of incidentMatches) {
+      const block = match[1];
+      const timeMatch = block.match(/<span class="time">([^<]+)<\/span>/i);
+      const textMatch = block.match(/<span class="incident[^"]*">([^<]+)<\/span>/i) || block.match(/<div class="[^"]*">([^<]+)<\/div>/i);
+      if (timeMatch && textMatch) {
+        incidents.push({
+          time: timeMatch[1].trim(),
+          text: textMatch[1].trim()
+        });
+      }
+    }
+
+    // Extract window.environment or stats feed if present
+    const envMatch = html.match(/window\.environment\s*=\s*(\{[\s\S]*?\});/);
+    if (envMatch) {
+      try {
+        const env = JSON.parse(envMatch[1]);
+        if (env.stats) {
+          Object.entries(env.stats).forEach(([name, val]) => {
+            if (val && typeof val === 'object') {
+              stats.push({ name, home: val.home || '0', away: val.away || '0' });
+            }
+          });
+        }
+      } catch (e) { /* ignore JSON parse */ }
+    }
+
+    // Fallback: parse Flashscore MOBI raw HTML stats table if present
+    if (stats.length === 0) {
+      const statRows = html.matchAll(/<tr class="stat-row">[\s\S]*?<td class="home">([^<]+)<\/td>[\s\S]*?<td class="title">([^<]+)<\/td>[\s\S]*?<td class="away">([^<]+)<\/td>[\s\S]*?<\/tr>/gi);
+      for (const row of statRows) {
+        stats.push({
+          name: row[2].trim(),
+          home: row[1].trim(),
+          away: row[3].trim()
+        });
+      }
+    }
+
+    return { incidents, stats };
+  } catch (err) {
+    console.warn('fetchFlashscoreDetails error:', err.message);
+    return { incidents: [], stats: [] };
+  }
+}
+
 // Helper for DB fallback match details
 async function getMatchDetailsFromDB(matchId) {
   if (!process.env.DATABASE_URL) return null;
