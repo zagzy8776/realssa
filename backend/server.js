@@ -5005,6 +5005,8 @@ app.get('/api/sports/results', async (req, res) => {
 
 // ── API-SPORTS Proxy & Cache Shield Server ───────────────────────────────
 const apiSportsCache = new Map();
+let dailyApiSportsCount = 0;
+let dailyResetTime = Date.now() + (24 * 60 * 60 * 1000);
 
 app.all(/^\/api\/sports\/proxy\/v3\/(.*)/, async (req, res) => {
   try {
@@ -5013,10 +5015,16 @@ app.all(/^\/api\/sports\/proxy\/v3\/(.*)/, async (req, res) => {
     const cacheKey = `${endpointPath}?${queryParams}`;
     const now = Date.now();
 
+    // Reset daily call count every 24 hours
+    if (now > dailyResetTime) {
+      dailyApiSportsCount = 0;
+      dailyResetTime = now + (24 * 60 * 60 * 1000);
+    }
+
     // Determine TTL based on endpoint type
-    let ttlMs = 60 * 1000; // 60 seconds default for live games
-    if (endpointPath.includes('standings')) ttlMs = 15 * 60 * 1000; // 15 mins
-    else if (endpointPath.includes('headtohead')) ttlMs = 60 * 60 * 1000; // 1 hour
+    let ttlMs = 180 * 1000; // 3 minutes default for live games
+    if (endpointPath.includes('standings')) ttlMs = 60 * 60 * 1000; // 1 hour
+    else if (endpointPath.includes('headtohead')) ttlMs = 2 * 60 * 60 * 1000; // 2 hours
     else if (endpointPath.includes('teams') || endpointPath.includes('players')) ttlMs = 24 * 60 * 60 * 1000; // 24 hours
 
     // Check Cache Hit
@@ -5026,7 +5034,16 @@ app.all(/^\/api\/sports\/proxy\/v3\/(.*)/, async (req, res) => {
       return res.json(cached.data);
     }
 
+    // Quota Safety Cap: If 85 backend requests reached today, serve stale cache or return fallback to shield API key
+    if (dailyApiSportsCount >= 85 && cached) {
+      res.setHeader('X-Cache-Status', 'SAFETY_CAP_HIT');
+      return res.json(cached.data);
+    }
+
     // Cache Miss -> Forward to API-SPORTS target API
+    dailyApiSportsCount++;
+    console.log(`[API-SPORTS Proxy] Call #${dailyApiSportsCount}/85 today: ${cacheKey}`);
+
     const targetUrl = `https://v3.football.api-sports.io/${endpointPath}${queryParams ? '?' + queryParams : ''}`;
     const apiKey = process.env.API_SPORTS_KEY || '63d52762b17e113314e8fd12e69134c1';
 
