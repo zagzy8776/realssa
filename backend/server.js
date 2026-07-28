@@ -4971,6 +4971,56 @@ app.get('/api/sports/results', async (req, res) => {
   }
 });
 
+// ── API-SPORTS Proxy & Cache Shield Server ───────────────────────────────
+const apiSportsCache = new Map();
+
+app.all('/api/sports/proxy/v3/*', async (req, res) => {
+  try {
+    const endpointPath = req.params[0] || '';
+    const queryParams = new URLSearchParams(req.query).toString();
+    const cacheKey = `${endpointPath}?${queryParams}`;
+    const now = Date.now();
+
+    // Determine TTL based on endpoint type
+    let ttlMs = 60 * 1000; // 60 seconds default for live games
+    if (endpointPath.includes('standings')) ttlMs = 15 * 60 * 1000; // 15 mins
+    else if (endpointPath.includes('headtohead')) ttlMs = 60 * 60 * 1000; // 1 hour
+    else if (endpointPath.includes('teams') || endpointPath.includes('players')) ttlMs = 24 * 60 * 60 * 1000; // 24 hours
+
+    // Check Cache Hit
+    const cached = apiSportsCache.get(cacheKey);
+    if (cached && (now - cached.timestamp) < ttlMs) {
+      res.setHeader('X-Cache-Status', 'HIT');
+      return res.json(cached.data);
+    }
+
+    // Cache Miss -> Forward to API-SPORTS target API
+    const targetUrl = `https://v3.football.api-sports.io/${endpointPath}${queryParams ? '?' + queryParams : ''}`;
+    const apiKey = process.env.API_SPORTS_KEY || '63d52762b17e113314e8fd12e69134c1';
+
+    const apiRes = await fetch(targetUrl, {
+      headers: {
+        'x-apisports-key': apiKey,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return res.status(apiRes.status).send(errText);
+    }
+
+    const data = await apiRes.json();
+    apiSportsCache.set(cacheKey, { timestamp: now, data });
+
+    res.setHeader('X-Cache-Status', 'MISS');
+    res.json(data);
+  } catch (err) {
+    console.error('API-SPORTS Proxy Error:', err.message);
+    res.status(500).json({ error: 'Proxy request failed', message: err.message });
+  }
+});
+
 
 // Helper for live Flashscore details & statistics scraping
 async function fetchFlashscoreDetails(matchId, homeTeam, awayTeam) {

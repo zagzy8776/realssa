@@ -52,10 +52,11 @@ interface SportsArticle {
 const SPORTS_PER_PAGE = 8;
 
 const TABS = [
-  { id: 'all',       label: 'All',      icon: Shield },
-  { id: 'live',      label: 'Live',     icon: Activity },
-  { id: 'upcoming',  label: 'Upcoming', icon: Calendar },
-  { id: 'results',   label: 'Results',  icon: CheckCircle2 },
+  { id: 'all',       label: 'All',              icon: Shield },
+  { id: 'live',      label: 'Live',             icon: Activity },
+  { id: 'upcoming',  label: 'Upcoming',         icon: Calendar },
+  { id: 'results',   label: 'Results',          icon: CheckCircle2 },
+  { id: 'widgets',   label: 'Global Live Feed', icon: Globe },
 ];
 
 /* ─────────────────────────── Helpers ─────────────────────────────────── */
@@ -1296,6 +1297,18 @@ const Sports = () => {
         {/* ── Scores Section ─────────────────────────────────────────── */}
         <section style={{ background: '#0f1623', border: '1px solid rgba(51,65,85,0.7)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.4)', marginBottom: 32 }}>
 
+          {/* API-SPORTS Global Config Component (Routes via protected backend proxy) */}
+          <api-sports-widget
+            data-type="config"
+            data-sport="football"
+            data-url-football="/api/sports/proxy/v3"
+            data-theme="RealSSA"
+            data-lang="en"
+            data-target-game="modal"
+            data-target-standings="modal"
+            data-target-team="modal"
+          ></api-sports-widget>
+
           {/* ── Pill Tab Bar ── */}
           <div style={{ borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#080e1a', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' }}>
@@ -1346,7 +1359,15 @@ const Sports = () => {
 
           {/* Match Content */}
           <div style={{ padding: 16 }}>
-            {matchesLoading && matches.length === 0 ? (
+            {activeTab === 'widgets' ? (
+              <div style={{ minHeight: 400 }}>
+                <api-sports-widget
+                  data-type="games"
+                  data-refresh="30"
+                  data-show-toolbar="true"
+                ></api-sports-widget>
+              </div>
+            ) : matchesLoading && matches.length === 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 0' }}>
                 {[1, 2, 3, 4].map(i => (
                   <div key={i} style={{ height: 64, borderRadius: 14, background: '#131b2a', animation: 'pulse 1.5s ease-in-out infinite' }} />
