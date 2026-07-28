@@ -536,7 +536,10 @@ export default function LiveWire() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* Left Column: Publisher Sidebar */}
-          <div className="lg:col-span-1 space-y-4 max-h-[75vh] overflow-y-auto pr-2 scrollbar-thin">
+          <div 
+            className="lg:col-span-1 space-y-4 lg:max-h-[75vh] lg:overflow-y-auto pr-2 scrollbar-thin"
+            style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+          >
             <h2 className="text-lg font-black tracking-tight flex items-center gap-1.5 text-foreground">
               <Layers className="h-5 w-5 text-amber-500 animate-pulse" /> Monitored Channels
             </h2>
@@ -726,7 +729,10 @@ export default function LiveWire() {
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[50vh] scrollbar-thin">
+                <div 
+                  className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[50vh] scrollbar-thin"
+                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                >
                   {selectedPost.image && (
                     <img
                       src={selectedPost.image}
@@ -772,7 +778,7 @@ export default function LiveWire() {
         {selectedProfilePublisher && (
           <div 
             className="fixed inset-0 z-[100002] bg-black/85 backdrop-blur-2xl flex justify-center overflow-y-auto animate-fade-in"
-            style={{ scrollbarWidth: 'none' }}
+            style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
           >
             {/* Drifting backdrop decorations */}
             <div className="absolute top-[10%] left-[20%] w-72 h-72 bg-amber-500/5 rounded-full blur-3xl animate-orb-drift" style={{ animationDuration: '16s' }} />
