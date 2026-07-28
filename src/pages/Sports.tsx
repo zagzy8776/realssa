@@ -568,19 +568,27 @@ const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*  MatchStandingsTable — Native dark glass standings table                  */
 /* ═══════════════════════════════════════════════════════════════════════ */
-const MatchStandingsTable = ({ competition }: { competition: string }) => {
+const MatchStandingsTable = ({ competition, homeTeam = '', awayTeam = '' }: { competition: string; homeTeam?: string; awayTeam?: string }) => {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const comp = competition.toLowerCase();
-    let slug = 'epl';
+    let slug: string | null = null;
     if (comp.includes('npfl') || comp.includes('nigeria')) slug = 'npfl';
-    else if (comp.includes('la liga') || comp.includes('laliga')) slug = 'laliga';
-    else if (comp.includes('bundesliga')) slug = 'bundesliga';
-    else if (comp.includes('serie a')) slug = 'seriea';
+    else if (comp.includes('la liga') || comp.includes('laliga') || comp.includes('spain')) slug = 'laliga';
+    else if (comp.includes('bundesliga') || comp.includes('germany')) slug = 'bundesliga';
+    else if (comp.includes('serie a') || comp.includes('italy')) slug = 'seriea';
     else if (comp.includes('caf')) slug = 'caf-cl';
+    else if (comp.includes('english premier') || comp.includes('epl') || (comp.includes('premier league') && !comp.includes('bhutan') && !comp.includes('jamaica'))) slug = 'epl';
 
+    if (!slug) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     fetch(apiUrl(`/api/sports/standings/${slug}`))
       .then(r => r.json())
       .then(data => setRows(data.standings || []))
@@ -601,10 +609,15 @@ const MatchStandingsTable = ({ competition }: { competition: string }) => {
       <div style={{ padding: '32px 16px', textAlign: 'center', background: '#131b2a', borderRadius: 14, border: '1px dashed rgba(51,65,85,0.6)' }}>
         <Trophy size={28} style={{ margin: '0 auto 10px', color: '#64748b' }} />
         <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>Standings Unavailable</p>
-        <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>League standings update following official match completions.</p>
+        <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+          Live league standings are currently compiled for major leagues (Premier League, La Liga, Serie A, Bundesliga, NPFL & CAF Champions League).
+        </p>
       </div>
     );
   }
+
+  const hNameLower = homeTeam.toLowerCase();
+  const aNameLower = awayTeam.toLowerCase();
 
   return (
     <div style={{ overflowX: 'auto', background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 14, padding: 12 }}>
@@ -621,17 +634,28 @@ const MatchStandingsTable = ({ competition }: { competition: string }) => {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid rgba(51,65,85,0.3)', background: i % 2 === 0 ? 'transparent' : 'rgba(30,41,59,0.3)' }}>
-              <td style={{ padding: '8px 6px', fontWeight: 700, color: i < 4 ? '#38bdf8' : '#94a3b8' }}>{row.position || i + 1}</td>
-              <td style={{ padding: '8px 8px', fontWeight: 700, color: '#e2e8f0' }}>{row.team}</td>
-              <td style={{ padding: '8px 6px', textAlign: 'center', color: '#94a3b8' }}>{row.played}</td>
-              <td style={{ padding: '8px 6px', textAlign: 'center', color: '#94a3b8' }}>{row.won}</td>
-              <td style={{ padding: '8px 6px', textAlign: 'center', color: '#94a3b8' }}>{row.drawn}</td>
-              <td style={{ padding: '8px 6px', textAlign: 'center', color: '#94a3b8' }}>{row.lost}</td>
-              <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 900, color: '#eab308' }}>{row.points}</td>
-            </tr>
-          ))}
+          {rows.map((row, i) => {
+            const rTeamLower = (row.team || '').toLowerCase();
+            const isMatchTeam = (hNameLower && rTeamLower.includes(hNameLower)) || (aNameLower && rTeamLower.includes(aNameLower));
+            return (
+              <tr
+                key={i}
+                style={{
+                  borderBottom: '1px solid rgba(51,65,85,0.3)',
+                  background: isMatchTeam ? 'rgba(234,179,8,0.15)' : i % 2 === 0 ? 'transparent' : 'rgba(30,41,59,0.3)',
+                  fontWeight: isMatchTeam ? 800 : 400
+                }}
+              >
+                <td style={{ padding: '8px 6px', fontWeight: 700, color: isMatchTeam ? '#eab308' : i < 4 ? '#38bdf8' : '#94a3b8' }}>{row.position || i + 1}</td>
+                <td style={{ padding: '8px 8px', fontWeight: 700, color: isMatchTeam ? '#eab308' : '#e2e8f0' }}>{row.team}</td>
+                <td style={{ padding: '8px 6px', textAlign: 'center', color: isMatchTeam ? '#fef08a' : '#94a3b8' }}>{row.played}</td>
+                <td style={{ padding: '8px 6px', textAlign: 'center', color: isMatchTeam ? '#fef08a' : '#94a3b8' }}>{row.won}</td>
+                <td style={{ padding: '8px 6px', textAlign: 'center', color: isMatchTeam ? '#fef08a' : '#94a3b8' }}>{row.drawn}</td>
+                <td style={{ padding: '8px 6px', textAlign: 'center', color: isMatchTeam ? '#fef08a' : '#94a3b8' }}>{row.lost}</td>
+                <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 900, color: '#eab308' }}>{row.points}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -897,7 +921,7 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
               {/* ── TAB 3: STANDINGS TABLE ── */}
               {modalTab === 'table' && (
                 <div>
-                  <MatchStandingsTable competition={competitionName} />
+                  <MatchStandingsTable competition={competitionName} homeTeam={homeName} awayTeam={awayName} />
                 </div>
               )}
 
