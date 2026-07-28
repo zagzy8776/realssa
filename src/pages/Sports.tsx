@@ -1303,7 +1303,7 @@ const Sports = () => {
           <api-sports-widget
             data-type="config"
             data-sport="football"
-            data-url-football="/api/sports/proxy/v3/"
+            data-url-football="https://www.realssanews.com.ng/api/sports/proxy/v3/"
             data-theme="RealSSA"
             data-lang="en"
             data-target-game="modal"
@@ -1361,54 +1361,47 @@ const Sports = () => {
 
           {/* Match Content */}
           <div style={{ padding: 16 }}>
-            {activeTab === 'widgets' ? (
-              <div style={{ minHeight: 400 }}>
-                <api-sports-widget
-                  data-type="config"
-                  data-sport="football"
-                  data-url-football="https://www.realssanews.com.ng/api/sports/proxy/v3/"
-                  data-theme="RealSSA"
-                  data-lang="en"
-                  data-target-game="modal"
-                  data-target-standings="modal"
-                  data-target-team="modal"
-                ></api-sports-widget>
-                <api-sports-widget
-                  data-type="games"
-                  data-refresh="30"
-                  data-show-toolbar="true"
-                ></api-sports-widget>
-              </div>
-            ) : matchesLoading && matches.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 0' }}>
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} style={{ height: 64, borderRadius: 14, background: '#131b2a', animation: 'pulse 1.5s ease-in-out infinite' }} />
-                ))}
-              </div>
-            ) : tabMatches.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8' }}>
-                <Calendar size={36} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                <p style={{ fontWeight: 700, fontSize: 14 }}>
-                  {activeTab === 'live'     ? 'No matches live right now'
-                  : activeTab === 'upcoming' ? 'No upcoming fixtures found'
-                  : activeTab === 'results'  ? 'No results available'
-                  :                           'No matches found in the next 14 days'}
-                </p>
-                <p style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>Scores update every 30 seconds</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {Object.entries(groupedTabMatches).map(([comp, compMatches]) => (
-                  <CompetitionGroup
-                    key={comp}
-                    competition={comp}
-                    matches={compMatches}
-                    followedIds={followedIds}
-                    onFollowToggle={handleFollowToggle}
-                    onMatchClick={id => setSelectedMatchId(id)}
-                  />
-                ))}
-              </div>
+            {/* ── API-SPORTS Global Live Feed Widget ── */}
+            <div style={{ display: activeTab === 'widgets' ? 'block' : 'none', minHeight: 400 }}>
+              <api-sports-widget
+                data-type="games"
+                data-refresh="30"
+                data-show-toolbar="true"
+              ></api-sports-widget>
+            </div>
+
+            {activeTab !== 'widgets' && (
+              matchesLoading && matches.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 0' }}>
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} style={{ height: 64, borderRadius: 14, background: '#131b2a', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  ))}
+                </div>
+              ) : tabMatches.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8' }}>
+                  <Calendar size={36} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                  <p style={{ fontWeight: 700, fontSize: 14 }}>
+                    {activeTab === 'live'     ? 'No matches live right now'
+                    : activeTab === 'upcoming' ? 'No upcoming fixtures found'
+                    : activeTab === 'results'  ? 'No results available'
+                    :                           'No matches found in the next 14 days'}
+                  </p>
+                  <p style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>Scores update every 30 seconds</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {Object.entries(groupedTabMatches).map(([comp, compMatches]) => (
+                    <CompetitionGroup
+                      key={comp}
+                      competition={comp}
+                      matches={compMatches}
+                      followedIds={followedIds}
+                      onFollowToggle={handleFollowToggle}
+                      onMatchClick={id => setSelectedMatchId(id)}
+                    />
+                  ))}
+                </div>
+              )
             )}
           </div>
         </section>
