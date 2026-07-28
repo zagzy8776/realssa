@@ -2250,6 +2250,226 @@ app.get('/api/news/social', async (req, res) => {
   } catch (err) {
     console.error('Social API error:', err.message);
     res.status(500).json({ error: 'Failed to fetch social feeds' });
+
+// ── Live Publisher Aggregated Feeds (Twitter + YouTube + Website RSS) ─────────
+const PUBLISHERS_FEEDS = {
+  AriseNews: {
+    name: "Arise News",
+    websiteRss: "https://www.arise.tv/feed/",
+    youtubeId: "UCL8y7157mFhP9Xm-l0c93rQ",
+    twitterHandle: "AriseNews"
+  },
+  channelstv: {
+    name: "Channels Television",
+    websiteRss: "https://www.channelstv.com/feed/",
+    youtubeId: "UC9qwmaW1j4o6Q-j2r1S4s4w",
+    twitterHandle: "channelstv"
+  },
+  PremiumTimesng: {
+    name: "Premium Times",
+    websiteRss: "https://www.premiumtimesng.com/rss.xml",
+    youtubeId: "UCeF_1Ems7398U1hQvHjE6fg",
+    twitterHandle: "PremiumTimesng"
+  },
+  vanguardngrnews: {
+    name: "Vanguard News",
+    websiteRss: "https://www.vanguardngr.com/feed/",
+    youtubeId: "UCgp4A6I8LCWrhUzn-5SbKvA",
+    twitterHandle: "vanguardngrnews"
+  },
+  thecableng: {
+    name: "TheCable",
+    websiteRss: "https://www.thecable.ng/feed/",
+    youtubeId: "UCD4Npe4K_SPh1lW9N43m3vA",
+    twitterHandle: "thecableng"
+  },
+  GuardianNigeria: {
+    name: "The Guardian Nigeria",
+    websiteRss: "https://guardian.ng/feed/",
+    youtubeId: "UC9X1X5_K-t38X_n07h6iBqA",
+    twitterHandle: "GuardianNigeria"
+  },
+  BBCAfrica: {
+    name: "BBC Africa",
+    websiteRss: "http://feeds.bbci.co.uk/news/world/africa/rss.xml",
+    youtubeId: "UC7GzTzO5ZJg9f39d892dZ_A",
+    twitterHandle: "BBCAfrica"
+  },
+  AlJazeera: {
+    name: "Al Jazeera English",
+    websiteRss: "https://www.aljazeera.com/xml/rss/all.xml",
+    youtubeId: "UCNye-wNBqNL5ZzHSJj3l8bg",
+    twitterHandle: "AlJazeera"
+  },
+  SuperSport: {
+    name: "SuperSport",
+    websiteRss: "https://supersport.com/rss",
+    youtubeId: "UC3PA6V3XG243G3O_F-Sg6HQ",
+    twitterHandle: "SuperSport"
+  },
+  nairametrics: {
+    name: "Nairametrics",
+    websiteRss: "https://nairametrics.com/rss",
+    youtubeId: "UCF_E-S932bYh94GZgqQ-C_w",
+    twitterHandle: "nairametrics"
+  },
+  dailytrust: {
+    name: "Daily Trust",
+    websiteRss: "https://dailytrust.com/feed/",
+    youtubeId: "UCtJ5DkS4K_YjH34D4Q6h5_w",
+    twitterHandle: "dailytrust"
+  },
+  businessday: {
+    name: "BusinessDay",
+    websiteRss: "https://businessday.ng/feed/",
+    youtubeId: "UCyFm08G2j40D5U6k_F-38_g",
+    twitterHandle: "businessday"
+  },
+  saharareporters: {
+    name: "Sahara Reporters",
+    websiteRss: "https://saharareporters.com/feed/",
+    youtubeId: "UCm643z_A78wO_P4fG81z2Hw",
+    twitterHandle: "saharareporters"
+  },
+  MobilePunch: {
+    name: "Punch",
+    websiteRss: "https://punchng.com/feed/",
+    youtubeId: "UCn1L9u_c9uW_A0l4uG6g4_w",
+    twitterHandle: "MobilePunch"
+  }
+};
+
+const publisherFeedCache = {};
+
+app.get('/api/news/publisher/:handle/live', async (req, res) => {
+  try {
+    const handle = req.params.handle;
+    const config = PUBLISHERS_FEEDS[handle];
+    if (!config) {
+      return res.status(404).json({ error: 'Publisher feed config not found' });
+    }
+
+    // Check cache (5 minutes duration)
+    const cached = publisherFeedCache[handle];
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+      return res.json(cached.data);
+    }
+
+    const feeds = [];
+
+    // 1. Fetch Website RSS
+    const fetchWeb = async () => {
+      try {
+        const feed = await rssParser.parseURL(config.websiteRss);
+        feed.items.slice(0, 15).forEach(item => {
+          let image = null;
+          if (item['media:content']) {
+            const media = item['media:content'];
+            image = Array.isArray(media) ? media[0]?.$.url : media.$.url;
+          } else if (item['media:thumbnail']) {
+            const thumb = item['media:thumbnail'];
+            image = Array.isArray(thumb) ? thumb[0]?.$.url : thumb.$.url;
+          } else if (item.enclosure && item.enclosure.url) {
+            image = item.enclosure.url;
+          }
+          feeds.push({
+            id: 'web-' + (item.guid || item.link || Math.random().toString()),
+            title: item.title || 'Live Update',
+            excerpt: item.contentSnippet || item.summary || '',
+            author: config.name,
+            handle: handle,
+            date: item.pubDate || new Date().toISOString(),
+            externalLink: item.link,
+            image: image,
+            category: 'news'
+          });
+        });
+      } catch (e) {
+        console.warn(`[Live Feed] Failed Website RSS for ${handle}:`, e.message);
+      }
+    };
+
+    // 2. Fetch YouTube Uploads RSS
+    const fetchYt = async () => {
+      if (!config.youtubeId) return;
+      try {
+        const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${config.youtubeId}`;
+        const feed = await rssParser.parseURL(url);
+        feed.items.slice(0, 10).forEach(item => {
+          let image = null;
+          if (item['media:group'] && item['media:group']['media:thumbnail']) {
+            image = item['media:group']['media:thumbnail'][0]?.$.url;
+          } else {
+            const matchId = item.id.split(':')[2];
+            if (matchId) image = `https://img.youtube.com/vi/${matchId}/0.jpg`;
+          }
+          feeds.push({
+            id: 'yt-' + item.id,
+            title: item.title || 'Live Video',
+            excerpt: item.contentSnippet || '',
+            author: config.name,
+            handle: handle,
+            date: item.pubDate || new Date().toISOString(),
+            externalLink: item.link,
+            image: image,
+            category: 'video'
+          });
+        });
+      } catch (e) {
+        console.warn(`[Live Feed] Failed YouTube RSS for ${handle}:`, e.message);
+      }
+    };
+
+    // 3. Fetch Twitter/X via Nitter mirrors
+    const fetchTwitter = async () => {
+      const nitterInstances = [
+        `https://nitter.poast.org/${config.twitterHandle}/rss`,
+        `https://nitter.cz/${config.twitterHandle}/rss`,
+        `https://nitter.privacydev.net/${config.twitterHandle}/rss`
+      ];
+
+      for (const url of nitterInstances) {
+        try {
+          const feed = await rssParser.parseURL(url);
+          feed.items.slice(0, 15).forEach(item => {
+            feeds.push({
+              id: 'x-' + (item.guid || item.link || Math.random().toString()),
+              title: item.title || 'Social Update',
+              excerpt: item.contentSnippet || item.title || '',
+              author: config.name,
+              handle: handle,
+              date: item.pubDate || new Date().toISOString(),
+              externalLink: item.link,
+              image: null,
+              category: 'social'
+            });
+          });
+          break; // Stop on first successful fetch!
+        } catch (e) {
+          console.warn(`[Live Feed] Failed Twitter from ${url}:`, e.message);
+        }
+      }
+    };
+
+    // Fetch in parallel
+    await Promise.all([fetchWeb(), fetchYt(), fetchTwitter()]);
+
+    // Sort by date desc
+    const sorted = feeds.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Cache results
+    publisherFeedCache[handle] = {
+      timestamp: Date.now(),
+      data: sorted
+    };
+
+    res.json(sorted);
+  } catch (err) {
+    console.error('Publisher Live Feed error:', err.message);
+    res.status(500).json({ error: 'Failed to aggregate publisher feeds' });
+  }
+});
+
   }
 });
 
