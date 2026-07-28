@@ -1301,7 +1301,7 @@ const Sports = () => {
           <api-sports-widget
             data-type="config"
             data-sport="football"
-            data-url-football="/api/sports/proxy/v3"
+            data-url-football="/api/sports/proxy/v3/"
             data-theme="RealSSA"
             data-lang="en"
             data-target-game="modal"

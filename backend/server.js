@@ -5008,9 +5008,12 @@ const apiSportsCache = new Map();
 let dailyApiSportsCount = 0;
 let dailyResetTime = Date.now() + (24 * 60 * 60 * 1000);
 
-app.all(/^\/api\/sports\/proxy\/v3\/(.*)/, async (req, res) => {
+app.all([/^\/api\/sports\/proxy\/v3\/(.*)/, /^\/api\/sports\/proxy\/(.*)/], async (req, res) => {
   try {
-    const endpointPath = req.params[0] || '';
+    let endpointPath = req.params[0] || '';
+    if (endpointPath.startsWith('v3/')) {
+      endpointPath = endpointPath.replace(/^v3\//, '');
+    }
     const queryParams = new URLSearchParams(req.query).toString();
     const cacheKey = `${endpointPath}?${queryParams}`;
     const now = Date.now();
