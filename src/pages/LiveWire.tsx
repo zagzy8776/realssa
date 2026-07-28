@@ -63,6 +63,61 @@ function VerifiedBadge({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+// Reusable PublisherLogo component with triple-redundant load fallback
+function PublisherLogo({ 
+  publisher, 
+  className = "w-10 h-10 rounded-xl" 
+}: { 
+  publisher: PublisherDetail; 
+  className?: string;
+}) {
+  const [src, setSrc] = useState(publisher.logo);
+  const [hasFailedOnce, setHasFailedOnce] = useState(false);
+  const [hasFailedTwice, setHasFailedTwice] = useState(false);
+
+  useEffect(() => {
+    setSrc(publisher.logo);
+    setHasFailedOnce(false);
+    setHasFailedTwice(false);
+  }, [publisher]);
+
+  const handleError = () => {
+    if (!hasFailedOnce) {
+      setHasFailedOnce(true);
+      const domain = publisher.website.replace("https://www.", "").replace("https://", "").replace("http://www.", "").replace("http://", "").split("/")[0];
+      setSrc(`https://icons.duckduckgo.com/ip3/${domain}.ico`);
+    } else if (!hasFailedTwice) {
+      setHasFailedTwice(true);
+      // Fallback to Wikipedia logo placeholder
+      setSrc(`https://www.google.com/s2/favicons?sz=128&domain=wikipedia.org`);
+    }
+  };
+
+  const initials = publisher.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
+  if (hasFailedTwice) {
+    return (
+      <div 
+        style={{ backgroundColor: publisher.color }} 
+        className={`${className} flex items-center justify-center text-white font-black text-xs uppercase shadow-inner shrink-0`}
+      >
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${className} bg-white flex items-center justify-center p-1 border border-white/10 shadow-sm shrink-0 overflow-hidden`}>
+      <img
+        src={src}
+        alt={publisher.name}
+        onError={handleError}
+        className="w-full h-full object-contain rounded-lg"
+      />
+    </div>
+  );
+}
+
 // 100% verified working logo URLs (either Wikipedia Commons SVG or direct favicon feeds)
 const PUBLISHERS: PublisherDetail[] = [
   {
@@ -314,6 +369,8 @@ export default function LiveWire() {
   const [selectedProfilePublisher, setSelectedProfilePublisher] = useState<PublisherDetail | null>(null);
   const [profileTabFilter, setProfileTabFilter] = useState<'all' | 'social' | 'youtube' | 'news'>('all');
   const [selectedPost, setSelectedPost] = useState<SocialPost | null>(null);
+  const [profilePosts, setProfilePosts] = useState<SocialPost[]>([]);
+  const [loadingProfilePosts, setLoadingProfilePosts] = useState(false);
 
   // Load followed state on mount
   useEffect(() => {
@@ -359,6 +416,35 @@ export default function LiveWire() {
     fetchWirePosts();
   }, []);
 
+  useEffect(() => {
+    if (!selectedProfilePublisher) {
+      setProfilePosts([]);
+      return;
+    }
+
+    const fetchLiveFeed = async () => {
+      try {
+        setLoadingProfilePosts(true);
+        const host = window.location.hostname === "localhost" ? "http://localhost:5000" : "";
+        const res = await fetch(`${host}/api/news/publisher/${selectedProfilePublisher.handle}/live`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setProfilePosts(data);
+      } catch (err) {
+        console.warn("Failed to fetch live publisher feed, falling back to database", err);
+        const fallback = posts.filter(p => {
+          return p.handle.toLowerCase() === selectedProfilePublisher.handle.toLowerCase() ||
+                 p.author.toLowerCase().includes(selectedProfilePublisher.name.split(" ")[0].toLowerCase());
+        });
+        setProfilePosts(fallback);
+      } finally {
+        setLoadingProfilePosts(false);
+      }
+    };
+
+    fetchLiveFeed();
+  }, [selectedProfilePublisher, posts]);
+
   const getInitials = (name: string) => {
     return name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
   };
@@ -387,23 +473,10 @@ export default function LiveWire() {
   });
 
   // Filter posts specifically inside the selected publisher's Profile overlay
-  const profileFilteredPosts = posts.filter(p => {
-    if (!selectedProfilePublisher) return false;
-    const isPublisher = p.handle.toLowerCase() === selectedProfilePublisher.handle.toLowerCase() ||
-                        p.author.toLowerCase().includes(selectedProfilePublisher.name.split(" ")[0].toLowerCase());
-    
-    if (!isPublisher) return false;
-
-    if (profileTabFilter === 'social') {
-      return p.title.toLowerCase().includes('x.com') || p.excerpt.toLowerCase().includes('tweet') || p.title.toLowerCase().includes('thread');
-    }
-    if (profileTabFilter === 'youtube') {
-      return p.title.toLowerCase().includes('youtube') || p.excerpt.toLowerCase().includes('watch');
-    }
-    if (profileTabFilter === 'news') {
-      return !p.title.toLowerCase().includes('youtube') && !p.title.toLowerCase().includes('x.com');
-    }
-    
+  const profileFilteredPosts = profilePosts.filter(p => {
+    if (profileTabFilter === 'social') return p.category === 'social';
+    if (profileTabFilter === 'youtube') return p.category === 'video';
+    if (profileTabFilter === 'news') return p.category === 'news';
     return true;
   });
 
@@ -481,20 +554,7 @@ export default function LiveWire() {
                     onClick={() => { setActivePublisher(pub); setSearch(""); }}
                     className="flex items-center gap-3 flex-1 text-left min-w-0"
                   >
-                    {pub.logo ? (
-                      <img
-                        src={pub.logo}
-                        alt={pub.name}
-                        className="w-10 h-10 rounded-xl object-cover bg-white p-1 border flex-shrink-0"
-                      />
-                    ) : (
-                      <div
-                        style={{ backgroundColor: pub.color }}
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                      >
-                        {getInitials(pub.name)}
-                      </div>
-                    )}
+                    <PublisherLogo publisher={pub} className="w-10 h-10 rounded-xl" />
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
@@ -524,15 +584,9 @@ export default function LiveWire() {
             {/* Publisher bio header card */}
             <Card className="border border-white/8 bg-white/[0.03] backdrop-blur-md rounded-2xl">
               <CardContent className="p-5 flex flex-col md:flex-row gap-5 items-start md:items-center">
-                {activePublisher.logo && (
-                  <button onClick={() => setSelectedProfilePublisher(activePublisher)}>
-                    <img
-                      src={activePublisher.logo}
-                      alt={activePublisher.name}
-                      className="w-16 h-16 rounded-2xl object-cover bg-white border p-1 shadow-sm hover:scale-105 transition"
-                    />
-                  </button>
-                )}
+                <button onClick={() => setSelectedProfilePublisher(activePublisher)}>
+                  <PublisherLogo publisher={activePublisher} className="w-16 h-16 rounded-2xl hover:scale-105 transition duration-200" />
+                </button>
                 <div className="space-y-1.5 flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <button onClick={() => setSelectedProfilePublisher(activePublisher)}>
@@ -747,12 +801,8 @@ export default function LiveWire() {
               {/* Logo, Title & Follower Info */}
               <div className="flex flex-col items-center text-center space-y-4 pt-4 shrink-0">
                 <div className="relative">
-                  <img
-                    src={selectedProfilePublisher.logo}
-                    alt={selectedProfilePublisher.name}
-                    className="w-20 h-20 rounded-3xl object-cover bg-white border-2 border-white p-1.5 shadow-2xl"
-                  />
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center border-2 border-background">
+                  <PublisherLogo publisher={selectedProfilePublisher} className="w-20 h-20 rounded-3xl" />
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center border-2 border-background z-20">
                     <VerifiedBadge className="w-3.5 h-3.5 text-white fill-white" />
                   </div>
                 </div>
@@ -880,7 +930,13 @@ export default function LiveWire() {
 
                 {/* Profile Feed Updates List */}
                 <div className="space-y-4">
-                  {profileFilteredPosts.length === 0 ? (
+                  {loadingProfilePosts ? (
+                    <div className="space-y-3">
+                      <div className="h-24 rounded-2xl bg-white/[0.04] border border-white/5 animate-pulse" />
+                      <div className="h-24 rounded-2xl bg-white/[0.04] border border-white/5 animate-pulse" />
+                      <div className="h-24 rounded-2xl bg-white/[0.04] border border-white/5 animate-pulse" />
+                    </div>
+                  ) : profileFilteredPosts.length === 0 ? (
                     <div className="text-center py-10 bg-white/[0.02] rounded-2xl border border-dashed border-white/10">
                       <Rss className="h-8 w-8 text-white/20 mx-auto" />
                       <p className="text-xs text-white/40 italic mt-2">No updates match this filter.</p>
@@ -905,7 +961,12 @@ export default function LiveWire() {
                               <VerifiedBadge className="h-2.5 w-2.5" />
                               {selectedProfilePublisher.name}
                             </span>
-                            <span>{timeAgo(post.date)}</span>
+                            <span className="flex items-center gap-1">
+                              {post.category === 'video' && <Youtube className="w-3 h-3 text-red-500 mr-0.5 shrink-0" />}
+                              {post.category === 'social' && <Twitter className="w-3 h-3 text-sky-400 mr-0.5 shrink-0" />}
+                              {post.category === 'news' && <Globe className="w-3 h-3 text-amber-500 mr-0.5 shrink-0" />}
+                              {timeAgo(post.date)}
+                            </span>
                           </div>
                           <h4 className="font-extrabold text-xs md:text-sm text-white leading-snug line-clamp-2">
                             {post.title}
