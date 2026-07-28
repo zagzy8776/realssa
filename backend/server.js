@@ -2258,13 +2258,13 @@ const PUBLISHERS_FEEDS = {
   AriseNews: {
     name: "Arise News",
     websiteRss: "https://www.arise.tv/feed/",
-    youtubeId: "UCL8y7157mFhP9Xm-l0c93rQ",
+    youtubeId: "UCyEJX-kSj0kOOCS7Qlq2G7g",
     twitterHandle: "AriseNews"
   },
   channelstv: {
     name: "Channels Television",
     websiteRss: "https://www.channelstv.com/feed/",
-    youtubeId: "UC9qwmaW1j4o6Q-j2r1S4s4w",
+    youtubeId: "UCfquiJA6_bKLo5m4CLqUphw",
     twitterHandle: "channelstv"
   },
   PremiumTimesng: {
@@ -2276,13 +2276,13 @@ const PUBLISHERS_FEEDS = {
   vanguardngrnews: {
     name: "Vanguard News",
     websiteRss: "https://www.vanguardngr.com/feed/",
-    youtubeId: "UCgp4A6I8LCWrhUzn-5SbKvA",
+    youtubeId: "UCkRLkFEEJR3o7QYm1r8_5yg",
     twitterHandle: "vanguardngrnews"
   },
   thecableng: {
     name: "TheCable",
     websiteRss: "https://www.thecable.ng/feed/",
-    youtubeId: "UCD4Npe4K_SPh1lW9N43m3vA",
+    youtubeId: "UCz0o6RGovCYFda3LXU-1_kA",
     twitterHandle: "thecableng"
   },
   GuardianNigeria: {
@@ -2294,7 +2294,7 @@ const PUBLISHERS_FEEDS = {
   BBCAfrica: {
     name: "BBC Africa",
     websiteRss: "http://feeds.bbci.co.uk/news/world/africa/rss.xml",
-    youtubeId: "UC7GzTzO5ZJg9f39d892dZ_A",
+    youtubeId: "UCoerKKIKIMlDYaVFSTlsWGw",
     twitterHandle: "BBCAfrica"
   },
   AlJazeera: {
@@ -2362,7 +2362,7 @@ app.get('/api/news/publisher/:handle/live', async (req, res) => {
     // 1. Fetch Website RSS
     const fetchWeb = async () => {
       try {
-        const feed = await rssParser.parseURL(config.websiteRss);
+        const feed = await parser.parseURL(config.websiteRss);
         feed.items.slice(0, 15).forEach(item => {
           let image = null;
           if (item['media:content']) {
@@ -2396,7 +2396,7 @@ app.get('/api/news/publisher/:handle/live', async (req, res) => {
       if (!config.youtubeId) return;
       try {
         const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${config.youtubeId}`;
-        const feed = await rssParser.parseURL(url);
+        const feed = await parser.parseURL(url);
         feed.items.slice(0, 10).forEach(item => {
           let image = null;
           if (item['media:group'] && item['media:group']['media:thumbnail']) {
@@ -2432,7 +2432,7 @@ app.get('/api/news/publisher/:handle/live', async (req, res) => {
 
       for (const url of nitterInstances) {
         try {
-          const feed = await rssParser.parseURL(url);
+          const feed = await parser.parseURL(url);
           feed.items.slice(0, 15).forEach(item => {
             feeds.push({
               id: 'x-' + (item.guid || item.link || Math.random().toString()),
