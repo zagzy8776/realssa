@@ -1299,17 +1299,7 @@ const Sports = () => {
         {/* ── Scores Section ─────────────────────────────────────────── */}
         <section style={{ background: '#0f1623', border: '1px solid rgba(51,65,85,0.7)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.4)', marginBottom: 32 }}>
 
-          {/* API-SPORTS Global Config Component (Routes via protected backend proxy) */}
-          <api-sports-widget
-            data-type="config"
-            data-sport="football"
-            data-url-football="https://www.realssanews.com.ng/api/sports/proxy/v3/"
-            data-theme="RealSSA"
-            data-lang="en"
-            data-target-game="modal"
-            data-target-standings="modal"
-            data-target-team="modal"
-          ></api-sports-widget>
+
 
           {/* ── Pill Tab Bar ── */}
           <div style={{ borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#080e1a', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
