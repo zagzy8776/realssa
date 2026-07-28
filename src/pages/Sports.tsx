@@ -94,9 +94,7 @@ function competitionEmoji(name: string): string {
   if (n.includes('bundesliga')) return '🇩🇪';
   if (n.includes('serie a')) return '🇮🇹';
   if (n.includes('ligue')) return '🇫🇷';
-  if (n.includes('npfl') || n.includes('nigeria')) return '🇳🇬';
-  if (n.includes('caf') || n.includes('africa')) return '🌍';
-  if (n.includes('mls')) return '🇺🇸';
+  if (n.includes('npfl')) return '🇳🇬';
   return '🏆';
 }
 
@@ -134,26 +132,48 @@ const TeamAvatar = ({ crest, name, size = 28 }: { crest?: string; name: string; 
     }
 
     let isMounted = true;
-    const fetchLogo = async () => {
+    const resolveLogo = async () => {
+      // 1. Try TheSportsDB API
       try {
-        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name)}&prop=pageimages&piprop=thumbnail&pilicense=any&pithumbsize=200&format=json&origin=*`;
-        const res = await fetch(wikiUrl);
-        const data = await res.json();
-        const pages = data.query?.pages;
-        if (pages) {
-          const pageKey = Object.keys(pages)[0];
-          const src = pages[pageKey]?.thumbnail?.source;
-          if (src && isMounted) {
-            teamLogoCache.set(name, src);
-            setImgUrl(src);
+        const sRes = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`);
+        const sData = await sRes.json();
+        if (sData?.teams?.[0]?.strBadge) {
+          const badge = sData.teams[0].strBadge;
+          if (isMounted) {
+            teamLogoCache.set(name, badge);
+            setImgUrl(badge);
             setBroken(false);
             return;
           }
         }
       } catch (e) { /* ignore */ }
+
+      // 2. Try Wikipedia 2-step search
+      try {
+        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name + ' football club')}&utf8=&format=json&origin=*`;
+        const searchRes = await fetch(searchUrl);
+        const searchData = await searchRes.json();
+        const firstMatch = searchData.query?.search?.[0];
+        if (firstMatch?.title) {
+          const wikiImgUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(firstMatch.title)}&prop=pageimages&piprop=thumbnail&pilicense=any&pithumbsize=200&format=json&origin=*`;
+          const iRes = await fetch(wikiImgUrl);
+          const iData = await iRes.json();
+          const pages = iData?.query?.pages;
+          if (pages) {
+            const pageKey = Object.keys(pages)[0];
+            const src = pages[pageKey]?.thumbnail?.source;
+            if (src && isMounted) {
+              teamLogoCache.set(name, src);
+              setImgUrl(src);
+              setBroken(false);
+              return;
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
     };
 
-    fetchLogo();
+    resolveLogo();
     return () => { isMounted = false; };
   }, [crest, name]);
 
@@ -170,7 +190,7 @@ const TeamAvatar = ({ crest, name, size = 28 }: { crest?: string; name: string; 
     height: size,
     borderRadius: '50%',
     flexShrink: 0,
-    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 100%)',
+    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 100%)',
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
     border: '1px solid rgba(255, 255, 255, 0.25)',
@@ -184,26 +204,7 @@ const TeamAvatar = ({ crest, name, size = 28 }: { crest?: string; name: string; 
   };
 
   const handleImgError = () => {
-    if (imgUrl && imgUrl !== crest) {
-      setBroken(true);
-      return;
-    }
-    fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name)}&prop=pageimages&piprop=thumbnail&pilicense=any&pithumbsize=200&format=json&origin=*`)
-      .then(r => r.json())
-      .then(data => {
-        const pages = data.query?.pages;
-        if (pages) {
-          const pageKey = Object.keys(pages)[0];
-          const src = pages[pageKey]?.thumbnail?.source;
-          if (src) {
-            teamLogoCache.set(name, src);
-            setImgUrl(src);
-            return;
-          }
-        }
-        setBroken(true);
-      })
-      .catch(() => setBroken(true));
+    setBroken(true);
   };
 
   if (broken || !imgUrl) {
@@ -280,28 +281,31 @@ const StatBar = ({ name, home, away }: { name: string; home: string | number; aw
 };
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-/*  ScoreFlash — highlights score in gold when value changes               */
+/*  ScoreFlash                                                              */
 /* ═══════════════════════════════════════════════════════════════════════ */
-const ScoreFlash = ({ value, live }: { value: number; live: boolean }) => {
+const ScoreFlash = ({ value, live }: { value: number; live?: boolean }) => {
   const [flash, setFlash] = useState(false);
-  const prev = useRef(value);
+  const prevRef = useRef(value);
+
   useEffect(() => {
-    if (value !== prev.current) {
+    if (prevRef.current !== value) {
       setFlash(true);
-      prev.current = value;
-      const t = setTimeout(() => setFlash(false), 1200);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setFlash(false), 2000);
+      prevRef.current = value;
+      return () => clearTimeout(timer);
     }
   }, [value]);
 
   return (
     <span
-      className={flash ? 'score-flash' : ''}
+      className={flash ? 'animate-bounce' : ''}
       style={{
-        fontSize: 22, fontWeight: 900,
-        color: flash ? '#f59e0b' : live ? '#f87171' : '#e2e8f0',
+        fontSize: 14,
+        fontWeight: 900,
+        color: flash ? '#eab308' : live ? '#ef4444' : '#f8fafc',
         transition: 'color 0.3s',
-        fontVariantNumeric: 'tabular-nums',
+        minWidth: 16,
+        textAlign: 'center',
       }}
     >
       {value}
@@ -310,13 +314,18 @@ const ScoreFlash = ({ value, live }: { value: number; live: boolean }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-/*  MatchCard — Responsive flex layout without premature truncation      */
+/*  MatchCard — LiveScore/Flashscore style 2-row stacked layout            */
 /* ═══════════════════════════════════════════════════════════════════════ */
-const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
-  match: Match; isFollowing: boolean; onFollowToggle: (id: string) => void; onClick: () => void;
-}) => {
+interface MatchCardProps {
+  match: Match;
+  isFollowing: boolean;
+  onFollowToggle: (id: string) => void;
+  onClick: () => void;
+}
+
+const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: MatchCardProps) => {
   const isLive = match.status === 'live';
-  const isFin  = match.status === 'finished';
+  const isFin = match.status === 'finished';
   const isSched = match.status === 'scheduled';
 
   return (
@@ -325,87 +334,100 @@ const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: {
       className="group cursor-pointer"
       style={{
         background: isLive
-          ? 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(11,15,25,0.6) 100%)'
-          : 'rgba(30,41,59,0.7)',
-        border: isLive ? '1px solid rgba(239,68,68,0.35)' : '1px solid rgba(51,65,85,0.6)',
+          ? 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(15,22,35,0.95) 100%)'
+          : '#131b2a',
+        border: isLive ? '1px solid rgba(239,68,68,0.45)' : '1px solid rgba(51,65,85,0.5)',
         borderRadius: 14,
-        padding: '10px 12px',
+        padding: '10px 14px',
         transition: 'all 0.18s',
-        boxShadow: isLive ? '0 0 18px rgba(239,68,68,0.12)' : 'none',
+        boxShadow: isLive ? '0 0 20px rgba(239,68,68,0.15)' : 'none',
       }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = isLive ? 'rgba(239,68,68,0.6)' : 'rgba(234,179,8,0.5)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = isLive ? 'rgba(239,68,68,0.35)' : 'rgba(51,65,85,0.6)'; (e.currentTarget as HTMLElement).style.transform = ''; }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = isLive ? 'rgba(239,68,68,0.7)' : 'rgba(234,179,8,0.5)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = isLive ? 'rgba(239,68,68,0.45)' : 'rgba(51,65,85,0.5)'; }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Home team */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, minWidth: 0 }}>
-          <span
-            style={{
-              color: '#e2e8f0', fontSize: 13, fontWeight: 700,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              textAlign: 'right',
-            }}
-            title={match.home_team_name}
-          >
-            {match.home_team_name}
-          </span>
-          <TeamAvatar crest={match.home_team_crest} name={match.home_team_name} size={28} />
-        </div>
-
-        {/* Score / Time */}
-        <div style={{ minWidth: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Left Column: Match Time / Status */}
+        <div style={{ width: 62, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center' }}>
           {isSched ? (
             <>
-              <span style={{ color: '#38bdf8', fontSize: 12.5, fontWeight: 800 }}>{fmtTime(match.kickoff_at)}</span>
-              <span style={{ color: '#64748b', fontSize: 10, fontWeight: 600 }}>{fmtDate(match.kickoff_at)}</span>
+              <span style={{ color: '#38bdf8', fontSize: 12, fontWeight: 800 }}>{fmtTime(match.kickoff_at)}</span>
+              <span style={{ color: '#64748b', fontSize: 9.5, fontWeight: 600 }}>{fmtDate(match.kickoff_at)}</span>
+            </>
+          ) : isLive ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 900, letterSpacing: 0.5 }}>
+                  {match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE'}
+                </span>
+              </div>
+              <span style={{ color: '#ef4444', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginTop: 2 }}>In Play</span>
             </>
           ) : (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <ScoreFlash value={match.home_score} live={isLive} />
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>–</span>
-                <ScoreFlash value={match.away_score} live={isLive} />
-              </div>
-              {isLive && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-                  <span style={{ color: '#ef4444', fontSize: 9, fontWeight: 900, letterSpacing: 1 }}>
-                    {match.minute && match.minute !== 'Live' ? `${match.minute}'` : 'LIVE'}
-                  </span>
-                </div>
-              )}
-              {isFin && <span style={{ color: '#475569', fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>FT</span>}
+              <span style={{ color: '#64748b', fontSize: 11, fontWeight: 800 }}>FT</span>
+              <span style={{ color: '#475569', fontSize: 9.5, fontWeight: 600 }}>Finished</span>
             </>
           )}
         </div>
 
-        {/* Away team */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={28} />
-          <span
-            style={{
-              color: '#e2e8f0', fontSize: 13, fontWeight: 700,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}
-            title={match.away_team_name}
-          >
-            {match.away_team_name}
-          </span>
+        {/* Vertical Separator Line */}
+        <div style={{ width: 1, height: 38, background: 'rgba(51,65,85,0.5)', flexShrink: 0 }} />
+
+        {/* Middle Column: Two-Row Stacked Teams (LiveScore Standard) */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+          {/* Home Team Row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0, flex: 1 }}>
+              <TeamAvatar crest={match.home_team_crest} name={match.home_team_name} size={24} />
+              <span
+                style={{
+                  color: '#f1f5f9', fontSize: 13, fontWeight: 700,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+                title={match.home_team_name}
+              >
+                {match.home_team_name}
+              </span>
+            </div>
+            {!isSched && (
+              <ScoreFlash value={match.home_score} live={isLive} />
+            )}
+          </div>
+
+          {/* Away Team Row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0, flex: 1 }}>
+              <TeamAvatar crest={match.away_team_crest} name={match.away_team_name} size={24} />
+              <span
+                style={{
+                  color: '#f1f5f9', fontSize: 13, fontWeight: 700,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+                title={match.away_team_name}
+              >
+                {match.away_team_name}
+              </span>
+            </div>
+            {!isSched && (
+              <ScoreFlash value={match.away_score} live={isLive} />
+            )}
+          </div>
         </div>
 
-        {/* Follow button */}
+        {/* Right Column: Follow Button */}
         {match.status !== 'finished' && (
           <button
             onClick={e => { e.stopPropagation(); onFollowToggle(match.provider_match_id); }}
             style={{
-              padding: 4, borderRadius: '50%', flexShrink: 0,
+              padding: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4,
               background: isFollowing ? 'rgba(234,179,8,0.15)' : 'transparent',
               color: isFollowing ? '#eab308' : '#475569',
               border: 'none', cursor: 'pointer', transition: 'all 0.15s',
             }}
             title={isFollowing ? 'Unfollow match' : 'Follow for goal alerts'}
           >
-            {isFollowing ? <Bell size={13} fill="currentColor" /> : <BellOff size={13} />}
+            {isFollowing ? <Bell size={14} fill="currentColor" /> : <BellOff size={14} />}
           </button>
         )}
       </div>
