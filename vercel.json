@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/index.cjs": { "maxDuration": 60 }
+    "api/index.js": { "maxDuration": 60 }
   },
   "headers": [
     {
@@ -77,15 +77,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.cjs"
+      "destination": "/api/index.js"
     },
     {
       "source": "/rss/(.*)",
-      "destination": "/api/index.cjs"
+      "destination": "/api/index.js"
     },
     {
       "source": "/news-feed",
-      "destination": "/api/index.cjs"
+      "destination": "/api/index.js"
     },
     {
       "source": "/yandex_33692219fb12f076.html",
@@ -101,15 +101,15 @@
     },
     {
       "source": "/sitemap.xml",
-      "destination": "/api/index.cjs"
+      "destination": "/api/index.js"
     },
     {
       "source": "/news-sitemap.xml",
-      "destination": "/api/index.cjs"
+      "destination": "/api/index.js"
     },
     {
       "source": "/pages-sitemap.xml",
-      "destination": "/api/index.cjs"
+      "destination": "/api/index.js"
     },
     {
       "source": "/(.*)",
