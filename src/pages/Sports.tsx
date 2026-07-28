@@ -1170,6 +1170,20 @@ const Sports = () => {
       .catch(() => {});
   }, []);
 
+  /* ── Dynamically initialize API-SPORTS widget when Global Live Feed tab selected ── */
+  useEffect(() => {
+    if (activeTab === 'widgets') {
+      const scriptId = 'api-sports-widget-module-script';
+      const existing = document.getElementById(scriptId);
+      if (existing) existing.remove();
+      const s = document.createElement('script');
+      s.id = scriptId;
+      s.type = 'module';
+      s.src = `https://widgets.api-sports.io/3.1.0/widgets.js?v=${Date.now()}`;
+      document.body.appendChild(s);
+    }
+  }, [activeTab]);
+
   /* ── Follow toggle ── */
   const handleFollowToggle = async (matchId: string) => {
     const isFollowing = followedIds.includes(matchId);
