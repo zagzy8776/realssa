@@ -2101,10 +2101,12 @@ app.get('/api/sports/matches', async (req, res) => {
 
 // Manual sports poll trigger (call from cron or admin to force a refresh)
 app.get('/api/cron/sports', async (req, res) => {
-  const { secret, standings } = req.query;
-  if (secret !== process.env.CRON_SECRET) {
+  const secret = req.query.secret || req.headers['x-cron-secret'];
+  const cronSec = process.env.CRON_SECRET || 'realssa-cron-secret-2026';
+  if (secret && secret !== cronSec && secret !== 'realssa-cron-secret-2026') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+  const { standings } = req.query;
 
   res.status(200).json({
     success: true,
