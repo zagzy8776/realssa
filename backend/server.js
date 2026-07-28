@@ -2250,6 +2250,8 @@ app.get('/api/news/social', async (req, res) => {
   } catch (err) {
     console.error('Social API error:', err.message);
     res.status(500).json({ error: 'Failed to fetch social feeds' });
+  }
+});
 
 // ── Live Publisher Aggregated Feeds (Twitter + YouTube + Website RSS) ─────────
 const PUBLISHERS_FEEDS = {
@@ -2467,9 +2469,6 @@ app.get('/api/news/publisher/:handle/live', async (req, res) => {
   } catch (err) {
     console.error('Publisher Live Feed error:', err.message);
     res.status(500).json({ error: 'Failed to aggregate publisher feeds' });
-  }
-});
-
   }
 });
 
