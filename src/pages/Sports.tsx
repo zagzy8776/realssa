@@ -110,14 +110,52 @@ function groupByCompetition(matches: Match[]): Record<string, Match[]> {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-/*  TeamAvatar — crest image with liquid glass gradient & initials fallback  */
+/*  TeamAvatar — Auto-resolving official team logos & liquid glass frame   */
 /* ═══════════════════════════════════════════════════════════════════════ */
+const teamLogoCache = new Map<string, string>();
+
 const TeamAvatar = ({ crest, name, size = 28 }: { crest?: string; name: string; size?: number }) => {
-  const [broken, setBroken] = useState(!crest);
+  const [imgUrl, setImgUrl] = useState<string | null>(crest || null);
+  const [broken, setBroken] = useState(false);
 
   useEffect(() => {
-    setBroken(!crest);
-  }, [crest]);
+    if (crest) {
+      setImgUrl(crest);
+      setBroken(false);
+      return;
+    }
+
+    if (!name) return;
+    const cached = teamLogoCache.get(name);
+    if (cached) {
+      setImgUrl(cached);
+      setBroken(false);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchLogo = async () => {
+      try {
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name)}&prop=pageimages&piprop=thumbnail&pilicense=any&pithumbsize=200&format=json&origin=*`;
+        const res = await fetch(wikiUrl);
+        const data = await res.json();
+        const pages = data.query?.pages;
+        if (pages) {
+          const pageKey = Object.keys(pages)[0];
+          const src = pages[pageKey]?.thumbnail?.source;
+          if (src && isMounted) {
+            teamLogoCache.set(name, src);
+            setImgUrl(src);
+            setBroken(false);
+            return;
+          }
+        }
+      } catch (e) { /* ignore */ }
+    };
+
+    fetchLogo();
+    return () => { isMounted = false; };
+  }, [crest, name]);
 
   const bg = useMemo(() => {
     const hues = [210, 240, 160, 30, 270, 340, 190, 50];
@@ -132,20 +170,43 @@ const TeamAvatar = ({ crest, name, size = 28 }: { crest?: string; name: string; 
     height: size,
     borderRadius: '50%',
     flexShrink: 0,
-    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 100%)',
+    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 100%)',
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
-    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 0 10px rgba(255, 255, 255, 0.15)',
+    border: '1px solid rgba(255, 255, 255, 0.25)',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4), inset 0 0 8px rgba(255, 255, 255, 0.2)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: size >= 50 ? 8 : size >= 28 ? 4 : 2,
+    padding: size >= 50 ? 5 : 2,
     position: 'relative',
     overflow: 'hidden',
   };
 
-  if (broken || !crest) {
+  const handleImgError = () => {
+    if (imgUrl && imgUrl !== crest) {
+      setBroken(true);
+      return;
+    }
+    fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name)}&prop=pageimages&piprop=thumbnail&pilicense=any&pithumbsize=200&format=json&origin=*`)
+      .then(r => r.json())
+      .then(data => {
+        const pages = data.query?.pages;
+        if (pages) {
+          const pageKey = Object.keys(pages)[0];
+          const src = pages[pageKey]?.thumbnail?.source;
+          if (src) {
+            teamLogoCache.set(name, src);
+            setImgUrl(src);
+            return;
+          }
+        }
+        setBroken(true);
+      })
+      .catch(() => setBroken(true));
+  };
+
+  if (broken || !imgUrl) {
     return (
       <div style={glassStyle} title={name}>
         <div
@@ -157,7 +218,7 @@ const TeamAvatar = ({ crest, name, size = 28 }: { crest?: string; name: string; 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: size * 0.34,
+            fontSize: size * 0.36,
             fontWeight: 800,
             color: '#ffffff',
             letterSpacing: '-0.5px',
@@ -173,15 +234,15 @@ const TeamAvatar = ({ crest, name, size = 28 }: { crest?: string; name: string; 
   return (
     <div style={glassStyle} title={name}>
       <img
-        src={crest}
+        src={imgUrl}
         alt={name}
         style={{
           width: '100%',
           height: '100%',
           objectFit: 'contain',
-          filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.5))',
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))',
         }}
-        onError={() => setBroken(true)}
+        onError={handleImgError}
       />
     </div>
   );
