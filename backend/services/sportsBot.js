@@ -169,24 +169,26 @@ async function pollMatches(pool, notificationService) {
           updated_at = NOW()
       `, [matchId, displayCompName, homeTeam, homeCrest, awayTeam, awayCrest, status, minute, homeScore, awayScore, kickoffAt]);
 
-      // Mirror into `live_matches` — but NEVER overwrite match_minute if scraper already has it
+      // Mirror into `live_matches`
       try {
         await pool.query(`
           INSERT INTO live_matches (
-            match_id, competition, home_team, away_team,
+            match_id, competition, home_team, home_team_crest, away_team, away_team_crest,
             home_score, away_score, status, match_minute, kickoff_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, NOW())
           ON CONFLICT (match_id) DO UPDATE SET
-            competition  = EXCLUDED.competition,
-            home_team    = EXCLUDED.home_team,
-            away_team    = EXCLUDED.away_team,
-            home_score   = EXCLUDED.home_score,
-            away_score   = EXCLUDED.away_score,
-            status       = EXCLUDED.status,
-            kickoff_at   = EXCLUDED.kickoff_at,
-            updated_at   = NOW()
+            competition     = EXCLUDED.competition,
+            home_team       = EXCLUDED.home_team,
+            home_team_crest = EXCLUDED.home_team_crest,
+            away_team       = EXCLUDED.away_team,
+            away_team_crest = EXCLUDED.away_team_crest,
+            home_score      = EXCLUDED.home_score,
+            away_score      = EXCLUDED.away_score,
+            status          = EXCLUDED.status,
+            kickoff_at      = EXCLUDED.kickoff_at,
+            updated_at      = NOW()
             -- match_minute intentionally NOT updated: scraper owns it
-        `, [matchId, compName, homeTeam, awayTeam, homeScore, awayScore, status, kickoffAt]);
+        `, [matchId, compName, homeTeam, homeCrest, awayTeam, awayCrest, homeScore, awayScore, status, kickoffAt]);
       } catch (lmErr) {
         console.error('[sportsBot] live_matches mirror failed:', lmErr.message);
       }
@@ -253,6 +255,9 @@ async function pollMatches(pool, notificationService) {
         });
       }
     }
+
+    // Also fetch live matches from API-SPORTS to ensure high-fidelity team crests & live scores
+    await fetchApiSportsMatches();
 
     // Housekeeping: Clean up followed matches database older than 2 days
     await pool.query(`
@@ -382,4 +387,61 @@ function initSportsBot(pool, notificationService) {
   }, 12 * 60 * 60 * 1000);
 }
 
-module.exports = { initSportsBot, pollMatches, fetchAndCacheStandings };
+async function fetchApiSportsMatches(poolInstance) {
+  const apiKey = process.env.API_SPORTS_KEY || '63d52762b17e113314e8fd12e69134c1';
+  const db = poolInstance || pool;
+  if (!apiKey || !db) return;
+
+  try {
+    const res = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
+      headers: {
+        'x-apisports-key': apiKey
+      }
+    });
+    if (!res.ok) return;
+    const json = await res.json();
+    const fixtures = json.response || [];
+
+    for (const item of fixtures) {
+      const fix = item.fixture || {};
+      const league = item.league || {};
+      const teams = item.teams || {};
+      const goals = item.goals || {};
+
+      const matchId = `api-${fix.id}`;
+      const compName = league.name ? `⚽ ${league.name}` : 'Football';
+      const homeTeam = teams.home?.name || 'Home';
+      const homeCrest = teams.home?.logo || null;
+      const awayTeam = teams.away?.name || 'Away';
+      const awayCrest = teams.away?.logo || null;
+      const homeScore = goals.home ?? 0;
+      const awayScore = goals.away ?? 0;
+      const minute = fix.status?.elapsed ? `${fix.status.elapsed}'` : (fix.status?.short || 'LIVE');
+      const status = 'live';
+      const kickoffAt = fix.date || new Date().toISOString();
+
+      await db.query(`
+        INSERT INTO live_matches (
+          match_id, competition, home_team, home_team_crest, away_team, away_team_crest,
+          home_score, away_score, status, match_minute, kickoff_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+        ON CONFLICT (match_id) DO UPDATE SET
+          competition     = EXCLUDED.competition,
+          home_team       = EXCLUDED.home_team,
+          home_team_crest = EXCLUDED.home_team_crest,
+          away_team       = EXCLUDED.away_team,
+          away_team_crest = EXCLUDED.away_team_crest,
+          home_score      = EXCLUDED.home_score,
+          away_score      = EXCLUDED.away_score,
+          status          = EXCLUDED.status,
+          match_minute    = EXCLUDED.match_minute,
+          kickoff_at      = EXCLUDED.kickoff_at,
+          updated_at      = NOW()
+      `, [matchId, compName, homeTeam, homeCrest, awayTeam, awayCrest, homeScore, awayScore, status, minute, kickoffAt]);
+    }
+  } catch (e) {
+    console.error('[sportsBot] API-SPORTS live match fetch failed:', e.message);
+  }
+}
+
+module.exports = { initSportsBot, pollMatches, fetchAndCacheStandings, fetchApiSportsMatches };
