@@ -22,10 +22,11 @@ const JWT_SECRET = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET || 
 async function initAuthTables() {
   if (!pool) return;
   try {
+    // 1. Create tables if not exist
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id BIGSERIAL PRIMARY KEY,
-        user_uuid VARCHAR(100) UNIQUE NOT NULL,
+        user_uuid VARCHAR(100) UNIQUE,
         email VARCHAR(255) UNIQUE,
         phone VARCHAR(50) UNIQUE,
         password_hash TEXT,
@@ -37,10 +38,6 @@ async function initAuthTables() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-      CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
-      CREATE INDEX IF NOT EXISTS idx_users_token ON users(verification_token);
-
       CREATE TABLE IF NOT EXISTS phone_otps (
         phone VARCHAR(50) PRIMARY KEY,
         otp_hash VARCHAR(255) NOT NULL,
@@ -49,6 +46,27 @@ async function initAuthTables() {
         last_sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // 2. Safely add missing columns to existing users table (migration fallback)
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS user_uuid VARCHAR(100);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_phone_verified BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS device_id_linked VARCHAR(150);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // 3. Create indices safely
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+      CREATE INDEX IF NOT EXISTS idx_users_token ON users(verification_token);
+    `);
+
     console.log('[Auth] Database tables verified & initialized.');
   } catch (err) {
     console.error('[Auth] Init DB Error:', err.message);
