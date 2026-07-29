@@ -6,7 +6,8 @@
 function getEmailHeader() {
   return `
     <div style="text-align: center; padding-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 24px;">
-      <h1 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 800; tracking-tight: -0.5px; color: #ffffff;">
+      <img src="https://www.realssanews.com.ng/logo.png" alt="RealSSA Logo" style="height: 44px; width: auto; margin-bottom: 8px; display: inline-block;" />
+      <h1 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; font-weight: 800; color: #ffffff;">
         <span style="color: #ffffff;">Real</span><span style="color: #f59e0b;">SSA</span>
       </h1>
       <p style="margin: 4px 0 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #94a3b8; font-weight: 600;">
