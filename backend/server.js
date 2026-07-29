@@ -3776,7 +3776,7 @@ app.post('/api/chat', async (req, res) => {
       const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerebrasKey}` },
-        body: JSON.stringify({ model: 'gemma-4-31b', messages, max_tokens: 600, temperature: 0.7 }),
+        body: JSON.stringify({ model: 'llama-3.3-70b', messages, max_tokens: 600, temperature: 0.7 }),
         signal: AbortSignal.timeout(10000)
       });
       const d = await r.json();
@@ -3786,13 +3786,13 @@ app.post('/api/chat', async (req, res) => {
   }
 
   // 2. Groq fallback
-  const groqKey = (process.env.GROQ_API_KEY || '').split(',')[0].trim();
-  if (groqKey) {
+  const groqKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  for (const groqKey of groqKeys) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-        body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages, max_tokens: 600, temperature: 0.7 }),
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: 600, temperature: 0.7 }),
         signal: AbortSignal.timeout(10000)
       });
       const d = await r.json();
@@ -3801,9 +3801,9 @@ app.post('/api/chat', async (req, res) => {
     } catch (e) { console.warn('[Chat] Groq:', e.message); }
   }
 
-  // 3. Gemini last resort
-  const geminiKey = (process.env.GEMINI_API_KEY || '').split(',')[0].trim();
-  if (geminiKey) {
+  // 3. Gemini fallback
+  const geminiKeys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  for (const geminiKey of geminiKeys) {
     try {
       const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System'}: ${m.content}`).join('\n');
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
@@ -3817,6 +3817,20 @@ app.post('/api/chat', async (req, res) => {
       if (text) return res.json({ reply: text, provider: 'gemini' });
     } catch (e) { console.warn('[Chat] Gemini:', e.message); }
   }
+
+  // 4. Pollinations AI (100% Free Guaranteed Fallback — No API Key Required)
+  try {
+    const r = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, model: 'openai' }),
+      signal: AbortSignal.timeout(12000)
+    });
+    if (r.ok) {
+      const text = (await r.text())?.trim();
+      if (text) return res.json({ reply: text, provider: 'pollinations' });
+    }
+  } catch (e) { console.warn('[Chat] Pollinations:', e.message); }
 
   res.status(503).json({ error: 'AI unavailable' });
 });
