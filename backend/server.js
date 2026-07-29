@@ -3743,6 +3743,25 @@ app.get('/api/render-page', async (req, res) => {
   }
 });
 
+// TEMP DEBUG: test Cerebras directly on production
+app.get('/api/chat-debug', async (req, res) => {
+  const key = process.env.CEREBRAS_API_KEY;
+  if (!key) return res.json({ error: 'No CEREBRAS_API_KEY' });
+  try {
+    const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model: 'gpt-oss-120b', messages: [{ role: 'user', content: 'Say hi' }], max_tokens: 50 }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const status = r.status;
+    const text = await r.text();
+    return res.json({ status, response: text.slice(0, 500), keyPrefix: key.slice(0, 8) + '...' });
+  } catch (e) {
+    return res.json({ error: e.message });
+  }
+});
+
 // --- RealSSA AI Chat Endpoint (Cerebras primary → Groq fallback) ---
 app.post('/api/chat', async (req, res) => {
   const { message, history = [] } = req.body;
