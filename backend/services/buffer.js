@@ -196,7 +196,9 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
       saveToDraft: false,
     };
 
-    // Instagram type field removed — not supported by CreatePostInput
+    if (isInstagram) {
+      input.metadata = { instagram: { type: 'post', shouldShareToFeed: true } };
+    }
 
     // Attach image — Instagram always gets one (logo fallback if needed), others only if real image
     if (isInstagram || (effectiveImage && effectiveImage !== LOGO)) {

@@ -56,10 +56,10 @@ const MobileBottomNav = () => {
           <div className="relative flex-1 flex items-center justify-center">
             <button
               onClick={() => setChatOpen(true)}
-              className="absolute -top-9 w-15 h-15 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-90 hover:scale-105 border-2 border-background/80 glow-amber-ring"
+              className="absolute -top-6 w-12 h-12 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-90 hover:scale-105 border-2 border-background/80 glow-amber-ring"
               style={{
-                width: 58,
-                height: 58,
+                width: 50,
+                height: 50,
                 background: 'linear-gradient(145deg, #FBBF24 0%, #F59E0B 45%, #D97706 100%)',
                 boxShadow: '0 0 0 2px rgba(245,158,11,0.35), 0 0 22px rgba(245,158,11,0.55), 0 0 48px rgba(245,158,11,0.18), inset 0 1px 0 rgba(255,255,255,0.35)',
               }}
@@ -67,8 +67,8 @@ const MobileBottomNav = () => {
             >
               {/* Inner shine */}
               <span className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.28) 0%, transparent 55%)', borderRadius: '9999px' }} />
-              <Sparkles className="w-5 h-5 text-black relative z-10" strokeWidth={2.5} />
-              <span className="text-[8px] font-black text-black uppercase tracking-wider leading-none relative z-10">RealSSA</span>
+              <Sparkles className="w-4 h-4 text-black relative z-10" strokeWidth={2.5} />
+              <span className="text-[7px] font-black text-black uppercase tracking-wider leading-none relative z-10 mt-0.5">RealSSA</span>
             </button>
           </div>
 

@@ -395,7 +395,7 @@ const NewsCard = ({
         <div className="w-full">
           <Link to={linkTo} onClick={handleImageClick} className="block w-full">
             <div
-              className="relative w-full aspect-video overflow-hidden flex items-center justify-center"
+              className="relative w-full aspect-[2/1] overflow-hidden flex items-center justify-center"
               style={{ background: 'rgba(44, 39, 50, 0.6)', borderRadius: '12px 12px 0 0' }}
             >
               {hasImage ? (
@@ -459,7 +459,7 @@ const NewsCard = ({
             style={{
               fontFamily: "'Fraunces', 'Source Serif 4', Georgia, serif",
               fontWeight: 700,
-              fontSize: '17px',
+              fontSize: '16px',
               lineHeight: 1.3,
               margin: 0,
               color: '#FFFFFF',
@@ -481,7 +481,7 @@ const NewsCard = ({
               style={{
                 fontFamily: "inherit",
                 fontWeight: 400,
-                fontSize: '13px',
+                fontSize: '12px',
                 lineHeight: 1.5,
                 color: '#B3ABBA',
                 display: '-webkit-box',
