@@ -6,12 +6,9 @@
 function getEmailHeader() {
   return `
     <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 24px;">
-      <h1 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
+      <h1 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
         <span style="color: #ffffff;">Real</span><span style="color: #f59e0b;">SSA</span>
       </h1>
-      <p style="margin: 4px 0 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #94a3b8; font-weight: 600;">
-        Sub-Saharan Africa News & Intelligence
-      </p>
     </div>
   `;
 }

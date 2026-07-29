@@ -163,7 +163,7 @@ async function sendResendEmail({ to, subject, html }) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'RealSSA News Desk <noreply@realssanews.com.ng>',
+        from: 'RealSSA News <realssanews@realssanews.com.ng>',
         to: [to],
         subject,
         html
