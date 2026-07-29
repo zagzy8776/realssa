@@ -3769,16 +3769,15 @@ app.post('/api/chat', async (req, res) => {
     { role: 'user', content: message.trim() }
   ];
 
-  // 1. Cerebras — fastest
+  // 1. Cerebras — fastest (gpt-oss-120b is the current production model, llama-3.3-70b was deprecated Feb 2026)
   const cerebrasKey = process.env.CEREBRAS_API_KEY;
   if (cerebrasKey) {
     try {
-      console.log('[Chat] Trying Cerebras...');
       const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerebrasKey}` },
-        body: JSON.stringify({ model: 'llama-3.3-70b', messages, max_tokens: 600, temperature: 0.7 }),
-        signal: AbortSignal.timeout(10000)
+        body: JSON.stringify({ model: 'gpt-oss-120b', messages, max_tokens: 600, temperature: 0.7 }),
+        signal: AbortSignal.timeout(12000)
       });
       if (!r.ok) { const err = await r.text(); console.warn('[Chat] Cerebras HTTP', r.status, err.slice(0, 200)); }
       else {
@@ -3789,7 +3788,7 @@ app.post('/api/chat', async (req, res) => {
     } catch (e) { console.warn('[Chat] Cerebras:', e.message); }
   } else { console.warn('[Chat] No CEREBRAS_API_KEY'); }
 
-  // 2. Groq fallback
+  // 2. Groq fallback (llama-3.3-70b-versatile → llama3-70b-8192 as final fallback)
   const groqKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
   for (const groqKey of groqKeys) {
     try {
