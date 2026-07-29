@@ -571,6 +571,17 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 });
 
+// Admin Route: View registered users list
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const { getAllUsersAdmin } = require('./services/authService');
+    const users = await getAllUsersAdmin();
+    res.json({ total: users.length, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Import summarizer for on-demand generation
 const { generateSummary, rewriteArticle, generateEmbedding, generateFullArticleBreakdown } = require('./services/summariser');
 

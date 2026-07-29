@@ -308,6 +308,27 @@ async function loginWithEmail({ email, password }) {
   };
 }
 
+// Auto-Prune expired OTPs every 10 minutes (Zero DB space waste!)
+setInterval(async () => {
+  if (pool) {
+    try {
+      await pool.query('DELETE FROM phone_otps WHERE expires_at < CURRENT_TIMESTAMP');
+    } catch (_) {}
+  }
+}, 10 * 60 * 1000);
+
+// Admin Helper: View all registered users (zero sensitive hash data returned)
+async function getAllUsersAdmin() {
+  if (pool) {
+    const res = await pool.query(
+      `SELECT id, user_uuid, email, phone, is_email_verified, is_phone_verified, created_at 
+       FROM users ORDER BY created_at DESC LIMIT 500`
+    );
+    return res.rows;
+  }
+  return [];
+}
+
 initAuthTables();
 
 module.exports = {
@@ -315,5 +336,6 @@ module.exports = {
   verifyEmailToken,
   sendPhoneOtp,
   verifyPhoneOtp,
-  loginWithEmail
+  loginWithEmail,
+  getAllUsersAdmin
 };
