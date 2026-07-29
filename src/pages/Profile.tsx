@@ -16,6 +16,7 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import UserReferralCard from "@/components/UserReferralCard";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -78,6 +79,8 @@ export default function Profile() {
             </div>
           </div>
         </div>
+
+        <UserReferralCard />
 
         <div className="rounded-2xl border border-border divide-y divide-border overflow-hidden">
           {links.map(({ label, path, icon: Icon }) => (
