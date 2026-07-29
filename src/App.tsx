@@ -67,6 +67,7 @@ const LiveWire            = lazy(() => import("./pages/LiveWire"));
 const Widgets             = lazy(() => import("./pages/Widgets"));
 const Search              = lazy(() => import("./pages/Search"));
 const InAppBrowser        = lazy(() => import("./pages/InAppBrowser"));
+const VerifyEmail         = lazy(() => import("./pages/VerifyEmail"));
 
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import OneSignalNative from 'onesignal-cordova-plugin';
@@ -178,6 +179,7 @@ const App = () => {
                 <Route path="/widget/:type" element={<Widgets />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/browser" element={<InAppBrowser />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
