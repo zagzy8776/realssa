@@ -33,6 +33,8 @@ export default function Profile() {
     localStorage.setItem("realssa_shake_discover_enabled", val ? "true" : "false");
     setShakeEnabled(val);
   };
+  const isLoggedIn = !!localStorage.getItem("realssa_auth_user");
+  const [showKey, setShowKey] = useState(false);
 
   const copyKey = () => {
     if (!deviceId) return;
@@ -54,7 +56,7 @@ export default function Profile() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      <main className="flex-1 container max-w-lg mx-auto px-4 py-6 space-y-6">
+      <main className="flex-1 container max-w-lg mx-auto px-4 pt-6 pb-28 space-y-6">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
             <User className="w-7 h-7 text-amber-500" />
@@ -133,30 +135,40 @@ export default function Profile() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border p-4 space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Anonymous key
-          </h2>
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Save this key to restore your streak and library on another device.
-          </p>
-          <div className="flex gap-2">
-            <input
-              readOnly
-              value={deviceId || "Not generated yet"}
-              className="flex-1 px-3 py-2 rounded-lg border bg-muted/30 text-xs font-mono truncate"
-            />
-            <button
-              type="button"
-              onClick={copyKey}
-              disabled={!deviceId}
-              className="px-3 py-2 rounded-lg bg-amber-500 text-black text-xs font-bold flex items-center gap-1 disabled:opacity-40"
-            >
-              {isCopied ? <Check size={12} /> : <Copy size={12} />}
-              Copy
-            </button>
+        {!isLoggedIn && (
+          <div className="rounded-2xl border border-border p-4 space-y-3">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Anonymous key
+            </h2>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Save this key to restore your streak and library on another device.
+            </p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                type={showKey ? "text" : "password"}
+                value={deviceId || "Not generated yet"}
+                className="flex-1 px-3 py-2 rounded-lg border bg-muted/30 text-xs font-mono truncate"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="px-3.5 py-2 rounded-lg border border-border text-xs font-semibold hover:bg-muted/80 transition-all"
+              >
+                {showKey ? "Hide" : "Show"}
+              </button>
+              <button
+                type="button"
+                onClick={copyKey}
+                disabled={!deviceId}
+                className="px-3.5 py-2 rounded-lg bg-amber-500 text-black text-xs font-bold flex items-center gap-1 disabled:opacity-40 hover:opacity-90 transition-all"
+              >
+                {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                Copy
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
