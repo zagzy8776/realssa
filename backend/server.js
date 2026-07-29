@@ -3818,18 +3818,19 @@ app.post('/api/chat', async (req, res) => {
     } catch (e) { console.warn('[Chat] Gemini:', e.message); }
   }
 
-  // 4. Pollinations AI (100% Free Guaranteed Fallback — No API Key Required)
+  // 4. Pollinations AI GET fallback (works anonymously, no API key needed)
   try {
-    const r = await fetch('https://text.pollinations.ai/openai', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'openai', messages }),
-      signal: AbortSignal.timeout(15000)
+    // Build a concise prompt from conversation context for the GET endpoint
+    const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
+    const sysPrompt = messages.find(m => m.role === 'system')?.content || '';
+    const prompt = encodeURIComponent(`${sysPrompt.slice(0, 200)}\n\nUser: ${lastUserMsg}`);
+    const r = await fetch(`https://text.pollinations.ai/${prompt}?model=openai-large`, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'User-Agent': 'RealSSA/1.0' }
     });
     if (r.ok) {
-      const d = await r.json();
-      const text = d?.choices?.[0]?.message?.content?.trim();
-      if (text) return res.json({ reply: text, provider: 'pollinations' });
+      const text = (await r.text())?.trim();
+      if (text && !text.startsWith('{')) return res.json({ reply: text, provider: 'pollinations' });
     }
   } catch (e) { console.warn('[Chat] Pollinations:', e.message); }
 
