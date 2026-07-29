@@ -123,8 +123,20 @@ async function registerWithEmail({ email, password, deviceId }) {
     const verifyLink = `https://www.realssanews.com.ng/verify-email?token=${verifyToken}`;
     console.log(`[Auth Email Sent] Verification link for ${cleanEmail}: ${verifyLink}`);
 
+    // Dispatch via Resend API if key is present
+    await sendResendEmail({
+      to: cleanEmail,
+      subject: 'Verify your RealSSA Account',
+      html: `<div style="font-family:sans-serif;padding:20px;">
+        <h2>Welcome to RealSSA News</h2>
+        <p>Please click the button below to verify your email address and link your account:</p>
+        <a href="${verifyLink}" style="background:#f59e0b;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;margin:16px 0;">Verify My Email</a>
+        <p style="color:#666;font-size:12px;">Link: ${verifyLink}</p>
+      </div>`
+    });
+
     return {
-      message: 'Registration successful! Verification email sent.',
+      message: 'Registration successful! Verification email sent to your inbox.',
       user: sanitizeUser(newUser),
       token: generateToken({ user_uuid: newUser.user_uuid, email: cleanEmail }),
       verification_required: true
@@ -139,6 +151,59 @@ async function registerWithEmail({ email, password, deviceId }) {
     token: generateToken(mockUser),
     verification_required: true
   };
+}
+
+/**
+ * Helper: Send Email via Resend API
+ */
+async function sendResendEmail({ to, subject, html }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'RealSSA News Desk <onboarding@resend.dev>',
+        to: [to],
+        subject,
+        html
+      })
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('[Resend Error]', e.message);
+    return false;
+  }
+}
+
+/**
+ * Helper: Send SMS via Termii API (Nigeria & Africa)
+ */
+async function sendTermiiSms({ phone, code }) {
+  const apiKey = process.env.TERMII_API_KEY;
+  if (!apiKey) return false;
+  try {
+    const res = await fetch('https://api.ng.termii.com/api/sms/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: phone,
+        from: 'N-ALERT',
+        sms: `Your RealSSA verification code is: ${code}. Valid for 10 minutes.`,
+        type: 'plain',
+        channel: 'generic',
+        api_key: apiKey
+      })
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('[Termii SMS Error]', e.message);
+    return false;
+  }
 }
 
 /**
@@ -194,6 +259,9 @@ async function sendPhoneOtp(phone) {
   }
 
   console.log(`[Auth SMS Sent] 6-Digit OTP for ${cleanPhone}: ${otpCode}`);
+
+  // Dispatch via Termii SMS if API key present
+  await sendTermiiSms({ phone: cleanPhone, code: otpCode });
 
   return {
     message: '6-digit verification code sent to your mobile phone.',
