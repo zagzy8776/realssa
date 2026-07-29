@@ -8,8 +8,8 @@
  *  3. Set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS in Fly.io secrets (fly secrets set KEY=VALUE)
  */
 
-const BUFFER_ACCESS_TOKEN = process.env.BUFFER_ACCESS_TOKEN || process.env.BUFFER_S_TOKEN;
-const BUFFER_PROFILE_IDS  = process.env.BUFFER_PROFILE_IDS  || process.env.BUFFER_FILE_IDS;
+const BUFFER_ACCESS_TOKEN = process.env.BUFFER_ACCESS_TOKEN || process.env.BUFFER_S_TOKEN || 'XgC6VYuJXL4xvvPRJolhwEdpK5iC4xwJutuSVPqf7Aw';
+const BUFFER_PROFILE_IDS  = process.env.BUFFER_PROFILE_IDS  || process.env.BUFFER_FILE_IDS || '6a5c8546e2638b94d7959a2c,6a46f43d5ab6d2f1069abed2';
 
 const BUFFER_API_ENDPOINT = 'https://api.buffer.com/graphql';
 
