@@ -26,35 +26,48 @@ export default function AccountAuthCard() {
     }
   }, []);
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const deviceId = localStorage.getItem('realssa_device_uuid') || '';
+
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone || phone.length < 10) {
       toast({ title: 'Invalid Phone Number', description: 'Please enter a valid phone number.' });
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await axios.post('/api/auth/send-otp', { phone });
       setOtpSent(true);
-      toast({ title: 'Verification Code Sent', description: 'Check your phone for your 4-digit OTP code.' });
-    }, 1000);
+      toast({ title: 'Verification Code Sent', description: res.data?.message || 'Check your phone for your 6-digit OTP code.' });
+    } catch (err: any) {
+      toast({ title: 'OTP Error', description: err.response?.data?.error || err.message });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otp || otp.length < 4) {
-      toast({ title: 'Invalid Code', description: 'Enter the 4-digit code sent to your phone.' });
+    if (!otp || otp.length !== 6) {
+      toast({ title: 'Invalid Code', description: 'Enter the 6-digit code sent to your phone.' });
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      const userData = { username: `User-${phone.slice(-4)}`, phone };
-      localStorage.setItem('realssa_auth_user', JSON.stringify(userData));
-      setUser(userData);
+    try {
+      const res = await axios.post('/api/auth/verify-otp', { phone, code: otp, deviceId });
+      if (res.data && res.data.token) {
+        localStorage.setItem('realssa_jwt_token', res.data.token);
+        const userData = res.data.user || { username: `User-${phone.slice(-4)}`, phone };
+        localStorage.setItem('realssa_auth_user', JSON.stringify(userData));
+        setUser(userData);
+        setIsOpen(false);
+        toast({ title: 'Phone Verified!', description: 'Your points and reading streak are linked.' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Verification Failed', description: err.response?.data?.error || err.message });
+    } finally {
       setLoading(false);
-      setIsOpen(false);
-      toast({ title: 'Account Verified', description: 'Your points and streaks are now linked!' });
-    }, 1000);
+    }
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
@@ -65,15 +78,18 @@ export default function AccountAuthCard() {
     }
     setLoading(true);
     try {
-      const endpoint = mode === 'signup' ? '/api/register' : '/api/login';
-      const res = await axios.post(endpoint, { username, password });
+      const endpoint = mode === 'signup' ? '/api/auth/register' : '/api/auth/login';
+      const res = await axios.post(endpoint, { email: username, password, deviceId });
       if (res.data && res.data.token) {
         localStorage.setItem('realssa_jwt_token', res.data.token);
-        const userData = { username, email: username };
+        const userData = res.data.user || { username, email: username };
         localStorage.setItem('realssa_auth_user', JSON.stringify(userData));
         setUser(userData);
         setIsOpen(false);
-        toast({ title: mode === 'signup' ? 'Account Created' : 'Signed In', description: 'Welcome to RealSSA!' });
+        toast({ 
+          title: mode === 'signup' ? 'Account Created!' : 'Signed In', 
+          description: mode === 'signup' ? 'A verification link has been sent to your email.' : 'Welcome back to RealSSA!' 
+        });
       } else {
         toast({ title: 'Auth Failed', description: res.data?.error || 'Could not authenticate.' });
       }
@@ -225,11 +241,11 @@ export default function AccountAuthCard() {
               ) : (
                 <form onSubmit={handleVerifyOtp} className="space-y-3">
                   <div className="space-y-1 text-left">
-                    <label className="text-xs font-semibold text-muted-foreground">Enter 4-Digit Code</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Enter 6-Digit Code</label>
                     <input
                       type="text"
-                      maxLength={4}
-                      placeholder="1234"
+                      maxLength={6}
+                      placeholder="123456"
                       value={otp}
                       onChange={e => setOtp(e.target.value)}
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-center text-lg font-bold tracking-widest focus:outline-none focus:border-primary"

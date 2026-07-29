@@ -517,6 +517,60 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token });
 });
 
+// Enterprise Production Auth Routes
+const {
+  registerWithEmail,
+  verifyEmailToken,
+  sendPhoneOtp,
+  verifyPhoneOtp,
+  loginWithEmail
+} = require('./services/authService');
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const result = await registerWithEmail(req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const result = await loginWithEmail(req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/auth/verify-email', async (req, res) => {
+  try {
+    const result = await verifyEmailToken(req.query.token);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const result = await sendPhoneOtp(req.body.phone || '');
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const result = await verifyPhoneOtp(req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Import summarizer for on-demand generation
 const { generateSummary, rewriteArticle, generateEmbedding, generateFullArticleBreakdown } = require('./services/summariser');
 
