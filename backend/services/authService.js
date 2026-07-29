@@ -103,9 +103,32 @@ async function registerWithEmail({ email, password, deviceId }) {
   
   if (pool) {
     // Check if email exists
-    const check = await pool.query('SELECT id FROM users WHERE email = $1', [cleanEmail]);
+    const check = await pool.query('SELECT * FROM users WHERE email = $1', [cleanEmail]);
     if (check.rows.length > 0) {
-      throw new Error('An account with this email already exists.');
+      const existingUser = check.rows[0];
+      if (existingUser.is_email_verified) {
+        throw new Error('An account with this email already exists. Please sign in.');
+      }
+      
+      // Email exists but is unverified: Re-generate token & resend verification email!
+      const freshToken = crypto.randomBytes(32).toString('hex');
+      await pool.query('UPDATE users SET verification_token = $1 WHERE email = $2', [freshToken, cleanEmail]);
+      
+      const verifyLink = `https://www.realssanews.com.ng/verify-email?token=${freshToken}`;
+      console.log(`[Auth Email Re-Sent] Verification link for ${cleanEmail}: ${verifyLink}`);
+
+      await sendResendEmail({
+        to: cleanEmail,
+        subject: 'Verify your RealSSA account',
+        html: getVerificationEmailHtml({ verifyLink, email: cleanEmail })
+      });
+
+      return {
+        message: 'Verification link re-sent! Please check your email inbox.',
+        user: sanitizeUser(existingUser),
+        token: generateToken({ user_uuid: existingUser.user_uuid, email: cleanEmail }),
+        verification_required: true
+      };
     }
 
     const userUuid = 'usr-' + crypto.randomUUID();
