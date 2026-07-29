@@ -1170,9 +1170,20 @@ const Sports = () => {
       .catch(() => {});
   }, []);
 
-
-
-  /* ── Follow toggle ── */
+  /* ── Trigger API-SPORTS widget initialization on tab select ── */
+  useEffect(() => {
+    if (activeTab === 'widgets') {
+      const t1 = setTimeout(() => {
+        window.dispatchEvent(new Event('DOMContentLoaded'));
+        window.dispatchEvent(new Event('load'));
+      }, 100);
+      const t2 = setTimeout(() => {
+        window.dispatchEvent(new Event('DOMContentLoaded'));
+        window.dispatchEvent(new Event('load'));
+      }, 500);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, [activeTab]);
   const handleFollowToggle = async (matchId: string) => {
     const isFollowing = followedIds.includes(matchId);
     const action = isFollowing ? 'unfollow' : 'follow';
@@ -1353,6 +1364,18 @@ const Sports = () => {
           <div style={{ padding: 16 }}>
             {/* ── API-SPORTS Global Live Feed Widget ── */}
             <div style={{ display: activeTab === 'widgets' ? 'block' : 'none', minHeight: 400 }}>
+              <api-sports-widget
+                data-type="config"
+                data-key="63d52762b17e113314e8fd12e69134c1"
+                data-sport="football"
+                data-url-football="https://www.realssanews.com.ng/api/sports/proxy/v3"
+                data-theme="RealSSA"
+                data-lang="en"
+                data-show-errors="true"
+                data-target-game="modal"
+                data-target-standings="modal"
+                data-target-team="modal"
+              ></api-sports-widget>
               <api-sports-widget
                 data-type="games"
                 data-refresh="30"
