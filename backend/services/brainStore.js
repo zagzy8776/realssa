@@ -4,7 +4,12 @@
  * Micro-compressed storage footprint ensures zero bloat and zero extra cost.
  */
 
-const { pool } = require('./ingestion');
+const { Pool } = require('pg');
+const dbUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_iljcrTy74CPR@ep-snowy-field-azwdymwg-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+const pool = new Pool({
+  connectionString: dbUrl,
+  ssl: { rejectUnauthorized: false }
+});
 
 // Migration: Ensure dedicated human_learning_brain table exists
 async function initBrainStore() {

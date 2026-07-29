@@ -3851,8 +3851,8 @@ app.post('/api/share/dwell', async (req, res) => {
 // --- Autonomous Human Brain Learning Cron Endpoint ---
 app.get('/api/cron/human-brain', async (req, res) => {
   try {
-    runLearningCycle();
-    return res.json({ success: true, message: 'Human brain learning cycle triggered' });
+    await runLearningCycle();
+    return res.json({ success: true, message: 'Human brain learning cycle completed' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
