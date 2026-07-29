@@ -8,8 +8,13 @@
  */
 
 const crypto = require('crypto');
-const { pool } = require('./ingestion');
+const { Pool } = require('pg');
 const { getVerificationEmailHtml } = require('./emailTemplates');
+
+const usersDbUrl = process.env.USERS_DATABASE_URL || process.env.DATABASE_URL;
+const pool = usersDbUrl 
+  ? new Pool({ connectionString: usersDbUrl, ssl: { rejectUnauthorized: false } }) 
+  : null;
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET || 'realssa_sec_key_998877665544332211';
 
@@ -49,6 +54,7 @@ async function initAuthTables() {
     console.error('[Auth] Init DB Error:', err.message);
   }
 }
+initAuthTables();
 
 // Helper: Hash password with salt
 function hashPassword(password) {
@@ -91,15 +97,44 @@ function sanitizeUser(user) {
   };
 }
 
-/**
- * 1. Register with Email (creates unverified account & token)
- */
-async function registerWithEmail({ email, password, deviceId }) {
+const DISPOSABLE_DOMAINS = [
+  'yopmail.com', 'mailinator.com', 'tempmail.com', 'temp-mail.org', 
+  'guerrillamail.com', 'trashmail.com', 'dispostable.com', 'sharklasers.com',
+  '10minutemail.com', 'getairmail.com', 'maildrop.cc'
+];
+
+const registrationLimits = new Map();
+
+async function registerWithEmail({ email, password, deviceId, ip }) {
   if (!email || !password || password.length < 6) {
     throw new Error('Valid email and password (min 6 chars) are required.');
   }
 
   const cleanEmail = email.trim().toLowerCase();
+  
+  // 1. IP Rate Limiting (Max 3 registrations per hour)
+  if (ip) {
+    const now = Date.now();
+    const limit = registrationLimits.get(ip);
+    if (limit) {
+      if (now > limit.resetTime) {
+        registrationLimits.set(ip, { count: 1, resetTime: now + 3600000 });
+      } else {
+        limit.count += 1;
+        if (limit.count > 3) {
+          throw new Error('Too many registration attempts from this IP. Please try again in an hour.');
+        }
+      }
+    } else {
+      registrationLimits.set(ip, { count: 1, resetTime: now + 3600000 });
+    }
+  }
+
+  // 2. Disposable Email Domain Check
+  const domain = cleanEmail.split('@')[1];
+  if (domain && DISPOSABLE_DOMAINS.includes(domain)) {
+    throw new Error('Disposable or temporary email addresses are not allowed.');
+  }
   
   if (pool) {
     // Check if email exists

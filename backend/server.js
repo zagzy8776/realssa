@@ -492,31 +492,6 @@ app.get('/api/debug-env', async (req, res) => {
   });
 });
 
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  const users = readJsonFile(usersFilePath);
-
-  const user = users.find(u => u.username === username);
-  if (!user) {
-    return res.status(400).json({ message: 'Invalid credentials' });
-  }
-
-  const isMatch = bcrypt.compareSync(password, user.password);
-  if (!isMatch) {
-    return res.status(400).json({ message: 'Invalid credentials' });
-  }
-
-  if (!user.isAdmin) {
-    return res.status(403).json({ message: 'Admin access required' });
-  }
-
-  const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-    expiresIn: '1h'
-  });
-
-  res.json({ token });
-});
-
 // Enterprise Production Auth Routes
 const {
   registerWithEmail,
@@ -526,18 +501,39 @@ const {
   loginWithEmail
 } = require('./services/authService');
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
+  const { username, email, password } = req.body;
+  const loginEmail = email || username;
+
   try {
-    const result = await registerWithEmail(req.body || {});
-    res.json(result);
+    // 1. Try to login as regular user first (Enterprise Database)
+    const result = await loginWithEmail({ email: loginEmail, password });
+    return res.json(result);
   } catch (err) {
+    // 2. If user login fails, try to fall back to Admin login (users.json)
+    try {
+      const users = readJsonFile(usersFilePath);
+      const user = users.find(u => u.username === loginEmail || u.email === loginEmail);
+      if (user) {
+        const isMatch = bcrypt.compareSync(password, user.password);
+        if (isMatch && user.isAdmin) {
+          const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+          return res.json({ token, user: { username: user.username, isAdmin: true } });
+        }
+      }
+    } catch (e) {
+      console.error('[Admin Login Fallback Error]', e.message);
+    }
+    
+    // Return the original enterprise login error message
     res.status(400).json({ error: err.message });
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const result = await loginWithEmail(req.body || {});
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const result = await registerWithEmail({ ...(req.body || {}), ip });
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
