@@ -2,9 +2,10 @@ mod types;
 mod parser;
 mod img;
 mod proxy;
+mod human_brain;
 
 use axum::{
-    extract::Query,
+    extract::{Query, State},
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Json, Response},
     routing::get,
@@ -18,6 +19,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 
 use types::ParseResult;
+use human_brain::HumanBrainEngine;
 
 // ─── Cache entry ──────────────────────────────────────────────────────────────
 struct CacheEntry<T> {
@@ -35,6 +37,7 @@ struct AppState {
     render_cache: DashMap<String, CacheEntry<ParseResult>>,
     img_cache: DashMap<String, CacheEntry<bytes::Bytes>>,
     engine_base: String,
+    human_brain: Arc<HumanBrainEngine>,
 }
 
 // ─── SSRF protection — block private/loopback IPs ─────────────────────────────
@@ -324,6 +327,18 @@ async fn proxy_page_handler(
     }
 }
 
+// ─── Human Brain Endpoints ───────────────────────────────────────────────────
+async fn human_brain_insights_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let memory = state.human_brain.get_formatted_human_context(15);
+    let (total_insights, occurrences) = state.human_brain.get_stats();
+    Json(serde_json::json!({
+        "success": true,
+        "memory": memory,
+        "total_insights": total_insights,
+        "total_occurrences": occurrences
+    }))
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() {
@@ -346,10 +361,14 @@ async fn main() {
 
     info!("RealSSA Engine starting on port {}, engine_base={}", port, engine_base);
 
+    let brain = Arc::new(HumanBrainEngine::new());
+    brain.clone().start_silent_worker();
+
     let state = Arc::new(AppState {
         render_cache: DashMap::new(),
         img_cache: DashMap::new(),
         engine_base,
+        human_brain: brain,
     });
 
     // CORS — allow realssanews.com.ng and localhost
@@ -360,7 +379,7 @@ async fn main() {
             "http://localhost:5173".parse().unwrap(),
             "http://localhost:3000".parse().unwrap(),
         ])
-        .allow_methods([axum::http::Method::GET, axum::http::Method::OPTIONS])
+        .allow_methods([axum::http::Method::GET, axum::http::Method::POST, axum::http::Method::OPTIONS])
         .allow_headers(Any);
 
     let app = Router::new()
@@ -368,6 +387,7 @@ async fn main() {
         .route("/render-page", get(render_page))
         .route("/img", get(img_handler))
         .route("/proxy-page", get(proxy_page_handler))
+        .route("/human-brain/insights", get(human_brain_insights_handler))
         .layer(cors)
         .with_state(state);
 
