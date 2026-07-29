@@ -18,6 +18,7 @@ const notificationService = require('./services/notificationService');
 const { runMigrations } = require('./worker');
 const { runCrawler } = require('./services/crawlerService');
 const { generateRateCardSvg } = require('./services/rateCard');
+const { getUserBalance, getUserHistory, recordLedgerTransaction, recordShareDwellTime } = require('./services/walletService');
 const { queryMultiDb, queryAllDbs, getPoolForCategory, getAllPools } = require('./config/multiDb');
 
 // SSRF protection helper
@@ -3742,6 +3743,42 @@ app.get('/api/render-page', async (req, res) => {
     }
     console.error('[render-page] error:', err.message);
     return res.json({ success: true, requiresProxy: true, reason: 'error', meta: {}, nodes: [] });
+  }
+});
+
+// --- RealSSA Points (RP) & Ledger Endpoints ---
+app.get('/api/points/balance', async (req, res) => {
+  const userId = req.query.userId || req.query.deviceId || 'guest';
+  try {
+    const data = await getUserBalance(userId);
+    return res.json({ success: true, ...data });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/points/history', async (req, res) => {
+  const userId = req.query.userId || req.query.deviceId || 'guest';
+  const limit = parseInt(req.query.limit || '20', 10);
+  const offset = parseInt(req.query.offset || '0', 10);
+  try {
+    const history = await getUserHistory(userId, limit, offset);
+    return res.json({ success: true, history });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/share/dwell', async (req, res) => {
+  const { shareId, sharerUserId, dwellSeconds } = req.body;
+  if (!shareId || !sharerUserId || !dwellSeconds) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+  try {
+    const result = await recordShareDwellTime(shareId, sharerUserId, parseInt(dwellSeconds, 10));
+    return res.json({ success: true, awarded: !!result, result });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

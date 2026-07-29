@@ -14,6 +14,7 @@ import KeepAlive from "@/components/KeepAlive";
 import GlobalHooks from "@/components/GlobalHooks";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import FeedWatermark from "@/components/FeedWatermark";
+import OnboardingTopicSelector from "@/components/OnboardingTopicSelector";
 
 // ── Lazy-loaded pages (code-split to prevent TDZ circular init crashes) ──────
 const Index               = lazy(() => import("./pages/Index"));
@@ -121,6 +122,7 @@ const App = () => {
           <GlobalHooks />
           <FeedWatermarkWrapper />
           <MobileBottomNav />
+          <OnboardingTopicSelector />
           <main className="pb-20 md:pb-0">
             <Suspense fallback={<PageLoader />}>
               <Routes>
