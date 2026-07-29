@@ -318,7 +318,7 @@ const Header = () => {
           </div>
 
           {/* Gamification Streak & Weather */}
-          <div className="flex items-center gap-1.5 md:gap-2 animate-in fade-in zoom-in duration-500">
+          <div className="flex items-center gap-1 md:gap-2 animate-in fade-in zoom-in duration-500 shrink-0">
             <button
               onClick={() => setIsStreakOpen((open) => !open)}
               className={`flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 rounded-full active:scale-95 transition-all cursor-pointer ${
@@ -329,7 +329,7 @@ const Header = () => {
               <span className={`hidden sm:inline text-xs font-medium ${streak > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500'}`}>Streak</span>
             </button>
             <PointsBadgeHeader />
-            <div>
+            <div className="hidden md:block">
               <WeatherWidget />
             </div>
           </div>

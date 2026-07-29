@@ -28,10 +28,10 @@ export default function PointsBadgeHeader() {
     <button
       type="button"
       onClick={() => navigate('/profile')}
-      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary text-xs font-bold transition-all active:scale-95"
+      className="flex items-center gap-1 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary text-[11px] md:text-xs font-bold transition-all active:scale-95 shrink-0"
       title="View RealSSA Points & Referral Link"
     >
-      <Award className="w-3.5 h-3.5" />
+      <Award className="w-3 h-3 md:w-3.5 md:h-3.5" />
       <span>{points !== null ? points.toLocaleString() : '0'} RP</span>
     </button>
   );
