@@ -328,6 +328,7 @@ const Header = () => {
               <span className={`font-bold text-xs md:text-sm ${streak > 0 ? 'text-orange-500' : 'text-gray-400 animate-pulse'}`}>🔥 {streak}</span>
               <span className={`hidden sm:inline text-xs font-medium ${streak > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500'}`}>Streak</span>
             </button>
+            <PointsBadgeHeader />
             <div>
               <WeatherWidget />
             </div>
@@ -499,9 +500,8 @@ const Header = () => {
             document.body
           )}
 
-          {/* Header Action Controls (Streak, Weather, Invite, Points Badge, Hamburger Menu) */}
+          {/* Header Action Controls (Invite, Hamburger Menu) */}
           <div className="flex items-center gap-1.5 md:gap-2.5 ml-1 shrink-0">
-            <PointsBadgeHeader />
             <InviteButton variant="icon" />
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
