@@ -3779,20 +3779,23 @@ app.get('/api/chat-debug', async (req, res) => {
     } catch (e) { results.groq = { error: e.message }; }
   }
 
-  // 3. Gemini
+  // 3. Gemini models check
   const geminiKeys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
   if (geminiKeys.length === 0) results.gemini = { status: 'MISSING_KEY' };
   else {
-    try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKeys[0]}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }] }),
-        signal: AbortSignal.timeout(6000)
-      });
-      const txt = await r.text();
-      results.gemini = { httpStatus: r.status, response: txt.slice(0, 200) };
-    } catch (e) { results.gemini = { error: e.message }; }
+    results.gemini = {};
+    for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite']) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKeys[0]}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }] }),
+          signal: AbortSignal.timeout(6000)
+        });
+        const txt = await r.text();
+        results.gemini[model] = { httpStatus: r.status, response: txt.slice(0, 150) };
+      } catch (e) { results.gemini[model] = { error: e.message }; }
+    }
   }
 
   return res.json(results);
