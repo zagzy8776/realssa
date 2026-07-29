@@ -2051,9 +2051,15 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
 // Get today's matches
 app.get('/api/sports/matches', async (req, res) => {
   try {
+    // Migration helper: ensure columns exist
+    await pool.query(`
+      ALTER TABLE live_matches ADD COLUMN IF NOT EXISTS home_team_crest TEXT;
+      ALTER TABLE live_matches ADD COLUMN IF NOT EXISTS away_team_crest TEXT;
+    `).catch(() => {});
+
     const result = await pool.query(`
       SELECT DISTINCT ON (provider_match_id) * FROM (
-        -- Scraper data first (real-time) for live matches
+        -- Scraper & API-SPORTS data from live_matches first (real-time)
         SELECT 
           match_id AS provider_match_id,
           competition AS competition_name,
