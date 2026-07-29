@@ -17,9 +17,16 @@ const getGeminiKey = () => {
   return keys[(_gi++) % keys.length];
 };
 
+const DEFAULT_GROQ_KEYS = [
+  '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',
+  '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',
+  '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'
+];
+
 let _qi = 0;
 const getGroqKey = () => {
-  const keys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  const envKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  const keys = Array.from(new Set([...envKeys, ...DEFAULT_GROQ_KEYS]));
   if (!keys.length) return null;
   return keys[(_qi++) % keys.length];
 };
@@ -81,7 +88,7 @@ async function callCerebras(prompt, { maxTokens = 800, temperature = 0.3 } = {})
     const res = await fetch(CEREBRAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: 'gemma-4-31b', messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature }),
+      body: JSON.stringify({ model: 'gpt-oss-120b', messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature }),
       signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
@@ -335,17 +342,17 @@ async function rewriteArticle(title, text) {
   const cleanText = (text || '').replace(/<[^>]+>/g, '').slice(0, 10000);
   const prompt = REWRITE_PROMPT(title, cleanText);
 
-  // 1. Cerebras — best writing quality
-  let result = await callCerebras(prompt, { maxTokens: 900, temperature: 0.7 });
-  if (result && result.length > 50) { console.log('[Rewrite] ✅ Cerebras'); return result; }
+  // 1. Groq — Primary (Fast & High Quota Pool)
+  let result = await callGroq(prompt, { maxTokens: 900, temperature: 0.7 });
+  if (result && result.length > 50) { console.log('[Rewrite] ✅ Groq'); return result; }
 
-  // 2. Groq fallback
-  result = await callGroq(prompt, { maxTokens: 900, temperature: 0.7 });
-  if (result && result.length > 50) { console.log('[Rewrite] ✅ Groq fallback'); return result; }
-
-  // 3. Gemini fallback
+  // 2. Gemini fallback
   result = await callGemini(prompt, { maxOutputTokens: 800, temperature: 0.7, timeout: 12000 });
   if (result && result.length > 50) { console.log('[Rewrite] ✅ Gemini fallback'); return result; }
+
+  // 3. Cerebras fallback (saves Cerebras API calls!)
+  result = await callCerebras(prompt, { maxTokens: 900, temperature: 0.7 });
+  if (result && result.length > 50) { console.log('[Rewrite] ✅ Cerebras fallback'); return result; }
 
   return null;
 }
