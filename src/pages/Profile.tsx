@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import UserReferralCard from "@/components/UserReferralCard";
+import AccountAuthCard from "@/components/AccountAuthCard";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -79,6 +80,8 @@ export default function Profile() {
             </div>
           </div>
         </div>
+
+        <AccountAuthCard />
 
         <UserReferralCard />
 
