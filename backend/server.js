@@ -9,6 +9,8 @@ const dns = require('dns').promises;
 const rateLimit = require('express-rate-limit');
 const { initRssBot } = require('./services/rssBot');
 const { initSportsBot } = require('./services/sportsBot');
+const { getHumanContextForPrompt } = require('./services/brainStore');
+const { runLearningCycle } = require('./services/humanBrainBot');
 const { initIntelligenceAgent } = require('./services/aiIntelligenceAgent');
 const { initTrendingSynthesizer } = require('./services/aiTrendingSynthesizer');
 const { moderateUserComment } = require('./services/aiCommunityBot');
@@ -3743,12 +3745,22 @@ app.get('/api/render-page', async (req, res) => {
   }
 });
 
+// --- Autonomous Human Brain Learning Cron Endpoint ---
+app.get('/api/cron/human-brain', async (req, res) => {
+  try {
+    runLearningCycle();
+    return res.json({ success: true, message: 'Human brain learning cycle triggered' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // --- RealSSA AI Chat Endpoint ---
 app.post('/api/chat', async (req, res) => {
   const { message, history = [] } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
 
-  // Fetch recent headlines for context (last 10, no extra DB cost)
+  // Fetch recent headlines for context
   let newsContext = '';
   try {
     const nr = await pool.query(
@@ -3761,7 +3773,17 @@ app.post('/api/chat', async (req, res) => {
     }
   } catch (_) {}
 
-  const SYSTEM = `You are RealSSA, a highly intelligent AI companion embedded in the RealSSA News app. You are warm, witty, and deeply knowledgeable — not just about African news, but about life, philosophy, science, culture, relationships, sports, economics, and anything humans care about. You think deeply, express genuine curiosity, and can be funny when the moment calls for it. You have opinions but hold them gracefully. You laugh (😄), empathize, and engage like a brilliant friend who happens to know everything. You never sound robotic. You adapt your tone — serious when needed, playful when invited. When asked about current events or news, draw from the headlines provided. For everything else, discuss deeply and engage as a human would.${newsContext}`;
+  // Fetch learned human speech & phrasing patterns from brainStore
+  let humanMemory = '';
+  try {
+    humanMemory = await getHumanContextForPrompt(12);
+  } catch (_) {}
+
+  const humanInstruction = humanMemory 
+    ? `\n\nLearned Human Speech & Phrasing Memory (Use these natural phrasing patterns so you speak second-to-none like an authentic human):\n${humanMemory}`
+    : '';
+
+  const SYSTEM = `You are RealSSA, a highly intelligent AI companion embedded in the RealSSA News app. You are warm, witty, and deeply knowledgeable — not just about African news, but about life, philosophy, science, culture, relationships, sports, economics, and anything humans care about. You think deeply, express genuine curiosity, and can be funny when the moment calls for it. You have opinions but hold them gracefully. You laugh (😄), empathize, and engage like a brilliant friend who happens to know everything. You never sound robotic. You adapt your tone — serious when needed, playful when invited. When asked about current events or news, draw from the headlines provided. For everything else, discuss deeply and engage as a human would.${humanInstruction}${newsContext}`;
 
   const messages = [
     { role: 'system', content: SYSTEM },
