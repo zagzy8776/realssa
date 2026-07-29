@@ -3773,17 +3773,21 @@ app.post('/api/chat', async (req, res) => {
   const cerebrasKey = process.env.CEREBRAS_API_KEY;
   if (cerebrasKey) {
     try {
+      console.log('[Chat] Trying Cerebras...');
       const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerebrasKey}` },
         body: JSON.stringify({ model: 'llama-3.3-70b', messages, max_tokens: 600, temperature: 0.7 }),
         signal: AbortSignal.timeout(10000)
       });
-      const d = await r.json();
-      const text = d.choices?.[0]?.message?.content?.trim();
-      if (text) return res.json({ reply: text, provider: 'cerebras' });
+      if (!r.ok) { const err = await r.text(); console.warn('[Chat] Cerebras HTTP', r.status, err.slice(0, 200)); }
+      else {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return res.json({ reply: text, provider: 'cerebras' });
+      }
     } catch (e) { console.warn('[Chat] Cerebras:', e.message); }
-  }
+  } else { console.warn('[Chat] No CEREBRAS_API_KEY'); }
 
   // 2. Groq fallback
   const groqKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
@@ -3818,19 +3822,18 @@ app.post('/api/chat', async (req, res) => {
     } catch (e) { console.warn('[Chat] Gemini:', e.message); }
   }
 
-  // 4. Pollinations AI GET fallback (works anonymously, no API key needed)
+  // 4. Pollinations AI GET fallback (anonymous, no API key, always works)
   try {
-    // Build a concise prompt from conversation context for the GET endpoint
-    const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
-    const sysPrompt = messages.find(m => m.role === 'system')?.content || '';
-    const prompt = encodeURIComponent(`${sysPrompt.slice(0, 200)}\n\nUser: ${lastUserMsg}`);
-    const r = await fetch(`https://text.pollinations.ai/${prompt}?model=openai-large`, {
-      signal: AbortSignal.timeout(15000),
-      headers: { 'User-Agent': 'RealSSA/1.0' }
+    const lastUserMsg = (messages.filter(m => m.role === 'user').pop()?.content || '').slice(0, 500);
+    const sysMsg = 'You are RealSSA, a smart AI news companion for Africa. Be helpful, warm, and concise.';
+    const url = `https://text.pollinations.ai/${encodeURIComponent(lastUserMsg)}?model=openai-large&system=${encodeURIComponent(sysMsg)}`;
+    const r = await fetch(url, {
+      signal: AbortSignal.timeout(20000),
+      headers: { 'User-Agent': 'Mozilla/5.0' }
     });
     if (r.ok) {
       const text = (await r.text())?.trim();
-      if (text && !text.startsWith('{')) return res.json({ reply: text, provider: 'pollinations' });
+      if (text && text.length > 5 && !text.startsWith('{')) return res.json({ reply: text, provider: 'pollinations' });
     }
   } catch (e) { console.warn('[Chat] Pollinations:', e.message); }
 
