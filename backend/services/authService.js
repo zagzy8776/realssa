@@ -191,8 +191,8 @@ async function registerWithEmail({ email, password, deviceId, ip }) {
 
     const res = await pool.query(
       `INSERT INTO users (user_uuid, username, email, password, password_hash, verification_token, is_email_verified, device_id_linked)
-       VALUES ($1, $2, $3, $4, $4, $5, FALSE, $6) RETURNING *`,
-      [userUuid, defaultUsername, cleanEmail, pwHash, verifyToken, deviceId || null]
+       VALUES ($1, $2, $3, $4, $5, $6, FALSE, $7) RETURNING *`,
+      [userUuid, defaultUsername, cleanEmail, pwHash, pwHash, verifyToken, deviceId || null]
     );
 
     const newUser = res.rows[0];
