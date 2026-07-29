@@ -75,7 +75,7 @@ export default function RealSSAChat({
       if (i < GREETING.length) {
         i++;
         setGreeting(GREETING.slice(0, i));
-        greetingTimer.current = setTimeout(type, 20);
+        greetingTimer.current = setTimeout(type, 35);
       } else {
         setGreetingDone(true);
       }
@@ -116,12 +116,12 @@ export default function RealSSAChat({
       // Create assistant message container
       setMessages(prev => [...prev, { role: 'assistant', content: '', sources: data.sources }]);
 
-      // Smooth word-by-word typewriter reveal effect
+      // Smooth word-by-word typewriter reveal effect (calm, natural reading pace)
       const words = fullReply.split(' ');
       let currentWordIdx = 0;
       
       const interval = setInterval(() => {
-        currentWordIdx += Math.min(2, words.length - currentWordIdx);
+        currentWordIdx += 1;
         const textSoFar = words.slice(0, currentWordIdx).join(' ');
         
         setMessages(prev => {
@@ -138,7 +138,7 @@ export default function RealSSAChat({
         if (currentWordIdx >= words.length) {
           clearInterval(interval);
         }
-      }, 30);
+      }, 55);
 
     } catch {
       setLoading(false);
