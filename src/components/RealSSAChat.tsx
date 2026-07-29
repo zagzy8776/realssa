@@ -109,15 +109,39 @@ export default function RealSSAChat({
         }),
       });
       const data = await res.json();
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: data.reply || "Hmm, something went quiet on my end. Try again in a moment!",
-          sources: data.sources,
-        },
-      ]);
+      const fullReply = data.reply || "Hmm, something went quiet on my end. Try again in a moment!";
+      
+      setLoading(false);
+
+      // Create assistant message container
+      setMessages(prev => [...prev, { role: 'assistant', content: '', sources: data.sources }]);
+
+      // Smooth word-by-word typewriter reveal effect
+      const words = fullReply.split(' ');
+      let currentWordIdx = 0;
+      
+      const interval = setInterval(() => {
+        currentWordIdx += Math.min(2, words.length - currentWordIdx);
+        const textSoFar = words.slice(0, currentWordIdx).join(' ');
+        
+        setMessages(prev => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+            updated[lastIdx] = { ...updated[lastIdx], content: textSoFar };
+          }
+          return updated;
+        });
+
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+        if (currentWordIdx >= words.length) {
+          clearInterval(interval);
+        }
+      }, 30);
+
     } catch {
+      setLoading(false);
       setMessages(prev => [
         ...prev,
         {
@@ -125,8 +149,6 @@ export default function RealSSAChat({
           content: 'Connection dropped. Give it a second and try again 🔄',
         },
       ]);
-    } finally {
-      setLoading(false);
     }
   };
 
