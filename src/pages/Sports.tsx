@@ -1209,10 +1209,23 @@ const Sports = () => {
 
   /* ── News pagination ── */
   const displayArticles = searchResults ?? allArticles;
-  const gridArticles    = displayArticles.filter(a =>
-    a.id !== featuredArticle?.id &&
-    a.title.trim().toLowerCase() !== featuredArticle?.title?.trim().toLowerCase()
-  );
+  const gridArticles = useMemo(() => {
+    const seen = new Set<string>();
+    return displayArticles.filter(a => {
+      if (!a || !a.title) return false;
+      const normTitle = a.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (seen.has(normTitle)) return false;
+      seen.add(normTitle);
+
+      if (featuredArticle) {
+        if (String(a.id) === String(featuredArticle.id)) return false;
+        const fTitle = (featuredArticle.title || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (normTitle === fTitle || (normTitle.length > 15 && fTitle.includes(normTitle))) return false;
+      }
+      return true;
+    });
+  }, [displayArticles, featuredArticle]);
+
   const totalPages    = Math.ceil(gridArticles.length / SPORTS_PER_PAGE);
   const paginatedGrid = gridArticles.slice((currentPage - 1) * SPORTS_PER_PAGE, currentPage * SPORTS_PER_PAGE);
 

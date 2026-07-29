@@ -174,19 +174,15 @@ const Index = () => {
         !loadedStories.some(s => s.id === v.id) && a.findIndex(t => t.title === v.title) === i
       );
 
-      // Sort by user preferences
-      try {
-        const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
-        if (prefs.topCategory) {
-          initialUnique.sort((a, b) => {
-            if (a.category === prefs.topCategory && b.category !== prefs.topCategory) return -1;
-            if (b.category === prefs.topCategory && a.category !== prefs.topCategory) return 1;
-            return 0;
-          });
-        }
-      } catch (e) {}
+      // Sort by user preferences & merge smoothly (new unread stories on top)
+      setAllArticles(prev => {
+        if (prev.length === 0) return initialUnique;
+        const existingTitles = new Set(prev.map(p => p.title?.trim().toLowerCase()));
+        const newUnread = initialUnique.filter(item => !existingTitles.has(item.title?.trim().toLowerCase()));
+        if (newUnread.length === 0) return prev;
+        return [...newUnread, ...prev];
+      });
 
-      setAllArticles(initialUnique);
       setLoading(false); // Stop main loading indicator once above-the-fold content renders!
 
       // Stage 2: Lazy load secondary below-the-fold content in background after a 4-second delay to optimize initial paint

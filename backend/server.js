@@ -560,15 +560,20 @@ app.post('/api/extract', async (req, res) => {
       return res.json(extracted);
     }
 
-    // 2. DB fallback
+    // 2. DB fallback (handles query string variations and canonical URLs)
     if (process.env.DATABASE_URL) {
+      const cleanUrl = url.split('?')[0];
       const dbRes = await pool.query(
-        'SELECT title, COALESCE(ai_summary, original_excerpt) AS content, original_excerpt, ai_summary, source_name, image FROM rss_articles WHERE external_link = $1 LIMIT 1',
-        [url]
+        `SELECT title, COALESCE(ai_summary, original_excerpt) AS content, original_excerpt, ai_summary, source_name, image 
+         FROM rss_articles 
+         WHERE external_link = $1 OR external_link LIKE $2 
+         ORDER BY published_at DESC LIMIT 1`,
+        [url, `${cleanUrl}%`]
       );
       if (dbRes.rows.length > 0) {
         const row = dbRes.rows[0];
-        return res.json({ title: row.title, content: row.content, textContent: row.content, length: (row.content||'').length, excerpt: row.original_excerpt||'', byline: row.source_name||'RealSSA News Desk', siteName: row.source_name||'RealSSA', image: row.image });
+        const content = row.content || row.original_excerpt || row.title;
+        return res.json({ title: row.title, content, textContent: content, length: content.length, excerpt: row.original_excerpt||'', byline: row.source_name||'RealSSA News Desk', siteName: row.source_name||'RealSSA', image: row.image });
       }
     }
 
