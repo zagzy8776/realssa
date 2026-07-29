@@ -3743,23 +3743,59 @@ app.get('/api/render-page', async (req, res) => {
   }
 });
 
-// TEMP DEBUG: test Cerebras directly on production
+// TEMP DEBUG: test all AI providers directly on production
 app.get('/api/chat-debug', async (req, res) => {
-  const key = process.env.CEREBRAS_API_KEY;
-  if (!key) return res.json({ error: 'No CEREBRAS_API_KEY' });
-  try {
-    const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: 'gpt-oss-120b', messages: [{ role: 'user', content: 'Say hi' }], max_tokens: 50 }),
-      signal: AbortSignal.timeout(15000)
-    });
-    const status = r.status;
-    const text = await r.text();
-    return res.json({ status, response: text.slice(0, 500), keyPrefix: key.slice(0, 8) + '...' });
-  } catch (e) {
-    return res.json({ error: e.message });
+  const results = {};
+  
+  // 1. Cerebras
+  const cerKey = process.env.CEREBRAS_API_KEY;
+  if (!cerKey) results.cerebras = { status: 'MISSING_KEY' };
+  else {
+    try {
+      const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerKey}` },
+        body: JSON.stringify({ model: 'gpt-oss-120b', messages: [{ role: 'user', content: 'hi' }], max_tokens: 10 }),
+        signal: AbortSignal.timeout(6000)
+      });
+      const txt = await r.text();
+      results.cerebras = { httpStatus: r.status, response: txt.slice(0, 200) };
+    } catch (e) { results.cerebras = { error: e.message }; }
   }
+
+  // 2. Groq
+  const groqKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  if (groqKeys.length === 0) results.groq = { status: 'MISSING_KEY' };
+  else {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKeys[0]}` },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: 'hi' }], max_tokens: 10 }),
+        signal: AbortSignal.timeout(6000)
+      });
+      const txt = await r.text();
+      results.groq = { httpStatus: r.status, response: txt.slice(0, 200) };
+    } catch (e) { results.groq = { error: e.message }; }
+  }
+
+  // 3. Gemini
+  const geminiKeys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  if (geminiKeys.length === 0) results.gemini = { status: 'MISSING_KEY' };
+  else {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKeys[0]}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }] }),
+        signal: AbortSignal.timeout(6000)
+      });
+      const txt = await r.text();
+      results.gemini = { httpStatus: r.status, response: txt.slice(0, 200) };
+    } catch (e) { results.gemini = { error: e.message }; }
+  }
+
+  return res.json(results);
 });
 
 // --- RealSSA AI Chat Endpoint (Cerebras primary → Groq fallback) ---
