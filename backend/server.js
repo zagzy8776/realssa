@@ -3827,27 +3827,15 @@ app.post('/api/chat', async (req, res) => {
     { role: 'user', content: message.trim() }
   ];
 
-  // 1. Cerebras — fastest (gpt-oss-120b is the current production model, llama-3.3-70b was deprecated Feb 2026)
-  const cerebrasKey = process.env.CEREBRAS_API_KEY;
-  if (cerebrasKey) {
-    try {
-      const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerebrasKey}` },
-        body: JSON.stringify({ model: 'gpt-oss-120b', messages, max_tokens: 600, temperature: 0.7 }),
-        signal: AbortSignal.timeout(12000)
-      });
-      if (!r.ok) { const err = await r.text(); console.warn('[Chat] Cerebras HTTP', r.status, err.slice(0, 200)); }
-      else {
-        const d = await r.json();
-        const text = d.choices?.[0]?.message?.content?.trim();
-        if (text) return res.json({ reply: text, provider: 'cerebras' });
-      }
-    } catch (e) { console.warn('[Chat] Cerebras:', e.message); }
-  } else { console.warn('[Chat] No CEREBRAS_API_KEY'); }
+  // 1. Groq — Primary (Fastest & Active Keys Pool)
+  const defaultGroqKeys = [
+    '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',
+    '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',
+    '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'
+  ];
+  const envGroqKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  const groqKeys = Array.from(new Set([...envGroqKeys, ...defaultGroqKeys]));
 
-  // 2. Groq fallback (llama-3.3-70b-versatile → llama3-70b-8192 as final fallback)
-  const groqKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
   for (const groqKey of groqKeys) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -3856,10 +3844,33 @@ app.post('/api/chat', async (req, res) => {
         body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: 600, temperature: 0.7 }),
         signal: AbortSignal.timeout(10000)
       });
-      const d = await r.json();
-      const text = d.choices?.[0]?.message?.content?.trim();
-      if (text) return res.json({ reply: text, provider: 'groq' });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return res.json({ reply: text, provider: 'groq' });
+      } else {
+        const errTxt = await r.text();
+        console.warn('[Chat] Groq HTTP', r.status, errTxt.slice(0, 150));
+      }
     } catch (e) { console.warn('[Chat] Groq:', e.message); }
+  }
+
+  // 2. OpenRouter fallback
+  const openRouterKeys = (process.env.OPENROUTER_API_KEY || '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').split(',').map(k => k.trim()).filter(Boolean);
+  for (const orKey of openRouterKeys) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${orKey}` },
+        body: JSON.stringify({ model: 'meta-llama/llama-3.3-70b-instruct', messages, max_tokens: 600 }),
+        signal: AbortSignal.timeout(12000)
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return res.json({ reply: text, provider: 'openrouter' });
+      }
+    } catch (e) { console.warn('[Chat] OpenRouter:', e.message); }
   }
 
   // 3. Gemini fallback
@@ -3871,30 +3882,40 @@ app.post('/api/chat', async (req, res) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 600, temperature: 0.7 } }),
-        signal: AbortSignal.timeout(12000)
+        signal: AbortSignal.timeout(10000)
       });
-      const d = await r.json();
-      const text = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (text) return res.json({ reply: text, provider: 'gemini' });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (text) return res.json({ reply: text, provider: 'gemini' });
+      }
     } catch (e) { console.warn('[Chat] Gemini:', e.message); }
   }
 
-  // 4. Pollinations AI GET fallback (anonymous, no API key, always works)
-  try {
-    const lastUserMsg = (messages.filter(m => m.role === 'user').pop()?.content || '').slice(0, 500);
-    const sysMsg = 'You are RealSSA, a smart AI news companion for Africa. Be helpful, warm, and concise.';
-    const url = `https://text.pollinations.ai/${encodeURIComponent(lastUserMsg)}?model=openai-large&system=${encodeURIComponent(sysMsg)}`;
-    const r = await fetch(url, {
-      signal: AbortSignal.timeout(20000),
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-    if (r.ok) {
-      const text = (await r.text())?.trim();
-      if (text && text.length > 5 && !text.startsWith('{')) return res.json({ reply: text, provider: 'pollinations' });
-    }
-  } catch (e) { console.warn('[Chat] Pollinations:', e.message); }
+  // 4. Cerebras fallback
+  const cerebrasKey = process.env.CEREBRAS_API_KEY;
+  if (cerebrasKey) {
+    try {
+      const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerebrasKey}` },
+        body: JSON.stringify({ model: 'gpt-oss-120b', messages, max_tokens: 600, temperature: 0.7 }),
+        signal: AbortSignal.timeout(10000)
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return res.json({ reply: text, provider: 'cerebras' });
+      }
+    } catch (e) { console.warn('[Chat] Cerebras:', e.message); }
+  }
 
-  res.status(503).json({ error: 'AI unavailable' });
+  // 5. Intelligent local fallback (Guarantees user never sees an error page!)
+  const fallbackReply = newsContext
+    ? `Here are the latest RealSSA highlights:\n${newsContext}\n\nFeel free to ask me about any specific story!`
+    : `Hello! I'm RealSSA AI. I'm currently keeping track of all major African & international news. Ask me anything or check out our trending articles!`;
+
+  return res.json({ reply: fallbackReply, provider: 'smart_fallback' });
 });
 
 // --- RealSSA Autocomplete Proxy (Bypasses CORS restrictions on mobile client) ---
