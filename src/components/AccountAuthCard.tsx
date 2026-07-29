@@ -70,6 +70,9 @@ export default function AccountAuthCard() {
     }
   };
 
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) {
@@ -78,23 +81,27 @@ export default function AccountAuthCard() {
     }
     setLoading(true);
     try {
-      const endpoint = mode === 'signup' ? '/api/auth/register' : '/api/auth/login';
-      const res = await axios.post(endpoint, { email: username, password, deviceId });
-      if (res.data && res.data.token) {
-        localStorage.setItem('realssa_jwt_token', res.data.token);
-        const userData = res.data.user || { username, email: username };
-        localStorage.setItem('realssa_auth_user', JSON.stringify(userData));
-        setUser(userData);
-        setIsOpen(false);
-        toast({ 
-          title: mode === 'signup' ? 'Account Created!' : 'Signed In', 
-          description: mode === 'signup' ? 'A verification link has been sent to your email.' : 'Welcome back to RealSSA!' 
+      if (mode === 'signup') {
+        const res = await axios.post('/api/auth/register', { email: username, password, deviceId });
+        setRegisteredEmail(username);
+        setVerificationSent(true);
+        toast({
+          title: 'Verification Link Sent!',
+          description: `Check ${username} inbox to activate your account.`,
         });
       } else {
-        toast({ title: 'Auth Failed', description: res.data?.error || 'Could not authenticate.' });
+        const res = await axios.post('/api/auth/login', { email: username, password, deviceId });
+        if (res.data && res.data.token) {
+          localStorage.setItem('realssa_jwt_token', res.data.token);
+          const userData = res.data.user || { username, email: username };
+          localStorage.setItem('realssa_auth_user', JSON.stringify(userData));
+          setUser(userData);
+          setIsOpen(false);
+          toast({ title: 'Signed In', description: 'Welcome back to RealSSA!' });
+        }
       }
     } catch (err: any) {
-      toast({ title: 'Auth Error', description: err.response?.data?.error || err.message });
+      toast({ title: 'Authentication Failed', description: err.response?.data?.error || err.message });
     } finally {
       setLoading(false);
     }
@@ -264,35 +271,57 @@ export default function AccountAuthCard() {
 
             {/* Email Method Form */}
             {authMethod === 'email' && (
-              <form onSubmit={handleEmailAuth} className="space-y-3">
-                <div className="space-y-1 text-left">
-                  <label className="text-xs font-semibold text-muted-foreground">Username or Email</label>
-                  <input
-                    type="text"
-                    placeholder="Enter username or email"
-                    value={username}
-                    onChange={e => setUsername(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-primary"
-                  />
+              verificationSent ? (
+                <div className="py-4 space-y-4 text-center animate-in fade-in zoom-in duration-300">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-base font-bold text-foreground">Verification Link Sent!</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    We sent a verification link to <strong className="text-foreground">{registeredEmail}</strong>. Please check your email inbox and click the link to activate your account.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVerificationSent(false);
+                      setMode('signin');
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all"
+                  >
+                    Return to Sign In
+                  </button>
                 </div>
-                <div className="space-y-1 text-left">
-                  <label className="text-xs font-semibold text-muted-foreground">Password</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-primary"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-xs shadow-md hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                >
-                  {loading ? 'Authenticating...' : mode === 'signup' ? 'Create Account' : 'Sign In'}
-                </button>
-              </form>
+              ) : (
+                <form onSubmit={handleEmailAuth} className="space-y-3">
+                  <div className="space-y-1 text-left">
+                    <label className="text-xs font-semibold text-muted-foreground">Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. user@example.com"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <label className="text-xs font-semibold text-muted-foreground">Password</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-xs shadow-md hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    {loading ? 'Processing...' : mode === 'signup' ? 'Send Verification Link' : 'Sign In'}
+                  </button>
+                </form>
+              )
             )}
 
           </div>

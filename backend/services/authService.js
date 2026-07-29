@@ -359,6 +359,10 @@ async function loginWithEmail({ email, password }) {
     const valid = verifyPassword(password, user.password_hash);
     if (!valid) throw new Error('Invalid credentials.');
 
+    if (!user.is_email_verified) {
+      throw new Error('Please verify your email address before logging in. Check your inbox for the verification link.');
+    }
+
     return {
       message: 'Logged in successfully!',
       user: sanitizeUser(user),
