@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, TrendingUp, RefreshCw } from 'lucide-react';
 import Header from '@/components/Header';
 import NewsCard from '@/components/NewsCard';
+import TrendingNearYouRail from '@/components/TrendingNearYouRail';
 
 interface Article {
   id: string;
@@ -181,6 +182,8 @@ const ForYou: React.FC = () => {
           </div>
         ) : (
           <>
+            <TrendingNearYouRail />
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {articles.map((article) => (
                 <div

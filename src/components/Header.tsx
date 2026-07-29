@@ -16,6 +16,7 @@ import PushNotificationManager from "./PushNotificationManager";
 import { useToast } from "@/hooks/use-toast";
 import WeatherWidget from "./WeatherWidget";
 import InviteButton from "./InviteButton";
+import PointsBadgeHeader from "./PointsBadgeHeader";
 import { useStreak } from "@/hooks/useStreak";
 
 const navLinks = [
@@ -498,8 +499,9 @@ const Header = () => {
             document.body
           )}
 
-          {/* Header Action Controls (Streak, Weather, Invite, Hamburger Menu) */}
+          {/* Header Action Controls (Streak, Weather, Invite, Points Badge, Hamburger Menu) */}
           <div className="flex items-center gap-1.5 md:gap-2.5 ml-1 shrink-0">
+            <PointsBadgeHeader />
             <InviteButton variant="icon" />
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
