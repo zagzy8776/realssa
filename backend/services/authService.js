@@ -187,11 +187,12 @@ async function registerWithEmail({ email, password, deviceId, ip }) {
     const userUuid = 'usr-' + crypto.randomUUID();
     const pwHash = hashPassword(password);
     const verifyToken = crypto.randomBytes(32).toString('hex');
+    const defaultUsername = cleanEmail.split('@')[0] + '_' + Math.floor(Math.random() * 1000);
 
     const res = await pool.query(
-      `INSERT INTO users (user_uuid, email, password_hash, verification_token, is_email_verified, device_id_linked)
-       VALUES ($1, $2, $3, $4, FALSE, $5) RETURNING *`,
-      [userUuid, cleanEmail, pwHash, verifyToken, deviceId || null]
+      `INSERT INTO users (user_uuid, username, email, password_hash, verification_token, is_email_verified, device_id_linked)
+       VALUES ($1, $2, $3, $4, $5, FALSE, $6) RETURNING *`,
+      [userUuid, defaultUsername, cleanEmail, pwHash, verifyToken, deviceId || null]
     );
 
     const newUser = res.rows[0];
