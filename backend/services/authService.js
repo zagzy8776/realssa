@@ -190,8 +190,8 @@ async function registerWithEmail({ email, password, deviceId, ip }) {
     const defaultUsername = cleanEmail.split('@')[0] + '_' + Math.floor(Math.random() * 1000);
 
     const res = await pool.query(
-      `INSERT INTO users (user_uuid, username, email, password_hash, verification_token, is_email_verified, device_id_linked)
-       VALUES ($1, $2, $3, $4, $5, FALSE, $6) RETURNING *`,
+      `INSERT INTO users (user_uuid, username, email, password, password_hash, verification_token, is_email_verified, device_id_linked)
+       VALUES ($1, $2, $3, $4, $4, $5, FALSE, $6) RETURNING *`,
       [userUuid, defaultUsername, cleanEmail, pwHash, verifyToken, deviceId || null]
     );
 
