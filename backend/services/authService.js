@@ -9,6 +9,7 @@
 
 const crypto = require('crypto');
 const { pool } = require('./ingestion');
+const { getVerificationEmailHtml } = require('./emailTemplates');
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET || 'realssa_sec_key_998877665544332211';
 
@@ -123,16 +124,11 @@ async function registerWithEmail({ email, password, deviceId }) {
     const verifyLink = `https://www.realssanews.com.ng/verify-email?token=${verifyToken}`;
     console.log(`[Auth Email Sent] Verification link for ${cleanEmail}: ${verifyLink}`);
 
-    // Dispatch via Resend API if key is present
+    // Dispatch via Resend API using executive template engine
     await sendResendEmail({
       to: cleanEmail,
-      subject: 'Verify your RealSSA Account',
-      html: `<div style="font-family:sans-serif;padding:20px;">
-        <h2>Welcome to RealSSA News</h2>
-        <p>Please click the button below to verify your email address and link your account:</p>
-        <a href="${verifyLink}" style="background:#f59e0b;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;margin:16px 0;">Verify My Email</a>
-        <p style="color:#666;font-size:12px;">Link: ${verifyLink}</p>
-      </div>`
+      subject: 'Verify your RealSSA account',
+      html: getVerificationEmailHtml({ verifyLink, email: cleanEmail })
     });
 
     return {
