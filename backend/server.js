@@ -5014,6 +5014,7 @@ app.all([/^\/api\/sports\/proxy\/v3\/(.*)/, /^\/api\/sports\/proxy\/(.*)/], asyn
     if (endpointPath.startsWith('v3/')) {
       endpointPath = endpointPath.replace(/^v3\//, '');
     }
+    endpointPath = endpointPath.replace(/^\/+/, '');
     const queryParams = new URLSearchParams(req.query).toString();
     const cacheKey = `${endpointPath}?${queryParams}`;
     const now = Date.now();
