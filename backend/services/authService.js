@@ -157,7 +157,7 @@ async function registerWithEmail({ email, password, deviceId }) {
  * Helper: Send Email via Resend API
  */
 async function sendResendEmail({ to, subject, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY || 're_GqmYWqcq_EpPd92233QuWRa8taSQBFojh';
   if (!apiKey) return false;
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -167,12 +167,14 @@ async function sendResendEmail({ to, subject, html }) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'RealSSA News Desk <onboarding@resend.dev>',
+        from: 'RealSSA News Desk <noreply@realssanews.com.ng>',
         to: [to],
         subject,
         html
       })
     });
+    const data = await res.json();
+    console.log('[Resend Email Success]', data);
     return res.ok;
   } catch (e) {
     console.error('[Resend Error]', e.message);
