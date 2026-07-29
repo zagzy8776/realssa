@@ -3820,14 +3820,15 @@ app.post('/api/chat', async (req, res) => {
 
   // 4. Pollinations AI (100% Free Guaranteed Fallback — No API Key Required)
   try {
-    const r = await fetch('https://text.pollinations.ai/', {
+    const r = await fetch('https://text.pollinations.ai/openai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, model: 'openai' }),
-      signal: AbortSignal.timeout(12000)
+      body: JSON.stringify({ model: 'openai', messages }),
+      signal: AbortSignal.timeout(15000)
     });
     if (r.ok) {
-      const text = (await r.text())?.trim();
+      const d = await r.json();
+      const text = d?.choices?.[0]?.message?.content?.trim();
       if (text) return res.json({ reply: text, provider: 'pollinations' });
     }
   } catch (e) { console.warn('[Chat] Pollinations:', e.message); }
