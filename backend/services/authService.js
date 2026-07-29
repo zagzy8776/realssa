@@ -295,9 +295,19 @@ async function verifyEmailToken(token) {
     if (res.rows.length === 0) {
       throw new Error('Invalid or expired verification token.');
     }
-    return sanitizeUser(res.rows[0]);
+    const user = res.rows[0];
+    return {
+      message: 'Email verified successfully!',
+      user: sanitizeUser(user),
+      token: generateToken({ user_uuid: user.user_uuid, email: user.email })
+    };
   }
-  return { email: 'verified@realssanews.com.ng', is_email_verified: true };
+  const mockUser = { user_uuid: 'usr-mock', email: 'verified@realssanews.com.ng', is_email_verified: true };
+  return {
+    message: 'Email verified successfully (Local mode).',
+    user: mockUser,
+    token: generateToken(mockUser)
+  };
 }
 
 /**

@@ -127,8 +127,13 @@ export default function AccountAuthCard() {
             <h3 className="text-base font-bold tracking-tight">
               {user ? user.username : 'Guest Reader Account'}
             </h3>
-            <p className="text-xs text-muted-foreground">
-              {user ? 'Account Linked & Verified' : 'Device Linked (Guest Mode)'}
+            {user && user.email && (
+              <p className="text-xs text-green-500 font-medium flex items-center gap-1 mt-0.5">
+                <CheckCircle2 className="w-3 h-3" /> {user.email}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {user ? 'Account Linked & Active' : 'Device Linked (Guest Mode)'}
             </p>
           </div>
         </div>

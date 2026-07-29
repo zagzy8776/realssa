@@ -27,6 +27,10 @@ export default function VerifyEmail() {
       .then((res) => {
         setSuccess(true);
         setMessage('Your email has been verified successfully! Your account is now fully active.');
+        if (res.data && res.data.token) {
+          localStorage.setItem('realssa_jwt_token', res.data.token);
+          localStorage.setItem('realssa_auth_user', JSON.stringify(res.data.user));
+        }
       })
       .catch((err) => {
         setSuccess(false);
