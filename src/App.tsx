@@ -124,7 +124,7 @@ const App = () => {
           <FeedWatermarkWrapper />
           <MobileBottomNav />
           <OnboardingTopicSelector />
-          <main className="pb-20 md:pb-0">
+          <main className="pb-20 md:pb-0 overflow-x-hidden w-full max-w-[100vw]">
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/" element={<Index />} />
