@@ -515,7 +515,7 @@ const Header = () => {
 
         {/* Integrated RealSSA Search Bar Gateway */}
         <div className={cn(
-          "border-t border-border/40 bg-background relative z-50 transition-all duration-300",
+          "border-t border-white/10 bg-[#1A1622]/95 backdrop-blur-md relative z-50 transition-all duration-300 shadow-lg",
           showMobileSearch || isSearchFocused
             ? "max-h-[80px] opacity-100 overflow-visible"
             : "max-h-0 opacity-0 border-t-0 pointer-events-none overflow-hidden md:max-h-[80px] md:opacity-100 md:border-t md:overflow-visible"

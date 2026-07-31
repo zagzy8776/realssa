@@ -503,7 +503,7 @@ const Index = () => {
       <button
         onClick={() => navigate('/wire')}
         title="Live Broadcast Wire"
-        className="fixed bottom-[84px] md:bottom-8 right-4 md:right-8 z-[999] h-[42px] rounded-[21px] bg-black border border-[#2a2535] cursor-pointer shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center gap-2 px-4 transition-all duration-150 hover:scale-105 hover:shadow-[0_6px_24px_rgba(245,158,11,0.3)]"
+        className="fixed bottom-[96px] md:bottom-8 right-4 md:right-8 z-[999] h-[42px] rounded-[21px] bg-black/90 backdrop-blur-md border border-[#3A3345] cursor-pointer shadow-[0_6px_24px_rgba(0,0,0,0.6)] flex items-center gap-2 px-4 transition-all duration-150 hover:scale-105 hover:shadow-[0_6px_24px_rgba(245,158,11,0.3)]"
       >
         <span className="text-amber-500 font-extrabold text-sm">📢</span>
         <span className="text-white text-xs font-bold whitespace-nowrap">Live Wire</span>

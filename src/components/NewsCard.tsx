@@ -396,7 +396,7 @@ const NewsCard = ({
           <Link to={linkTo} onClick={handleImageClick} className="block w-full">
             <div
               className="relative w-full aspect-[2/1] overflow-hidden flex items-center justify-center"
-              style={{ background: 'rgba(44, 39, 50, 0.6)', borderRadius: '12px 12px 0 0' }}
+              style={{ background: '#1C1824', borderRadius: '12px 12px 0 0' }}
             >
               {hasImage ? (
                 <img
