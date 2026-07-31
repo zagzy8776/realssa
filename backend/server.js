@@ -6056,13 +6056,31 @@ if (process.env.DATABASE_URL) {
     )
   `).catch(e => console.warn('Match details cache table creation failed:', e.message));
 }
-// Start live scraper and server when running locally or on Fly.io — NOT on Vercel serverless
+// Start persistent background bots and server when running locally or on Fly.io — NOT on Vercel serverless
 if (!process.env.VERCEL) {
   try {
     console.log('🚀 Initializing persistent Soccerway live scores scraper...');
     require('./services/liveScraper');
   } catch (err) {
     console.error('❌ Failed to initialize Soccerway live scraper:', err.message);
+  }
+
+  try {
+    console.log('🤖 Initializing background cron bots (RSS Ingestion, Buffer, Sports, Rates)...');
+    const { initRssBot } = require('./services/rssBot');
+    const { initSportsBot } = require('./services/sportsBot');
+    const { initRatesBot } = require('./services/ratesBot');
+    const { initPricesBot } = require('./services/pricesBot');
+
+    if (pool) {
+      initRssBot(pool);
+      initSportsBot(pool, notificationService);
+      initRatesBot(pool);
+      initPricesBot(pool);
+      console.log('✅ All background cron bots active and running.');
+    }
+  } catch (botErr) {
+    console.error('❌ Failed to initialize background cron bots:', botErr.message);
   }
 
   app.listen(PORT, '0.0.0.0', () => {
