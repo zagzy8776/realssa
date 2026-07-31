@@ -1185,7 +1185,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
                 const checkNotified = await activePool.query('SELECT 1 FROM notified_articles WHERE story_hash = $1', [articleHash]);
                 if (checkNotified.rows.length === 0) {
                   // 2. Rate limiter check: max 8 notifications per hour
-                  const limitCheck = await pool.query("SELECT COUNT(*) FROM notified_articles WHERE notified_at > NOW() - INTERVAL '1 hour'");
+                  const limitCheck = await activePool.query("SELECT COUNT(*) FROM notified_articles WHERE notified_at > NOW() - INTERVAL '1 hour'");
                   const currentHourCount = parseInt(limitCheck.rows[0].count) || 0;
 
                   if (currentHourCount < 8) {
@@ -1203,9 +1203,9 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
                     console.log(`🔔 Eagerly Notifying [score=${score}]: "${title.slice(0, 60)}"`);
                     await notificationService.sendBreakingNews(notifArticle);
                     // 3. Mark as notified
-                    await pool.query('INSERT INTO notified_articles (story_hash, notified_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING', [articleHash]);
+                    await activePool.query('INSERT INTO notified_articles (story_hash, notified_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING', [articleHash]);
                     // Clean up rows older than 48 hours to preserve space
-                    await pool.query("DELETE FROM notified_articles WHERE notified_at < NOW() - INTERVAL '48 hours'");
+                    await activePool.query("DELETE FROM notified_articles WHERE notified_at < NOW() - INTERVAL '48 hours'");
                   } else {
                     console.log(`📭 Notification rate limiter: hourly limit reached (${currentHourCount}/8). Skipping notification.`);
                   }
