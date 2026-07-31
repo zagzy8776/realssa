@@ -1282,12 +1282,32 @@ app.get('/api/articles/trending', async (req, res) => {
         `;
       }
 
-      const dbResult = await pool.query(queryText, queryParams);
-      if (page === 1 && dbResult.rows.length < 5) {
-        // Fallback to live RSS only on first page when DB is empty
+      let trendingRows = [];
+      try {
+        const dbResults = await Promise.allSettled(
+          (contentPools || []).map(p => p.pool.query(queryText, queryParams))
+        );
+        const seenIds = new Set();
+        dbResults.forEach(r => {
+          if (r.status === 'fulfilled' && Array.isArray(r.value.rows)) {
+            r.value.rows.forEach(row => {
+              if (!seenIds.has(row.id)) {
+                seenIds.add(row.id);
+                trendingRows.push(row);
+              }
+            });
+          }
+        });
+      } catch (mErr) {
+        const fallbackRes = await queryMultiDb(queryText, queryParams);
+        trendingRows = fallbackRes.rows || [];
+      }
+
+      if (page === 1 && trendingRows.length < 5) {
         console.log('Trending: DB empty, falling back to live RSS...');
       } else {
-        const results = dbResult.rows.map(r => ({
+        trendingRows.sort((a, b) => new Date(b.published_at || b.date || 0).getTime() - new Date(a.published_at || a.date || 0).getTime());
+        const results = trendingRows.slice(0, limit).map(r => ({
           id: r.id, title: r.title, excerpt: r.excerpt,
           category: r.category, image: r.image, author: r.author,
           externalLink: r.external_link, date: r.date,
