@@ -69,17 +69,15 @@ if (!process.env.CRON_SECRET) {
 }
 
 // Neon PostgreSQL connection (Articles/Main)
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : undefined
-});
+const pool = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : null;
 
 // Users PostgreSQL connection (falls back to DATABASE_URL if USERS_DATABASE_URL not provided)
 const usersDbUrl = process.env.USERS_DATABASE_URL || process.env.DATABASE_URL;
-const usersPool = new Pool({
-  connectionString: usersDbUrl,
-  ssl: usersDbUrl ? { rejectUnauthorized: false } : undefined
-});
+const usersPool = usersDbUrl
+  ? new Pool({ connectionString: usersDbUrl, ssl: { rejectUnauthorized: false } })
+  : null;
 
 // Test database connection
 if (process.env.DATABASE_URL) {
