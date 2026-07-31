@@ -70,8 +70,8 @@ const NewsTicker = () => {
   }
 
   return (
-    <div className="bg-[#0a0f1c] text-white border-b border-white/5 py-2 overflow-hidden flex items-center relative">
-      <div className="absolute left-0 top-0 bottom-0 bg-[#0a0f1c] z-10 flex items-center px-2 border-r border-white/10 shadow-[5px_0_15px_rgba(0,0,0,0.8)]">
+    <div className="bg-muted/80 dark:bg-[#0a0f1c] text-foreground dark:text-white border-b border-border py-2 overflow-hidden flex items-center relative">
+      <div className="absolute left-0 top-0 bottom-0 bg-card dark:bg-[#0a0f1c] z-10 flex items-center px-2 border-r border-border shadow-[5px_0_15px_rgba(0,0,0,0.15)]">
         <span className="bg-amber-500 text-black text-xs font-bold px-3 py-1 rounded flex items-center gap-1 shadow-[0_0_10px_rgba(245,158,11,0.4)]">
           <span className="w-1.5 h-1.5 bg-black rounded-full animate-pulse"></span>
           LIVE FX

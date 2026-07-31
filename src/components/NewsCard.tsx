@@ -456,19 +456,12 @@ const NewsCard = ({
         {/* Text content */}
         <div className="px-4 pt-3 pb-1">
           <h3
-            style={{
-              fontFamily: "'Fraunces', 'Source Serif 4', Georgia, serif",
-              fontWeight: 700,
-              fontSize: '16px',
-              lineHeight: 1.3,
-              margin: 0,
-              color: '#FFFFFF',
-            }}
+            className="text-foreground font-display font-bold text-base leading-snug m-0"
           >
             <Link
               to={linkTo}
               onClick={handleClick}
-              style={{ color: '#FFFFFF', textDecoration: 'none', display: 'block' }}
+              className="text-foreground hover:text-amber-500 transition-colors block text-decoration-none"
             >
               {decodeHTMLEntities(title)}
             </Link>
@@ -478,18 +471,7 @@ const NewsCard = ({
         {excerpt && (
           <div className="px-4 pt-1 pb-3">
             <p
-              style={{
-                fontFamily: "inherit",
-                fontWeight: 400,
-                fontSize: '12px',
-                lineHeight: 1.5,
-                color: '#B3ABBA',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                margin: 0,
-              }}
+              className="text-muted-foreground text-xs leading-normal font-sans line-clamp-2 m-0"
             >
               {decodeHTMLEntities(excerpt)}
             </p>

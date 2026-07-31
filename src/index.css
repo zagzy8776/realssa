@@ -525,6 +525,12 @@ body {
     0 0 0 1px rgba(245, 158, 11, 0.10);
 }
 
+.light .glass-card {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
 /* Navigation bar glass — denser blur for persistent UI */
 .glass-nav {
   background: rgba(22, 19, 26, 0.96);
