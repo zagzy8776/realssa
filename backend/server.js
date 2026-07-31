@@ -2268,6 +2268,8 @@ app.get('/api/cron/ingest', async (req, res) => {
       console.error('❌ Ingest cron background job failed:', err.message);
     }
   });
+});
+
 // Primary Buffer Social Auto-Posting Cron Endpoint
 app.get('/api/cron/buffer', async (req, res) => {
   const secret = req.query.secret || req.headers['x-cron-secret'];
@@ -2293,7 +2295,6 @@ app.get('/api/cron/buffer', async (req, res) => {
       console.error('❌ Buffer cron background job failed:', err.message);
     }
   });
-});
 });
 
 // Sports health endpoint — reports whether the bot can run
