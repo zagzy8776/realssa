@@ -326,14 +326,16 @@ function initRssBot(sharedPool) {
     await generateDailyDigest();
   });
 
-  // Immediately run once on startup
+  // Immediately run Buffer top-up and ingestion on startup in parallel
   (async () => {
     try {
+      console.log(`[${new Date().toISOString()}] Triggering instant Buffer queue top-up on startup...`);
+      runBufferCron().catch(err => console.error('Initial Buffer error:', err));
+
       console.log(`[${new Date().toISOString()}] Running initial RSS ingestion cycle...`);
       await ingestAllFeeds(pool, rssParser);
       await cleanOldArticles();
       await generateDailyDigest();
-      await runBufferCron();
     } catch (err) {
       console.error('RSS Bot encountered an error during initial cycle:', err.message);
     }
