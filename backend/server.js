@@ -2712,7 +2712,11 @@ app.get('/api/news/nigerian', makeDbFirstRoute('nigerian', nigerianFeeds, ['nige
 // Get Local news based on GPS coordinates or Vercel IP headers (instant location sensor)
 app.get('/api/news/local', async (req, res) => {
   try {
-    let country = req.headers['x-vercel-ip-country'] || 'NG';
+    let country = req.headers['cf-ipcountry'] || 
+                  req.headers['x-vercel-ip-country'] || 
+                  req.headers['x-country-code'] || 
+                  req.headers['x-appengine-country'] || 
+                  'NG';
 
     const { lat, lng } = req.query;
     if (lat && lng) {
