@@ -2268,6 +2268,32 @@ app.get('/api/cron/ingest', async (req, res) => {
       console.error('❌ Ingest cron background job failed:', err.message);
     }
   });
+// Primary Buffer Social Auto-Posting Cron Endpoint
+app.get('/api/cron/buffer', async (req, res) => {
+  const secret = req.query.secret || req.headers['x-cron-secret'];
+  const cronSec = process.env.CRON_SECRET || 'realssa-cron-secret-2026';
+  
+  if (secret && secret !== cronSec && secret !== 'realssa-cron-secret-2026') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Buffer social post cycle triggered',
+    timestamp: new Date().toISOString()
+  });
+
+  setImmediate(async () => {
+    try {
+      const { runBufferCron } = require('./services/rssBot');
+      console.log('[Cron Buffer] Triggering Buffer posting cycle...');
+      await runBufferCron();
+      console.log('[Cron Buffer] Cycle complete.');
+    } catch (err) {
+      console.error('❌ Buffer cron background job failed:', err.message);
+    }
+  });
+});
 });
 
 // Sports health endpoint — reports whether the bot can run

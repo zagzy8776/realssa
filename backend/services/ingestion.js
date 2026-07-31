@@ -888,7 +888,25 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           continue;
         }
 
-        const title = item.title || 'Untitled';
+        function decodeHtmlEntities(str) {
+          if (!str) return '';
+          return str
+            .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+            .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&#8216;/g, "'")
+            .replace(/&#8217;/g, "'")
+            .replace(/&#8220;/g, '"')
+            .replace(/&#8221;/g, '"')
+            .replace(/&#8211;/g, '–')
+            .replace(/&#8212;/g, '—')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>');
+        }
+
+        const title = decodeHtmlEntities(item.title || 'Untitled').trim();
         
         // Clean source names from verbose boilerplate suffixes
         const cleanSourceName = (rawName) => {

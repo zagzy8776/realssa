@@ -309,5 +309,5 @@ function initRssBot(sharedPool) {
   })();
 }
 
-module.exports = { initRssBot };
+module.exports = { initRssBot, runBufferCron };
 

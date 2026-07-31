@@ -19,6 +19,24 @@ const CATEGORY_EMOJI = {
   'jobs':          '💼',
 };
 
+function decodeHtmlEntities(str) {
+  if (!str) return '';
+  return str
+    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#8216;/g, "'")
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8220;/g, '"')
+    .replace(/&#8221;/g, '"')
+    .replace(/&#8211;/g, '–')
+    .replace(/&#8212;/g, '—')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
 class NotificationService {
   constructor() {
     this.appId = process.env.ONESIGNAL_APP_ID || "055b6596-a96c-48e2-8cda-ff4bb6d61009";
@@ -109,7 +127,7 @@ class NotificationService {
       readerUrl = `${SITE_URL}/article/${news.id}`;
     }
 
-    const rawTitle = (news.title || news.summary || 'New story available')
+    const rawTitle = decodeHtmlEntities(news.title || news.summary || 'New story available')
       .replace(/^\s*(Breaking|News|Alert|Update)\s*[:|-]\s*/i, '')
       .trim();
 
@@ -120,12 +138,11 @@ class NotificationService {
     const fullTitle = `${titlePrefix} ${rawTitle}`;
     const notifTitle = fullTitle.length > 90 ? `${fullTitle.slice(0, 87)}...` : fullTitle;
 
-    // Body: source name + clean excerpt — no label padding, max 120 chars of real content
-    const rawExcerpt = (news.excerpt || news.summary || '').replace(/<[^>]+>/g, '').trim();
-    const sourceLine = news.source_name ? `${news.source_name} • RealSSA` : 'RealSSA News';
-    const notifBody = rawExcerpt.length > 20
-      ? `${sourceLine}\n${rawExcerpt.slice(0, 120).replace(/\s\S+$/, '')}…`
-      : sourceLine;
+    // Body: pure clean story summary without external publisher ads (max 140 chars)
+    const rawExcerpt = decodeHtmlEntities((news.excerpt || news.summary || '').replace(/<[^>]+>/g, '')).trim();
+    const notifBody = rawExcerpt.length > 15
+      ? (rawExcerpt.length > 135 ? `${rawExcerpt.slice(0, 135).replace(/\s\S+$/, '')}…` : rawExcerpt)
+      : 'Tap to read full story on RealSSA News.';
 
     const payload = {
       title: notifTitle,
