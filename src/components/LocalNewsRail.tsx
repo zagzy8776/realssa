@@ -95,8 +95,7 @@ export default function LocalNewsRail({ excludeIds = [] }: LocalNewsRailProps) {
 
   return (
     <section 
-      className="w-full py-4 mt-1 border-t-[0.5px] border-b-[0.5px] border-[#362F3D]" 
-      style={{ backgroundColor: '#211D26' }}
+      className="w-full py-4 mt-1 border-t-[0.5px] border-b-[0.5px] border-border bg-card/50 dark:bg-[#211D26]" 
     >
       <div className="container mx-auto px-4">
         {/* Header */}

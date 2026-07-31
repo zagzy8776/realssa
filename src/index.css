@@ -534,6 +534,12 @@ body {
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.40);
 }
 
+.light .glass-nav {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
 /* Glass pill — for small tag/badge/chip elements */
 .glass-pill {
   background: rgba(255, 255, 255, 0.08);

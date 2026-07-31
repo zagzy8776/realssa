@@ -308,8 +308,8 @@ const Header = () => {
             <Link to="/" className="flex items-center flex-shrink-0 gap-2">
               <img src="/logo.png" alt="RealSSA Logo" className="h-8 md:h-10 w-auto" />
               <h1 className="text-sm sm:text-lg md:text-2xl font-display font-bold tracking-tight whitespace-nowrap flex-shrink-0">
-                <span className="text-foreground">Real</span>
-                <span className="text-gradient-gold">SSA</span>
+                <span className="text-slate-900 dark:text-white font-black">Real</span>
+                <span className="text-gradient-gold font-black">SSA</span>
               </h1>
             </Link>
           </div>
@@ -515,7 +515,7 @@ const Header = () => {
 
         {/* Integrated RealSSA Search Bar Gateway */}
         <div className={cn(
-          "border-t border-white/10 bg-[#1A1622]/95 backdrop-blur-md relative z-50 transition-all duration-300 shadow-lg",
+          "border-t border-border/40 bg-background/95 dark:bg-[#1A1622]/95 backdrop-blur-md relative z-50 transition-all duration-300 shadow-lg",
           showMobileSearch || isSearchFocused
             ? "max-h-[80px] opacity-100 overflow-visible"
             : "max-h-0 opacity-0 border-t-0 pointer-events-none overflow-hidden md:max-h-[80px] md:opacity-100 md:border-t md:overflow-visible"
