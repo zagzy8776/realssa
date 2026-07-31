@@ -20,6 +20,7 @@ const { runCrawler } = require('./services/crawlerService');
 const { generateRateCardSvg } = require('./services/rateCard');
 const { getUserBalance, getUserHistory, recordLedgerTransaction, recordShareDwellTime } = require('./services/walletService');
 const { queryMultiDb, queryAllDbs, getPoolForCategory, getAllPools } = require('./config/multiDb');
+const { parseBeaconPayload, bufferTelemetry, initTelemetryFlusher } = require('./services/telemetryService');
 
 // SSRF protection helper
 const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;
@@ -225,6 +226,8 @@ if (process.env.DATABASE_URL) {
       initIntelligenceAgent(pool);
       // Initialize the AI Trending Topic Synthesizer Agent
       initTrendingSynthesizer(pool);
+      // Initialize the Telemetry Shock-Absorber Buffer & Cron Flusher
+      initTelemetryFlusher(pool);
     }
   });
 }
@@ -286,8 +289,28 @@ const authLimiter = rateLimit({
 });
 
 app.use('/api/', apiLimiter);
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.text({ type: ['text/plain', 'application/json', 'text/*'], limit: '10mb' }));
+
+// High-Concurrency Shock-Absorber Telemetry Endpoint
+app.post('/api/telemetry', async (req, res) => {
+  try {
+    const rawData = req.body;
+    const payload = parseBeaconPayload(rawData);
+    if (!payload) {
+      return res.status(200).send('OK'); // Always return 200 to sendBeacon
+    }
+    
+    // Dump payload straight into Redis buffer/Memory queue (sub-millisecond)
+    bufferTelemetry(payload).catch(() => {});
+    
+    return res.status(200).send('OK');
+  } catch (err) {
+    return res.status(200).send('OK');
+  }
+});
 app.use('/api/auth/login', authLimiter);
-app.use(express.json());
 
 // Public Syndication API & RSS Feed Syndication Endpoints
 const { generateRSSFeedFromDB } = require('./rss-generator');

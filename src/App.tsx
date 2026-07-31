@@ -131,7 +131,7 @@ const App = () => {
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/terms" element={<Terms />} />
-                <Route path="/nigeria" element={<Nigeria />} />
+                <Route path="/nigeria" element={<Trending />} />
                 <Route path="/culture" element={<Culture />} />
                 <Route path="/library/media-decode" element={<MediaDecode />} />
                 <Route path="/library/nigerian-manual" element={<NigerianManual />} />
@@ -142,25 +142,25 @@ const App = () => {
                 <Route path="/edit-news/:id" element={<EditNewsPage />} />
                 <Route path="/post-news" element={<NewsPost />} />
                 <Route path="/article/:id" element={<ArticlePage />} />
-                <Route path="/nigerian-news" element={<NigerianNews />} />
-                <Route path="/world-news" element={<WorldNews />} />
+                <Route path="/nigerian-news" element={<Trending />} />
+                <Route path="/world-news" element={<Trending />} />
                 <Route path="/for-you" element={<ForYou />} />
                 <Route path="/crypto" element={<CryptoNews />} />
                 <Route path="/videos" element={<VideoNews />} />
                 <Route path="/sports" element={<Sports />} />
-                <Route path="/ghana" element={<Ghana />} />
-                <Route path="/kenya" element={<Kenya />} />
-                <Route path="/south-africa" element={<SouthAfrica />} />
-                <Route path="/uk" element={<UK />} />
-                <Route path="/usa" element={<USA />} />
+                <Route path="/ghana" element={<Trending />} />
+                <Route path="/kenya" element={<Trending />} />
+                <Route path="/south-africa" element={<Trending />} />
+                <Route path="/uk" element={<Trending />} />
+                <Route path="/usa" element={<Trending />} />
                 <Route path="/news" element={<ForYou />} />
                 <Route path="/news-section" element={<ForYou />} />
                 <Route path="/entertainment" element={<Newssection categoryFilter="entertainment" />} />
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/read" element={<ReaderMode />} />
-                <Route path="/world-directory" element={<WorldDirectory />} />
+                <Route path="/world-directory" element={<Trending />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
-                <Route path="/country/:countryId" element={<CountryNews />} />
+                <Route path="/country/:countryId" element={<Trending />} />
                 <Route path="/download" element={<AppDownload />} />
                 <Route path="/ads" element={<AdPortal />} />
                 <Route path="/reels" element={<Reels />} />

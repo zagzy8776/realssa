@@ -310,9 +310,9 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
       </div>
 
       {/* 2. Intent-Driven Feed Knobs (User controls for feed filtering) */}
-      <div className="mt-3 flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Intent-Driven Feed</span>
-        <div className="flex gap-2">
+      <div className="mt-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground shrink-0">Intent-Driven Feed</span>
+        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 md:pb-0 w-full md:w-auto">
           <button
             onClick={() => onFilterChange(activeFilter === 'deep_dives' ? 'all' : 'deep_dives')}
             className={`text-xs px-3 py-1 rounded-full border transition-all duration-300 font-semibold ${

@@ -56,7 +56,7 @@ const MobileBottomNav = () => {
           <div className="relative flex-1 flex items-center justify-center">
             <button
               onClick={() => setChatOpen(true)}
-              className="absolute -top-6 w-12 h-12 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-90 hover:scale-105 border-2 border-background/80 glow-amber-ring"
+              className="absolute -top-6 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-90 hover:scale-105 border-2 border-background/80 glow-amber-ring"
               style={{
                 width: 50,
                 height: 50,

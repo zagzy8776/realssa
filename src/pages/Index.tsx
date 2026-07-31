@@ -167,9 +167,22 @@ const Index = () => {
         initialNews = await articlesRes.value.json();
       }
 
-      // Initial filter & sort (only local/critical articles)
-      let initialFiltered = initialNews.filter(isNotPunch);
-      initialFiltered.sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
+      // Sort by user preferences, location intent & sports priority
+      const getCategoryWeight = (category?: string) => {
+        if (!category) return 0;
+        const c = category.toLowerCase();
+        if (c.includes('sports')) return 10; // High baseline boost for Sports content
+        const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
+        const counts = prefs.counts || {};
+        return (counts[c] || 0) * 2;
+      };
+
+      initialFiltered.sort((a, b) => {
+        const weightDiff = getCategoryWeight(b.category) - getCategoryWeight(a.category);
+        if (weightDiff !== 0) return weightDiff;
+        return new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime();
+      });
+
       const initialUnique = initialFiltered.filter((v, i, a) => 
         !loadedStories.some(s => s.id === v.id) && a.findIndex(t => t.title === v.title) === i
       );

@@ -117,8 +117,9 @@ async function getBufferQueueCount() {
     const { isBufferConfigured } = require('./buffer');
     if (!isBufferConfigured()) return 0;
 
-    const BUFFER_ACCESS_TOKEN = process.env.BUFFER_ACCESS_TOKEN || process.env.BUFFER_S_TOKEN;
-    const BUFFER_PROFILE_IDS = (process.env.BUFFER_PROFILE_IDS || process.env.BUFFER_FILE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const BUFFER_ACCESS_TOKEN = process.env.BUFFER_ACCESS_TOKEN || process.env.BUFFER_S_TOKEN || 'XgC6VYuJXL4xvvPRJolhwEdpK5iC4xwJutuSVPqf7Aw';
+    const rawProfiles = process.env.BUFFER_PROFILE_IDS || process.env.BUFFER_FILE_IDS || '6a5c8546e2638b94d7959a2c,6a46f43d5ab6d2f1069abed2';
+    const BUFFER_PROFILE_IDS = rawProfiles.split(',').map(s => s.trim()).filter(Boolean);
     if (!BUFFER_PROFILE_IDS.length) return 0;
 
     // Check queue count for the first non-Instagram profile

@@ -21,31 +21,15 @@ import { useStreak } from "@/hooks/useStreak";
 
 const navLinks = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/ads", label: "📢 Advertise" },
-  { href: "/sports", label: "⚽ Sports" },
-  { href: "/market", label: "📊 Market Hub" },
-  { href: "/wire", label: "📢 Live Wire" },
-  { href: "/events", label: "📅 Events Calendar" },
-  { href: "/world-news", label: "🌍 World", icon: Globe },
-  { href: "/videos", label: "📺 Videos", icon: Radio },
-  { href: "/crypto", label: "₿ Crypto" },
+  { href: "/ads", label: "Advertise", icon: Newspaper },
+  { href: "/sports", label: "Sports" },
+  { href: "/market", label: "Market Hub" },
+  { href: "/videos", label: "Videos", icon: Radio },
+  { href: "/crypto", label: "Crypto" },
   { href: "/admin-dashboard", label: "Dashboard", adminOnly: true },
 ];
 
-const regionsLinks = [
-  { href: "/nigeria", label: "🇳🇬 Nigeria" },
-  { href: "/ghana", label: "🇬🇭 Ghana" },
-  { href: "/kenya", label: "🇰🇪 Kenya" },
-  { href: "/south-africa", label: "🇿🇦 South Africa" },
-  { href: "/uk", label: "🇬🇧 UK" },
-  { href: "/usa", label: "🇺🇸 USA" },
-  { href: "/culture", label: "Culture" },
-  { href: "/entertainment", label: "🎬 Entertainment" },
-  { href: "/nigerian-news", label: "Nigerian News" },
-  { href: "/jobs", label: "💼 Jobs" },
-  { href: "/world-directory", label: "🗺️ World Directory" },
-  { href: "/post-news", label: "Post News", adminOnly: true },
-];
+const regionsLinks: { href: string; label: string; adminOnly?: boolean }[] = [];
 
 
 const libraryLinks = [
@@ -341,7 +325,7 @@ const Header = () => {
               }`}
               title="Click to view Reading Streak & Points"
             >
-              <span className={`font-bold text-xs ${streak > 0 ? 'text-orange-500' : 'text-gray-400'}`}>🔥 {streak}</span>
+              <span className={`font-bold text-xs ${streak > 0 ? 'text-orange-500' : 'text-gray-400'}`}>STREAK {streak}</span>
               <span className="hidden sm:inline text-muted-foreground/40 text-[10px] font-light">|</span>
               <span className="hidden sm:inline font-bold text-xs text-amber-500">{rpPoints !== null ? rpPoints : 0} RP</span>
             </button>
@@ -370,7 +354,7 @@ const Header = () => {
 
                 <div className="flex justify-between items-center">
                   <h3 className="font-bold text-lg text-foreground flex items-center gap-1.5">
-                    ⚡ Reading Streak
+                    Reading Streak
                   </h3>
                   <button 
                     onClick={() => setIsStreakOpen(false)}
@@ -382,8 +366,8 @@ const Header = () => {
                 </div>
 
                 <div className="flex flex-col items-center gap-3 text-center">
-                  <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center text-4xl shadow-inner relative group">
-                    <span className="group-hover:scale-110 transition duration-300 transform inline-block">🔥</span>
+                  <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center text-2xl font-bold text-orange-500 shadow-inner relative group">
+                    <span className="group-hover:scale-110 transition duration-300 transform inline-block">STREAK</span>
                     <span className="absolute inset-0 rounded-full border-2 border-orange-500/20 animate-ping"></span>
                   </div>
                   
@@ -397,12 +381,12 @@ const Header = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-muted/40 rounded-2xl p-3 border border-border/50 text-center">
                     <div className="text-[10px] font-semibold uppercase text-muted-foreground">Longest Streak</div>
-                    <div className="text-lg font-bold text-foreground mt-1">🏆 {longestStreak} days</div>
+                    <div className="text-lg font-bold text-foreground mt-1">{longestStreak} days</div>
                   </div>
                   <div className="bg-muted/40 rounded-2xl p-3 border border-border/50 text-center">
                     <div className="text-[10px] font-semibold uppercase text-muted-foreground">Habit Level</div>
                     <div className="text-lg font-bold text-orange-500 mt-1">
-                      {streak >= 30 ? '🔥 Expert' : streak >= 7 ? '⭐ Regular' : '🌱 Novice'}
+                      {streak >= 30 ? 'Expert' : streak >= 7 ? 'Regular' : 'Novice'}
                     </div>
                   </div>
                 </div>
@@ -444,7 +428,7 @@ const Header = () => {
                     onClick={() => setIsSecureOpen(!isSecureOpen)}
                     className="w-full flex items-center justify-between text-xs font-bold text-muted-foreground hover:text-foreground hover:underline"
                   >
-                    <span className="flex items-center gap-1">⚙️ Advanced Settings (Restore Profile)</span>
+                    <span className="flex items-center gap-1">Advanced Settings (Restore Profile)</span>
                     <span>{isSecureOpen ? "Hide" : "Show"}</span>
                   </button>
                   
@@ -591,7 +575,7 @@ const Header = () => {
                 type="submit"
                 className="bg-amber-500 hover:bg-amber-400 text-black text-[10px] md:text-xs font-extrabold px-2.5 md:px-3.5 py-1.5 rounded-xl uppercase flex items-center gap-1 shrink-0 shadow-sm transition-transform active:scale-95 cursor-pointer whitespace-nowrap"
               >
-                ⚡ SEARCH
+                SEARCH
               </button>
             </form>
 

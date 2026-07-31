@@ -577,8 +577,12 @@ function notificationScore(title, category, feedUrl) {
       const match = kwMatch(lower, kw);
       if (match) return 1;
     }
-    // No soft keyword matched — not worth a notification even from authority source
-    return 0;
+  }
+
+  // Fallback score for top high-priority news categories if no exclusion word matched
+  const priorityCategories = ['nigerian-news', 'breaking', 'sports', 'crypto', 'tech', 'ghana', 'kenya'];
+  if (category && priorityCategories.includes(category.toLowerCase())) {
+    return 2;
   }
 
   return 0;
@@ -1094,69 +1098,6 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
               [imageStatus, result.rows[0].id]
             ).catch(err => console.warn('Image status update skipped:', err.message));
           }
-
-          if (result.rows.length > 0) {
-            const articleId = result.rows[0].id;
-            newArticleIds.push(`rss-${articleId}`);
-
-            // Generate AI Discussion Starter comment for featured or AI-summarized articles
-            if (isFeatured || aiSummary) {
-              generateDiscussionStarter(pool, `rss-${articleId}`, title, aiSummary || description, category)
-                .catch(err => console.warn('Discussion starter trigger error:', err.message));
-            }
-            
-            // Insert extracted entities
-            if (extractedEntities.length > 0) {
-              for (const ent of extractedEntities) {
-                try {
-                  await pool.query(
-                    `INSERT INTO article_entities (article_id, entity_name, entity_type)
-                     VALUES ($1, $2, $3)
-                     ON CONFLICT (article_id, entity_name, entity_type) DO NOTHING`,
-                    [articleId, ent.name.trim(), ent.type]
-                  );
-                } catch (entErr) {
-                  console.error('Error inserting entity:', entErr.message);
-                }
-              }
-            }
-
-            // Auto-link to matching events in the next 7 days
-            try {
-              const matchingEvents = await pool.query(
-                `SELECT id, title FROM events 
-                 WHERE event_date BETWEEN NOW() - INTERVAL '1 day' AND NOW() + INTERVAL '7 days'`
-              );
-              for (const evt of matchingEvents.rows) {
-                const evtKeywords = evt.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-                const articleText = (title + ' ' + (description || '')).toLowerCase();
-                const isMatch = evtKeywords.every(kw => articleText.includes(kw));
-                if (isMatch) {
-                  await pool.query(
-                    `INSERT INTO article_events (article_id, event_id)
-                     VALUES ($1, $2)
-                     ON CONFLICT DO NOTHING`,
-                    [articleId, evt.id]
-                  );
-                  console.log(`🔗 Auto-linked article ${articleId} to Event "${evt.title}"`);
-                }
-              }
-            } catch (evtLinkErr) {
-              console.error('Event auto-linking error:', evtLinkErr.message);
-            }
-
-            // Score this article for notification worthiness
-            const score = notificationScore(title, category, externalLink);
-            if (score > 0) {
-              const articleHash = crypto.createHash('md5').update(title + (sourceName || '')).digest('hex');
-              try {
-                // 1. Deduplication check
-                const checkNotified = await pool.query('SELECT 1 FROM notified_articles WHERE story_hash = $1', [articleHash]);
-                if (checkNotified.rows.length === 0) {
-                  // 2. Rate limiter check: max 8 notifications per hour
-                  const limitCheck = await pool.query("SELECT COUNT(*) FROM notified_articles WHERE notified_at > NOW() - INTERVAL '1 hour'");
-                  const currentHourCount = parseInt(limitCheck.rows[0].count) || 0;
-
                   if (currentHourCount < 8) {
                     const notifArticle = {
                       id: `rss-${articleId}`,
