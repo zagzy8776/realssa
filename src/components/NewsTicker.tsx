@@ -82,8 +82,8 @@ const NewsTicker = () => {
         <div className="animate-marquee whitespace-nowrap flex items-center pl-32 w-max">
           {[...rates, ...rates].map((item, index) => (
             <div key={index} className="mx-6 flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-300">{item.pair}</span>
-              <span className="text-sm font-bold tracking-tight text-white">
+              <span className="text-sm font-semibold text-foreground/80">{item.pair}</span>
+              <span className="text-sm font-bold tracking-tight text-foreground">
                 {item.rate < 100 ? item.rate.toFixed(4) : item.rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               {item.icon}

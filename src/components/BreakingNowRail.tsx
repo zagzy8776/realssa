@@ -15,9 +15,10 @@ interface BreakingArticle {
 
 interface BreakingNowRailProps {
   excludeIds?: string[];
+  onLoaded?: (ids: string[]) => void;
 }
 
-export default function BreakingNowRail({ excludeIds = [] }: BreakingNowRailProps) {
+export default function BreakingNowRail({ excludeIds = [], onLoaded }: BreakingNowRailProps) {
   const [articles, setArticles] = useState<BreakingArticle[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -27,7 +28,11 @@ export default function BreakingNowRail({ excludeIds = [] }: BreakingNowRailProp
       .then(data => {
         if (Array.isArray(data)) {
           const filtered = data.filter(a => !excludeIds.includes(a.id));
-          setArticles(filtered.slice(0, 5));
+          const top = filtered.slice(0, 5);
+          setArticles(top);
+          if (onLoaded && top.length > 0) {
+            onLoaded(top.map(a => a.id));
+          }
         } else {
           setArticles([]);
         }

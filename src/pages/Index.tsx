@@ -35,6 +35,7 @@ const Index = () => {
   const [allArticles, setAllArticles] = useState([]);
   const [trendingArticles, setTrendingArticles] = useState([]);
   const [storyGroups, setStoryGroups] = useState([]);
+  const [breakingIds, setBreakingIds] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
   const [initialLoading, setInitialLoading] = useState(!initialLoadDone);
@@ -356,8 +357,8 @@ const Index = () => {
       <ReadProgressBar />
       <Header />
       <NewsTicker />
-      <BreakingNowRail excludeIds={stories.map((s: any) => s.id)} />
-      <LocalNewsRail excludeIds={stories.map((s: any) => s.id)} />
+      <BreakingNowRail excludeIds={stories.map((s: any) => s.id)} onLoaded={(ids) => setBreakingIds(ids)} />
+      <LocalNewsRail excludeIds={[...stories.map((s: any) => s.id), ...breakingIds]} />
       <SocialButtons />
 
       <main>
