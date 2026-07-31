@@ -201,11 +201,11 @@ async function runBufferCron() {
     const ngnRes = await db.query(
       `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
               a.external_link, a.category,
-              COALESCE(a.story_hash, a.url_hash) AS story_hash
+              a.url_hash AS story_hash
        FROM rss_articles a
-       LEFT JOIN buffer_posts_log b ON b.story_hash = COALESCE(a.story_hash, a.url_hash)
+       LEFT JOIN buffer_posts_log b ON b.story_hash = a.url_hash
        WHERE b.story_hash IS NULL
-         AND COALESCE(a.story_hash, a.url_hash) IS NOT NULL
+         AND a.url_hash IS NOT NULL
          AND a.category = 'nigerian-news'
        ORDER BY a.published_at DESC
        LIMIT $1`,
@@ -215,11 +215,11 @@ async function runBufferCron() {
     const otherRes = await db.query(
       `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
               a.external_link, a.category,
-              COALESCE(a.story_hash, a.url_hash) AS story_hash
+              a.url_hash AS story_hash
        FROM rss_articles a
-       LEFT JOIN buffer_posts_log b ON b.story_hash = COALESCE(a.story_hash, a.url_hash)
+       LEFT JOIN buffer_posts_log b ON b.story_hash = a.url_hash
        WHERE b.story_hash IS NULL
-         AND COALESCE(a.story_hash, a.url_hash) IS NOT NULL
+         AND a.url_hash IS NOT NULL
          AND a.category != 'nigerian-news'
        ORDER BY a.is_featured DESC, a.published_at DESC
        LIMIT $1`,
@@ -234,11 +234,11 @@ async function runBufferCron() {
       const fallbackRes = await db.query(
         `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
                 a.external_link, a.category,
-                COALESCE(a.story_hash, a.url_hash) AS story_hash
+                a.url_hash AS story_hash
          FROM rss_articles a
-         LEFT JOIN buffer_posts_log b ON b.story_hash = COALESCE(a.story_hash, a.url_hash)
+         LEFT JOIN buffer_posts_log b ON b.story_hash = a.url_hash
          WHERE b.story_hash IS NULL
-           AND COALESCE(a.story_hash, a.url_hash) IS NOT NULL
+           AND a.url_hash IS NOT NULL
          ORDER BY a.published_at DESC
          LIMIT 20`
       );
