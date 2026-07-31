@@ -1032,7 +1032,7 @@ app.get('/api/articles', async (req, res) => {
             content_type,
             '5 min read' as read_time
           FROM rss_articles 
-          WHERE published_at > NOW() - INTERVAL '2 days'
+          ORDER BY published_at DESC LIMIT 200
         `;
 
         let result;

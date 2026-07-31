@@ -167,18 +167,20 @@ const Index = () => {
         initialNews = await articlesRes.value.json();
       }
 
+      const initialFiltered = (initialNews || []).filter(isNotPunch);
+
       // Reset error state on successful fetch
       setError(null);
 
       // Sort strictly by recency timestamp (newest articles ALWAYS on top)
-      initialFiltered.sort((a, b) => {
+      initialFiltered.sort((a: any, b: any) => {
         const timeA = new Date(a.date || a.created_at || a.published_at || 0).getTime();
         const timeB = new Date(b.date || b.created_at || b.published_at || 0).getTime();
         return timeB - timeA;
       });
 
-      const initialUnique = initialFiltered.filter((v, i, a) => 
-        !loadedStories.some(s => s.id === v.id) && a.findIndex(t => t.title === v.title) === i
+      const initialUnique = initialFiltered.filter((v: any, i: number, a: any[]) => 
+        a.findIndex(t => t.title === v.title) === i
       );
 
       // Set fresh timestamp-sorted articles

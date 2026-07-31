@@ -42,8 +42,10 @@ const Trending: React.FC = () => {
       const endpoints = [
         `/api/articles/trending?diverse=true${qs}`,
         `/api/news/breaking?diverse=true${qs}`,
-        `/api/news/nigerian`,
+        `/api/articles?limit=50`,
+        `/api/news/nigerian-news`,
         `/api/news/world`,
+        `/api/news/sports`,
       ];
 
       const results = await Promise.allSettled(
