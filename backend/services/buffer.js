@@ -223,6 +223,11 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
       body: JSON.stringify(mutation)
     });
 
+    if (res.status === 429) {
+      console.log(`[Buffer] ⏳ Buffer API rate limit reached (15m window). Standing by until window resets.`);
+      return false;
+    }
+
     if (!res.ok) {
       console.error(`[Buffer] API error for profile ${profileId} (${res.status}):`, await res.text());
       return false;

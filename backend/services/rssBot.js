@@ -106,8 +106,8 @@ async function generateDailyDigest() {
 
 // How many posts to keep loaded in Buffer's queue at all times
 const BUFFER_QUEUE_TARGET = 10;
-// Max posts to ADD per cron cycle (2 req/min for AI safety)
-const BUFFER_MAX_PER_CYCLE = 5;
+// Max posts to ADD per cron cycle (2 req/cycle = sustainable for Buffer API 15m rate limit)
+const BUFFER_MAX_PER_CYCLE = 2;
 // Gap between each post in ms — 30s = 2 req/min
 const BUFFER_POST_GAP_MS = 30000;
 
@@ -338,8 +338,8 @@ function initRssBot(sharedPool) {
     }
   });
 
-  // Check Buffer queue every 5 minutes — 5 posts per cycle, keeps Buffer queue at target 10
-  cron.schedule('*/5 * * * *', async () => {
+  // Check Buffer queue every 15 minutes — 2 posts per cycle = sustainable for Buffer API 15m rate limit
+  cron.schedule('*/15 * * * *', async () => {
     await runBufferCron();
   });
 
