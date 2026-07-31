@@ -167,34 +167,22 @@ const Index = () => {
         initialNews = await articlesRes.value.json();
       }
 
-      // Sort by user preferences, location intent & sports priority
-      const getCategoryWeight = (category?: string) => {
-        if (!category) return 0;
-        const c = category.toLowerCase();
-        if (c.includes('sports')) return 10; // High baseline boost for Sports content
-        const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
-        const counts = prefs.counts || {};
-        return (counts[c] || 0) * 2;
-      };
+      // Reset error state on successful fetch
+      setError(null);
 
+      // Sort strictly by recency timestamp (newest articles ALWAYS on top)
       initialFiltered.sort((a, b) => {
-        const weightDiff = getCategoryWeight(b.category) - getCategoryWeight(a.category);
-        if (weightDiff !== 0) return weightDiff;
-        return new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime();
+        const timeA = new Date(a.date || a.created_at || a.published_at || 0).getTime();
+        const timeB = new Date(b.date || b.created_at || b.published_at || 0).getTime();
+        return timeB - timeA;
       });
 
       const initialUnique = initialFiltered.filter((v, i, a) => 
         !loadedStories.some(s => s.id === v.id) && a.findIndex(t => t.title === v.title) === i
       );
 
-      // Sort by user preferences & merge smoothly (new unread stories on top)
-      setAllArticles(prev => {
-        if (prev.length === 0) return initialUnique;
-        const existingTitles = new Set(prev.map(p => p.title?.trim().toLowerCase()));
-        const newUnread = initialUnique.filter(item => !existingTitles.has(item.title?.trim().toLowerCase()));
-        if (newUnread.length === 0) return prev;
-        return [...newUnread, ...prev];
-      });
+      // Set fresh timestamp-sorted articles
+      setAllArticles(initialUnique);
 
       setLoading(false); // Stop main loading indicator once above-the-fold content renders!
 

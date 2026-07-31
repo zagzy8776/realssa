@@ -2297,6 +2297,46 @@ app.get('/api/cron/buffer', async (req, res) => {
   });
 });
 
+// Live Video Streams Endpoint (Prevents 500 errors in HeroSection/VideoNews/Sports)
+app.get('/api/streams/live', async (req, res) => {
+  try {
+    if (!pool) return res.json([]);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS live_streams (
+        id SERIAL PRIMARY KEY,
+        match_id TEXT,
+        match_title TEXT,
+        home_team TEXT,
+        away_team TEXT,
+        stream_url TEXT NOT NULL,
+        stream_type TEXT,
+        quality TEXT,
+        language TEXT,
+        is_live BOOLEAN DEFAULT true,
+        is_verified BOOLEAN DEFAULT false,
+        url_hash TEXT UNIQUE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `).catch(() => {});
+    const result = await pool.query("SELECT * FROM live_streams WHERE is_live = true ORDER BY created_at DESC LIMIT 20");
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error('Error fetching live streams:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/streams', async (req, res) => {
+  try {
+    if (!pool) return res.json([]);
+    const result = await pool.query("SELECT * FROM live_streams ORDER BY created_at DESC LIMIT 30");
+    res.json(result.rows || []);
+  } catch (err) {
+    res.json([]);
+  }
+});
+
 // Sports health endpoint — reports whether the bot can run
 app.get('/api/sports/health', async (req, res) => {
   try {
