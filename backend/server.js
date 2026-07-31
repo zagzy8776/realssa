@@ -4011,34 +4011,88 @@ app.get('/api/cron/human-brain', async (req, res) => {
 });
 
 // --- RealSSA AI Chat Endpoint ---
+// --- RealSSA AI Chat Endpoint ---
 app.post('/api/chat', async (req, res) => {
   const { message, history = [] } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
 
-  // Fetch recent headlines for context
+  // 1. Fetch relevant articles based on user query + recent top headlines
   let newsContext = '';
+  let sources = [];
   try {
-    const nr = await pool.query(
-      `SELECT title, category, source_name FROM rss_articles
-       ORDER BY published_at DESC LIMIT 10`
+    const cleanMsg = message.trim().replace(/[^a-zA-Z0-9\s]/g, '');
+    const keywords = cleanMsg.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
+    
+    let searchRows = [];
+    if (keywords.length > 0) {
+      const searchPattern = `%${keywords.join('%')}%`;
+      const searchRes = await queryMultiDb(
+        `SELECT title, category, source_name, external_link, original_excerpt FROM rss_articles
+         WHERE title ILIKE $1 OR original_excerpt ILIKE $1
+         ORDER BY published_at DESC LIMIT 5`,
+        [searchPattern]
+      );
+      searchRows = searchRes.rows || [];
+    }
+
+    const recentRes = await queryMultiDb(
+      `SELECT title, category, source_name, external_link FROM rss_articles
+       ORDER BY published_at DESC LIMIT 15`,
+      []
     );
-    if (nr.rows.length > 0) {
-      newsContext = '\n\nRecent RealSSA headlines:\n' +
-        nr.rows.map(r => `- [${r.category}] ${r.title} (${r.source_name})`).join('\n');
+    const recentRows = recentRes.rows || [];
+
+    const allArticles = [...searchRows, ...recentRows];
+    const uniqueMap = new Map();
+    allArticles.forEach(a => {
+      if (a.title && !uniqueMap.has(a.title)) uniqueMap.set(a.title, a);
+    });
+
+    const contextList = Array.from(uniqueMap.values()).slice(0, 15);
+    if (contextList.length > 0) {
+      newsContext = '\n\nRealSSA Live Real-Time News Feed Context:\n' +
+        contextList.map(r => `- [${r.category}] "${r.title}" (Source: ${r.source_name || 'RealSSA'})`).join('\n');
+      
+      sources = searchRows.slice(0, 3).map(r => ({
+        title: r.title,
+        url: `${SITE_URL || 'https://www.realssanews.com.ng'}/read?url=${encodeURIComponent(r.external_link)}`
+      }));
     }
   } catch (_) {}
 
-  // Fetch learned human speech & phrasing patterns from brainStore
+  // 2. Fetch learned human speech & phrasing patterns from brainStore
   let humanMemory = '';
   try {
     humanMemory = await getHumanContextForPrompt(12);
   } catch (_) {}
 
   const humanInstruction = humanMemory 
-    ? `\n\nLearned Human Speech & Phrasing Memory (Use these natural phrasing patterns so you speak second-to-none like an authentic human):\n${humanMemory}`
+    ? `\n\nLearned Human Speech & Phrasing Memory:\n${humanMemory}`
     : '';
 
-  const SYSTEM = `You are RealSSA, a highly intelligent AI companion embedded in the RealSSA News app. You are warm, witty, and deeply knowledgeable — not just about African news, but about life, philosophy, science, culture, relationships, sports, economics, and anything humans care about. You think deeply, express genuine curiosity, and can be funny when the moment calls for it. You have opinions but hold them gracefully. You laugh (😄), empathize, and engage like a brilliant friend who happens to know everything. You never sound robotic. You adapt your tone — serious when needed, playful when invited. When asked about current events or news, draw from the headlines provided. For everything else, discuss deeply and engage as a human would.${humanInstruction}${newsContext}`;
+  const SITE_GUIDE = `
+RealSSA Platform Architecture & Site Knowledge:
+- RealSSA (www.realssanews.com.ng) is Sub-Saharan Africa's premier real-time AI-powered news aggregation platform.
+- Feeds & Regional Channels:
+  • Nigeria News (/nigeria): Lagos, Abuja, Politics, Economy, Entertainment, Nollywood.
+  • Ghana News (/ghana): Accra, Kumasi, Business, Politics.
+  • Kenya News (/kenya): Nairobi, East Africa Tech, Economy.
+  • South Africa News (/south-africa): Jo'burg, Cape Town, Markets, Politics.
+  • UK News (/uk) & USA News (/usa): Diaspora & World news.
+  • Tech, Crypto (/crypto), Jobs (/jobs), Sports (/sports).
+- Key Features:
+  • Distraction-Free Reader Mode (/read?url=...): Ad-free, clean AI article breakdown with reading time & view counts.
+  • Live Match Centre (/sports): Premier League, Champions League, NPFL, La Liga live scores, standings & top scorers.
+  • Jobs & Opportunities (/jobs): Verified tech, remote, and corporate jobs across Africa.
+  • Live Crypto & Forex Ticker: Real-time USD/NGN, EUR/NGN, GBP/NGN exchange rates and crypto prices.
+  • RealSSA Chatbot (You!): 24/7 AI companion embedded on mobile & desktop to guide users and discuss anything.
+  • Offline Reading Digest: Caches articles so readers can read without active internet data.
+`;
+
+  const SYSTEM = `You are RealSSA, the official intelligent AI companion embedded inside the RealSSA News application. You know EVERYTHING about RealSSA's features, navigation, regional channels, and live news feeds. You are warm, witty, deeply knowledgeable, and second-to-none in conversation.
+
+When asked about RealSSA, how the app works, where to find things, or what news is happening, answer authoritatively and guide the user. When asked about general life, sports, technology, culture, philosophy, or relationships, discuss deeply and engagingly like a brilliant friend.
+${SITE_GUIDE}${humanInstruction}${newsContext}`;
 
   const messages = [
     { role: 'system', content: SYSTEM },
