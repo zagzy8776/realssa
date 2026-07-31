@@ -240,10 +240,15 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
     }
     if (data?.data?.createPost?.message) {
       const msg = data.data.createPost.message;
+      if (msg.includes('limit reached') || msg.includes('capacity') || msg.includes('scheduled posts')) {
+        console.log(`[Buffer] ℹ️ Buffer Queue full (10/10 scheduled posts in buffer.com queue). Standing by until posts publish.`);
+        return false;
+      }
       console.error(`[Buffer] Post rejected for ${profileId}:`, msg);
-      if (msg.includes('file size limit') && input.assets) {
-        delete input.assets;
-        console.log(`[Buffer] Retrying post without heavy image for ${profileId}...`);
+      if ((msg.includes('file size limit') || msg.includes('Image could not be read') || msg.includes('image') || msg.includes('download')) && input.assets) {
+        // First retry with clean RealSSA logo
+        input.assets = { image: { url: 'https://www.realssanews.com.ng/logo.png' } };
+        console.log(`[Buffer] Retrying post with fallback RealSSA logo image for ${profileId}...`);
         const retryRes = await fetch(BUFFER_API_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
@@ -251,7 +256,21 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
         });
         const retryData = await retryRes.json();
         if (retryData?.data?.createPost?.post?.id) {
-          console.log(`[Buffer] ✅ Retry successful without image for ${profileId}`);
+          console.log(`[Buffer] ✅ Retry successful with fallback image for ${profileId}`);
+          return true;
+        }
+
+        // If fallback image also rejected, retry text-only
+        delete input.assets;
+        console.log(`[Buffer] Retrying post text-only for ${profileId}...`);
+        const textOnlyRes = await fetch(BUFFER_API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
+          body: JSON.stringify({ query: mutation.query, variables: { input } })
+        });
+        const textOnlyData = await textOnlyRes.json();
+        if (textOnlyData?.data?.createPost?.post?.id) {
+          console.log(`[Buffer] ✅ Retry successful (text-only) for ${profileId}`);
           return true;
         }
       }
