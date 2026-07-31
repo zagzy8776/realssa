@@ -16,8 +16,10 @@ const DarkModeToggle: React.FC = () => {
     // Apply dark mode class to document
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
     }
     
     // Save preference to localStorage

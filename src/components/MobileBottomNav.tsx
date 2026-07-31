@@ -28,7 +28,7 @@ const MobileBottomNav = () => {
       <RealSSAChat isOpen={chatOpen} onClose={() => setChatOpen(false)} />
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 bg-[#18141F]/95 backdrop-blur-xl border-t border-white/10 md:hidden shadow-[0_-4px_24px_rgba(0,0,0,0.5)]"
+        className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 dark:bg-[#18141F]/95 backdrop-blur-xl border-t border-border md:hidden shadow-lg"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)' }}
       >
         <div className="flex items-center justify-around h-16 px-1">
