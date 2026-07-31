@@ -19,7 +19,7 @@ const { runMigrations } = require('./worker');
 const { runCrawler } = require('./services/crawlerService');
 const { generateRateCardSvg } = require('./services/rateCard');
 const { getUserBalance, getUserHistory, recordLedgerTransaction, recordShareDwellTime } = require('./services/walletService');
-const { queryMultiDb, queryAllDbs, getPoolForCategory, getAllPools } = require('./config/multiDb');
+const { queryMultiDb, queryAllDbs, getPoolForCategory, getAllPools, pools: contentPools } = require('./config/multiDb');
 const { parseBeaconPayload, bufferTelemetry, initTelemetryFlusher } = require('./services/telemetryService');
 
 // SSRF protection helper
@@ -1035,17 +1035,26 @@ app.get('/api/articles', async (req, res) => {
           ORDER BY published_at DESC LIMIT 200
         `;
 
-        let result;
+        let articlesData = [];
         try {
-          const targetPool = getPoolForCategory('nigerian-news').pool;
-          result = await targetPool.query(queryStr);
-          if (result.rows.length === 0) {
-            result = await queryMultiDb(queryStr);
-          }
+          const dbResults = await Promise.allSettled(
+            (contentPools || []).map(p => p.pool.query(queryStr))
+          );
+          const seenIds = new Set();
+          dbResults.forEach(r => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value.rows)) {
+              r.value.rows.forEach(row => {
+                if (!seenIds.has(row.id)) {
+                  seenIds.add(row.id);
+                  articlesData.push(row);
+                }
+              });
+            }
+          });
         } catch (mErr) {
-          result = await queryMultiDb(queryStr);
+          const fallbackRes = await queryMultiDb(queryStr);
+          articlesData = fallbackRes.rows || [];
         }
-        let articlesData = result.rows;
 
         // In-memory personalization and sorting
         if (deviceId && Object.keys(affinitiesMap).length > 0) {
