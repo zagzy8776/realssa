@@ -173,65 +173,40 @@ async function runBufferCron() {
   }
 
   try {
-    console.log(`[Buffer Cron] Starting Buffer post cycle...`);
-
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS buffer_posts_log (
-        id SERIAL PRIMARY KEY,
-        story_hash TEXT UNIQUE,
-        posted_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-
-    // Check how many posts are already queued in Buffer
-    const queueCount = await getBufferQueueCount();
-    const toAdd = Math.max(0, BUFFER_QUEUE_TARGET - queueCount);
-
-    if (toAdd === 0) {
-      console.log(`[Buffer Cron] Queue already has ${queueCount} posts. Nothing to add.`);
+    // Acquire PostgreSQL advisory lock to ensure only 1 worker runs Buffer top-up at a time
+    const lockRes = await db.query(`SELECT pg_try_advisory_lock(888777) AS acquired`);
+    if (!lockRes.rows[0]?.acquired) {
+      console.log('[Buffer Cron] Another worker is running Buffer top-up. Skipping concurrent execution.');
       return;
     }
 
-    console.log(`[Buffer Cron] Queue has ${queueCount} posts. Topping up with ${toAdd} more...`);
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS buffer_posts_log (
+          id SERIAL PRIMARY KEY,
+          story_hash TEXT UNIQUE,
+          title_clean TEXT,
+          posted_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+      await db.query(`ALTER TABLE buffer_posts_log ADD COLUMN IF NOT EXISTS title_clean TEXT`).catch(() => {});
 
-    // Balanced selection: guarantees 50% Nigerian news mix in Buffer queue
-    const ngnLimit = Math.ceil(BUFFER_MAX_PER_CYCLE / 2); // 1 for Nigerian news
-    const otherLimit = BUFFER_MAX_PER_CYCLE - ngnLimit;  // 1 for World/Sports/Other
+      // Check how many posts are already queued in Buffer
+      const queueCount = await getBufferQueueCount();
+      const toAdd = Math.max(0, BUFFER_QUEUE_TARGET - queueCount);
 
-    const ngnRes = await db.query(
-      `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
-              a.external_link, a.category,
-              a.url_hash AS story_hash
-       FROM rss_articles a
-       LEFT JOIN buffer_posts_log b ON b.story_hash = a.url_hash
-       WHERE b.story_hash IS NULL
-         AND a.url_hash IS NOT NULL
-         AND a.category = 'nigerian-news'
-       ORDER BY a.published_at DESC
-       LIMIT $1`,
-      [ngnLimit]
-    );
+      if (toAdd === 0) {
+        console.log(`[Buffer Cron] Queue already has ${queueCount} posts. Nothing to add.`);
+        return;
+      }
 
-    const otherRes = await db.query(
-      `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
-              a.external_link, a.category,
-              a.url_hash AS story_hash
-       FROM rss_articles a
-       LEFT JOIN buffer_posts_log b ON b.story_hash = a.url_hash
-       WHERE b.story_hash IS NULL
-         AND a.url_hash IS NOT NULL
-         AND a.category != 'nigerian-news'
-       ORDER BY a.is_featured DESC, a.published_at DESC
-       LIMIT $1`,
-      [otherLimit]
-    );
+      console.log(`[Buffer Cron] Queue has ${queueCount} posts. Topping up with ${toAdd} more...`);
 
-    let articlesToProcess = [...ngnRes.rows, ...otherRes.rows];
+      // Balanced selection: guarantees 50% Nigerian news mix in Buffer queue
+      const ngnLimit = Math.ceil(BUFFER_MAX_PER_CYCLE / 2); // 3 for Nigerian news
+      const otherLimit = BUFFER_MAX_PER_CYCLE - ngnLimit;  // 2 for World/Sports/Other
 
-    // Fallback: fill remaining slots if either query returned fewer articles
-    if (articlesToProcess.length < BUFFER_MAX_PER_CYCLE) {
-      const alreadyPickedHashes = new Set(articlesToProcess.map(a => a.story_hash));
-      const fallbackRes = await db.query(
+      const ngnRes = await db.query(
         `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
                 a.external_link, a.category,
                 a.url_hash AS story_hash
@@ -239,43 +214,95 @@ async function runBufferCron() {
          LEFT JOIN buffer_posts_log b ON b.story_hash = a.url_hash
          WHERE b.story_hash IS NULL
            AND a.url_hash IS NOT NULL
+           AND a.category = 'nigerian-news'
          ORDER BY a.published_at DESC
-         LIMIT 20`
+         LIMIT $1`,
+        [ngnLimit]
       );
 
-      for (const row of fallbackRes.rows) {
-        if (!alreadyPickedHashes.has(row.story_hash)) {
-          articlesToProcess.push(row);
-          alreadyPickedHashes.add(row.story_hash);
-          if (articlesToProcess.length >= BUFFER_MAX_PER_CYCLE) break;
+      const otherRes = await db.query(
+        `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
+                a.external_link, a.category,
+                a.url_hash AS story_hash
+         FROM rss_articles a
+         LEFT JOIN buffer_posts_log b ON b.story_hash = a.url_hash
+         WHERE b.story_hash IS NULL
+           AND a.url_hash IS NOT NULL
+           AND a.category != 'nigerian-news'
+         ORDER BY a.is_featured DESC, a.published_at DESC
+         LIMIT $1`,
+        [otherLimit]
+      );
+
+      let articlesToProcess = [...ngnRes.rows, ...otherRes.rows];
+
+      // Fallback: fill remaining slots if either query returned fewer articles
+      if (articlesToProcess.length < BUFFER_MAX_PER_CYCLE) {
+        const alreadyPickedHashes = new Set(articlesToProcess.map(a => a.story_hash));
+        const fallbackRes = await db.query(
+          `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
+                  a.external_link, a.category,
+                  a.url_hash AS story_hash
+           FROM rss_articles a
+           LEFT JOIN buffer_posts_log b ON b.story_hash = a.url_hash
+           WHERE b.story_hash IS NULL
+             AND a.url_hash IS NOT NULL
+           ORDER BY a.published_at DESC
+           LIMIT 20`
+        );
+
+        for (const row of fallbackRes.rows) {
+          if (!alreadyPickedHashes.has(row.story_hash)) {
+            articlesToProcess.push(row);
+            alreadyPickedHashes.add(row.story_hash);
+            if (articlesToProcess.length >= BUFFER_MAX_PER_CYCLE) break;
+          }
         }
       }
-    }
 
-    if (articlesToProcess.length === 0) {
-      console.log(`[Buffer Cron] No unposted articles found.`);
-      return;
-    }
-
-    console.log(`[Buffer Cron] Processing ${articlesToProcess.length} articles this cycle (Categories: ${articlesToProcess.map(a => a.category).join(', ')}).`);
-
-    for (const article of articlesToProcess) {
-      const excerpt = article.ai_summary || article.original_excerpt || '';
-      const hooks = await generateSocialHooks(article.title, excerpt);
-
-      const link = `${SITE_URL}/read?url=${encodeURIComponent(article.external_link)}`;
-      const success = await postToBuffer(hooks, link, article.image, false);
-
-      if (success) {
-        await db.query(
-          `INSERT INTO buffer_posts_log (story_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
-          [article.story_hash]
-        );
-        console.log(`[Buffer Cron] ✅ Queued: "${article.title.slice(0, 60)}"`);
+      if (articlesToProcess.length === 0) {
+        console.log(`[Buffer Cron] No unposted articles found.`);
+        return;
       }
 
-      // 30s gap = 2 req/min, safe for all AI providers
-      await new Promise(r => setTimeout(r, BUFFER_POST_GAP_MS));
+      console.log(`[Buffer Cron] Processing ${articlesToProcess.length} articles this cycle (Categories: ${articlesToProcess.map(a => a.category).join(', ')}).`);
+
+      for (const article of articlesToProcess) {
+        const cleanTitle = article.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        const first5Words = cleanTitle.split(' ').slice(0, 5).join(' ');
+
+        // Deduplication check across similar titles
+        const dupCheck = await db.query(
+          `SELECT id FROM buffer_posts_log WHERE title_clean = $1 OR (title_clean IS NOT NULL AND title_clean LIKE $2) LIMIT 1`,
+          [cleanTitle, `${first5Words}%`]
+        );
+
+        if (dupCheck.rows.length > 0) {
+          console.log(`[Buffer Cron] ⏭️ Skipping duplicate title: "${article.title.slice(0, 50)}..."`);
+          // Mark hash as posted so we don't inspect it again
+          await db.query(`INSERT INTO buffer_posts_log (story_hash, title_clean) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [article.story_hash, cleanTitle]).catch(() => {});
+          continue;
+        }
+
+        const excerpt = article.ai_summary || article.original_excerpt || '';
+        const hooks = await generateSocialHooks(article.title, excerpt);
+
+        const link = `${SITE_URL}/read?url=${encodeURIComponent(article.external_link)}`;
+        const success = await postToBuffer(hooks, link, article.image, false);
+
+        if (success) {
+          await db.query(
+            `INSERT INTO buffer_posts_log (story_hash, title_clean) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [article.story_hash, cleanTitle]
+          );
+          console.log(`[Buffer Cron] ✅ Queued: "${article.title.slice(0, 60)}"`);
+        }
+
+        // 30s gap = 2 req/min, safe for all AI providers
+        await new Promise(r => setTimeout(r, BUFFER_POST_GAP_MS));
+      }
+    } finally {
+      await db.query(`SELECT pg_advisory_unlock(888777)`).catch(() => {});
     }
   } catch (err) {
     console.error('[Buffer Cron] Error:', err.message);
