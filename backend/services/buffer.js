@@ -229,7 +229,15 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
     }
 
     const data = await res.json();
-    if (data.errors) { console.error(`[Buffer] GraphQL errors for ${profileId}:`, JSON.stringify(data.errors)); return false; }
+    if (data.errors) {
+      const errMsg = JSON.stringify(data.errors);
+      if (errMsg.includes('capacity') || errMsg.includes('limit') || errMsg.includes('maximum') || errMsg.includes('full')) {
+        console.log(`[Buffer] Queue at full capacity for profile ${profileId}. Standing by for human approval on buffer.com.`);
+        return false;
+      }
+      console.error(`[Buffer] GraphQL errors for ${profileId}:`, errMsg);
+      return false;
+    }
     if (data?.data?.createPost?.message) {
       const msg = data.data.createPost.message;
       console.error(`[Buffer] Post rejected for ${profileId}:`, msg);

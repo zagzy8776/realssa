@@ -599,6 +599,10 @@ const Header = () => {
                       e.preventDefault();
                       goToSuggestion(s);
                     }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      goToSuggestion(s);
+                    }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-amber-500/10 transition-colors text-left group border-b border-border/10 last:border-0"
                   >
                     {s.isSearch ? (
@@ -623,6 +627,15 @@ const Header = () => {
             )}
           </div>
         </div>
+
+        {/* Mobile Drawer Dimmed Backdrop */}
+        {isMenuOpen && (
+          <div
+            onClick={() => setIsMenuOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] transition-opacity duration-300 animate-in fade-in cursor-pointer"
+            aria-hidden="true"
+          />
+        )}
 
         {/* Universal Navigation Drawer - Sleek Slide-out style */}
         <nav

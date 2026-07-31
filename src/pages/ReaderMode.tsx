@@ -225,10 +225,10 @@ const ReaderMode = () => {
           )}
         </div>
 
-        {fallbackImage && !imgError && (
+        {fallbackImage && (
           <div className="w-full aspect-video rounded-2xl overflow-hidden mb-10 shadow-2xl bg-muted">
             <img 
-              src={fallbackImage} 
+              src={imgError ? 'https://www.realssanews.com.ng/logo.png' : fallbackImage} 
               alt={article.title} 
               className="w-full h-full object-cover" 
               onError={() => setImgError(true)}

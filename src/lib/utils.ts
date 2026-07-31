@@ -27,3 +27,19 @@ export function decodeHTMLEntities(text: string): string {
     return text;
   }
 }
+
+export function safeLocalStorageSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err: any) {
+    if (err?.name === 'QuotaExceededError' || err?.code === 22) {
+      try {
+        localStorage.removeItem('realssa_offline_digest');
+        localStorage.removeItem('realssa_browser_history');
+        localStorage.setItem(key, value);
+      } catch (retryErr) {
+        console.warn('LocalStorage quota exceeded:', retryErr);
+      }
+    }
+  }
+}
