@@ -59,6 +59,11 @@ const ReaderMode = () => {
       return;
     }
 
+    // Instantly scroll to top when a recommended article is clicked
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
     const extractArticle = async () => {
       try {
         setLoading(true);

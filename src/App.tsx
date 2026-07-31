@@ -80,12 +80,14 @@ const FeedWatermarkWrapper = () => {
   return null; // Disabled watermark background overlay to resolve UX/aesthetic issue
 };
 
-// Scroll to top on every route change (fixes pages starting from bottom on navigation)
+// Scroll to top on every route or search param change (fixes recommended articles opening from bottom)
 const ScrollToTop = () => {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, [pathname]);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [pathname, search]);
   return null;
 };
 
