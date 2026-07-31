@@ -230,7 +230,25 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
 
     const data = await res.json();
     if (data.errors) { console.error(`[Buffer] GraphQL errors for ${profileId}:`, JSON.stringify(data.errors)); return false; }
-    if (data?.data?.createPost?.message) { console.error(`[Buffer] Post rejected for ${profileId}:`, data.data.createPost.message); return false; }
+    if (data?.data?.createPost?.message) {
+      const msg = data.data.createPost.message;
+      console.error(`[Buffer] Post rejected for ${profileId}:`, msg);
+      if (msg.includes('file size limit') && input.assets) {
+        delete input.assets;
+        console.log(`[Buffer] Retrying post without heavy image for ${profileId}...`);
+        const retryRes = await fetch(BUFFER_API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
+          body: JSON.stringify({ query: mutation.query, variables: { input } })
+        });
+        const retryData = await retryRes.json();
+        if (retryData?.data?.createPost?.post?.id) {
+          console.log(`[Buffer] ✅ Retry successful without image for ${profileId}`);
+          return true;
+        }
+      }
+      return false;
+    }
 
     return true;
   } catch (err) {

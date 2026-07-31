@@ -153,11 +153,29 @@ async function getBufferQueueCount() {
   }
 }
 
+function getDbPool() {
+  if (pool) return pool;
+  try {
+    const { pools } = require('../config/multiDb');
+    if (pools && pools[0] && pools[0].pool) {
+      pool = pools[0].pool;
+      return pool;
+    }
+  } catch (e) {}
+  return null;
+}
+
 async function runBufferCron() {
+  const db = getDbPool();
+  if (!db) {
+    console.error('[Buffer Cron] Failed: Database pool unavailable.');
+    return;
+  }
+
   try {
     console.log(`[Buffer Cron] Starting Buffer post cycle...`);
 
-    await pool.query(`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS buffer_posts_log (
         id SERIAL PRIMARY KEY,
         story_hash TEXT UNIQUE,
@@ -180,7 +198,7 @@ async function runBufferCron() {
     const ngnLimit = Math.ceil(BUFFER_MAX_PER_CYCLE / 2); // 1 for Nigerian news
     const otherLimit = BUFFER_MAX_PER_CYCLE - ngnLimit;  // 1 for World/Sports/Other
 
-    const ngnRes = await pool.query(
+    const ngnRes = await db.query(
       `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
               a.external_link, a.category,
               COALESCE(a.story_hash, a.url_hash) AS story_hash
@@ -194,7 +212,7 @@ async function runBufferCron() {
       [ngnLimit]
     );
 
-    const otherRes = await pool.query(
+    const otherRes = await db.query(
       `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
               a.external_link, a.category,
               COALESCE(a.story_hash, a.url_hash) AS story_hash
@@ -213,7 +231,7 @@ async function runBufferCron() {
     // Fallback: fill remaining slots if either query returned fewer articles
     if (articlesToProcess.length < BUFFER_MAX_PER_CYCLE) {
       const alreadyPickedHashes = new Set(articlesToProcess.map(a => a.story_hash));
-      const fallbackRes = await pool.query(
+      const fallbackRes = await db.query(
         `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
                 a.external_link, a.category,
                 COALESCE(a.story_hash, a.url_hash) AS story_hash
@@ -249,7 +267,7 @@ async function runBufferCron() {
       const success = await postToBuffer(hooks, link, article.image);
 
       if (success) {
-        await pool.query(
+        await db.query(
           `INSERT INTO buffer_posts_log (story_hash) VALUES ($1) ON CONFLICT DO NOTHING`,
           [article.story_hash]
         );
@@ -269,12 +287,25 @@ function initRssBot(sharedPool) {
   pool = sharedPool;
   console.log('🤖 RSS Aggregation Bot initialized. Running on Fly.io...');
 
-  // Run every 20 minutes continuously
-  cron.schedule('*/20 * * * *', async () => {
+  // Trigger initial Buffer post cycle on startup after 10s delay
+  setTimeout(async () => {
+    try {
+      console.log('[Buffer Startup] Initializing automatic Buffer post cycle...');
+      await runBufferCron();
+    } catch (err) {
+      console.error('[Buffer Startup] Error:', err.message);
+    }
+  }, 10000);
+
+  // Run every 15 minutes continuously
+  cron.schedule('*/15 * * * *', async () => {
     try {
       console.log(`[${new Date().toISOString()}] Starting scheduled RSS ingestion cycle...`);
       const results = await ingestAllFeeds(pool, rssParser);
-      console.log(`[${new Date().toISOString()}] Cycle complete. Added ${results.newCount} articles.`);
+      console.log(`[${new Date().toISOString()}] Cycle complete. Added ${results?.newCount || 0} articles.`);
+
+      // Automatically trigger Buffer social post cycle after RSS ingestion
+      await runBufferCron();
     } catch (err) {
       console.error('RSS Bot encountered an error during cycle:', err.message);
     }
