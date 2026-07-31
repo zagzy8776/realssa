@@ -69,7 +69,6 @@ class NotificationService {
       large_icon: LOGO_URL,
       firefox_icon: LOGO_URL,
       android_accent_color: 'FFE63946',
-      collapse_id: category || 'general',
       ...(priority !== undefined && { priority }),
       ...(image && {
         big_picture: image,
