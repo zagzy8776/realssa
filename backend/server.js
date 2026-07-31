@@ -1244,15 +1244,16 @@ app.get('/api/articles/trending', async (req, res) => {
             SELECT 'rss-' || id AS id,
                    title,
                    COALESCE(ai_summary, original_excerpt) AS excerpt,
-                   category, image, source_name AS author,
+                   category, COALESCE(NULLIF(image, ''), 'https://realssanews.com.ng/logo.png') AS image,
+                   source_name AS author,
                    external_link, published_at AS date, content_type,
                    '5 min read' AS read_time,
                    published_at,
-                   ROW_NUMBER() OVER (PARTITION BY source_name ORDER BY published_at DESC) AS rn
+                   ROW_NUMBER() OVER (PARTITION BY category ORDER BY published_at DESC) AS rn
             FROM rss_articles
-            WHERE image IS NOT NULL AND image != '' ${excludeClause} ${categoryClause}
+            WHERE 1=1 ${excludeClause} ${categoryClause}
           ) t
-          WHERE t.rn <= 2
+          WHERE t.rn <= 5
           ORDER BY ${orderBy}
           LIMIT $1 OFFSET $2
         `;
@@ -1261,11 +1262,12 @@ app.get('/api/articles/trending', async (req, res) => {
           SELECT 'rss-' || id AS id,
                  title,
                  COALESCE(ai_summary, original_excerpt) AS excerpt,
-                 category, image, source_name AS author,
+                 category, COALESCE(NULLIF(image, ''), 'https://realssanews.com.ng/logo.png') AS image,
+                 source_name AS author,
                  external_link, published_at AS date, content_type,
                  '5 min read' AS read_time
           FROM rss_articles
-          WHERE image IS NOT NULL AND image != '' ${excludeClause} ${categoryClause}
+          WHERE 1=1 ${excludeClause} ${categoryClause}
           ORDER BY ${orderBy}
           LIMIT $1 OFFSET $2
         `;
