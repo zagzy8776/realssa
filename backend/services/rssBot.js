@@ -264,7 +264,7 @@ async function runBufferCron() {
       const hooks = await generateSocialHooks(article.title, excerpt);
 
       const link = `${SITE_URL}/read?url=${encodeURIComponent(article.external_link)}`;
-      const success = await postToBuffer(hooks, link, article.image);
+      const success = await postToBuffer(hooks, link, article.image, true);
 
       if (success) {
         await db.query(

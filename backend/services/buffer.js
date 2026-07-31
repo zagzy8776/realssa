@@ -116,7 +116,7 @@ async function getBufferProfiles() {
  * @param {boolean} [now]     - If true, post immediately; if false, add to Buffer queue
  * @returns {Promise<boolean>} true on success
  */
-async function postToBuffer(hooks, link, imageUrl, now = false) {
+async function postToBuffer(hooks, link, imageUrl, now = true) {
   if (!isBufferConfigured()) {
     console.log('[Buffer] Not configured — skipping social post.');
     return false;
