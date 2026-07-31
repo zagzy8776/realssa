@@ -4,12 +4,21 @@
  * in-memory/Redis before flushing via bulk INSERT to PostgreSQL.
  */
 
-const { fetchWithTimeout } = require('../lib/fetchWithTimeout');
-
 // In-memory queue fallback if UPSTASH_REDIS_REST_URL is not set
 const memoryBuffer = [];
 const MAX_BUFFER_SIZE = 1000;
 let flusherInterval = null;
+
+/**
+ * Helper: fetch with AbortSignal timeout
+ */
+async function fetchWithTimeout(url, options = {}) {
+  const { timeoutMs = 5000, ...fetchOpts } = options;
+  return fetch(url, {
+    ...fetchOpts,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
 
 /**
  * Parses raw request body from navigator.sendBeacon Blob text stream safely
