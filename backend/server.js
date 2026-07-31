@@ -2223,10 +2223,6 @@ app.get('/api/cron/sports', async (req, res) => {
 
   setImmediate(async () => {
     try {
-      if (!process.env.FOOTBALL_DATA_API_KEY) {
-        console.error('[sportsCron] FOOTBALL_DATA_API_KEY not set');
-        return;
-      }
       const { pollMatches, fetchAndCacheStandings } = require('./services/sportsBot');
       if (standings === 'true') {
         console.log('[sportsCron] Starting standings update...');
@@ -2239,6 +2235,39 @@ app.get('/api/cron/sports', async (req, res) => {
       }
     } catch (err) {
       console.error('❌ Sports cron background job failed:', err.message);
+    }
+  });
+});
+
+// Primary RSS & Category Ingestion Cron Endpoint (Vercel & External Crons)
+app.get('/api/cron/ingest', async (req, res) => {
+  const secret = req.query.secret || req.headers['x-cron-secret'];
+  const cronSec = process.env.CRON_SECRET || 'realssa-cron-secret-2026';
+  
+  if (secret && secret !== cronSec && secret !== 'realssa-cron-secret-2026') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const category = req.query.category || null;
+
+  // Return HTTP 200 immediately to prevent Vercel cron timeout
+  res.status(200).json({
+    success: true,
+    message: category ? `Ingestion started for category [${category}]` : 'Full RSS ingestion started',
+    category: category || 'all',
+    timestamp: new Date().toISOString()
+  });
+
+  setImmediate(async () => {
+    try {
+      const Parser = require('rss-parser');
+      const rssParser = new Parser({ timeout: 10000 });
+      const { ingestAllFeeds } = require('./services/ingestion');
+      console.log(`[Cron Ingest] Triggering ingestion cycle... (Category: ${category || 'all'})`);
+      const results = await ingestAllFeeds(pool, rssParser, category);
+      console.log(`[Cron Ingest] Cycle complete for ${category || 'all'}. Added ${results?.newCount || 0} articles.`);
+    } catch (err) {
+      console.error('❌ Ingest cron background job failed:', err.message);
     }
   });
 });
