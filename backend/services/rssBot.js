@@ -172,7 +172,7 @@ async function runBufferCron() {
   const db = getDbPool();
   if (!db) {
     console.error('[Buffer Cron] Failed: Database pool unavailable.');
-    return;
+    return { ok: false, status: 503, code: 'DATABASE_UNAVAILABLE', message: 'Database pool unavailable.' };
   }
 
   try {
@@ -180,7 +180,7 @@ async function runBufferCron() {
     const lockRes = await db.query(`SELECT pg_try_advisory_lock(888777) AS acquired`);
     if (!lockRes.rows[0]?.acquired) {
       console.log('[Buffer Cron] Another worker is running Buffer top-up. Skipping concurrent execution.');
-      return;
+      return { ok: true, skipped: true, message: 'Another Buffer cycle is already running.' };
     }
 
     try {
@@ -200,7 +200,7 @@ async function runBufferCron() {
 
       if (toAdd === 0) {
         console.log(`[Buffer Cron] Queue already has ${queueCount} posts. Nothing to add.`);
-        return;
+        return { ok: true, queued: 0, message: `Buffer queue already has ${queueCount} posts.` };
       }
 
       console.log(`[Buffer Cron] Queue has ${queueCount} posts. Topping up with ${toAdd} more...`);
@@ -265,11 +265,12 @@ async function runBufferCron() {
 
       if (articlesToProcess.length === 0) {
         console.log(`[Buffer Cron] No unposted articles found.`);
-        return;
+        return { ok: true, queued: 0, message: 'No unposted articles found.' };
       }
 
       console.log(`[Buffer Cron] Processing ${articlesToProcess.length} articles this cycle (Categories: ${articlesToProcess.map(a => a.category).join(', ')}).`);
 
+      let queued = 0;
       for (const article of articlesToProcess) {
         const cleanTitle = article.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
         const first5Words = cleanTitle.split(' ').slice(0, 5).join(' ');
@@ -298,17 +299,25 @@ async function runBufferCron() {
             `INSERT INTO buffer_posts_log (story_hash, title_clean) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
             [article.story_hash, cleanTitle]
           );
+          queued += 1;
           console.log(`[Buffer Cron] ✅ Queued: "${article.title.slice(0, 60)}"`);
         }
 
         // 30s gap = 2 req/min, safe for all AI providers
         await new Promise(r => setTimeout(r, BUFFER_POST_GAP_MS));
       }
+      return { ok: true, queued, attempted: articlesToProcess.length };
     } finally {
       await db.query(`SELECT pg_advisory_unlock(888777)`).catch(() => {});
     }
   } catch (err) {
     console.error('[Buffer Cron] Error:', err.message);
+    return {
+      ok: false,
+      status: err.status || 500,
+      code: err.code || 'BUFFER_CRON_FAILED',
+      message: err.message,
+    };
   }
 }
 

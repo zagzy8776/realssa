@@ -2320,13 +2320,14 @@ app.get('/api/cron/buffer', async (req, res) => {
     // so this must be awaited instead of being left in a background callback.
     const { runBufferCron } = require('./services/rssBot');
     console.log('[Cron Buffer] Triggering Buffer posting cycle...');
-    await runBufferCron();
+    const result = await runBufferCron();
     console.log('[Cron Buffer] Cycle complete.');
 
-    return res.status(200).json({
-      success: true,
-      message: 'Buffer social post cycle completed',
-      timestamp: new Date().toISOString()
+    return res.status(result?.status || 200).json({
+      success: result?.ok !== false,
+      message: result?.message || 'Buffer social post cycle completed',
+      result,
+      timestamp: new Date().toISOString(),
     });
   } catch (err) {
     console.error('❌ Buffer cron job failed:', err.message);

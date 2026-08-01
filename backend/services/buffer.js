@@ -13,6 +13,15 @@ const BUFFER_PROFILE_IDS  = process.env.BUFFER_PROFILE_IDS  || process.env.BUFFE
 
 const BUFFER_API_ENDPOINT = 'https://api.buffer.com/graphql';
 
+class BufferRateLimitError extends Error {
+  constructor() {
+    super('Buffer API rate limit reached. Try again after Buffer\'s 24-hour window resets.');
+    this.name = 'BufferRateLimitError';
+    this.code = 'BUFFER_RATE_LIMITED';
+    this.status = 429;
+  }
+}
+
 /**
  * Check if Buffer is configured with valid credentials.
  * @returns {boolean}
@@ -146,9 +155,16 @@ async function postToBuffer(hooks, link, imageUrl, now = false) {
 
   const succeeded = results.filter(r => r.status === 'fulfilled' && r.value).length;
   const failed    = results.length - succeeded;
+  const rateLimitFailure = results.find(
+    result => result.status === 'rejected' && result.reason?.code === 'BUFFER_RATE_LIMITED'
+  );
 
   if (succeeded > 0) console.log(`[Buffer] ✅ Posted to ${succeeded}/${profileIds.length} profiles.`);
   if (failed > 0)    console.warn(`[Buffer] ⚠️ Failed for ${failed}/${profileIds.length} profiles.`);
+
+  // Do not let a caller report a successful cron run when Buffer refused every
+  // post because its API quota has been exhausted.
+  if (succeeded === 0 && rateLimitFailure) throw rateLimitFailure.reason;
 
   return succeeded > 0;
 }
@@ -225,7 +241,7 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
 
     if (res.status === 429) {
       console.log(`[Buffer] ⏳ Buffer API rate limit reached (15m window). Standing by until window resets.`);
-      return false;
+      throw new BufferRateLimitError();
     }
 
     if (!res.ok) {
