@@ -12,7 +12,7 @@ const DB_CONFIGS = [
     id: 2,
     name: 'DB2 (Sweet Field)',
     url: process.env.DATABASE_URL_2 || 'postgresql://neondb_owner:npg_LXS6rJEbRCl2@ep-sweet-field-azj0x1ei.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
-    categories: ['crypto', 'entertainment', 'culture', 'movies', 'lifestyle']
+    categories: ['crypto', 'entertainment', 'culture', 'lifestyle']
   },
   {
     id: 3,
@@ -25,6 +25,24 @@ const DB_CONFIGS = [
     name: 'DB4 (Icy Glitter)',
     url: process.env.DATABASE_URL_4 || 'postgresql://neondb_owner:npg_PLk86fymaGsx@ep-icy-glitter-az3nsoqd.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
     categories: ['ghana', 'kenya', 'south-africa', 'jobs', 'tech']
+  },
+  {
+    id: 6,
+    name: 'DB6 (Cinema Movies)',
+    url: process.env.NEON_DATABASE_URL_1 || process.env.DATABASE_URL,
+    categories: ['movies', 'cinema-movies']
+  },
+  {
+    id: 7,
+    name: 'DB7 (Cinema Shows)',
+    url: process.env.NEON_DATABASE_URL_2 || process.env.DATABASE_URL,
+    categories: ['shows', 'series', 'episodes']
+  },
+  {
+    id: 8,
+    name: 'DB8 (Cinema Sources)',
+    url: process.env.NEON_DATABASE_URL_3 || process.env.DATABASE_URL,
+    categories: ['video_sources', 'stream_links']
   }
 ];
 

@@ -1,3 +1,4 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -242,6 +243,7 @@ const allowedOrigins = [
   'https://realssa.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000',
+  'http://localhost:8080',
   'http://localhost',
   'https://localhost',
   'capacitor://localhost'
@@ -313,6 +315,9 @@ app.use('/api/auth/login', authLimiter);
 // Public Syndication API & RSS Feed Syndication Endpoints
 const { generateRSSFeedFromDB } = require('./rss-generator');
 app.use('/api/v1', require('./routes/publicApi'));
+
+// Cinema Hub & Video Streaming Platform Routes
+app.use('/api/cinema', require('./routes/cinema'));
 
 app.get(['/rss.xml', '/rss/:category.xml'], async (req, res) => {
   const category = (req.params.category || 'latest').replace('.xml', '');
