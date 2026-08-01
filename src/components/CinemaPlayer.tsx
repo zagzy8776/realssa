@@ -46,8 +46,24 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
     );
   }
 
-  const isHls = activeSource.type === 'hls' || activeSource.url.includes('.m3u8');
-  const hlsProxyUrl = isHls ? apiUrl(`/api/cinema/proxy-stream?url=${encodeURIComponent(activeSource.url)}`) : activeSource.url;
+  const [proxyMode, setProxyMode] = useState<'direct' | 'backend' | 'corsproxy' | 'allorigins'>('direct');
+
+  const getActiveStreamUrl = () => {
+    if (!activeSource) return '';
+    if (proxyMode === 'backend') {
+      return apiUrl(`/api/cinema/proxy-stream?url=${encodeURIComponent(activeSource.url)}`);
+    }
+    if (proxyMode === 'corsproxy') {
+      return `https://corsproxy.io/?url=${encodeURIComponent(activeSource.url)}`;
+    }
+    if (proxyMode === 'allorigins') {
+      return `https://api.allorigins.win/raw?url=${encodeURIComponent(activeSource.url)}`;
+    }
+    return activeSource.url;
+  };
+
+  const currentStreamUrl = getActiveStreamUrl();
+  const isHls = activeSource.type === 'hls' || activeSource.url.includes('.m3u8') || proxyMode === 'backend';
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4">
@@ -62,7 +78,7 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
           <div className="flex flex-col min-w-0">
             <span className="text-[10px] uppercase font-extrabold tracking-wider text-amber-500 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              {isHls ? 'Direct HLS Stream' : 'Live Stream Mirror'}
+              {isHls ? 'Direct HLS Stream' : `Stream Mode: ${proxyMode.toUpperCase()}`}
             </span>
             <h3 className="text-white text-sm sm:text-base font-extrabold truncate drop-shadow max-w-[250px] sm:max-w-md">
               {title}
@@ -88,9 +104,9 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
         {/* Video Player Main Area */}
         <div className="flex-1 w-full h-full relative bg-black flex items-center justify-center">
           {isHls ? (
-            <HlsPlayer src={hlsProxyUrl} className="w-full h-full" />
+            <HlsPlayer src={currentStreamUrl} className="w-full h-full" />
           ) : (
-            <SandboxedIframe src={activeSource.url} className="w-full h-full" />
+            <SandboxedIframe src={currentStreamUrl} className="w-full h-full" />
           )}
 
           {/* Buffering or Mirror switch helper overlay banner */}
@@ -99,7 +115,7 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
               <div className="flex items-center gap-2 text-left">
                 <Zap size={16} className="text-amber-400 shrink-0 animate-bounce" />
                 <p className="text-[11px] font-bold text-amber-200">
-                  Slow buffer? Switch to another server below!
+                  Slow buffer? Try changing Proxy Mode or Server below!
                 </p>
               </div>
               <button 
@@ -113,39 +129,63 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
         </div>
 
         {/* Footer Info & Multi-Server Selector Bar */}
-        <div className="p-3 sm:p-4 bg-gradient-to-t from-black/95 to-zinc-950/90 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 z-40">
+        <div className="p-3 sm:p-4 bg-gradient-to-t from-black/95 to-zinc-950/90 border-t border-white/10 flex flex-col gap-2.5 z-40">
           
-          {/* Server Switcher Pill Buttons */}
-          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0 no-scrollbar">
-            <span className="text-[10px] uppercase font-extrabold text-zinc-500 flex items-center gap-1 shrink-0">
-              <Server size={12} /> Server:
+          {/* Row 1: Proxy Mode Selector */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            <span className="text-[10px] uppercase font-extrabold text-amber-400 flex items-center gap-1 shrink-0">
+              <RefreshCw size={12} /> Proxy Mode:
             </span>
-            {sources.map((src, index) => (
+            {[
+              { id: 'direct', label: 'Direct (Standard)' },
+              { id: 'backend', label: 'Backend Proxy' },
+              { id: 'corsproxy', label: 'CorsProxy.io' },
+              { id: 'allorigins', label: 'AllOrigins API' }
+            ].map(pm => (
               <button
-                key={index}
-                onClick={() => {
-                  setActiveIdx(index);
-                  setIsBufferingNotice(false);
-                }}
-                className={`px-3 py-1 rounded-full text-[10px] font-extrabold transition-all duration-200 shrink-0 flex items-center gap-1.5 ${
-                  activeIdx === index
-                    ? 'bg-amber-500 text-black shadow-md scale-105'
-                    : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                key={pm.id}
+                onClick={() => setProxyMode(pm.id as any)}
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                  proxyMode === pm.id
+                    ? 'bg-emerald-500 text-black shadow font-extrabold'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                 }`}
               >
-                {index === 0 && <Zap size={10} className="fill-current" />}
-                {src.source_name.split(' ')[0]} {index + 1}
+                {pm.label}
               </button>
             ))}
           </div>
-          
-          <div className="flex items-center justify-between w-full sm:w-auto gap-4 shrink-0">
-            <span className="text-zinc-400 text-[10px] font-semibold">
-              Quality: {activeSource.quality || '1080p'}
-            </span>
-            <span className="text-zinc-500 text-[10px] hidden sm:inline">
-              Multi-Server Fallback Engine Active
-            </span>
+
+          {/* Row 2: Server Switcher Pill Buttons */}
+          <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-2 overflow-x-auto max-w-full no-scrollbar">
+              <span className="text-[10px] uppercase font-extrabold text-zinc-500 flex items-center gap-1 shrink-0">
+                <Server size={12} /> Server:
+              </span>
+              {sources.map((src, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setActiveIdx(index);
+                    setIsBufferingNotice(false);
+                  }}
+                  className={`px-3 py-1 rounded-full text-[10px] font-extrabold transition-all duration-200 shrink-0 flex items-center gap-1.5 ${
+                    activeIdx === index
+                      ? 'bg-amber-500 text-black shadow-md scale-105'
+                      : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                  }`}
+                >
+                  {index === 0 && <Zap size={10} className="fill-current" />}
+                  {src.source_name.split(' ')[0]} {index + 1}
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-zinc-400 text-[10px] font-semibold">
+                Quality: {activeSource.quality || '1080p'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
