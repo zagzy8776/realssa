@@ -53,9 +53,9 @@ interface Article {
 const VIDEO_CHANNELS: VideoChannel[] = [
   {
     id: 'peller-jarvis-wedding',
-    title: '🔴 LIVE | PELLER AND JARVIS TRADITIONAL WEDDING HAPPENING LIVE',
-    embedUrl: 'https://www.youtube.com/embed/GbLw8A-JI1g?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
-    thumbnail: 'https://img.youtube.com/vi/GbLw8A-JI1g/mqdefault.jpg',
+    title: '🔴 LIVE | Peller & Jarvis Traditional Wedding',
+    embedUrl: 'https://www.youtube.com/embed/MnG0Ldos2wU?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/MnG0Ldos2wU/mqdefault.jpg',
     category: 'nigeria',
     country: 'Nigeria',
     source: 'YouTube Live',
@@ -670,7 +670,20 @@ const VideoNews = () => {
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [activeStream, setActiveStream] = useState<LiveStream | null>(null);
 
-  const STATIC_LIVE_MATCHES: LiveStream[] = [];
+  const STATIC_LIVE_MATCHES: LiveStream[] = [
+    {
+      id: 'real-madrid-fiorentina',
+      match_id: 'real-madrid-fiorentina',
+      match_title: '🔴 LIVE | Real Madrid vs Fiorentina | Pre-season Friendly | SportyTV',
+      home_team: 'Real Madrid',
+      away_team: 'Fiorentina',
+      league: 'Pre-season Friendly',
+      stream_url: 'https://www.youtube.com/embed/8xSdOgFDCvI?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+      stream_type: 'iframe',
+      quality: '1080p',
+      language: 'English'
+    }
+  ];
 
   // Fetch live streams
   useEffect(() => {

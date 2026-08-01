@@ -21,7 +21,7 @@ const CHANNELS: LiveChannel[] = [
     id: "peller-jarvis-wedding",
     name: "Peller & Jarvis Traditional Wedding Live",
     source: "YouTube Live",
-    embedUrl: "https://www.youtube.com/embed/GbLw8A-JI1g?autoplay=0"
+    embedUrl: "https://www.youtube.com/embed/MnG0Ldos2wU?autoplay=0"
   },
   {
     id: "channels-tv",
