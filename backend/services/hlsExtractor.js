@@ -22,18 +22,11 @@ const tmdbClient = axios.create({
  * Resolves direct HLS (.m3u8) streams and resilient embed mirrors for a Movie.
  */
 async function getMovieStreams(tmdbId) {
-  const cacheKey = `cinema:stream:movie:${tmdbId}`;
+  const cacheKey = `cinema:stream:movie:v2:${tmdbId}`;
   const cached = await redisService.getCached(cacheKey);
   if (cached) return cached;
 
   const sources = [
-    {
-      source_name: 'VidKing Engine (Ultra Fast 1080p)',
-      url: `https://vidking.net/e/movie/${tmdbId}`,
-      quality: '1080p',
-      is_embed: true,
-      type: 'iframe'
-    },
     {
       source_name: 'VidSrc.cc (Primary Server)',
       url: `https://vidsrc.cc/v2/embed/movie/${tmdbId}`,
@@ -70,13 +63,6 @@ async function getMovieStreams(tmdbId) {
       type: 'iframe'
     },
     {
-      source_name: 'VidSrc.in (Backup Mirror)',
-      url: `https://vidsrc.in/embed/movie/${tmdbId}`,
-      quality: '1080p',
-      is_embed: true,
-      type: 'iframe'
-    },
-    {
       source_name: '2Embed (Classic HD)',
       url: `https://www.2embed.cc/embed/${tmdbId}`,
       quality: '1080p',
@@ -101,18 +87,11 @@ async function getMovieStreams(tmdbId) {
  * Resolves direct HLS (.m3u8) streams and resilient embed mirrors for a TV Show Episode.
  */
 async function getEpisodeStreams(tmdbId, season, episode) {
-  const cacheKey = `cinema:stream:tv:${tmdbId}:${season}:${episode}`;
+  const cacheKey = `cinema:stream:tv:v2:${tmdbId}:${season}:${episode}`;
   const cached = await redisService.getCached(cacheKey);
   if (cached) return cached;
 
   const sources = [
-    {
-      source_name: 'VidKing Engine (Ultra Fast 1080p)',
-      url: `https://vidking.net/e/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p',
-      is_embed: true,
-      type: 'iframe'
-    },
     {
       source_name: 'VidSrc.cc (Primary Server)',
       url: `https://vidsrc.cc/v2/embed/tv/${tmdbId}/${season}/${episode}`,
@@ -144,13 +123,6 @@ async function getEpisodeStreams(tmdbId, season, episode) {
     {
       source_name: 'VidSrc.pro (HD Mirror)',
       url: `https://vidsrc.pro/embed/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p',
-      is_embed: true,
-      type: 'iframe'
-    },
-    {
-      source_name: 'VidSrc.in (Backup Mirror)',
-      url: `https://vidsrc.in/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p',
       is_embed: true,
       type: 'iframe'
