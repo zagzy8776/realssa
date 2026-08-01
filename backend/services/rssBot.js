@@ -175,16 +175,20 @@ async function runBufferCron() {
     return { ok: false, status: 503, code: 'DATABASE_UNAVAILABLE', message: 'Database pool unavailable.' };
   }
 
+  let client;
   try {
+    // Advisory locks belong to a PostgreSQL session. Hold one checked-out
+    // client for the entire cycle so the same session also releases the lock.
+    client = await db.connect();
     // Acquire PostgreSQL advisory lock to ensure only 1 worker runs Buffer top-up at a time
-    const lockRes = await db.query(`SELECT pg_try_advisory_lock(888777) AS acquired`);
+    const lockRes = await client.query(`SELECT pg_try_advisory_lock(888777) AS acquired`);
     if (!lockRes.rows[0]?.acquired) {
       console.log('[Buffer Cron] Another worker is running Buffer top-up. Skipping concurrent execution.');
       return { ok: true, skipped: true, message: 'Another Buffer cycle is already running.' };
     }
 
     try {
-      await db.query(`
+      await client.query(`
         CREATE TABLE IF NOT EXISTS buffer_posts_log (
           id SERIAL PRIMARY KEY,
           story_hash TEXT UNIQUE,
@@ -192,7 +196,7 @@ async function runBufferCron() {
           posted_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
-      await db.query(`ALTER TABLE buffer_posts_log ADD COLUMN IF NOT EXISTS title_clean TEXT`).catch(() => {});
+      await client.query(`ALTER TABLE buffer_posts_log ADD COLUMN IF NOT EXISTS title_clean TEXT`).catch(() => {});
 
       // Check how many posts are already queued in Buffer
       const queueCount = await getBufferQueueCount();
@@ -209,7 +213,7 @@ async function runBufferCron() {
       const ngnLimit = Math.ceil(BUFFER_MAX_PER_CYCLE / 2); // 3 for Nigerian news
       const otherLimit = BUFFER_MAX_PER_CYCLE - ngnLimit;  // 2 for World/Sports/Other
 
-      const ngnRes = await db.query(
+      const ngnRes = await client.query(
         `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
                 a.external_link, a.category,
                 a.url_hash AS story_hash
@@ -223,7 +227,7 @@ async function runBufferCron() {
         [ngnLimit]
       );
 
-      const otherRes = await db.query(
+      const otherRes = await client.query(
         `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
                 a.external_link, a.category,
                 a.url_hash AS story_hash
@@ -242,7 +246,7 @@ async function runBufferCron() {
       // Fallback: fill remaining slots if either query returned fewer articles
       if (articlesToProcess.length < BUFFER_MAX_PER_CYCLE) {
         const alreadyPickedHashes = new Set(articlesToProcess.map(a => a.story_hash));
-        const fallbackRes = await db.query(
+        const fallbackRes = await client.query(
           `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
                   a.external_link, a.category,
                   a.url_hash AS story_hash
@@ -276,7 +280,7 @@ async function runBufferCron() {
         const first5Words = cleanTitle.split(' ').slice(0, 5).join(' ');
 
         // Deduplication check across similar titles
-        const dupCheck = await db.query(
+        const dupCheck = await client.query(
           `SELECT 1 FROM buffer_posts_log WHERE title_clean = $1 OR (title_clean IS NOT NULL AND title_clean LIKE $2) LIMIT 1`,
           [cleanTitle, `${first5Words}%`]
         );
@@ -284,7 +288,7 @@ async function runBufferCron() {
         if (dupCheck.rows.length > 0) {
           console.log(`[Buffer Cron] ⏭️ Skipping duplicate title: "${article.title.slice(0, 50)}..."`);
           // Mark hash as posted so we don't inspect it again
-          await db.query(`INSERT INTO buffer_posts_log (story_hash, title_clean) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [article.story_hash, cleanTitle]).catch(() => {});
+          await client.query(`INSERT INTO buffer_posts_log (story_hash, title_clean) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [article.story_hash, cleanTitle]).catch(() => {});
           continue;
         }
 
@@ -295,7 +299,7 @@ async function runBufferCron() {
         const success = await postToBuffer(hooks, link, article.image, false);
 
         if (success) {
-          await db.query(
+          await client.query(
             `INSERT INTO buffer_posts_log (story_hash, title_clean) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
             [article.story_hash, cleanTitle]
           );
@@ -308,7 +312,7 @@ async function runBufferCron() {
       }
       return { ok: true, queued, attempted: articlesToProcess.length };
     } finally {
-      await db.query(`SELECT pg_advisory_unlock(888777)`).catch(() => {});
+      await client.query(`SELECT pg_advisory_unlock(888777)`).catch(() => {});
     }
   } catch (err) {
     console.error('[Buffer Cron] Error:', err.message);
@@ -318,6 +322,8 @@ async function runBufferCron() {
       code: err.code || 'BUFFER_CRON_FAILED',
       message: err.message,
     };
+  } finally {
+    client?.release();
   }
 }
 
