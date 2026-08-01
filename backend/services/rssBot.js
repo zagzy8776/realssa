@@ -214,7 +214,7 @@ async function runBufferCron() {
       const otherLimit = BUFFER_MAX_PER_CYCLE - ngnLimit;  // 2 for World/Sports/Other
 
       const ngnRes = await client.query(
-        `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
+        `SELECT a.title, a.original_excerpt, a.ai_summary, a.full_content, a.image,
                 a.external_link, a.category,
                 a.url_hash AS story_hash
          FROM rss_articles a
@@ -228,7 +228,7 @@ async function runBufferCron() {
       );
 
       const otherRes = await client.query(
-        `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
+        `SELECT a.title, a.original_excerpt, a.ai_summary, a.full_content, a.image,
                 a.external_link, a.category,
                 a.url_hash AS story_hash
          FROM rss_articles a
@@ -247,7 +247,7 @@ async function runBufferCron() {
       if (articlesToProcess.length < BUFFER_MAX_PER_CYCLE) {
         const alreadyPickedHashes = new Set(articlesToProcess.map(a => a.story_hash));
         const fallbackRes = await client.query(
-          `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
+          `SELECT a.title, a.original_excerpt, a.ai_summary, a.full_content, a.image,
                   a.external_link, a.category,
                   a.url_hash AS story_hash
            FROM rss_articles a
@@ -292,7 +292,9 @@ async function runBufferCron() {
           continue;
         }
 
-        const excerpt = article.ai_summary || article.original_excerpt || '';
+        // Prefer the extracted article body so social copy is grounded in more
+        // than an RSS teaser; fall back safely for feeds without full content.
+        const excerpt = article.full_content || article.ai_summary || article.original_excerpt || '';
         const hooks = await generateSocialHooks(article.title, excerpt);
 
         const link = `${SITE_URL}/read?url=${encodeURIComponent(article.external_link)}`;

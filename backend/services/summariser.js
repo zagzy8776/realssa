@@ -3,7 +3,7 @@
  *
  * Job assignments (primary → fallbacks):
  *  generateAIAnalysis  → Gemini (JSON mode, structured output)  → Groq → Cerebras → title fallback
- *  generateSocialHook  → Groq (fast, high volume)               → Cerebras → Gemini → Cloudflare → title fallback
+ *  generateSocialHook  → Cerebras 120B (editorial quality)      → Gemini → Groq → Cloudflare → title fallback
  *  rewriteArticle      → Cerebras gemma-4-31b (best writing)    → Groq → Gemini → plain text fallback
  *  generateEmbedding   → Gemini embedding-001                   → null (no fallback, optional feature)
  */
@@ -226,7 +226,7 @@ async function generateSummary(title, excerpt) {
 }
 
 // ── Job: Social Hooks for Buffer (platform-specific) ────────────────────
-// Primary: Groq → Cerebras → Gemini → Cloudflare → title fallback
+// Primary: Cerebras 120B → Gemini → Groq → Cloudflare → title fallback
 //
 // Platform rules:
 //  Twitter/X  — 280 chars total. Link (~23 chars) + space = 24 chars reserved.
@@ -236,9 +236,13 @@ async function generateSummary(title, excerpt) {
 //  Facebook   — No hard limit. 1-3 short paragraphs, conversational tone,
 //               link posted separately as attachment. 3-5 hashtags.
 
+const SOCIAL_GROUNDING_RULE =
+  'Use ONLY facts stated in the supplied title and context. Never invent names, numbers, quotes, causes, dates, or background. If context is thin, write a careful, factual caption using only the confirmed detail.';
+
 const TWITTER_PROMPT = (title, cleanText) => [
   'You are a senior digital news editor for RealSSA News on Twitter/X.',
   'Write a high-impact, direct news summary tweet for this story.',
+  SOCIAL_GROUNDING_RULE,
   'STRICT EDITORIAL RULES:',
   '- DO NOT ask any questions! Zero question marks allowed (no "?" in text).',
   '- State the core news facts directly, concisely, and authoritatively.',
@@ -256,6 +260,7 @@ const TWITTER_PROMPT = (title, cleanText) => [
 const INSTAGRAM_PROMPT = (title, cleanText) => [
   'You are a senior news editor for RealSSA News on Instagram.',
   'Write an authoritative, punchy Instagram news summary caption for this story.',
+  SOCIAL_GROUNDING_RULE,
   'STRICT EDITORIAL RULES:',
   '- DO NOT ask any questions! Zero question marks allowed (no "?" in text).',
   '- State the core news facts directly and clearly in 2 short paragraphs.',
@@ -273,6 +278,7 @@ const INSTAGRAM_PROMPT = (title, cleanText) => [
 const FACEBOOK_PROMPT = (title, cleanText) => [
   'You are a senior news editor for RealSSA News on Facebook.',
   'Write a compelling, professional Facebook news summary for this story.',
+  SOCIAL_GROUNDING_RULE,
   'STRICT EDITORIAL RULES:',
   '- DO NOT ask any questions! Zero question marks allowed (no "?" in text).',
   '- Summarize the key facts directly and authoritatively in 2 short paragraphs.',
@@ -287,14 +293,16 @@ const FACEBOOK_PROMPT = (title, cleanText) => [
 ].join('\n');
 
 async function _callWithFallbacks(prompt, maxTokens, label) {
-  let text = await callGroq(prompt, { maxTokens, temperature: 0.7 });
-  if (text && text.length > 20) { console.log(`[${label}] ✅ Groq`); return text; }
+  // The Buffer caption is published without a human review step, so prefer the
+  // larger editorial model over the fast 8B model used for fallbacks.
+  let text = await callCerebras(prompt, { maxTokens, temperature: 0.35 });
+  if (text && text.length > 20) { console.log(`[${label}] ✅ Cerebras 120B`); return text; }
 
-  text = await callCerebras(prompt, { maxTokens, temperature: 0.7 });
-  if (text && text.length > 20) { console.log(`[${label}] ✅ Cerebras`); return text; }
-
-  text = await callGemini(prompt, { maxOutputTokens: maxTokens, temperature: 0.7, timeout: 8000 });
+  text = await callGemini(prompt, { maxOutputTokens: maxTokens, temperature: 0.35, timeout: 8000 });
   if (text && text.length > 20) { console.log(`[${label}] ✅ Gemini`); return text; }
+
+  text = await callGroq(prompt, { maxTokens, temperature: 0.35 });
+  if (text && text.length > 20) { console.log(`[${label}] ✅ Groq fallback`); return text; }
 
   text = await callCloudflare(prompt, { maxTokens });
   if (text && text.length > 20) { console.log(`[${label}] ✅ Cloudflare`); return text; }
@@ -307,7 +315,9 @@ async function _callWithFallbacks(prompt, maxTokens, label) {
  * Returns { twitter, instagram, facebook }
  */
 async function generateSocialHooks(title, excerpt) {
-  const cleanText = (excerpt || title || '').replace(/<[^>]+>/g, '').slice(0, 600);
+  // Give the editor enough verified source material to preserve the important
+  // facts, while keeping the prompt small enough for a fast cron execution.
+  const cleanText = (excerpt || title || '').replace(/<[^>]+>/g, '').slice(0, 1800);
 
   const [twitter, instagram, facebook] = await Promise.all([
     _callWithFallbacks(TWITTER_PROMPT(title, cleanText), 80, 'Twitter'),
