@@ -210,7 +210,7 @@ async function runBufferCron() {
       const otherLimit = BUFFER_MAX_PER_CYCLE - ngnLimit;  // 2 for World/Sports/Other
 
       const ngnRes = await db.query(
-        `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
+        `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
                 a.external_link, a.category,
                 a.url_hash AS story_hash
          FROM rss_articles a
@@ -224,7 +224,7 @@ async function runBufferCron() {
       );
 
       const otherRes = await db.query(
-        `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
+        `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
                 a.external_link, a.category,
                 a.url_hash AS story_hash
          FROM rss_articles a
@@ -243,7 +243,7 @@ async function runBufferCron() {
       if (articlesToProcess.length < BUFFER_MAX_PER_CYCLE) {
         const alreadyPickedHashes = new Set(articlesToProcess.map(a => a.story_hash));
         const fallbackRes = await db.query(
-          `SELECT a.id, a.title, a.original_excerpt, a.ai_summary, a.image,
+          `SELECT a.title, a.original_excerpt, a.ai_summary, a.image,
                   a.external_link, a.category,
                   a.url_hash AS story_hash
            FROM rss_articles a
@@ -277,7 +277,7 @@ async function runBufferCron() {
 
         // Deduplication check across similar titles
         const dupCheck = await db.query(
-          `SELECT id FROM buffer_posts_log WHERE title_clean = $1 OR (title_clean IS NOT NULL AND title_clean LIKE $2) LIMIT 1`,
+          `SELECT 1 FROM buffer_posts_log WHERE title_clean = $1 OR (title_clean IS NOT NULL AND title_clean LIKE $2) LIMIT 1`,
           [cleanTitle, `${first5Words}%`]
         );
 
