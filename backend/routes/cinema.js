@@ -2,6 +2,32 @@ const express = require('express');
 const router = express.Router();
 const tmdbService = require('../services/tmdbService');
 const movieScraper = require('../services/movieScraper');
+const hlsExtractor = require('../services/hlsExtractor');
+
+/**
+ * GET /api/cinema/stream
+ * Returns high-speed extracted HLS and multi-server mirror links for movies and TV episodes.
+ */
+router.get('/stream', async (req, res) => {
+  try {
+    const { id, type = 'movie', season = 1, episode = 1 } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: 'TMDB Media ID parameter "id" is required' });
+    }
+
+    let data;
+    if (type === 'tv') {
+      data = await hlsExtractor.getEpisodeStreams(parseInt(id), parseInt(season), parseInt(episode));
+    } else {
+      data = await hlsExtractor.getMovieStreams(parseInt(id));
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error(`[Cinema Stream API] Error:`, err.message);
+    res.status(500).json({ error: 'Failed to extract video streams' });
+  }
+});
 
 /**
  * GET /api/cinema/trending

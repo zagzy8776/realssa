@@ -62,7 +62,7 @@ export default function CinemaHub() {
   const [episodesLoading, setEpisodesLoading] = useState(false);
   
   // Stream Playback State
-  const [activePlayerSource, setActivePlayerSource] = useState<StreamSource | null>(null);
+  const [activePlayerSources, setActivePlayerSources] = useState<StreamSource[]>([]);
   const [playerTitle, setPlayerTitle] = useState('');
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const [availableSources, setAvailableSources] = useState<StreamSource[]>([]);
@@ -177,13 +177,37 @@ export default function CinemaHub() {
     if (!selectedMedia) return;
     
     try {
-      const res = await fetch(apiUrl(`/api/cinema/episodes/${selectedMedia.id}/${episode.season_number}/${episode.episode_number}/sources`));
+      const res = await fetch(apiUrl(`/api/cinema/stream?id=${selectedMedia.id}&type=tv&season=${episode.season_number}&episode=${episode.episode_number}`));
       const data = await res.json();
-      setAvailableSources(data.sources || []);
+      const sources = data.sources || [];
+      setAvailableSources(sources);
+      if (sources.length > 0) {
+        const showName = selectedMedia.title || selectedMedia.name || 'Episode';
+        startPlayingMedia(sources, `${showName} - S${episode.season_number}E${episode.episode_number}`);
+      }
     } catch (err) {
       console.error('Failed to load episode sources:', err);
     } finally {
       setSourcesLoading(false);
+    }
+  };
+
+  const startPlayingMedia = (sources: StreamSource[], title: string) => {
+    setActivePlayerSources(sources);
+    setPlayerTitle(title);
+  };
+
+  const handlePlayMedia = async (media: MovieOrShow) => {
+    const title = media.title || media.name || 'Movie';
+    try {
+      const res = await fetch(apiUrl(`/api/cinema/stream?id=${media.id}&type=${media.media_type}`));
+      const data = await res.json();
+      const sources = data.sources || [];
+      if (sources.length > 0) {
+        startPlayingMedia(sources, title);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stream sources:', err);
     }
   };
 
@@ -203,11 +227,6 @@ export default function CinemaHub() {
   const formatGenres = (genres: any[]) => {
     if (!genres || genres.length === 0) return 'Cinema';
     return genres.slice(0, 3).map(g => g.name).join(' • ');
-  };
-
-  const startPlayingMedia = (source: StreamSource, title: string) => {
-    setActivePlayerSource(source);
-    setPlayerTitle(title);
   };
 
   const getFeaturedTitle = () => {
@@ -290,11 +309,11 @@ export default function CinemaHub() {
 
             <div className="flex flex-wrap gap-3 mt-6 sm:mt-8">
               <Button 
-                onClick={() => handleOpenDetails(featured)}
+                onClick={() => handlePlayMedia(featured)}
                 className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold px-6 py-2.5 sm:py-3 text-xs sm:text-sm rounded-full flex items-center gap-2 transition-transform duration-300 hover:scale-105 active:scale-95 shadow-lg"
               >
                 <Play size={16} className="fill-current" />
-                Watch Trailer / Streams
+                Watch Movie Now
               </Button>
               <Button 
                 variant="outline"
@@ -552,7 +571,7 @@ export default function CinemaHub() {
                         {availableSources.map((src, index) => (
                           <button
                             key={index}
-                            onClick={() => startPlayingMedia(src, `${selectedMedia.title || selectedMedia.name} - ${src.source_name}`)}
+                            onClick={() => handlePlayMedia(selectedMedia)}
                             className="flex items-center justify-between p-3 bg-zinc-900 hover:bg-zinc-850 rounded-xl border border-zinc-850 hover:border-amber-500/40 text-left transition-all duration-300 group"
                           >
                             <div>
@@ -679,12 +698,11 @@ export default function CinemaHub() {
       )}
 
       {/* Video Streaming Player overlay */}
-      {activePlayerSource && (
+      {activePlayerSources.length > 0 && (
         <CinemaPlayer 
-          url={activePlayerSource.url}
+          sources={activePlayerSources}
           title={playerTitle}
-          isEmbed={activePlayerSource.is_embed}
-          onClose={() => setActivePlayerSource(null)}
+          onClose={() => setActivePlayerSources([])}
         />
       )}
 

@@ -1,17 +1,51 @@
-import React, { useState } from 'react';
-import { Play, X, ShieldAlert, Monitor, Volume2, Maximize, EyeOff, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, X, ShieldAlert, Monitor, Volume2, Maximize, EyeOff, ShieldCheck, Server, RefreshCw, Zap } from 'lucide-react';
 import { HlsPlayer } from './HlsPlayer';
 import { SandboxedIframe } from './SandboxedIframe';
 
-interface CinemaPlayerProps {
+export interface StreamSource {
+  source_name: string;
   url: string;
+  quality: string;
+  is_embed: boolean;
+  type?: 'hls' | 'iframe';
+}
+
+interface CinemaPlayerProps {
+  sources: StreamSource[];
   title: string;
-  isEmbed: boolean;
   onClose: () => void;
 }
 
-export default function CinemaPlayer({ url, title, isEmbed, onClose }: CinemaPlayerProps) {
-  const [cinemaMode, setCinemaMode] = useState(true);
+export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerProps) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [isBufferingNotice, setIsBufferingNotice] = useState(false);
+
+  const activeSource = sources && sources.length > 0 ? sources[activeIdx] || sources[0] : null;
+
+  useEffect(() => {
+    // Show a helpful tip after 6 seconds if video is taking long
+    const timer = setTimeout(() => {
+      setIsBufferingNotice(true);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [activeIdx]);
+
+  if (!activeSource) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 p-4 text-white">
+        <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 text-center max-w-md">
+          <p className="text-amber-500 font-bold mb-2">No active video servers found</p>
+          <p className="text-xs text-zinc-400 mb-4">Please check back shortly or try selecting a different episode.</p>
+          <button onClick={onClose} className="px-4 py-2 bg-amber-500 text-black font-bold rounded-full text-xs">
+            Close Player
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isHls = activeSource.type === 'hls' || activeSource.url.includes('.m3u8');
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4">
@@ -22,29 +56,26 @@ export default function CinemaPlayer({ url, title, isEmbed, onClose }: CinemaPla
       <div className="relative w-full max-w-5xl aspect-video bg-zinc-950 rounded-2xl sm:rounded-3xl border border-white/10 overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col transition-all duration-500">
         
         {/* Top Header controls */}
-        <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gradient-to-b from-black/90 to-transparent">
+        <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gradient-to-b from-black/95 via-black/60 to-transparent">
           <div className="flex flex-col min-w-0">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-amber-500 flex items-center gap-1.5">
+            <span className="text-[10px] uppercase font-extrabold tracking-wider text-amber-500 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              Now Playing
+              {isHls ? 'Direct HLS Stream' : 'Live Stream Mirror'}
             </span>
-            <h3 className="text-white text-sm sm:text-base font-bold truncate drop-shadow max-w-[250px] sm:max-w-md">
+            <h3 className="text-white text-sm sm:text-base font-extrabold truncate drop-shadow max-w-[250px] sm:max-w-md">
               {title}
             </h3>
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Safe Shield Indicator */}
-            {isEmbed && (
-              <div className="hidden sm:flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded-full backdrop-blur-md">
-                <ShieldCheck size={12} />
-                Sandboxed Secure
-              </div>
-            )}
+            <div className="hidden sm:flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-extrabold px-2.5 py-1 rounded-full backdrop-blur-md">
+              <ShieldCheck size={12} />
+              {activeSource.source_name}
+            </div>
             
             <button
               onClick={onClose}
-              className="p-2 sm:p-2.5 bg-black/60 hover:bg-red-600 rounded-full text-white backdrop-blur-md transition-all duration-300 border border-white/10 shadow-lg"
+              className="p-2 sm:p-2.5 bg-black/70 hover:bg-red-600 rounded-full text-white backdrop-blur-md transition-all duration-300 border border-white/10 shadow-lg"
               title="Close Player"
             >
               <X size={18} />
@@ -54,45 +85,64 @@ export default function CinemaPlayer({ url, title, isEmbed, onClose }: CinemaPla
 
         {/* Video Player Main Area */}
         <div className="flex-1 w-full h-full relative bg-black flex items-center justify-center">
-          {isEmbed ? (
-            <SandboxedIframe src={url} className="w-full h-full" />
+          {isHls ? (
+            <HlsPlayer src={activeSource.url} className="w-full h-full" />
           ) : (
-            <HlsPlayer src={url} className="w-full h-full" />
+            <SandboxedIframe src={activeSource.url} className="w-full h-full" />
           )}
 
-          {/* Iframe Shield Safety Overlay Banner */}
-          {isEmbed && (
-            <div className="absolute bottom-4 left-4 right-4 pointer-events-none z-40 bg-zinc-950/80 backdrop-blur-md p-2.5 sm:p-3 rounded-xl border border-amber-500/20 max-w-lg hidden sm:flex items-start gap-2.5 shadow-lg select-none">
-              <ShieldAlert className="text-amber-500 shrink-0 mt-0.5" size={16} />
-              <div className="text-left">
-                <p className="text-xs font-bold text-zinc-100">Anti-Redirect Shield Active</p>
-                <p className="text-[10px] text-zinc-400 leading-relaxed mt-0.5">
-                  RealSSA News runs this stream in a strict sandbox. Any automatic popups, ads, or site redirects from the provider have been successfully blocked.
+          {/* Buffering or Mirror switch helper overlay banner */}
+          {isBufferingNotice && !isHls && (
+            <div className="absolute top-16 left-4 right-4 z-40 bg-amber-950/90 backdrop-blur-md p-3 rounded-xl border border-amber-500/40 max-w-md flex items-center justify-between gap-3 shadow-xl animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 text-left">
+                <Zap size={16} className="text-amber-400 shrink-0 animate-bounce" />
+                <p className="text-[11px] font-bold text-amber-200">
+                  Slow buffer? Switch to another server below!
                 </p>
               </div>
+              <button 
+                onClick={() => setIsBufferingNotice(false)} 
+                className="text-amber-400 hover:text-white p-1"
+              >
+                <X size={14} />
+              </button>
             </div>
           )}
         </div>
 
-        {/* Footer info/controls bar */}
-        <div className="p-3 sm:p-4 bg-gradient-to-t from-black/95 to-zinc-950/90 border-t border-white/5 flex items-center justify-between z-40 text-xs text-white/60">
-          <div className="flex items-center gap-3">
-            <span className="px-2 py-0.5 rounded bg-white/10 text-white text-[10px] font-bold">
-              {isEmbed ? 'EMBED FEED' : 'DIRECT HLS'}
+        {/* Footer Info & Multi-Server Selector Bar */}
+        <div className="p-3 sm:p-4 bg-gradient-to-t from-black/95 to-zinc-950/90 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 z-40">
+          
+          {/* Server Switcher Pill Buttons */}
+          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0 no-scrollbar">
+            <span className="text-[10px] uppercase font-extrabold text-zinc-500 flex items-center gap-1 shrink-0">
+              <Server size={12} /> Server:
             </span>
-            <span className="text-[10px] tracking-wide text-zinc-400">
-              Provider: {isEmbed ? 'Third-Party Mirror' : 'RealSSA CDN'}
-            </span>
+            {sources.map((src, index) => (
+              <button
+                key={index}
+                onClick={() => {
+                  setActiveIdx(index);
+                  setIsBufferingNotice(false);
+                }}
+                className={`px-3 py-1 rounded-full text-[10px] font-extrabold transition-all duration-200 shrink-0 flex items-center gap-1.5 ${
+                  activeIdx === index
+                    ? 'bg-amber-500 text-black shadow-md scale-105'
+                    : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                }`}
+              >
+                {index === 0 && <Zap size={10} className="fill-current" />}
+                {src.source_name.split(' ')[0]} {index + 1}
+              </button>
+            ))}
           </div>
           
-          <div className="flex items-center gap-4">
-            {isEmbed && (
-              <div className="flex sm:hidden items-center gap-1 text-emerald-400 text-[10px] font-bold">
-                <ShieldCheck size={12} /> Secure
-              </div>
-            )}
+          <div className="flex items-center justify-between w-full sm:w-auto gap-4 shrink-0">
+            <span className="text-zinc-400 text-[10px] font-semibold">
+              Quality: {activeSource.quality || '1080p'}
+            </span>
             <span className="text-zinc-500 text-[10px] hidden sm:inline">
-              Adjust mirror if playback buffers
+              Multi-Server Fallback Engine Active
             </span>
           </div>
         </div>
