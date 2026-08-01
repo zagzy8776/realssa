@@ -1,8 +1,49 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
 const tmdbService = require('../services/tmdbService');
 const movieScraper = require('../services/movieScraper');
 const hlsExtractor = require('../services/hlsExtractor');
+
+/**
+ * GET /api/cinema/proxy-stream
+ * MovieBox-style HLS Stream Proxy
+ * Fetches target .m3u8 playlists and TS video segments, strips CORS/referer blocks,
+ * and pipes video stream bytes directly to the client's native HTML5 player.
+ */
+router.get('/proxy-stream', async (req, res) => {
+  try {
+    const targetUrl = req.query.url;
+    if (!targetUrl) {
+      return res.status(400).json({ error: 'Query parameter "url" is required' });
+    }
+
+    const decodedUrl = decodeURIComponent(targetUrl);
+
+    const response = await axios({
+      method: 'get',
+      url: decodedUrl,
+      responseType: 'stream',
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Referer': new URL(decodedUrl).origin
+      }
+    });
+
+    const contentType = response.headers['content-type'] || 'application/vnd.apple.mpegurl';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    response.data.pipe(res);
+  } catch (err) {
+    console.error(`[Cinema Proxy Stream Error]:`, err.message);
+    res.status(500).json({ error: 'Failed to proxy video stream chunk' });
+  }
+});
 
 /**
  * GET /api/cinema/stream

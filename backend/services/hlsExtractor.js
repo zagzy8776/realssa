@@ -28,8 +28,8 @@ async function getMovieStreams(tmdbId) {
 
   const sources = [
     {
-      source_name: 'VidLink (Ultra Fast 4K/1080p)',
-      url: `https://vidlink.pro/movie/${tmdbId}`,
+      source_name: 'VidKing Engine (Ultra Fast 1080p)',
+      url: `https://vidking.net/e/movie/${tmdbId}`,
       quality: '1080p',
       is_embed: true,
       type: 'iframe'
@@ -51,6 +51,13 @@ async function getMovieStreams(tmdbId) {
     {
       source_name: 'Embed.su (Multi-Host)',
       url: `https://embed.su/embed/movie/${tmdbId}`,
+      quality: '1080p',
+      is_embed: true,
+      type: 'iframe'
+    },
+    {
+      source_name: 'VidLink (Alternative)',
+      url: `https://vidlink.pro/movie/${tmdbId}`,
       quality: '1080p',
       is_embed: true,
       type: 'iframe'
@@ -99,6 +106,13 @@ async function getEpisodeStreams(tmdbId, season, episode) {
   if (cached) return cached;
 
   const sources = [
+    {
+      source_name: 'VidKing Engine (Ultra Fast 1080p)',
+      url: `https://vidking.net/e/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p',
+      is_embed: true,
+      type: 'iframe'
+    },
     {
       source_name: 'VidSrc.cc (Primary Server)',
       url: `https://vidsrc.cc/v2/embed/tv/${tmdbId}/${season}/${episode}`,

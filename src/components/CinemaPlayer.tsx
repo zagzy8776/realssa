@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, X, ShieldAlert, Monitor, Volume2, Maximize, EyeOff, ShieldCheck, Server, RefreshCw, Zap } from 'lucide-react';
 import { HlsPlayer } from './HlsPlayer';
 import { SandboxedIframe } from './SandboxedIframe';
+import { apiUrl } from '@/lib/api-base';
 
 export interface StreamSource {
   source_name: string;
@@ -46,6 +47,7 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
   }
 
   const isHls = activeSource.type === 'hls' || activeSource.url.includes('.m3u8');
+  const hlsProxyUrl = isHls ? apiUrl(`/api/cinema/proxy-stream?url=${encodeURIComponent(activeSource.url)}`) : activeSource.url;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4">
@@ -86,7 +88,7 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
         {/* Video Player Main Area */}
         <div className="flex-1 w-full h-full relative bg-black flex items-center justify-center">
           {isHls ? (
-            <HlsPlayer src={activeSource.url} className="w-full h-full" />
+            <HlsPlayer src={hlsProxyUrl} className="w-full h-full" />
           ) : (
             <SandboxedIframe src={activeSource.url} className="w-full h-full" />
           )}
