@@ -12,8 +12,7 @@ export function SandboxedIframe({ src, className = "" }: SandboxedIframeProps) {
         src={src}
         className="absolute inset-0 w-full h-full border-0"
         allowFullScreen
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-pointer-lock allow-top-navigation-by-user-activation"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
         title="Live Stream"
       />
     </div>
