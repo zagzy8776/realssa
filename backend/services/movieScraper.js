@@ -7,8 +7,26 @@ const redisService = require('./redisService');
 function resolveMovieEmbeds(tmdbId) {
   return [
     {
-      source_name: 'VidSrc.to (Fast Server)',
-      url: `https://vidsrc.to/embed/movie/${tmdbId}`,
+      source_name: 'AutoEmbed (Ultra Fast)',
+      url: `https://player.autoembed.cc/embed/movie/${tmdbId}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: 'VidSrc.cc (Primary Server)',
+      url: `https://vidsrc.cc/v2/embed/movie/${tmdbId}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: 'VidSrc.icu (High Quality)',
+      url: `https://vidsrc.icu/embed/movie/${tmdbId}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: '2Embed (HD Stream)',
+      url: `https://www.2embed.cc/embed/${tmdbId}`,
       quality: '1080p',
       is_embed: true
     },
@@ -19,9 +37,15 @@ function resolveMovieEmbeds(tmdbId) {
       is_embed: true
     },
     {
-      source_name: 'VidSrc.me (Alternative)',
+      source_name: 'VidSrc.me (Classic)',
       url: `https://vidsrc.xyz/embed/movie/${tmdbId}`,
       quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: 'SmashyStream (Alternative)',
+      url: `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}`,
+      quality: '720p',
       is_embed: true
     },
     {
@@ -39,8 +63,26 @@ function resolveMovieEmbeds(tmdbId) {
 function resolveEpisodeEmbeds(tmdbId, season, episode) {
   return [
     {
-      source_name: 'VidSrc.to (Fast Server)',
-      url: `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}`,
+      source_name: 'AutoEmbed (Ultra Fast)',
+      url: `https://player.autoembed.cc/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: 'VidSrc.cc (Primary Server)',
+      url: `https://vidsrc.cc/v2/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: 'VidSrc.icu (High Quality)',
+      url: `https://vidsrc.icu/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: '2Embed (HD Stream)',
+      url: `https://www.2embed.cc/embedtv/${tmdbId}&s=${season}&e=${episode}`,
       quality: '1080p',
       is_embed: true
     },
@@ -51,9 +93,15 @@ function resolveEpisodeEmbeds(tmdbId, season, episode) {
       is_embed: true
     },
     {
-      source_name: 'VidSrc.me (Alternative)',
+      source_name: 'VidSrc.me (Classic)',
       url: `https://vidsrc.xyz/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: 'SmashyStream (Alternative)',
+      url: `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}&s=${season}&e=${episode}`,
+      quality: '720p',
       is_embed: true
     },
     {
