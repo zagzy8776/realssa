@@ -2303,29 +2303,35 @@ app.get('/api/cron/ingest', async (req, res) => {
 
 // Primary Buffer Social Auto-Posting Cron Endpoint
 app.get('/api/cron/buffer', async (req, res) => {
-  const secret = req.query.secret || req.headers['x-cron-secret'];
+  // Vercel Cron sends the configured CRON_SECRET as a Bearer token. Keep the
+  // query/custom-header forms for external schedulers and manual runs.
+  const bearerToken = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.slice('Bearer '.length)
+    : undefined;
+  const secret = req.query.secret || req.headers['x-cron-secret'] || bearerToken;
   const cronSec = process.env.CRON_SECRET || 'realssa-cron-secret-2026';
   
-  if (secret && secret !== cronSec && secret !== 'realssa-cron-secret-2026') {
+  if (!secret || (secret !== cronSec && secret !== 'realssa-cron-secret-2026')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  res.status(200).json({
-    success: true,
-    message: 'Buffer social post cycle triggered',
-    timestamp: new Date().toISOString()
-  });
+  try {
+    // A serverless invocation may be frozen as soon as the response is sent,
+    // so this must be awaited instead of being left in a background callback.
+    const { runBufferCron } = require('./services/rssBot');
+    console.log('[Cron Buffer] Triggering Buffer posting cycle...');
+    await runBufferCron();
+    console.log('[Cron Buffer] Cycle complete.');
 
-  setImmediate(async () => {
-    try {
-      const { runBufferCron } = require('./services/rssBot');
-      console.log('[Cron Buffer] Triggering Buffer posting cycle...');
-      await runBufferCron();
-      console.log('[Cron Buffer] Cycle complete.');
-    } catch (err) {
-      console.error('❌ Buffer cron background job failed:', err.message);
-    }
-  });
+    return res.status(200).json({
+      success: true,
+      message: 'Buffer social post cycle completed',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('❌ Buffer cron job failed:', err.message);
+    return res.status(500).json({ error: 'Buffer cron failed', message: err.message });
+  }
 });
 
 // Live Video Streams Endpoint (Prevents 500 errors in HeroSection/VideoNews/Sports)
@@ -6261,4 +6267,3 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
-

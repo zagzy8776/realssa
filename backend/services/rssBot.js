@@ -108,8 +108,11 @@ async function generateDailyDigest() {
 const BUFFER_QUEUE_TARGET = 10;
 // Max posts to ADD per cron cycle (2 req/cycle = sustainable for Buffer API 15m rate limit)
 const BUFFER_MAX_PER_CYCLE = 2;
-// Gap between each post in ms — 30s = 2 req/min
-const BUFFER_POST_GAP_MS = 30000;
+// Keep the local/Fly worker conservative. A Vercel Cron invocation has a
+// finite function lifetime, so use a short, configurable gap there instead.
+const BUFFER_POST_GAP_MS = Number(
+  process.env.BUFFER_POST_GAP_MS ?? (process.env.VERCEL ? 1000 : 30000)
+);
 
 async function getBufferQueueCount() {
   try {
@@ -370,4 +373,3 @@ function initRssBot(sharedPool) {
 }
 
 module.exports = { initRssBot, runBufferCron };
-
