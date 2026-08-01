@@ -18,6 +18,12 @@ interface LiveChannel {
 
 const CHANNELS: LiveChannel[] = [
   {
+    id: "peller-jarvis-wedding",
+    name: "Peller & Jarvis Traditional Wedding Live",
+    source: "YouTube Live",
+    embedUrl: "https://www.youtube.com/embed/GbLw8A-JI1g?autoplay=0"
+  },
+  {
     id: "channels-tv",
     name: "Channels TV",
     source: "Channels TV",

@@ -33,6 +33,7 @@ url = "2"
 
 # Thread-safe in-memory cache
 dashmap = "6"
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 # Static regex compilation
 once_cell = "1"

@@ -42,6 +42,7 @@ const Index = () => {
   const [error, setError] = useState(null);
 
   const LIVE_VIDEOS = [
+    { id: 'peller-jarvis-wedding', title: 'Peller & Jarvis Traditional Wedding', embedUrl: 'https://www.youtube.com/embed/GbLw8A-JI1g?mute=1' },
     { id: 'v1', title: 'Channels TV Live', embedUrl: 'https://www.youtube.com/embed/W8nThq62Vb4?mute=1' },
     { id: 'v2', title: 'Arise News Live', embedUrl: 'https://www.youtube.com/embed/x4wL-fWyhI0?mute=1' },
     { id: 'v3', title: 'TVC News Live', embedUrl: 'https://www.youtube.com/embed/Mv14aabg4mA?mute=1' }

@@ -8,7 +8,7 @@ use axum::{
     extract::{Query, State},
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Json, Response},
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use dashmap::DashMap;
@@ -20,6 +20,28 @@ use tracing::{info, warn};
 
 use types::ParseResult;
 use human_brain::HumanBrainEngine;
+
+/// Simple .env file loader — reads KEY=VALUE lines and sets env vars
+fn load_env_file(path: &str) {
+    if let Ok(content) = std::fs::read_to_string(path) {
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') { continue; }
+            if let Some((key, val)) = line.split_once('=') {
+                let key = key.trim();
+                let val = val.trim()
+                    .trim_start_matches('"')
+                    .trim_end_matches('"')
+                    .trim_start_matches('\'')
+                    .trim_end_matches('\'');
+                if std::env::var(key).is_err() {
+                    std::env::set_var(key, val);
+                }
+            }
+        }
+        info!("[Engine] Loaded .env from {}", path);
+    }
+}
 
 // ─── Cache entry ──────────────────────────────────────────────────────────────
 struct CacheEntry<T> {
@@ -327,6 +349,22 @@ async fn proxy_page_handler(
     }
 }
 
+#[derive(Deserialize)]
+struct ChatRequest { message: String }
+
+#[derive(Deserialize)]
+struct RlhfRequest { category: String, phrase: String, reward: f32 }
+
+#[derive(Deserialize)]
+struct TeachRequest {
+    category: String,
+    phrase: String,
+    #[serde(default)]
+    context: String,
+    #[serde(default)]
+    nuance: String,
+}
+
 // ─── Human Brain Endpoints ───────────────────────────────────────────────────
 async fn human_brain_insights_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let memory = state.human_brain.get_formatted_human_context(15);
@@ -339,9 +377,78 @@ async fn human_brain_insights_handler(State(state): State<Arc<AppState>>) -> imp
     }))
 }
 
+async fn human_brain_chat_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ChatRequest>,
+) -> impl IntoResponse {
+    let (reply, memory_used) = state.human_brain.chat(&payload.message).await;
+    let (total_insights, occurrences) = state.human_brain.get_stats();
+    Json(serde_json::json!({
+        "success": true,
+        "reply": reply,
+        "memory_used": memory_used,
+        "total_insights": total_insights,
+        "total_occurrences": occurrences
+    }))
+}
+
+async fn human_brain_native_chat_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ChatRequest>,
+) -> impl IntoResponse {
+    let (reply, vector_score) = state.human_brain.native_rust_inference(&payload.message);
+    Json(serde_json::json!({
+        "success": true,
+        "engine": "Native Rust Vector Neural Engine",
+        "reply": reply,
+        "vector_score": vector_score
+    }))
+}
+
+async fn human_brain_rlhf_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<RlhfRequest>,
+) -> impl IntoResponse {
+    state.human_brain.apply_rlhf_feedback(&payload.category, &payload.phrase, payload.reward);
+    Json(serde_json::json!({
+        "success": true,
+        "message": "RLHF reward signal applied & saved to Rust persistent storage",
+        "category": payload.category,
+        "phrase": payload.phrase,
+        "new_reward_signal": payload.reward
+    }))
+}
+
+/// POST /human-brain/teach — Directly feed knowledge into the bot's memory
+async fn human_brain_teach_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<TeachRequest>,
+) -> impl IntoResponse {
+    state.human_brain.record_insight(
+        &payload.category,
+        &payload.phrase,
+        &payload.context,
+        &payload.nuance,
+    );
+    let (total_insights, occurrences) = state.human_brain.get_stats();
+    Json(serde_json::json!({
+        "success": true,
+        "message": "Knowledge taught & saved to Rust persistent memory",
+        "category": payload.category,
+        "phrase": payload.phrase,
+        "total_insights": total_insights,
+        "total_occurrences": occurrences
+    }))
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() {
+    // Load .env files for API keys (Tavily, Exa, Firecrawl, etc.)
+    load_env_file("../.env");
+    load_env_file(".env");
+    load_env_file("../../.env");
+
     // Logging
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -388,6 +495,10 @@ async fn main() {
         .route("/img", get(img_handler))
         .route("/proxy-page", get(proxy_page_handler))
         .route("/human-brain/insights", get(human_brain_insights_handler))
+        .route("/human-brain/chat", post(human_brain_chat_handler))
+        .route("/human-brain/native-chat", post(human_brain_native_chat_handler))
+        .route("/human-brain/rlhf", post(human_brain_rlhf_handler))
+        .route("/human-brain/teach", post(human_brain_teach_handler))
         .layer(cors)
         .with_state(state);
 

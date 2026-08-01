@@ -51,6 +51,16 @@ interface Article {
 }
 
 const VIDEO_CHANNELS: VideoChannel[] = [
+  {
+    id: 'peller-jarvis-wedding',
+    title: '🔴 LIVE | PELLER AND JARVIS TRADITIONAL WEDDING HAPPENING LIVE',
+    embedUrl: 'https://www.youtube.com/embed/GbLw8A-JI1g?modestbranding=1&rel=0&iv_load_policy=3&showinfo=0',
+    thumbnail: 'https://img.youtube.com/vi/GbLw8A-JI1g/mqdefault.jpg',
+    category: 'nigeria',
+    country: 'Nigeria',
+    source: 'YouTube Live',
+    type: 'youtube'
+  },
   // 🔴 LIVE NEWS CHANNELS
   {
     id: 'france-24-en',
