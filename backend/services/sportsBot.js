@@ -257,7 +257,7 @@ async function pollMatches(pool, notificationService) {
     }
 
     // Also fetch live matches from API-SPORTS to ensure high-fidelity team crests & live scores
-    await fetchApiSportsMatches();
+    await fetchApiSportsMatches(pool);
 
     // Housekeeping: Clean up followed matches database older than 2 days
     await pool.query(`
@@ -389,7 +389,7 @@ function initSportsBot(pool, notificationService) {
 
 async function fetchApiSportsMatches(poolInstance) {
   const apiKey = process.env.API_SPORTS_KEY || '63d52762b17e113314e8fd12e69134c1';
-  const db = poolInstance || pool;
+  const db = poolInstance;
   if (!apiKey || !db) return;
 
   try {
