@@ -1,3 +1,4 @@
+require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { getAllPools } = require('./config/multiDb');
@@ -102,6 +103,42 @@ async function initAllDatabases() {
         CREATE INDEX IF NOT EXISTS idx_rss_articles_published ON rss_articles (published_at DESC);
         CREATE INDEX IF NOT EXISTS idx_rss_articles_cat_pub ON rss_articles (category, published_at DESC);
         CREATE INDEX IF NOT EXISTS idx_rss_articles_image_status ON rss_articles (image_status, published_at DESC);
+
+        CREATE TABLE IF NOT EXISTS cinema_movies (
+          id INT PRIMARY KEY,
+          title TEXT NOT NULL,
+          overview TEXT,
+          poster_path TEXT,
+          backdrop_path TEXT,
+          release_date TEXT,
+          vote_average DOUBLE PRECISION DEFAULT 0,
+          genres JSONB,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS cinema_shows (
+          id INT PRIMARY KEY,
+          name TEXT NOT NULL,
+          overview TEXT,
+          poster_path TEXT,
+          backdrop_path TEXT,
+          first_air_date TEXT,
+          vote_average DOUBLE PRECISION DEFAULT 0,
+          genres JSONB,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS cinema_sources (
+          id SERIAL PRIMARY KEY,
+          tmdb_id INT NOT NULL,
+          media_type VARCHAR(16) NOT NULL,
+          season INT DEFAULT 1,
+          episode INT DEFAULT 1,
+          sources JSONB NOT NULL,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_cinema_sources_media ON cinema_sources (tmdb_id, media_type, season, episode);
       `);
 
       console.log(`  ✅ Supplementary migrations & indexes successfully applied on ${item.name}.`);

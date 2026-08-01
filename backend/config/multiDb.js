@@ -55,8 +55,10 @@ const AI_DB_CONFIG = {
 
 // Initialize pool instances with error handling
 const contentPools = DB_CONFIGS.map(cfg => {
+  const rawUrl = cfg.url || process.env.DATABASE_URL || '';
+  const cleanUrl = rawUrl ? rawUrl.split('?')[0] : '';
   const p = new Pool({
-    connectionString: cfg.url,
+    connectionString: cleanUrl,
     ssl: { rejectUnauthorized: false },
     max: 10,
     idleTimeoutMillis: 30000,
