@@ -7,20 +7,26 @@ const redisService = require('./redisService');
 function resolveMovieEmbeds(tmdbId) {
   return [
     {
-      source_name: 'VidLink (Ultra Fast 4K/1080p)',
-      url: `https://vidlink.pro/movie/${tmdbId}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
       source_name: 'VidSrc.cc (Primary Server)',
       url: `https://vidsrc.cc/v2/embed/movie/${tmdbId}`,
       quality: '1080p',
       is_embed: true
     },
     {
+      source_name: 'VidSrc.vip (Ultra Fast)',
+      url: `https://vidsrc.vip/embed/movie/${tmdbId}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
       source_name: 'Embed.su (Multi-host)',
       url: `https://embed.su/embed/movie/${tmdbId}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: 'VidLink (Alternative)',
+      url: `https://vidlink.pro/movie/${tmdbId}`,
       quality: '1080p',
       is_embed: true
     },
@@ -43,12 +49,6 @@ function resolveMovieEmbeds(tmdbId) {
       is_embed: true
     },
     {
-      source_name: 'VidSrc.me (Classic)',
-      url: `https://vidsrc.xyz/embed/movie/${tmdbId}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
       source_name: 'SuperEmbed (Ad-light)',
       url: `https://multiembed.to/embed.php?video_id=${tmdbId}`,
       quality: '720p',
@@ -63,20 +63,26 @@ function resolveMovieEmbeds(tmdbId) {
 function resolveEpisodeEmbeds(tmdbId, season, episode) {
   return [
     {
-      source_name: 'VidLink (Ultra Fast 4K/1080p)',
-      url: `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
       source_name: 'VidSrc.cc (Primary Server)',
       url: `https://vidsrc.cc/v2/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p',
       is_embed: true
     },
     {
+      source_name: 'VidSrc.vip (Ultra Fast)',
+      url: `https://vidsrc.vip/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
       source_name: 'Embed.su (Multi-host)',
       url: `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p',
+      is_embed: true
+    },
+    {
+      source_name: 'VidLink (Alternative)',
+      url: `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p',
       is_embed: true
     },
@@ -95,12 +101,6 @@ function resolveEpisodeEmbeds(tmdbId, season, episode) {
     {
       source_name: 'VidSrc.in (Mirror)',
       url: `https://vidsrc.in/embed/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
-      source_name: 'VidSrc.me (Classic)',
-      url: `https://vidsrc.xyz/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p',
       is_embed: true
     },

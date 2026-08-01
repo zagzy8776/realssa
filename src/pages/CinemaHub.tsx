@@ -130,12 +130,16 @@ export default function CinemaHub() {
       if (media.media_type === 'movie') {
         setAvailableSources(details.sources || []);
       } else if (media.media_type === 'tv') {
-        setSeasons(details.seasons || []);
-        // Trigger loading of season 1 episodes
-        if (details.seasons && details.seasons.length > 0) {
-          const s1 = details.seasons[0].season_number;
-          setSelectedSeasonNum(s1);
-          fetchSeasonEpisodes(media.id, s1);
+        const rawSeasons = details.seasons || [];
+        // Filter out Season 0 (Specials/Trailers which servers don't host)
+        const regularSeasons = rawSeasons.filter((s: any) => s.season_number > 0);
+        const activeSeasons = regularSeasons.length > 0 ? regularSeasons : rawSeasons;
+        setSeasons(activeSeasons);
+
+        if (activeSeasons.length > 0) {
+          const firstSeasonNum = activeSeasons[0].season_number;
+          setSelectedSeasonNum(firstSeasonNum);
+          fetchSeasonEpisodes(media.id, firstSeasonNum);
         }
       }
     } catch (err) {
