@@ -2,8 +2,8 @@ const axios = require('axios');
 const redisService = require('./redisService');
 const r2Service = require('./r2Service');
 
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
-const TMDB_READ_TOKEN = process.env.TMDB_READ_TOKEN;
+const TMDB_API_KEY = process.env.TMDB_API_KEY || 'c45fd7812c8980c108390153b0041416';
+const TMDB_READ_TOKEN = process.env.TMDB_READ_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjNDVmZDc4MTJjODk4MGMxMDgzOTAxNTNiMDA0MTQxNiIsIm5iZiI6MTc4NTM4NDk2Ny4zMDcwMDAyLCJzdWIiOiI2YTZhZDAwN2lyZjAyMDJjMTMwZTdiNzgiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.f9r903H07S-TMyG5LCIMNF4uJ-bZytYSWgIWZGJS6ik';
 const BASE_URL = 'https://api.themoviedb.org/3';
 
 // Set up Axios instance with defaults
@@ -18,9 +18,7 @@ const tmdbClient = axios.create({
 // Always include the api_key query parameter
 const getParams = (extraParams = {}) => {
   const params = { ...extraParams };
-  if (TMDB_API_KEY) {
-    params.api_key = TMDB_API_KEY;
-  }
+  params.api_key = TMDB_API_KEY;
   return params;
 };
 
@@ -31,20 +29,19 @@ async function processMediaImages(item) {
   if (!item) return item;
   
   if (item.poster_path) {
-    const originalUrl = `https://image.tmdb.org/t/p/w500${item.poster_path}`;
-    // Key will look like: cinema/posters/poster_path.jpg
-    const cleanKey = `cinema/posters${item.poster_path}`;
-    item.r2_poster_url = await r2Service.cacheImageToR2(originalUrl, cleanKey);
+    item.r2_poster_url = item.poster_path.startsWith('http')
+      ? item.poster_path
+      : `https://image.tmdb.org/t/p/w500${item.poster_path}`;
   } else {
-    item.r2_poster_url = 'https://realssanews.com.ng/logo.png'; // Fallback
+    item.r2_poster_url = 'https://realssanews.com.ng/logo.png';
   }
 
   if (item.backdrop_path) {
-    const originalUrl = `https://image.tmdb.org/t/p/original${item.backdrop_path}`;
-    const cleanKey = `cinema/backdrops${item.backdrop_path}`;
-    item.r2_backdrop_url = await r2Service.cacheImageToR2(originalUrl, cleanKey);
+    item.r2_backdrop_url = item.backdrop_path.startsWith('http')
+      ? item.backdrop_path
+      : `https://image.tmdb.org/t/p/original${item.backdrop_path}`;
   } else {
-    item.r2_backdrop_url = 'https://realssanews.com.ng/logo.png'; // Fallback
+    item.r2_backdrop_url = 'https://realssanews.com.ng/logo.png';
   }
 
   return item;

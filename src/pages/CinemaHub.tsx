@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Info, Search, Heart, Star, Film, Tv, ChevronRight, X, Clock, Calendar, ShieldCheck, Activity, EyeOff } from 'lucide-react';
+import VideoNews from "@/pages/VideoNews";
+import { Play, Info, Search, Heart, Star, Film, Tv, ChevronRight, X, Clock, Calendar, ShieldCheck, Activity, EyeOff, Youtube } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,7 @@ interface StreamSource {
 }
 
 export default function CinemaHub() {
+  const [activeTab, setActiveTab] = useState<'movies' | 'news'>('movies');
   const [trending, setTrending] = useState<MovieOrShow[]>([]);
   const [featured, setFeatured] = useState<MovieOrShow | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -211,8 +213,36 @@ export default function CinemaHub() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 flex flex-col font-sans select-none">
-      <Header />
+      {/* Category / Mode Switcher Bar */}
+      <div className="bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 sticky top-14 z-40 px-4 py-2.5">
+        <div className="container mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Button
+              variant={activeTab === 'movies' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveTab('movies')}
+              className={`rounded-full text-xs font-bold gap-2 ${activeTab === 'movies' ? 'bg-amber-500 text-black hover:bg-amber-400 font-extrabold' : 'text-zinc-400 hover:text-white'}`}
+            >
+              <Film size={14} />
+              Movies & Shows
+            </Button>
+            <Button
+              variant={activeTab === 'news' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveTab('news')}
+              className={`rounded-full text-xs font-bold gap-2 ${activeTab === 'news' ? 'bg-amber-500 text-black hover:bg-amber-400 font-extrabold' : 'text-zinc-400 hover:text-white'}`}
+            >
+              <Youtube size={14} />
+              Live News & YouTube Feeds
+            </Button>
+          </div>
+        </div>
+      </div>
 
+      {activeTab === 'news' ? (
+        <VideoNews />
+      ) : (
+        <>
       {/* Hero Banner Section */}
       {!isSearching && featured && (
         <section className="relative w-full h-[60vh] sm:h-[80vh] bg-zinc-950 flex flex-col justify-end overflow-hidden border-b border-zinc-900">
@@ -429,6 +459,8 @@ export default function CinemaHub() {
           )
         )}
       </main>
+      </>
+      )}
 
       {/* Cinematic Detail Drawer (Slides from right/centered modal) */}
       {selectedMedia && (

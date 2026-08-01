@@ -38,6 +38,7 @@ const WorldNews           = lazy(() => import("./pages/WorldNews"));
 const ForYou              = lazy(() => import("./pages/ForYou"));
 const CryptoNews          = lazy(() => import("./pages/CryptoNews"));
 const CinemaHub           = lazy(() => import("./pages/CinemaHub"));
+const VideoNews           = lazy(() => import("./pages/VideoNews"));
 const Sports              = lazy(() => import("./pages/Sports"));
 const Ghana               = lazy(() => import("./pages/Ghana"));
 const Kenya               = lazy(() => import("./pages/Kenya"));
@@ -149,6 +150,7 @@ const App = () => {
                 <Route path="/for-you" element={<ForYou />} />
                 <Route path="/crypto" element={<CryptoNews />} />
                 <Route path="/videos" element={<CinemaHub />} />
+                <Route path="/video-news" element={<VideoNews />} />
                 <Route path="/sports" element={<Sports />} />
                 <Route path="/ghana" element={<Trending />} />
                 <Route path="/kenya" element={<Trending />} />
