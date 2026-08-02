@@ -10,30 +10,14 @@ function getServer1Url(tmdbId: number, mediaType: 'movie' | 'tv', season: number
   return `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`;
 }
 
-// All 20 servers — Server 1 loads first, others available on demand
+// All 4 primary multi-host servers
 function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: number, episode: number) {
   const isTV = mediaType === 'tv';
   return [
-    { name: 'Server 1', url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}` },
-    { name: 'Server 2', url: isTV ? `https://vidsrc.me/embed/tv/${tmdbId}/${season}/${episode}` : `https://vidsrc.me/embed/movie/${tmdbId}` },
-    { name: 'Server 3', url: isTV ? `https://player.autoembed.cc/embed/tv/${tmdbId}/${season}/${episode}` : `https://player.autoembed.cc/embed/movie/${tmdbId}` },
-    { name: 'Server 4', url: isTV ? `https://vidsrc.net/embed/tv/${tmdbId}/${season}/${episode}` : `https://vidsrc.net/embed/movie/${tmdbId}` },
-    { name: 'Server 5', url: isTV ? `https://player.smashy.stream/tv/${tmdbId}?s=${season}&e=${episode}` : `https://player.smashy.stream/movie/${tmdbId}` },
-    { name: 'Server 6', url: isTV ? `https://vidsrc.cc/v2/embed/tv/${tmdbId}/${season}/${episode}` : `https://vidsrc.cc/v2/embed/movie/${tmdbId}` },
-    { name: 'Server 7', url: isTV ? `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}?autoplay=true` : `https://vidlink.pro/movie/${tmdbId}?autoplay=true` },
-    { name: 'Server 8', url: isTV ? `https://vidsrc.xyz/embed/tv/${tmdbId}/${season}/${episode}` : `https://vidsrc.xyz/embed/movie/${tmdbId}` },
-    { name: 'Server 9', url: `https://multiembed.to/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}` },
-    { name: 'Server 10', url: isTV ? `https://vidsrc.vip/embed/tv/${tmdbId}/${season}/${episode}` : `https://vidsrc.vip/embed/movie/${tmdbId}` },
-    { name: 'Server 11', url: isTV ? `https://www.2embed.cc/embedtv/${tmdbId}&s=${season}&e=${episode}` : `https://www.2embed.cc/embed/${tmdbId}` },
-    { name: 'Server 12', url: isTV ? `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}` : `https://embed.su/embed/movie/${tmdbId}` },
-    { name: 'Server 13', url: isTV ? `https://moviesapi.club/tv/${tmdbId}-${season}-${episode}` : `https://moviesapi.club/movie/${tmdbId}` },
-    { name: 'Server 14', url: isTV ? `https://flixhq.to/embed/tv/${tmdbId}/${season}/${episode}` : `https://flixhq.to/embed/movie/${tmdbId}` },
-    { name: 'Server 15', url: isTV ? `https://cinezone.to/embed/tv/${tmdbId}/${season}/${episode}` : `https://cinezone.to/embed/movie/${tmdbId}` },
-    { name: 'Server 16', url: isTV ? `https://www.NontonGo.net/embed/tv/${tmdbId}/${season}/${episode}` : `https://www.NontonGo.net/embed/movie/${tmdbId}` },
-    { name: 'Server 17', url: isTV ? `https://soaper.tv/embed/tv/${tmdbId}/${season}/${episode}` : `https://soaper.tv/embed/movie/${tmdbId}` },
-    { name: 'Server 18', url: isTV ? `https://watchseries-online.io/embed/tv/${tmdbId}/${season}/${episode}` : `https://watchseries-online.io/embed/movie/${tmdbId}` },
-    { name: 'Server 19', url: isTV ? `https://www.episodate.com/embed/tvmaze/${tmdbId}/${season}/${episode}` : `https://vidsrc.pro/embed/movie/${tmdbId}` },
-    { name: 'Server 20', url: isTV ? `https://vidsrc.pro/embed/tv/${tmdbId}/${season}/${episode}` : `https://vidsrc.pro/embed/movie/${tmdbId}` },
+    { name: 'Server 1 (MultiEmbed)', url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}` },
+    { name: 'Server 2 (Embed.su)', url: isTV ? `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}` : `https://embed.su/embed/movie/${tmdbId}` },
+    { name: 'Server 3 (VidSrc.to)', url: isTV ? `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}` : `https://vidsrc.to/embed/movie/${tmdbId}` },
+    { name: 'Server 4 (SuperEmbed)', url: `https://multiembed.to/embed.php?video_id=${tmdbId}${isTV ? `&s=${season}&e=${episode}` : ''}` },
   ];
 }
 
