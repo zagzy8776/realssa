@@ -3,27 +3,37 @@ const { createClient } = require('redis');
 let client = null;
 let isConnected = false;
 
-const redisUrl = process.env.REDIS_URL;
+let redisUrl = process.env.REDIS_URL;
 
 if (redisUrl) {
-  client = createClient({
-    url: redisUrl,
-    socket: {
-      connectTimeout: 5000,
-      reconnectStrategy: (retries) => {
-        if (retries > 5) {
-          console.warn('❌ [Redis] Max reconnection attempts reached. Disabling cache.');
-          return false;
+  // Strip UTF-8 BOM, double/single quotes, and leading/trailing whitespace
+  redisUrl = redisUrl.replace(/^\uFEFF/, '').replace(/^["']|["']$/g, '').trim();
+
+  try {
+    client = createClient({
+      url: redisUrl,
+      socket: {
+        connectTimeout: 5000,
+        reconnectStrategy: (retries) => {
+          if (retries > 5) {
+            console.warn('❌ [Redis] Max reconnection attempts reached. Disabling cache.');
+            return false;
+          }
+          return Math.min(retries * 500, 2000);
         }
-        return Math.min(retries * 500, 2000);
       }
-    }
-  });
+    });
 
-  client.on('error', (err) => {
-    console.warn('⚠️ [Redis Error]:', err.message);
-  });
+    client.on('error', (err) => {
+      console.warn('⚠️ [Redis Error]:', err.message);
+    });
+  } catch (err) {
+    console.warn('❌ [Redis Client Creation Failed]:', err.message);
+    client = null;
+  }
+}
 
+if (client) {
   client.on('connect', () => {
     console.log('🔌 [Redis] Connecting to Upstash...');
   });
