@@ -70,32 +70,43 @@ async function getStreamingSources(tmdbId, mediaType = 'movie', redisService) {
     if (!watchmodeId) return [];
 
     const response = await client.get(`/title/${watchmodeId}/sources/`, {
-      params: { apiKey: WATCHMODE_KEY, regions: 'US' }
+      params: { apiKey: WATCHMODE_KEY }
     });
 
     const sources = response.data || [];
 
-    // Filter to subscription/free only (skip buy/rent), prioritize known platforms
-    const cleaned = sources
-      .filter(s => s.type === 'sub' || s.type === 'free')
-      .map(s => ({
-        name: s.name,
-        type: s.type,       // 'sub' or 'free'
-        web_url: s.web_url,
-        logo: `https://cdn.watchmode.com/provider_logos/${s.name.toLowerCase().replace(/\s+/g, '_')}_100px.png`,
-      }))
-      // Prioritize well-known platforms first
-      .sort((a, b) => {
-        const aPriority = PRIORITY_SOURCES.has(a.name) ? 0 : 1;
-        const bPriority = PRIORITY_SOURCES.has(b.name) ? 0 : 1;
-        return aPriority - bPriority;
-      })
-      .slice(0, 6); // Max 6 badges to keep UI clean
+    // Filter to subscription/free only (skip buy/rent) and deduplicate by provider name
+    const seenNames = new Set();
+    const cleaned = [];
+    
+    for (const s of sources) {
+      if (s.type === 'sub' || s.type === 'free') {
+        const normalizedName = s.name.trim();
+        if (!seenNames.has(normalizedName)) {
+          seenNames.add(normalizedName);
+          cleaned.push({
+            name: normalizedName,
+            type: s.type,       // 'sub' or 'free'
+            web_url: s.web_url,
+            logo: `https://cdn.watchmode.com/provider_logos/${normalizedName.toLowerCase().replace(/\s+/g, '_')}_100px.png`,
+          });
+        }
+      }
+    }
+
+    // Prioritize well-known platforms first
+    cleaned.sort((a, b) => {
+      const aPriority = PRIORITY_SOURCES.has(a.name) ? 0 : 1;
+      const bPriority = PRIORITY_SOURCES.has(b.name) ? 0 : 1;
+      return aPriority - bPriority;
+    });
+
+    const finalSources = cleaned.slice(0, 6); // Max 6 badges to keep UI clean
 
     if (redisService) {
-      await redisService.setCached(cacheKey, cleaned, 3600 * 24); // 24h cache
+      await redisService.setCached(cacheKey, finalSources, 3600 * 24); // 24h cache
     }
-    return cleaned;
+    return finalSources;
   } catch (err) {
     console.error('❌ [Watchmode Sources Error]:', err.message);
     return [];
