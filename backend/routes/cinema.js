@@ -9,6 +9,7 @@ const streamResolver = require('../services/streamResolver');
 const tvmazeService = require('../services/tvmazeService');
 const watchmodeService = require('../services/watchmodeService');
 const redisService = require('../services/redisService');
+const streamHealthMonitor = require('../services/streamHealthMonitor');
 
 /**
  * GET /api/cinema/resolve-stream
@@ -282,6 +283,20 @@ router.get('/episodes/:showId/:season/:episode/sources', async (req, res) => {
   } catch (err) {
     console.error(`[Cinema API] Episode Sources error:`, err.message);
     res.status(500).json({ error: 'Failed to fetch streaming sources for this episode' });
+  }
+});
+
+/**
+ * GET /api/cinema/server-health
+ * Returns current health state of all embed servers.
+ * Frontend uses this to skip degraded servers before play.
+ */
+router.get('/server-health', async (req, res) => {
+  try {
+    const health = await streamHealthMonitor.getServerHealthStatus();
+    res.json({ servers: health, timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch server health' });
   }
 });
 

@@ -319,6 +319,15 @@ app.use('/api/v1', require('./routes/publicApi'));
 // Cinema Hub & Video Streaming Platform Routes
 app.use('/api/cinema', require('./routes/cinema'));
 
+// ── Stream Health Monitor (every 15 min) ──
+const streamHealthMonitor = require('./services/streamHealthMonitor');
+// Run immediately on startup, then every 15 minutes
+streamHealthMonitor.runStreamHealthCheck().catch(console.error);
+setInterval(() => {
+  streamHealthMonitor.runStreamHealthCheck().catch(console.error);
+}, 15 * 60 * 1000);
+
+
 app.get(['/rss.xml', '/rss/:category.xml'], async (req, res) => {
   const category = (req.params.category || 'latest').replace('.xml', '');
   const xml = await generateRSSFeedFromDB(app.get('pool'), category);

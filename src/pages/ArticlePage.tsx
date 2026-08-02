@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { ShieldCheck, ShieldAlert, Users } from "lucide-react";
 import { ArrowLeft, Share2, Facebook, Twitter, Mail, Copy, Heart, MessageCircle, Send, ExternalLink } from "lucide-react";
 import { trackArticleRead } from "@/lib/userPreferences";
+import MovieRail from "@/components/MovieRail";
 
 interface Comment {
   id: string;
@@ -650,6 +651,11 @@ const ArticlePage = () => {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Cross-Pollination: News → Movie Rail */}
+          {article && (
+            <MovieRail headline={article.title || ''} articleId={article.id} />
           )}
         </article>
       </div>

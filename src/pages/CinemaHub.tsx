@@ -75,8 +75,53 @@ export default function CinemaHub() {
     tmdbId: number; mediaType: 'movie' | 'tv'; season: number; episode: number; title: string;
   } | null>(null);
 
+  // ── Continue Watching (localStorage persistence) ──
+  const [continueWatching, setContinueWatching] = useState<Array<{
+    tmdbId: number; title: string; poster: string | null;
+    mediaType: 'movie' | 'tv'; season: number; episode: number; timestamp: number;
+  }>>([]);
+
+  // ── Data Saver Mode (auto-detects Nigerian low-bandwidth connections) ──
+  const [dataSaver, setDataSaver] = useState(false);
+
+  // ── Time-aware content (night = thrillers, morning = news first) ──
+  const [timeOfDay, setTimeOfDay] = useState<'night' | 'morning' | 'day'>('day');
+
+  // ── Trailer preview on hero banner ──
+  const [heroTrailerKey, setHeroTrailerKey] = useState<string | null>(null);
+
   // ── Initial Load ──
   useEffect(() => { fetchPage(1, true); }, []);
+
+  // ── Data saver: auto-detect via navigator.connection ──
+  useEffect(() => {
+    const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    if (conn) {
+      const check = () => {
+        const slow = conn.effectiveType === '2g' || conn.effectiveType === 'slow-2g' || conn.saveData;
+        setDataSaver(slow);
+      };
+      check();
+      conn.addEventListener?.('change', check);
+      return () => conn.removeEventListener?.('change', check);
+    }
+  }, []);
+
+  // ── Time of day detection for contextual hero ──
+  useEffect(() => {
+    const h = new Date().getHours();
+    if (h >= 21 || h < 5) setTimeOfDay('night');        // Late night → thrillers/horror
+    else if (h >= 5 && h < 10) setTimeOfDay('morning'); // Morning → news nudge
+    else setTimeOfDay('day');
+  }, []);
+
+  // ── Continue Watching: load from localStorage ──
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('realssa:continue_watching');
+      if (raw) setContinueWatching(JSON.parse(raw));
+    } catch (_) {}
+  }, []);
 
   // ── IntersectionObserver for infinite scroll ──
   useEffect(() => {
@@ -284,10 +329,31 @@ export default function CinemaHub() {
     if (selectedMedia) fetchSeasonEpisodes(selectedMedia.id, seasonNum);
   };
 
+  // ── Save to Continue Watching history ──
+  const saveToWatchHistory = (media: MovieOrShow, season = 1, episode = 1) => {
+    const entry = {
+      tmdbId: media.id,
+      title: media.title || media.name || '',
+      poster: media.r2_poster_url || (media.poster_path ? `https://image.tmdb.org/t/p/w300${media.poster_path}` : null),
+      mediaType: (media.media_type || 'movie') as 'movie' | 'tv',
+      season,
+      episode,
+      timestamp: Date.now(),
+    };
+    setContinueWatching(prev => {
+      // Remove existing entry for same title, prepend new one, cap at 10
+      const filtered = prev.filter(i => i.tmdbId !== media.id);
+      const updated = [entry, ...filtered].slice(0, 10);
+      try { localStorage.setItem('realssa:continue_watching', JSON.stringify(updated)); } catch (_) {}
+      return updated;
+    });
+  };
+
   const handleEpisodeSelect = (ep: Episode) => {
     if (!selectedMedia) return;
     setSelectedEpisode(ep);
     const showName = selectedMedia.title || selectedMedia.name || 'Show';
+    saveToWatchHistory(selectedMedia, ep.season_number, ep.episode_number);
     setActivePlayer({
       tmdbId: selectedMedia.id,
       mediaType: 'tv',
@@ -298,6 +364,7 @@ export default function CinemaHub() {
   };
 
   const handlePlayMedia = (media: MovieOrShow) => {
+    saveToWatchHistory(media, 1, 1);
     setActivePlayer({
       tmdbId: media.id,
       mediaType: (media.media_type || 'movie') as 'movie' | 'tv',
@@ -446,6 +513,78 @@ export default function CinemaHub() {
 
           {/* Main Content Area */}
           <main className="container mx-auto px-4 py-6 flex-1">
+
+            {/* ── Data Saver Banner (auto-shown on 2G/slow networks) ── */}
+            {dataSaver && (
+              <div className="mb-4 flex items-center gap-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2.5">
+                <span className="text-emerald-400 text-sm">📶</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-emerald-400">Data Saver Active</p>
+                  <p className="text-[10px] text-zinc-500">Slow connection detected — lower-quality streams loaded to save your data</p>
+                </div>
+                <button onClick={() => setDataSaver(false)} className="text-zinc-600 hover:text-zinc-400 text-xs">✕</button>
+              </div>
+            )}
+
+            {/* ── Time-aware greeting ── */}
+            {!isSearching && (
+              <p className="text-[10px] uppercase font-extrabold text-zinc-600 tracking-widest mb-4">
+                {timeOfDay === 'night' ? '🌙 Late Night Cinema' : timeOfDay === 'morning' ? '☀️ Good Morning — Start Your Day' : '🔥 Popular Releases'}
+              </p>
+            )}
+
+            {/* ── Continue Watching Row ── */}
+            {!isSearching && continueWatching.length > 0 && (
+              <div className="mb-7">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-extrabold text-zinc-300 flex items-center gap-1.5">
+                    <Clock size={12} className="text-amber-500" /> Continue Watching
+                  </p>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('realssa:continue_watching');
+                      setContinueWatching([]);
+                    }}
+                    className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+                  {continueWatching.map(item => (
+                    <button
+                      key={`${item.tmdbId}-${item.season}-${item.episode}`}
+                      onClick={() => setActivePlayer({
+                        tmdbId: item.tmdbId,
+                        mediaType: item.mediaType,
+                        season: item.season,
+                        episode: item.episode,
+                        title: item.title,
+                      })}
+                      className="flex-shrink-0 w-28 group"
+                    >
+                      <div className="relative w-28 h-40 rounded-xl overflow-hidden border border-zinc-800 group-hover:border-amber-500/50 transition-all">
+                        {item.poster
+                          ? <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                          : <div className="w-full h-full bg-zinc-900 flex items-center justify-center"><Film size={24} className="text-zinc-700" /></div>
+                        }
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
+                            <Play size={14} className="fill-black ml-0.5" />
+                          </div>
+                        </div>
+                        {item.mediaType === 'tv' && (
+                          <div className="absolute bottom-1.5 left-1.5 bg-black/70 text-[9px] font-bold text-amber-400 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                            S{item.season}E{item.episode}
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-400 mt-1 truncate text-left">{item.title}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── Search Bar with Live Autocomplete ── */}
             <div ref={searchRef} className="relative w-full max-w-xl mx-auto mb-8">
