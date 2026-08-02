@@ -2,19 +2,27 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { X, Server, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SandboxedIframe } from './SandboxedIframe';
 
-// Build Server 1 URL directly — no backend roundtrip, plays instantly
-function getServer1Url(tmdbId: number, mediaType: 'movie' | 'tv', season: number, episode: number): string {
-  if (mediaType === 'tv') {
-    return `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`;
-  }
-  return `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`;
-}
 
 // All active servers
 function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: number, episode: number) {
   const isTV = mediaType === 'tv';
   return [
-    { name: 'Server 1 (MultiEmbed)', url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}` }
+    {
+      name: 'Server 1 (MultiEmbed)',
+      url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}`
+    },
+    {
+      name: 'Server 2 (MovieUniverse)',
+      url: isTV
+        ? `https://movieuniverse.skin/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://movieuniverse.skin/embed/movie/${tmdbId}`
+    },
+    {
+      name: 'Server 3 (VidSrc)',
+      url: isTV
+        ? `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidsrc.to/embed/movie/${tmdbId}`
+    },
   ];
 }
 

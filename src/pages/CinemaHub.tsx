@@ -779,36 +779,84 @@ export default function CinemaHub() {
             </div>
           )}
 
-          {/* Curated 24/7 Broadcast Channels */}
+          {/* Live Sports Access — VIPRow · VIPBox · Strikeout */}
           <div className="mt-8 border-t border-zinc-900 pt-8 mb-6">
-            <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2">
               <Tv size={14} />
-              Live Sports Broadcast Channels
+              Browse Live Sports By Category
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <p className="text-[10px] text-zinc-600 mb-5">All streams use VIPRow, VIPBox and Strikeout — 3 independent CDNs. If one is blank, switch server inside the player.</p>
+
+            {/* ── Football / Soccer ── */}
+            <p className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest mb-2.5">⚽ Football</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 mb-6">
               {[
-                { id: 28, name: 'SuperSport Premier League', theme: 'from-red-600/10 to-zinc-900 border-red-500/20 text-orange-400 hover:border-orange-500/40' },
-                { id: 45, name: 'SuperSport La Liga', theme: 'from-indigo-600/10 to-zinc-900 border-indigo-500/20 text-indigo-400 hover:border-indigo-500/40' },
-                { id: 31, name: 'SuperSport Football', theme: 'from-emerald-600/10 to-zinc-900 border-emerald-500/20 text-emerald-400 hover:border-emerald-500/40' },
-                { id: 27, name: 'SuperSport Grandstand', theme: 'from-amber-600/10 to-zinc-900 border-amber-500/20 text-amber-400 hover:border-amber-500/40' },
-                { id: 3, name: 'Sky Sports Premier League', theme: 'from-red-600/10 to-zinc-900 border-red-500/20 text-red-400 hover:border-red-500/40' },
-                { id: 2, name: 'Sky Sports Main Event', theme: 'from-zinc-700/10 to-zinc-900 border-zinc-500/20 text-zinc-400 hover:border-zinc-500/40' },
-                { id: 18, name: 'TNT Sports 1', theme: 'from-pink-600/10 to-zinc-900 border-pink-500/20 text-pink-400 hover:border-pink-500/40' },
-                { id: 19, name: 'TNT Sports 2', theme: 'from-violet-600/10 to-zinc-900 border-violet-500/20 text-violet-400 hover:border-violet-500/40' },
-                { id: 33, name: 'ESPN US', theme: 'from-red-600/10 to-zinc-900 border-red-500/20 text-red-500 hover:border-red-500/40' },
-                { id: 34, name: 'ESPN 2 US', theme: 'from-zinc-700/10 to-zinc-900 border-zinc-500/20 text-zinc-400 hover:border-zinc-500/40' },
-                { id: 39, name: 'beIN Sports US', theme: 'from-blue-600/10 to-zinc-900 border-blue-500/20 text-blue-400 hover:border-blue-500/40' },
-                { id: 46, name: 'LaLiga TV', theme: 'from-amber-600/10 to-zinc-900 border-amber-500/20 text-amber-400 hover:border-amber-500/40' },
+                { id: 'football', name: 'Live Football', theme: 'from-emerald-600/10 to-zinc-900 border-emerald-500/20 text-emerald-400 hover:border-emerald-500/40' },
+                { id: 'premier-league', name: 'Premier League', theme: 'from-purple-600/10 to-zinc-900 border-purple-500/20 text-purple-400 hover:border-purple-500/40' },
+                { id: 'la-liga', name: 'La Liga', theme: 'from-red-600/10 to-zinc-900 border-red-500/20 text-red-400 hover:border-red-500/40' },
+                { id: 'champions-league', name: 'Champions League', theme: 'from-blue-600/10 to-zinc-900 border-blue-500/20 text-blue-400 hover:border-blue-500/40' },
+                { id: 'serie-a', name: 'Serie A', theme: 'from-indigo-600/10 to-zinc-900 border-indigo-500/20 text-indigo-400 hover:border-indigo-500/40' },
+                { id: 'bundesliga', name: 'Bundesliga', theme: 'from-yellow-600/10 to-zinc-900 border-yellow-500/20 text-yellow-400 hover:border-yellow-500/40' },
+                { id: 'ligue-1', name: 'Ligue 1', theme: 'from-sky-600/10 to-zinc-900 border-sky-500/20 text-sky-400 hover:border-sky-500/40' },
+                { id: 'afcon', name: 'Africa / AFCON', theme: 'from-amber-600/10 to-zinc-900 border-amber-500/20 text-amber-400 hover:border-amber-500/40' },
               ].map(ch => (
                 <button
                   key={ch.id}
                   onClick={() => setActiveSportsPlayer({ channelId: ch.id, title: ch.name })}
-                  className={`relative flex flex-col p-4 bg-gradient-to-br ${ch.theme} rounded-2xl border text-left hover:scale-[1.02] transition-all hover:shadow-lg hover:shadow-black/50 group`}
+                  className={`relative flex flex-col p-3.5 bg-gradient-to-br ${ch.theme} rounded-2xl border text-left hover:scale-[1.02] transition-all hover:shadow-lg hover:shadow-black/40 group`}
                 >
-                  <span className="text-[8px] uppercase font-extrabold tracking-widest text-zinc-500">Live Network Feed</span>
-                  <span className="text-zinc-200 font-extrabold text-xs mt-1.5 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
-                  <div className="mt-4 flex items-center justify-between w-full">
-                    <span className="text-[9px] bg-white/5 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5">24/7 TV</span>
+                  <span className="text-[8px] uppercase font-extrabold tracking-widest text-zinc-500">Live Stream</span>
+                  <span className="text-zinc-200 font-extrabold text-xs mt-1 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
+                  <div className="mt-3 flex items-center justify-between w-full">
+                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">VIPRow · Strikeout</span>
+                    <Play size={10} className="text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0" />
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* ── Basketball & Combat Sports ── */}
+            <p className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest mb-2.5">🏀 Basketball · 🥊 Combat</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 mb-6">
+              {[
+                { id: 'nba', name: 'NBA Basketball', theme: 'from-orange-600/10 to-zinc-900 border-orange-500/20 text-orange-400 hover:border-orange-500/40' },
+                { id: 'boxing', name: 'Boxing', theme: 'from-red-600/10 to-zinc-900 border-red-500/20 text-red-400 hover:border-red-500/40' },
+                { id: 'ufc', name: 'UFC / MMA', theme: 'from-rose-600/10 to-zinc-900 border-rose-500/20 text-rose-400 hover:border-rose-500/40' },
+                { id: 'wrestling', name: 'WWE / Wrestling', theme: 'from-yellow-600/10 to-zinc-900 border-yellow-500/20 text-yellow-400 hover:border-yellow-500/40' },
+              ].map(ch => (
+                <button
+                  key={ch.id}
+                  onClick={() => setActiveSportsPlayer({ channelId: ch.id, title: ch.name })}
+                  className={`relative flex flex-col p-3.5 bg-gradient-to-br ${ch.theme} rounded-2xl border text-left hover:scale-[1.02] transition-all hover:shadow-lg hover:shadow-black/40 group`}
+                >
+                  <span className="text-[8px] uppercase font-extrabold tracking-widest text-zinc-500">Live Stream</span>
+                  <span className="text-zinc-200 font-extrabold text-xs mt-1 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
+                  <div className="mt-3 flex items-center justify-between w-full">
+                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">VIPBox · Strikeout</span>
+                    <Play size={10} className="text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0" />
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* ── Rugby, Cricket & Motorsport ── */}
+            <p className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest mb-2.5">🏉 Rugby · 🏏 Cricket · 🏎️ Motorsport</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+              {[
+                { id: 'rugby', name: 'Rugby Union / League', theme: 'from-green-600/10 to-zinc-900 border-green-500/20 text-green-400 hover:border-green-500/40' },
+                { id: 'cricket', name: 'Cricket', theme: 'from-lime-600/10 to-zinc-900 border-lime-500/20 text-lime-400 hover:border-lime-500/40' },
+                { id: 'f1', name: 'Formula 1', theme: 'from-red-700/10 to-zinc-900 border-red-600/20 text-red-400 hover:border-red-500/40' },
+                { id: 'tennis', name: 'Tennis', theme: 'from-yellow-600/10 to-zinc-900 border-yellow-500/20 text-yellow-400 hover:border-yellow-500/40' },
+              ].map(ch => (
+                <button
+                  key={ch.id}
+                  onClick={() => setActiveSportsPlayer({ channelId: ch.id, title: ch.name })}
+                  className={`relative flex flex-col p-3.5 bg-gradient-to-br ${ch.theme} rounded-2xl border text-left hover:scale-[1.02] transition-all hover:shadow-lg hover:shadow-black/40 group`}
+                >
+                  <span className="text-[8px] uppercase font-extrabold tracking-widest text-zinc-500">Live Stream</span>
+                  <span className="text-zinc-200 font-extrabold text-xs mt-1 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
+                  <div className="mt-3 flex items-center justify-between w-full">
+                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">VIPRow · VIPBox</span>
                     <Play size={10} className="text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0" />
                   </div>
                 </button>
