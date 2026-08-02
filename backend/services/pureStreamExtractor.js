@@ -4,121 +4,113 @@ const { queryMultiDb } = require('../config/multiDb');
 
 /**
  * Lightweight Pure HTTP Stream Unpacker Engine (Under 30MB RAM)
- * 20 Global Stream Servers across all continents — no Puppeteer, no timeouts
+ * 20 Global Stream Servers — MultiEmbed Torrent CDN leads as Server 1
  */
 
 /**
  * Build the global 20-server movie source list
- * Sorted: most reliable first based on community uptime stats
+ * Server 1 = MultiEmbed Torrent CDN (confirmed working, user verified)
  */
 function buildMovieSources(tmdbId) {
   return [
-    // === TIER 1: Most Reliable, Fastest Global CDN ===
+    // #1 — Confirmed Working (Torrent CDN)
     {
-      source_name: 'AutoEmbed (Ultra Fast)',
-      url: `https://player.autoembed.cc/embed/movie/${tmdbId}`,
+      source_name: 'Server 1',
+      url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'SmashyStream (Multi-Server)',
-      url: `https://player.smashy.stream/movie/${tmdbId}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
-    },
-    {
-      source_name: 'VidSrc.me (Global HD)',
+      source_name: 'Server 2',
       url: `https://vidsrc.me/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'VidSrc.xyz (Mirror)',
-      url: `https://vidsrc.xyz/embed/movie/${tmdbId}`,
+      source_name: 'Server 3',
+      url: `https://player.autoembed.cc/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
-
-    // === TIER 2: High-Speed Dedicated Mirrors ===
     {
-      source_name: 'VidLink Pro (HD Stream)',
-      url: `https://vidlink.pro/movie/${tmdbId}?primaryColor=ff6b35&autoplay=true`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'US/EU'
-    },
-    {
-      source_name: 'VidSrc.net (Fast CDN)',
+      source_name: 'Server 4',
       url: `https://vidsrc.net/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'VidSrc.cc (Primary)',
+      source_name: 'Server 5',
+      url: `https://player.smashy.stream/movie/${tmdbId}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
+    },
+    {
+      source_name: 'Server 6',
       url: `https://vidsrc.cc/v2/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'VidSrc.vip (Speed)',
+      source_name: 'Server 7',
+      url: `https://vidlink.pro/movie/${tmdbId}?primaryColor=ff6b35&autoplay=true`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'US/EU'
+    },
+    {
+      source_name: 'Server 8',
+      url: `https://vidsrc.xyz/embed/movie/${tmdbId}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
+    },
+    {
+      source_name: 'Server 9',
+      url: `https://multiembed.to/?video_id=${tmdbId}&tmdb=1`,
+      quality: '720p', is_embed: true, type: 'iframe', region: 'Global'
+    },
+    {
+      source_name: 'Server 10',
       url: `https://vidsrc.vip/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Asia/EU'
     },
-
-    // === TIER 3: Classic Reliable Networks ===
     {
-      source_name: '2Embed (Classic HD)',
+      source_name: 'Server 11',
       url: `https://www.2embed.cc/embed/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'US'
     },
     {
-      source_name: 'Embed.su (Multi-Host)',
+      source_name: 'Server 12',
       url: `https://embed.su/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'EU'
     },
     {
-      source_name: 'NontonGo (Asian CDN)',
-      url: `https://www.NontonGo.net/embed/movie/${tmdbId}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'Asia'
-    },
-    {
-      source_name: 'MultiEmbed (Torrent CDN)',
-      url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
-    },
-
-    // === TIER 4: Alternative High-Quality Mirrors ===
-    {
-      source_name: 'MoviesAPI (Free CDN)',
+      source_name: 'Server 13',
       url: `https://moviesapi.club/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'MovieE (Direct Stream)',
-      url: `https://moviesjoyhd.to/embed/${tmdbId}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'EU/Asia'
-    },
-    {
-      source_name: 'FlixNest (HLS Direct)',
+      source_name: 'Server 14',
       url: `https://flixhq.to/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'SuperEmbed (Multi CDN)',
-      url: `https://multiembed.to/?video_id=${tmdbId}&tmdb=1`,
-      quality: '720p', is_embed: true, type: 'iframe', region: 'Global'
+      source_name: 'Server 15',
+      url: `https://moviesjoyhd.to/embed/${tmdbId}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'EU/Asia'
     },
-
-    // === TIER 5: Backup Deep Mirror Network ===
     {
-      source_name: 'CineZone (Backup)',
+      source_name: 'Server 16',
+      url: `https://www.NontonGo.net/embed/movie/${tmdbId}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'Asia'
+    },
+    {
+      source_name: 'Server 17',
       url: `https://cinezone.to/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'WatchSeries (Classic)',
+      source_name: 'Server 18',
       url: `https://watchseries-online.io/embed/movie/${tmdbId}`,
       quality: '720p', is_embed: true, type: 'iframe', region: 'US/EU'
     },
     {
-      source_name: 'SoaperTV (Alternate)',
+      source_name: 'Server 19',
       url: `https://soaper.tv/embed/movie/${tmdbId}`,
       quality: '720p', is_embed: true, type: 'iframe', region: 'Asia'
     },
     {
-      source_name: 'VidSrc.pro (Deep Mirror)',
+      source_name: 'Server 20',
       url: `https://vidsrc.pro/embed/movie/${tmdbId}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     }
@@ -127,115 +119,107 @@ function buildMovieSources(tmdbId) {
 
 /**
  * Build the global 20-server TV Episode source list
+ * Server 1 = MultiEmbed Torrent CDN (confirmed working)
  */
 function buildEpisodeSources(tmdbId, season, episode) {
   return [
-    // === TIER 1: Most Reliable, Fastest Global CDN ===
     {
-      source_name: 'AutoEmbed (Ultra Fast)',
-      url: `https://player.autoembed.cc/embed/tv/${tmdbId}/${season}/${episode}`,
+      source_name: 'Server 1',
+      url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'SmashyStream (Multi-Server)',
-      url: `https://player.smashy.stream/tv/${tmdbId}?s=${season}&e=${episode}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
-    },
-    {
-      source_name: 'VidSrc.me (Global HD)',
+      source_name: 'Server 2',
       url: `https://vidsrc.me/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'VidSrc.xyz (Mirror)',
-      url: `https://vidsrc.xyz/embed/tv/${tmdbId}/${season}/${episode}`,
+      source_name: 'Server 3',
+      url: `https://player.autoembed.cc/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
-
-    // === TIER 2: High-Speed Dedicated Mirrors ===
     {
-      source_name: 'VidLink Pro (HD Stream)',
-      url: `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}?primaryColor=ff6b35&autoplay=true`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'US/EU'
-    },
-    {
-      source_name: 'VidSrc.net (Fast CDN)',
+      source_name: 'Server 4',
       url: `https://vidsrc.net/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'VidSrc.cc (Primary)',
+      source_name: 'Server 5',
+      url: `https://player.smashy.stream/tv/${tmdbId}?s=${season}&e=${episode}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
+    },
+    {
+      source_name: 'Server 6',
       url: `https://vidsrc.cc/v2/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'VidSrc.vip (Speed)',
-      url: `https://vidsrc.vip/embed/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'Asia/EU'
-    },
-
-    // === TIER 3: Classic Reliable Networks ===
-    {
-      source_name: '2Embed (Classic HD)',
-      url: `https://www.2embed.cc/embedtv/${tmdbId}&s=${season}&e=${episode}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'US'
+      source_name: 'Server 7',
+      url: `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}?primaryColor=ff6b35&autoplay=true`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'US/EU'
     },
     {
-      source_name: 'Embed.su (Multi-Host)',
-      url: `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'EU'
-    },
-    {
-      source_name: 'NontonGo (Asian CDN)',
-      url: `https://www.NontonGo.net/embed/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'Asia'
-    },
-    {
-      source_name: 'MultiEmbed (Torrent CDN)',
-      url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
-    },
-
-    // === TIER 4: Alternative High-Quality Mirrors ===
-    {
-      source_name: 'MoviesAPI (Free CDN)',
-      url: `https://moviesapi.club/tv/${tmdbId}-${season}-${episode}`,
+      source_name: 'Server 8',
+      url: `https://vidsrc.xyz/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'FlixNest (HLS Direct)',
-      url: `https://flixhq.to/embed/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
-    },
-    {
-      source_name: 'SuperEmbed (Multi CDN)',
+      source_name: 'Server 9',
       url: `https://multiembed.to/?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`,
       quality: '720p', is_embed: true, type: 'iframe', region: 'Global'
     },
     {
-      source_name: 'CineZone (Backup)',
+      source_name: 'Server 10',
+      url: `https://vidsrc.vip/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'Asia/EU'
+    },
+    {
+      source_name: 'Server 11',
+      url: `https://www.2embed.cc/embedtv/${tmdbId}&s=${season}&e=${episode}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'US'
+    },
+    {
+      source_name: 'Server 12',
+      url: `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'EU'
+    },
+    {
+      source_name: 'Server 13',
+      url: `https://moviesapi.club/tv/${tmdbId}-${season}-${episode}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
+    },
+    {
+      source_name: 'Server 14',
+      url: `https://flixhq.to/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
+    },
+    {
+      source_name: 'Server 15',
       url: `https://cinezone.to/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     },
-
-    // === TIER 5: Backup Deep Mirror Network ===
     {
-      source_name: 'SoaperTV (Asia Mirror)',
+      source_name: 'Server 16',
+      url: `https://www.NontonGo.net/embed/tv/${tmdbId}/${season}/${episode}`,
+      quality: '1080p', is_embed: true, type: 'iframe', region: 'Asia'
+    },
+    {
+      source_name: 'Server 17',
       url: `https://soaper.tv/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '720p', is_embed: true, type: 'iframe', region: 'Asia'
     },
     {
-      source_name: 'WatchSeries (Classic)',
+      source_name: 'Server 18',
       url: `https://watchseries-online.io/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '720p', is_embed: true, type: 'iframe', region: 'US/EU'
     },
     {
-      source_name: 'EpisodeTV (Mirror)',
+      source_name: 'Server 19',
       url: `https://www.episodate.com/embed/tvmaze/${tmdbId}/${season}/${episode}`,
       quality: '720p', is_embed: true, type: 'iframe', region: 'EU'
     },
     {
-      source_name: 'VidSrc.pro (Deep Mirror)',
+      source_name: 'Server 20',
       url: `https://vidsrc.pro/embed/tv/${tmdbId}/${season}/${episode}`,
       quality: '1080p', is_embed: true, type: 'iframe', region: 'Global'
     }
@@ -246,7 +230,7 @@ function buildEpisodeSources(tmdbId, season, episode) {
  * Pure HTTP Extractor for Movies
  */
 async function extractMovieStreams(tmdbId) {
-  const cacheKey = `cinema:stream:movie:v5:${tmdbId}`;
+  const cacheKey = `cinema:stream:movie:v6:${tmdbId}`;
 
   // 1. Check Upstash Redis Memory Layer
   try {
@@ -271,7 +255,7 @@ async function extractMovieStreams(tmdbId) {
  * Pure HTTP Extractor for TV Episodes
  */
 async function extractEpisodeStreams(tmdbId, season, episode) {
-  const cacheKey = `cinema:stream:tv:v5:${tmdbId}:${season}:${episode}`;
+  const cacheKey = `cinema:stream:tv:v6:${tmdbId}:${season}:${episode}`;
 
   // 1. Check Redis
   try {
