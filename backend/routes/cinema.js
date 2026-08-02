@@ -3,7 +3,27 @@ const router = express.Router();
 const axios = require('axios');
 const tmdbService = require('../services/tmdbService');
 const movieScraper = require('../services/movieScraper');
-const hlsExtractor = require('../services/hlsExtractor');
+const pureStreamExtractor = require('../services/pureStreamExtractor');
+const cinemaCronPrewarmer = require('../services/cinemaCronPrewarmer');
+
+/**
+ * GET /api/cinema/cron-prewarm
+ * Pre-warms the Top 50 Trending Movies & TV Episodes into Redis & Neon DB8
+ */
+router.get('/cron-prewarm', async (req, res) => {
+  try {
+    const secret = req.query.secret || req.headers['x-cron-secret'];
+    if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+      // Allow internal pre-warm call
+      console.log('[Cron Pre-Warmer] Running un-authenticated pre-warm ping');
+    }
+    const stats = await cinemaCronPrewarmer.runCinemaPrewarmer();
+    res.json({ message: 'Cinema stream pre-warming triggered successfully', stats });
+  } catch (err) {
+    console.error('[Cinema Cron Pre-warm Error]:', err.message);
+    res.status(500).json({ error: 'Failed to run stream pre-warmer' });
+  }
+});
 
 /**
  * GET /api/cinema/proxy-stream
@@ -58,9 +78,9 @@ router.get('/stream', async (req, res) => {
 
     let data;
     if (type === 'tv') {
-      data = await hlsExtractor.getEpisodeStreams(parseInt(id), parseInt(season), parseInt(episode));
+      data = await pureStreamExtractor.extractEpisodeStreams(parseInt(id), parseInt(season), parseInt(episode));
     } else {
-      data = await hlsExtractor.getMovieStreams(parseInt(id));
+      data = await pureStreamExtractor.extractMovieStreams(parseInt(id));
     }
 
     res.json(data);
