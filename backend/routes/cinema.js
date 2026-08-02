@@ -6,6 +6,9 @@ const movieScraper = require('../services/movieScraper');
 const pureStreamExtractor = require('../services/pureStreamExtractor');
 const cinemaCronPrewarmer = require('../services/cinemaCronPrewarmer');
 const streamResolver = require('../services/streamResolver');
+const tvmazeService = require('../services/tvmazeService');
+const watchmodeService = require('../services/watchmodeService');
+const redisService = require('../services/redisService');
 
 /**
  * GET /api/cinema/resolve-stream
@@ -155,11 +158,9 @@ router.get('/trending', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch trending movies/series' });
   }
 });
-
-
 /**
  * GET /api/cinema/search
- * Searches TMDB movie and series catalog.
+ * Searches TMDB first. For TV shows, fans out to TVmaze if TMDB returns < 3 results.
  */
 router.get('/search', async (req, res) => {
   try {
@@ -167,14 +168,31 @@ router.get('/search', async (req, res) => {
     if (!query) {
       return res.status(400).json({ error: 'Search query parameter "q" is required' });
     }
-    const type = req.query.type || 'multi'; // 'multi', 'movie', 'tv'
-    const data = await tmdbService.searchCatalog(query, type);
-    res.json(data);
+    const type = req.query.type || 'multi';
+
+    // TMDB search (primary)
+    const tmdbData = await tmdbService.searchCatalog(query, type);
+    let results = tmdbData.results || [];
+
+    // TVmaze fallback — kicks in when TMDB TV results are thin
+    const tvResults = results.filter(r => r.media_type === 'tv');
+    if (tvResults.length < 3) {
+      try {
+        const tvmazeResults = await tvmazeService.searchShows(query);
+        // Merge, avoid duplicates by name
+        const existingNames = new Set(results.map(r => (r.title || r.name || '').toLowerCase()));
+        const fresh = tvmazeResults.filter(r => !existingNames.has((r.name || '').toLowerCase()));
+        results = [...results, ...fresh];
+      } catch (_) {}
+    }
+
+    res.json({ ...tmdbData, results });
   } catch (err) {
     console.error('[Cinema API] Search error:', err.message);
     res.status(500).json({ error: 'Failed to search movie/series catalog' });
   }
 });
+
 
 /**
  * GET /api/cinema/movies/:id
@@ -183,16 +201,18 @@ router.get('/search', async (req, res) => {
 router.get('/movies/:id', async (req, res) => {
   try {
     const movieId = req.params.id;
-    
-    // Fetch details & recommendations from TMDB
-    const movieDetails = await tmdbService.getMovieDetails(movieId);
-    
-    // Fetch streaming video source links
-    const sources = await movieScraper.getMovieSources(movieId);
-    
+
+    // Fetch details & recommendations from TMDB + Watchmode badges (parallel)
+    const [movieDetails, streamingSources, sources] = await Promise.allSettled([
+      tmdbService.getMovieDetails(movieId),
+      watchmodeService.getStreamingSources(movieId, 'movie', redisService),
+      movieScraper.getMovieSources(movieId),
+    ]);
+
     res.json({
-      ...movieDetails,
-      sources
+      ...(movieDetails.value || {}),
+      streaming_sources: streamingSources.value || [],
+      sources: sources.value || [],
     });
   } catch (err) {
     console.error(`[Cinema API] Movie Details error for ID ${req.params.id}:`, err.message);
@@ -207,8 +227,23 @@ router.get('/movies/:id', async (req, res) => {
 router.get('/shows/:id', async (req, res) => {
   try {
     const showId = req.params.id;
-    const showDetails = await tmdbService.getShowDetails(showId);
-    res.json(showDetails);
+    // Check if this is a TVmaze-sourced show (prefixed with 'tvmaze-')
+    if (String(showId).startsWith('tvmaze-')) {
+      const tvmazeId = showId.replace('tvmaze-', '');
+      const [seasons] = await Promise.allSettled([tvmazeService.getSeasons(tvmazeId)]);
+      return res.json({ id: showId, seasons: seasons.value || [], streaming_sources: [] });
+    }
+
+    // Standard TMDB show + Watchmode badges (parallel)
+    const [showDetails, streamingSources] = await Promise.allSettled([
+      tmdbService.getShowDetails(showId),
+      watchmodeService.getStreamingSources(showId, 'tv', redisService),
+    ]);
+
+    res.json({
+      ...(showDetails.value || {}),
+      streaming_sources: streamingSources.value || [],
+    });
   } catch (err) {
     console.error(`[Cinema API] TV Show Details error for ID ${req.params.id}:`, err.message);
     res.status(500).json({ error: 'Failed to fetch TV show details' });

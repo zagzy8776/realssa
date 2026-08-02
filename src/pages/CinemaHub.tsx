@@ -647,12 +647,34 @@ export default function CinemaHub() {
                     {formatGenres(mediaDetails.genres)}
                   </p>
                 )}
+
+                {/* Watchmode Streaming Availability Badges */}
+                {mediaDetails?.streaming_sources?.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[9px] uppercase font-extrabold text-zinc-600 tracking-widest mb-2">Also streaming on</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {mediaDetails.streaming_sources.map((src: any, i: number) => (
+                        <span
+                          key={i}
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                            src.type === 'free'
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                              : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                          }`}
+                        >
+                          {src.type === 'free' ? '🆓 ' : ''}{src.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
                 <h4 className="text-[10px] uppercase font-extrabold text-zinc-500 tracking-wider mb-1.5">Synopsis</h4>
                 <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{selectedMedia.overview}</p>
               </div>
+
 
               {detailsLoading ? (
                 <div className="flex justify-center p-8">
