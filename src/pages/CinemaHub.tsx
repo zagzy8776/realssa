@@ -107,7 +107,7 @@ export default function CinemaHub() {
   useEffect(() => {
     if (activeTab === 'sports') {
       setSportsMatchesLoading(true);
-      fetch(apiUrl('/api/sports/matches'))
+      fetch(apiUrl('/api/sports/stream-schedule'))
         .then(r => r.ok ? r.json() : [])
         .then(data => {
           setSportsMatches(Array.isArray(data) ? data : []);
@@ -640,9 +640,8 @@ export default function CinemaHub() {
               const filtered = sportsMatches.filter(m => {
                 if (!query) return true;
                 return (
-                  m.home_team_name?.toLowerCase().includes(query) ||
-                  m.away_team_name?.toLowerCase().includes(query) ||
-                  m.competition_name?.toLowerCase().includes(query)
+                  m.event?.toLowerCase().includes(query) ||
+                  m.sport?.toLowerCase().includes(query)
                 );
               });
 
@@ -654,78 +653,58 @@ export default function CinemaHub() {
                 );
               }
 
+              // Group by sport category
+              const groups: { [key: string]: typeof sportsMatches } = {};
+              filtered.forEach(m => {
+                const sp = m.sport || 'General Sports';
+                if (!groups[sp]) groups[sp] = [];
+                groups[sp].push(m);
+              });
+
               return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {filtered.map(match => {
-                    const isLive = match.status?.toLowerCase().includes('live') || (parseInt(match.minute) > 0 && match.status?.toLowerCase() !== 'ft');
-
-                    return (
-                      <div
-                        key={match.provider_match_id}
-                        className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between gap-4 hover:border-amber-500/30 transition-all duration-200"
-                      >
-                        <div className="flex items-center justify-between text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">
-                          <span>{match.competition_name}</span>
-                          {isLive ? (
-                            <span className="flex items-center gap-1 bg-red-950/50 text-red-400 px-2 py-0.5 rounded-full border border-red-900/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                              LIVE {match.minute ? `${match.minute}'` : ''}
-                            </span>
-                          ) : (
-                            <span className="bg-zinc-800/80 text-zinc-400 px-2 py-0.5 rounded-full uppercase">
-                              {match.status}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Team Names & Scores */}
-                        <div className="flex items-center justify-between px-2">
-                          {/* Home Team */}
-                          <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
-                            {match.home_team_crest ? (
-                              <img src={match.home_team_crest} alt="" className="w-10 h-10 object-contain shrink-0" />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center font-black text-zinc-500 text-xs shrink-0">
-                                {match.home_team_name?.substring(0, 2).toUpperCase()}
+                <div className="space-y-8">
+                  {Object.entries(groups).map(([sportName, items]) => (
+                    <div key={sportName} className="space-y-3">
+                      <h4 className="text-xs font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-900 pb-2">
+                        <Trophy size={12} className="text-amber-500" />
+                        {sportName}
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {items.map((match, idx) => (
+                          <div
+                            key={idx}
+                            className="bg-zinc-900/60 border border-zinc-850 hover:border-amber-500/20 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all hover:bg-zinc-900/90 group"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 text-[9px] text-zinc-500 font-extrabold uppercase tracking-wider mb-1.5">
+                                <span className="flex items-center gap-1 bg-red-950/40 text-red-400 px-2 py-0.5 rounded border border-red-900/20">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                  {match.time || 'LIVE'}
+                                </span>
+                                <span className="bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded border border-white/5 font-bold">
+                                  {match.channels?.length || 0} Servers
+                                </span>
                               </div>
-                            )}
-                            <span className="text-[11px] font-extrabold text-zinc-200 text-center truncate w-full">{match.home_team_name}</span>
+                              <h4 className="text-zinc-200 font-black text-xs leading-snug group-hover:text-white transition-colors truncate">
+                                {match.event}
+                              </h4>
+                            </div>
+                            <button
+                              onClick={() => setSelectedSportMatch(match)}
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black rounded-xl flex items-center gap-1 transition-all border border-amber-600 active:scale-95 shrink-0"
+                            >
+                              <Play size={10} className="fill-black" /> Watch
+                            </button>
                           </div>
-
-                          {/* Scores Divider */}
-                          <div className="flex flex-col items-center justify-center px-4 shrink-0">
-                            <span className="text-lg font-black text-white bg-zinc-950 px-3 py-1 rounded-xl border border-zinc-800">
-                              {match.home_score ?? 0} - {match.away_score ?? 0}
-                            </span>
-                          </div>
-
-                          {/* Away Team */}
-                          <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
-                            {match.away_team_crest ? (
-                              <img src={match.away_team_crest} alt="" className="w-10 h-10 object-contain shrink-0" />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center font-black text-zinc-500 text-xs shrink-0">
-                                {match.away_team_name?.substring(0, 2).toUpperCase()}
-                              </div>
-                            )}
-                            <span className="text-[11px] font-extrabold text-zinc-200 text-center truncate w-full">{match.away_team_name}</span>
-                          </div>
-                        </div>
-
-                        {/* Open Drawer Action Button */}
-                        <button
-                          onClick={() => setSelectedSportMatch(match)}
-                          className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all border border-zinc-700 active:scale-95 shrink-0"
-                        >
-                          <Play size={11} className="fill-white" /> Watch Match
-                        </button>
+                        ))}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               );
             })()}
           </div>
+
 
           {/* ── Sport Match Watch Drawer (rbtv+ style) ── */}
           {selectedSportMatch && (
@@ -736,7 +715,7 @@ export default function CinemaHub() {
                   <div className="flex items-center gap-2">
                     <Trophy className="text-amber-500" size={16} />
                     <span className="text-zinc-200 font-extrabold text-xs sm:text-sm truncate max-w-[200px] sm:max-w-[240px]">
-                      {selectedSportMatch.home_team_name} vs {selectedSportMatch.away_team_name}
+                      {selectedSportMatch.event}
                     </span>
                   </div>
                   <button
@@ -749,15 +728,13 @@ export default function CinemaHub() {
 
                 {/* Match Status Details */}
                 <div className="flex flex-col items-center justify-center gap-1.5 p-4 bg-zinc-900/50 rounded-2xl border border-zinc-900 mb-6 text-center">
-                  <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">{selectedSportMatch.competition_name}</span>
-                  <div className="flex items-center gap-3 text-lg font-black text-white mt-1">
-                    <span>{selectedSportMatch.home_team_name}</span>
-                    <span className="text-amber-500 font-black">{selectedSportMatch.home_score ?? 0} - {selectedSportMatch.away_score ?? 0}</span>
-                    <span>{selectedSportMatch.away_team_name}</span>
+                  <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">{selectedSportMatch.sport}</span>
+                  <div className="flex items-center gap-3 text-sm font-black text-white mt-1">
+                    <span>{selectedSportMatch.event}</span>
                   </div>
-                  <span className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1 mt-1 bg-red-950/20 px-2 py-0.5 rounded border border-red-900/10">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    {selectedSportMatch.status === 'live' || (parseInt(selectedSportMatch.minute) > 0) ? `LIVE · ${selectedSportMatch.minute}'` : selectedSportMatch.status}
+                  <span className="text-[10px] text-amber-500 font-black uppercase flex items-center gap-1 mt-1 bg-amber-950/20 px-2 py-0.5 rounded border border-amber-900/10">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    Kickoff: {selectedSportMatch.time || 'Live Now'}
                   </span>
                 </div>
 
@@ -766,59 +743,14 @@ export default function CinemaHub() {
                   <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider mb-3.5">Select Streaming Server</p>
                   
                   <div className="grid grid-cols-1 gap-2.5">
-                    {(() => {
-                      const getServersForMatch = () => {
-                        const comp = (selectedSportMatch.competition_name || '').toLowerCase();
-                        if (comp.includes('premier league') || comp.includes('epl')) {
-                          return [
-                            { label: 'Server 1 (HD English)', id: 28, desc: 'SuperSport Premier League Feed' },
-                            { label: 'Server 2 (HD Alternate)', id: 3, desc: 'Sky Sports PL English Feed' },
-                            { label: 'Server 3 (HD Backup)', id: 27, desc: 'SuperSport Grandstand Feed' },
-                          ];
-                        }
-                        if (comp.includes('la liga') || comp.includes('laliga')) {
-                          return [
-                            { label: 'Server 1 (HD English)', id: 45, desc: 'SuperSport La Liga Feed' },
-                            { label: 'Server 2 (HD Alternate)', id: 46, desc: 'LaLiga TV Spain Feed' },
-                            { label: 'Server 3 (HD Backup)', id: 39, desc: 'beIN Sports US Feed' },
-                          ];
-                        }
-                        if (comp.includes('champions league') || comp.includes('uefa') || comp.includes('europa')) {
-                          return [
-                            { label: 'Server 1 (HD English)', id: 18, desc: 'TNT Sports 1 Live Feed' },
-                            { label: 'Server 2 (HD Alternate)', id: 19, desc: 'TNT Sports 2 Backup Feed' },
-                            { label: 'Server 3 (HD Backup)', id: 27, desc: 'SuperSport Grandstand Feed' },
-                          ];
-                        }
-                        if (comp.includes('serie a') || comp.includes('italy')) {
-                          return [
-                            { label: 'Server 1 (HD English)', id: 19, desc: 'TNT Sports 2 Live Feed' },
-                            { label: 'Server 2 (HD Alternate)', id: 27, desc: 'SuperSport Grandstand Feed' },
-                            { label: 'Server 3 (HD Backup)', id: 33, desc: 'ESPN Live US Feed' },
-                          ];
-                        }
-                        if (comp.includes('caf') || comp.includes('npfl')) {
-                          return [
-                            { label: 'Server 1 (HD English)', id: 31, desc: 'SuperSport Football Feed' },
-                            { label: 'Server 2 (HD Alternate)', id: 27, desc: 'SuperSport Grandstand Feed' },
-                            { label: 'Server 3 (HD Backup)', id: 33, desc: 'ESPN Live US Feed' },
-                          ];
-                        }
-                        // Default general sports fallbacks
-                        return [
-                          { label: 'Server 1 (HD English)', id: 27, desc: 'SuperSport Grandstand General Feed' },
-                          { label: 'Server 2 (HD Alternate)', id: 33, desc: 'ESPN Live US Feed' },
-                          { label: 'Server 3 (HD Backup)', id: 2, desc: 'Sky Sports Main Event Feed' },
-                        ];
-                      };
-
-                      return getServersForMatch().map((srv, index) => (
+                    {selectedSportMatch.channels && selectedSportMatch.channels.length > 0 ? (
+                      selectedSportMatch.channels.map((srv: any, index: number) => (
                         <button
                           key={index}
                           onClick={() => {
                             setActiveSportsPlayer({
                               channelId: srv.id,
-                              title: `${selectedSportMatch.home_team_name} vs ${selectedSportMatch.away_team_name} (${srv.label})`
+                              title: `${selectedSportMatch.event} (${srv.name})`
                             });
                             setSelectedSportMatch(null);
                           }}
@@ -827,14 +759,18 @@ export default function CinemaHub() {
                           <div className="min-w-0">
                             <p className="text-xs font-black text-zinc-100 flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              {srv.label}
+                              Server {index + 1}
                             </p>
-                            <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">{srv.desc}</p>
+                            <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">{srv.name}</p>
                           </div>
                           <Play size={12} className="text-zinc-600 group-hover:text-amber-400 group-hover:fill-amber-400 transition-colors shrink-0" />
                         </button>
-                      ));
-                    })()}
+                      ))
+                    ) : (
+                      <div className="text-center py-6 text-xs text-zinc-500">
+                        No active channels mapped to this event. Try fallback broadcast channels below.
+                      </div>
+                    )}
                   </div>
 
                 </div>
@@ -842,6 +778,7 @@ export default function CinemaHub() {
               </div>
             </div>
           )}
+
           {/* Curated 24/7 Broadcast Channels */}
           <div className="mt-8 border-t border-zinc-900 pt-8 mb-6">
             <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">

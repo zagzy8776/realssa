@@ -2223,6 +2223,161 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
 // SPORTS LIVESCORE HUB API
 // ==========================================
 
+// Get live stream schedule scraped in real-time from mirrors
+app.get('/api/sports/stream-schedule', async (req, res) => {
+  try {
+    const domains = ['daddylive.mp', 'daddylive.st', 'daddylive.la', 'daddylive.sx'];
+    let html = null;
+    let usedDomain = '';
+
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': 'https://daddylive.mp/'
+    };
+
+    for (const domain of domains) {
+      try {
+        console.log(`[sportsBot] Fetching schedule from https://${domain}/schedule/schedule-generated.php`);
+        const response = await axios.get(`https://${domain}/schedule/schedule-generated.php`, {
+          headers: { ...headers, 'Referer': `https://${domain}/` },
+          timeout: 8000
+        });
+        if (response.status === 200 && response.data) {
+          html = response.data;
+          usedDomain = domain;
+          break;
+        }
+      } catch (e) {
+        console.warn(`[sportsBot] Failed to fetch schedule from ${domain}:`, e.message);
+      }
+    }
+
+    if (!html) {
+      return res.json([]);
+    }
+
+    const cheerio = require('cheerio');
+    const $ = cheerio.load(html);
+    const events = [];
+
+    const extractChannelId = (href) => {
+      if (!href) return null;
+      const match = href.match(/stream-(\d+)\.php/);
+      return match ? parseInt(match[1]) : null;
+    };
+
+    // ── PARSING METHOD 1: Table-based layout ──
+    $('tr').each((_, tr) => {
+      const tds = $(tr).find('td');
+      if (tds.length >= 2) {
+        const links = $(tr).find('a');
+        const streamLinks = [];
+        
+        links.each((_, a) => {
+          const href = $(a).attr('href');
+          const chId = extractChannelId(href);
+          if (chId) {
+            streamLinks.push({
+              id: chId,
+              name: $(a).text().trim()
+            });
+          }
+        });
+
+        if (streamLinks.length > 0) {
+          const timeText = $(tds[0]).text().trim();
+          const eventText = $(tds[1]).text().trim();
+          
+          let cleanedEvent = eventText;
+          streamLinks.forEach(link => {
+            cleanedEvent = cleanedEvent.replace(link.name, '');
+          });
+          cleanedEvent = cleanedEvent.replace(/\s*-\s*$/, '').trim();
+
+          let sport = 'Sports';
+          let prev = $(tr).closest('.table-responsive').prev();
+          while (prev.length > 0) {
+            const tag = prev.prop('tagName')?.toLowerCase();
+            if (['h1', 'h2', 'h3', 'h4', 'strong', 'b'].includes(tag)) {
+              sport = prev.text().trim();
+              break;
+            }
+            prev = prev.prev();
+          }
+
+          if (cleanedEvent && timeText) {
+            events.push({
+              sport,
+              time: timeText,
+              event: cleanedEvent,
+              channels: streamLinks
+            });
+          }
+        }
+      }
+    });
+
+    // ── PARSING METHOD 2: Paragraph/list-based layout ──
+    if (events.length === 0) {
+      $('p, div').each((_, el) => {
+        const links = $(el).find('a');
+        const streamLinks = [];
+        
+        links.each((_, a) => {
+          const href = $(a).attr('href');
+          const chId = extractChannelId(href);
+          if (chId) {
+            streamLinks.push({
+              id: chId,
+              name: $(a).text().trim()
+            });
+          }
+        });
+
+        if (streamLinks.length > 0) {
+          const fullText = $(el).text().trim();
+          const timeMatch = fullText.match(/^(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i);
+          const timeText = timeMatch ? timeMatch[1] : 'Live';
+          
+          let eventText = fullText;
+          if (timeMatch) {
+            eventText = eventText.substring(timeMatch[0].length).trim();
+          }
+          streamLinks.forEach(link => {
+            eventText = eventText.replace(link.name, '');
+          });
+          eventText = eventText.replace(/^[\s-:]+|[\s-:]+$/g, '').trim();
+
+          let sport = 'Sports';
+          let prev = $(el).prev();
+          while (prev.length > 0) {
+            const tag = prev.prop('tagName')?.toLowerCase();
+            if (['h1', 'h2', 'h3', 'h4', 'strong', 'b'].includes(tag)) {
+              sport = prev.text().trim();
+              break;
+            }
+            prev = prev.prev();
+          }
+
+          if (eventText && streamLinks.length > 0) {
+            events.push({
+              sport,
+              time: timeText,
+              event: eventText,
+              channels: streamLinks
+            });
+          }
+        }
+      });
+    }
+
+    res.json(events);
+  } catch (error) {
+    console.error('[sportsBot] Error parsing stream schedule:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // Get today's matches
 app.get('/api/sports/matches', async (req, res) => {
   try {
