@@ -12,25 +12,13 @@ function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: numb
       url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}`
     },
     {
-      name: 'Server 2 · 2Embed',
-      url: isTV
-        ? `https://www.2embed.cc/embedtv/${tmdbId}&s=${season}&e=${episode}`
-        : `https://www.2embed.cc/embed/${tmdbId}`
-    },
-    {
-      name: 'Server 3 · AutoEmbed',
+      name: 'Server 2 · AutoEmbed',
       url: isTV
         ? `https://autoembed.co/tv/tmdb/${tmdbId}-${season}-${episode}`
         : `https://autoembed.co/movie/tmdb/${tmdbId}`
     },
     {
-      name: 'Server 4 · VidSrc.net',
-      url: isTV
-        ? `https://vidsrc.net/embed/tv/${tmdbId}/${season}/${episode}`
-        : `https://vidsrc.net/embed/movie/${tmdbId}`
-    },
-    {
-      name: 'Server 5 · VidSrc.su',
+      name: 'Server 3 · VidSrc',
       url: isTV
         ? `https://vidsrc.su/embed/tv/${tmdbId}/${season}/${episode}`
         : `https://vidsrc.su/embed/movie/${tmdbId}`
