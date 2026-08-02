@@ -8,14 +8,14 @@ function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: numb
   const isTV = mediaType === 'tv';
   return [
     {
-      name: 'Server 1 · MultiEmbed',
-      url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}`
-    },
-    {
-      name: 'Server 2 · AutoEmbed',
+      name: 'Server 1 · AutoEmbed',
       url: isTV
         ? `https://autoembed.co/tv/tmdb/${tmdbId}-${season}-${episode}`
         : `https://autoembed.co/movie/tmdb/${tmdbId}`
+    },
+    {
+      name: 'Server 2 · MultiEmbed',
+      url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}`
     },
     {
       name: 'Server 3 · VidSrc',
@@ -31,6 +31,7 @@ function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: numb
     },
   ];
 }
+
 
 interface CinemaPlayerProps {
   tmdbId: number;
