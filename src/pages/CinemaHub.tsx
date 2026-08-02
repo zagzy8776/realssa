@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import VideoNews from "@/pages/VideoNews";
-import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2 } from 'lucide-react';
+import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2, Activity, Shield, Trophy } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api-base";
 import CinemaPlayer from "@/components/CinemaPlayer";
+import SportsPlayer from "@/components/SportsPlayer";
 
 interface MovieOrShow {
   id: number;
@@ -34,7 +35,7 @@ interface Episode {
 }
 
 export default function CinemaHub() {
-  const [activeTab, setActiveTab] = useState<'movies' | 'news'>('movies');
+  const [activeTab, setActiveTab] = useState<'movies' | 'news' | 'sports'>('movies');
 
   // Catalog state — single flat list, infinite scroll
   const [catalog, setCatalog] = useState<MovieOrShow[]>([]);
@@ -75,6 +76,15 @@ export default function CinemaHub() {
     tmdbId: number; mediaType: 'movie' | 'tv'; season: number; episode: number; title: string;
   } | null>(null);
 
+  // Sports Stream Player & Matches State
+  const [activeSportsPlayer, setActiveSportsPlayer] = useState<{
+    channelId: string | number; title: string;
+  } | null>(null);
+  const [sportsMatches, setSportsMatches] = useState<any[]>([]);
+  const [sportsSearchQuery, setSportsSearchQuery] = useState('');
+  const [sportsMatchesLoading, setSportsMatchesLoading] = useState(false);
+  const [customStreamId, setCustomStreamId] = useState('');
+
   // ── Continue Watching (localStorage persistence) ──
   const [continueWatching, setContinueWatching] = useState<Array<{
     tmdbId: number; title: string; poster: string | null;
@@ -92,6 +102,23 @@ export default function CinemaHub() {
 
   // ── Initial Load ──
   useEffect(() => { fetchPage(1, true); }, []);
+
+  // ── Load Sports Matches when activeTab === 'sports' ──
+  useEffect(() => {
+    if (activeTab === 'sports') {
+      setSportsMatchesLoading(true);
+      fetch(apiUrl('/api/sports/matches'))
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          setSportsMatches(Array.isArray(data) ? data : []);
+          setSportsMatchesLoading(false);
+        })
+        .catch(() => {
+          setSportsMatches([]);
+          setSportsMatchesLoading(false);
+        });
+    }
+  }, [activeTab]);
 
   // ── Data saver: auto-detect via navigator.connection ──
   useEffect(() => {
@@ -544,6 +571,14 @@ export default function CinemaHub() {
           >
             <Youtube size={13} /> Live News
           </button>
+          <button
+            onClick={() => setActiveTab('sports')}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold transition-all ${
+              activeTab === 'sports' ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Activity size={13} /> Live Sports TV
+          </button>
         </div>
       </div>
 
@@ -551,6 +586,230 @@ export default function CinemaHub() {
       {activeTab === 'news' && (
         <div className="flex-1 overflow-auto">
           <VideoNews />
+        </div>
+      )}
+
+      {/* ── Live Sports TV Tab ── */}
+      {activeTab === 'sports' && (
+        <div className="flex-1 overflow-y-auto px-4 py-6 container mx-auto max-w-6xl">
+          {/* Header */}
+          <div className="text-center max-w-xl mx-auto mb-8">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-white flex items-center justify-center gap-2 mb-2">
+              <Trophy className="text-amber-500 animate-pulse" size={24} />
+              RealSSA Live Sports TV
+            </h2>
+            <p className="text-xs text-zinc-400">Watch live matches, search your favorite clubs, and stream sports channels for free with ad-hijack protection.</p>
+          </div>
+
+          {/* Search Live Matches & Clubs */}
+          <div className="relative w-full max-w-md mx-auto mb-8">
+            <div className="relative flex items-center">
+              <Search className="absolute left-4 text-zinc-500" size={16} />
+              <input
+                type="text"
+                placeholder="Search live clubs or matches... (e.g. Chelsea)"
+                value={sportsSearchQuery}
+                onChange={e => setSportsSearchQuery(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-500 text-zinc-200 placeholder-zinc-500 rounded-full pl-11 pr-5 py-3 text-sm outline-none transition-colors"
+              />
+              {sportsSearchQuery && (
+                <button
+                  onClick={() => setSportsSearchQuery('')}
+                  className="absolute right-4 text-zinc-500 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Live Matches Scoreboard / Stream Center */}
+          <div className="mb-10">
+            <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-red-600 absolute shrink-0" />
+              Live Streams & Fixtures
+            </h3>
+
+            {sportsMatchesLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-7 h-7 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (() => {
+              const query = sportsSearchQuery.toLowerCase().trim();
+              const filtered = sportsMatches.filter(m => {
+                if (!query) return true;
+                return (
+                  m.home_team_name?.toLowerCase().includes(query) ||
+                  m.away_team_name?.toLowerCase().includes(query) ||
+                  m.competition_name?.toLowerCase().includes(query)
+                );
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-8 text-center text-zinc-500 text-xs">
+                    No active live matches found matching your search.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filtered.map(match => {
+                    const isLive = match.status?.toLowerCase().includes('live') || (parseInt(match.minute) > 0 && match.status?.toLowerCase() !== 'ft');
+                    
+                    const resolveSportsStream = () => {
+                      const comp = (match.competition_name || '').toLowerCase();
+                      if (comp.includes('premier league') || comp.includes('epl')) return { id: 28, name: 'SuperSport Premier League' };
+                      if (comp.includes('la liga') || comp.includes('laliga')) return { id: 45, name: 'SuperSport La Liga' };
+                      if (comp.includes('champions league') || comp.includes('uefa') || comp.includes('europa')) return { id: 18, name: 'TNT Sports 1' };
+                      if (comp.includes('serie a') || comp.includes('italy')) return { id: 19, name: 'TNT Sports 2' };
+                      if (comp.includes('caf')) return { id: 31, name: 'SuperSport Football' };
+                      return { id: 27, name: 'SuperSport Grandstand' };
+                    };
+
+                    const stream = resolveSportsStream();
+
+                    return (
+                      <div
+                        key={match.provider_match_id}
+                        className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between gap-4 hover:border-amber-500/30 transition-all duration-200"
+                      >
+                        <div className="flex items-center justify-between text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">
+                          <span>{match.competition_name}</span>
+                          {isLive ? (
+                            <span className="flex items-center gap-1 bg-red-950/50 text-red-400 px-2 py-0.5 rounded-full border border-red-900/30">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                              LIVE {match.minute ? `${match.minute}'` : ''}
+                            </span>
+                          ) : (
+                            <span className="bg-zinc-800/80 text-zinc-400 px-2 py-0.5 rounded-full uppercase">
+                              {match.status}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Team Names & Scores */}
+                        <div className="flex items-center justify-between px-2">
+                          {/* Home Team */}
+                          <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
+                            {match.home_team_crest ? (
+                              <img src={match.home_team_crest} alt="" className="w-10 h-10 object-contain shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center font-black text-zinc-500 text-xs shrink-0">
+                                {match.home_team_name?.substring(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-[11px] font-extrabold text-zinc-200 text-center truncate w-full">{match.home_team_name}</span>
+                          </div>
+
+                          {/* Scores Divider */}
+                          <div className="flex flex-col items-center justify-center px-4 shrink-0">
+                            <span className="text-lg font-black text-white bg-zinc-950 px-3 py-1 rounded-xl border border-zinc-800">
+                              {match.home_score ?? 0} - {match.away_score ?? 0}
+                            </span>
+                          </div>
+
+                          {/* Away Team */}
+                          <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
+                            {match.away_team_crest ? (
+                              <img src={match.away_team_crest} alt="" className="w-10 h-10 object-contain shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center font-black text-zinc-500 text-xs shrink-0">
+                                {match.away_team_name?.substring(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-[11px] font-extrabold text-zinc-200 text-center truncate w-full">{match.away_team_name}</span>
+                          </div>
+                        </div>
+
+                        {/* Stream Action Button */}
+                        <button
+                          onClick={() => {
+                            setActiveSportsPlayer({
+                              channelId: stream.id,
+                              title: `${match.home_team_name} vs ${match.away_team_name} (${stream.name})`
+                            });
+                          }}
+                          className="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black text-xs font-black rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10 transition-all active:scale-95 shrink-0"
+                        >
+                          <Play size={11} className="fill-black" /> Watch Live Stream
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Curated 24/7 Channels */}
+          <div className="mb-10">
+            <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Tv size={14} />
+              24/7 Sports TV Guide
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {[
+                { id: 28, name: 'SuperSport Premier League', theme: 'from-red-600/10 to-orange-600/20 border-orange-500/30 text-orange-400 hover:border-orange-500/60' },
+                { id: 45, name: 'SuperSport La Liga', theme: 'from-indigo-600/10 to-purple-600/20 border-indigo-500/30 text-indigo-400 hover:border-indigo-500/60' },
+                { id: 31, name: 'SuperSport Football', theme: 'from-emerald-600/10 to-blue-600/20 border-emerald-500/30 text-emerald-400 hover:border-emerald-500/60' },
+                { id: 27, name: 'SuperSport Grandstand', theme: 'from-amber-600/10 to-yellow-600/20 border-amber-500/30 text-amber-400 hover:border-amber-500/60' },
+                { id: 3, name: 'Sky Sports Premier League', theme: 'from-red-600/10 to-zinc-600/20 border-red-500/30 text-red-400 hover:border-red-500/60' },
+                { id: 2, name: 'Sky Sports Main Event', theme: 'from-zinc-700/10 to-zinc-900/20 border-zinc-500/30 text-zinc-400 hover:border-zinc-500/60' },
+                { id: 18, name: 'TNT Sports 1', theme: 'from-pink-600/10 to-purple-600/20 border-pink-500/30 text-pink-400 hover:border-pink-500/60' },
+                { id: 19, name: 'TNT Sports 2', theme: 'from-violet-600/10 to-fuchsia-600/20 border-violet-500/30 text-violet-400 hover:border-violet-500/60' },
+                { id: 33, name: 'ESPN US', theme: 'from-red-600/10 to-black/30 border-red-500/30 text-red-500 hover:border-red-500/60' },
+                { id: 34, name: 'ESPN 2 US', theme: 'from-zinc-700/10 to-red-600/10 border-zinc-500/30 text-red-400 hover:border-zinc-500/60' },
+                { id: 39, name: 'beIN Sports US', theme: 'from-blue-600/10 to-cyan-600/20 border-blue-500/30 text-blue-400 hover:border-blue-500/60' },
+                { id: 46, name: 'LaLiga TV', theme: 'from-amber-600/10 to-amber-700/20 border-amber-500/30 text-amber-400 hover:border-amber-500/60' },
+              ].map(ch => (
+                <button
+                  key={ch.id}
+                  onClick={() => setActiveSportsPlayer({ channelId: ch.id, title: ch.name })}
+                  className={`relative flex flex-col p-4 bg-gradient-to-br ${ch.theme} rounded-2xl border text-left hover:scale-[1.03] transition-all hover:shadow-lg hover:shadow-black/40 group`}
+                >
+                  <span className="text-[9px] uppercase font-extrabold text-zinc-500 tracking-wider">Channel #{ch.id}</span>
+                  <span className="text-zinc-200 font-extrabold text-xs mt-1.5 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
+                  <div className="mt-4 flex items-center justify-between w-full">
+                    <span className="text-[9px] bg-white/5 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5">24/7 TV</span>
+                    <Play size={10} className="text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Stream ID Loader */}
+          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 max-w-md mx-auto">
+            <h4 className="text-xs font-extrabold text-zinc-300 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+              <Shield size={13} className="text-amber-500" />
+              Custom Stream ID Loader
+            </h4>
+            <p className="text-[10px] text-zinc-500 leading-normal mb-4">Have another match stream ID from the provider? Enter the channel ID below to watch with full ad-hijack protection.</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Enter Channel ID (e.g. 142)"
+                value={customStreamId}
+                onChange={e => setCustomStreamId(e.target.value)}
+                className="flex-1 bg-zinc-950 border border-zinc-800 focus:border-amber-500 text-zinc-200 rounded-xl px-3 py-2 text-xs outline-none transition-colors"
+              />
+              <button
+                onClick={() => {
+                  const clean = customStreamId.trim();
+                  if (clean) {
+                    setActiveSportsPlayer({ channelId: clean, title: `Custom Channel #${clean}` });
+                    setCustomStreamId('');
+                  }
+                }}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white rounded-xl text-xs font-bold border border-zinc-700 transition-colors"
+              >
+                Launch
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1026,6 +1285,15 @@ export default function CinemaHub() {
           onClose={() => setActivePlayer(null)}
         />
       )}
+      {/* ── RealSSA Sports Player ── */}
+      {activeSportsPlayer && (
+        <SportsPlayer
+          channelId={activeSportsPlayer.channelId}
+          title={activeSportsPlayer.title}
+          onClose={() => setActiveSportsPlayer(null)}
+        />
+      )}
+
 
       <Footer />
     </div>
