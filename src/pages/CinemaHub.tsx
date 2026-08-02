@@ -294,7 +294,7 @@ export default function CinemaHub() {
         </h4>
         <div className="flex items-center gap-1.5 mt-1">
           <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold">
-            <Star size={8} className="fill-current" />{item.vote_average.toFixed(1)}
+            <Star size={8} className="fill-current" />{(item.vote_average ?? 0).toFixed(1)}
           </span>
           <span className="text-zinc-500 text-[9px]">{getYear(item)}</span>
         </div>
@@ -328,7 +328,9 @@ export default function CinemaHub() {
       </div>
 
       {activeTab === 'news' ? (
-        <VideoNews />
+        <div className="flex-1 overflow-auto">
+          <VideoNews />
+        </div>
       ) : (
         <>
           {/* Hero Banner */}
@@ -348,7 +350,7 @@ export default function CinemaHub() {
                 </h1>
                 <div className="flex items-center gap-2 mt-2 text-xs text-zinc-300 font-semibold flex-wrap">
                   <span className="text-amber-400 flex items-center gap-0.5">
-                    <Star size={12} className="fill-current" />{featured.vote_average.toFixed(1)}
+                    <Star size={12} className="fill-current" />{(featured.vote_average ?? 0).toFixed(1)}
                   </span>
                   <span>·</span><span>{getYear(featured)}</span>
                   <span>·</span>
@@ -413,7 +415,7 @@ export default function CinemaHub() {
                         <p className="text-sm font-bold text-zinc-200 truncate">{item.title || item.name}</p>
                         <p className="text-[10px] text-zinc-500 flex items-center gap-1">
                           {item.media_type === 'tv' ? <Tv size={9} /> : <Film size={9} />}
-                          {getYear(item)} · ⭐ {item.vote_average.toFixed(1)}
+                          {getYear(item)} · ⭐ {(item.vote_average ?? 0).toFixed(1)}
                         </p>
                       </div>
                     </button>
@@ -541,7 +543,7 @@ export default function CinemaHub() {
                 </h2>
                 <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-400 font-semibold flex-wrap">
                   <span className="text-amber-400 flex items-center gap-0.5">
-                    <Star size={11} className="fill-current" />{selectedMedia.vote_average.toFixed(1)}
+                    <Star size={11} className="fill-current" />{(selectedMedia.vote_average ?? 0).toFixed(1)}
                   </span>
                   · <span>{getYear(selectedMedia)}</span>
                   {mediaDetails?.runtime && <> · <span className="flex items-center gap-0.5"><Clock size={11} />{mediaDetails.runtime}m</span></>}
