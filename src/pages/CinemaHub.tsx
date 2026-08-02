@@ -107,6 +107,53 @@ export default function CinemaHub() {
     }
   }, []);
 
+  // ── Scraper & DevTools Anti-Hack Protection ──
+  useEffect(() => {
+    if (import.meta.env?.MODE === 'development') return;
+
+    // 1. Disable right-click context menu
+    const preventContextMenu = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener('contextmenu', preventContextMenu);
+
+    // 2. Disable inspect keyboard shortcuts (F12, Ctrl+Shift+I/J/C, Ctrl+U)
+    const preventShortcuts = (e: KeyboardEvent) => {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
+        (e.ctrlKey && (e.key === 'U' || e.key === 'u'))
+      ) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('keydown', preventShortcuts);
+
+    // 3. Disable text selection
+    const preventSelection = (e: Event) => e.preventDefault();
+    document.addEventListener('selectstart', preventSelection);
+
+    // 4. Anti-DevTools Debugger Loop
+    // Triggers debugger breakpoint if browser devtools console is open, freezing the window
+    const antiDevTools = setInterval(() => {
+      const startTime = Date.now();
+      debugger; // Breakpoint triggers if DevTools console is open
+      const duration = Date.now() - startTime;
+      if (duration > 100) {
+        // DevTools opened, clear body or slow down execution
+        try {
+          const main = document.querySelector('main');
+          if (main) main.style.filter = 'blur(10px)';
+        } catch (_) {}
+      }
+    }, 1000);
+
+    return () => {
+      document.removeEventListener('contextmenu', preventContextMenu);
+      document.removeEventListener('keydown', preventShortcuts);
+      document.removeEventListener('selectstart', preventSelection);
+      clearInterval(antiDevTools);
+    };
+  }, []);
+
   // ── Time of day detection for contextual hero ──
   useEffect(() => {
     const h = new Date().getHours();

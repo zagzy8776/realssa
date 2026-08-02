@@ -234,7 +234,16 @@ if (process.env.DATABASE_URL) {
 // Middleware
 const cors = require('cors');
 const compression = require('compression');
+const helmet = require('helmet');
+
 app.use(compression()); // Gzip all responses to make API calls fast
+
+// Helmet security headers (configured to allow iframes for embeds but protect APIs)
+app.use(helmet({
+  contentSecurityPolicy: false, // Managed by vercel.json
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 // Allowed origins configuration
 const allowedOrigins = [
@@ -288,6 +297,37 @@ const authLimiter = rateLimit({
   message: { error: 'Too many login attempts, please try again later.' }
 });
 
+// ── Scraper & Direct Request Protection Middleware ──
+const antiScraper = (req, res, next) => {
+  const userAgent = (req.headers['user-agent'] || '').toLowerCase();
+  
+  // 1. Block popular scripting and scraping clients
+  const badAgents = [
+    'python', 'requests', 'beautifulsoup', 'urllib', 'scrapy', 'axios', 
+    'curl', 'wget', 'postman', 'insomnia', 'http-client', 'got', 'node-fetch'
+  ];
+  if (badAgents.some(agent => userAgent.includes(agent))) {
+    return res.status(403).json({ error: 'Access denied: Scraper activity detected.' });
+  }
+
+  // 2. Referer / Origin Check (bypass for local development and options requests)
+  if (process.env.NODE_ENV === 'production' && req.method !== 'OPTIONS') {
+    const referer = req.headers.referer || '';
+    const origin = req.headers.origin || '';
+    const isFromApp = allowedOrigins.some(allowed => referer.startsWith(allowed) || origin.startsWith(allowed));
+    
+    // Also allow internal system crons/webhooks (often have no referer, but check for local loopback/secret)
+    const isCron = req.path.startsWith('/api/cron') || req.query.secret === process.env.CRON_SECRET;
+    
+    if (!isFromApp && !isCron) {
+      return res.status(403).json({ error: 'Access denied: Unauthorized cross-origin request.' });
+    }
+  }
+
+  next();
+};
+
+app.use('/api/cinema/', antiScraper);
 app.use('/api/', apiLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
