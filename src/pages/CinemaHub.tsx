@@ -450,10 +450,10 @@ export default function CinemaHub() {
   };
 
   const getPoster = (item: MovieOrShow) =>
-    item.r2_poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : '/logo.png');
+    item.r2_poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : null);
 
   const getBackdrop = (item: MovieOrShow) =>
-    item.r2_backdrop_url || (item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : '/logo.png');
+    item.r2_backdrop_url || (item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null);
 
   const getYear = (item: MovieOrShow) => {
     const d = item.release_date || item.first_air_date || '';
@@ -469,44 +469,58 @@ export default function CinemaHub() {
   const movies = catalog.filter(i => i.media_type === 'movie');
   const shows = catalog.filter(i => i.media_type === 'tv');
 
-  const MediaCard = ({ item }: { item: MovieOrShow }) => (
-    <div
-      onClick={() => handleOpenDetails(item)}
-      className="group relative cursor-pointer rounded-xl overflow-hidden border border-white/5 hover:border-amber-500/50 transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-black/60 bg-zinc-900 aspect-[2/3]"
-    >
-      <img
-        src={getPoster(item)}
-        alt={item.title || item.name}
-        className="w-full h-full object-cover"
-        loading="lazy"
-      />
-      {/* Gradient overlay always visible at bottom */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+  const MediaCard = ({ item }: { item: MovieOrShow }) => {
+    const posterUrl = getPoster(item);
+    return (
+      <div
+        onClick={() => handleOpenDetails(item)}
+        className="group relative cursor-pointer rounded-xl overflow-hidden border border-white/5 hover:border-amber-500/50 transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-black/60 bg-zinc-900 aspect-[2/3]"
+      >
+        {posterUrl ? (
+          <img
+            src={posterUrl}
+            alt={item.title || item.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-3 text-center select-none">
+            <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500 group-hover:text-amber-400 group-hover:bg-amber-500/10 transition-colors">
+              {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
+            </div>
+            <p className="text-zinc-400 text-[10px] font-extrabold max-w-full truncate px-1 uppercase tracking-wider">
+              {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
+            </p>
+          </div>
+        )}
+        {/* Gradient overlay always visible at bottom */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
 
-      {/* Play icon on hover */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-        <div className="w-11 h-11 bg-amber-500/95 rounded-full flex items-center justify-center shadow-xl">
-          <Play size={18} className="fill-black ml-0.5" />
+        {/* Play icon on hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="w-11 h-11 bg-amber-500/95 rounded-full flex items-center justify-center shadow-xl">
+            <Play size={18} className="fill-black ml-0.5" />
+          </div>
         </div>
-      </div>
 
-      {/* Title + meta */}
-      <div className="absolute bottom-0 left-0 right-0 p-2.5">
-        <p className="text-white text-[11px] font-bold leading-tight line-clamp-2">{item.title || item.name}</p>
-        <div className="flex items-center gap-1.5 mt-1">
-          {(item.vote_average ?? 0) > 0 && (
-            <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold">
-              <Star size={8} className="fill-current" />{getRating(item)}
+        {/* Title + meta */}
+        <div className="absolute bottom-0 left-0 right-0 p-2.5">
+          <p className="text-white text-[11px] font-bold leading-tight line-clamp-2">{item.title || item.name}</p>
+          <div className="flex items-center gap-1.5 mt-1">
+            {(item.vote_average ?? 0) > 0 && (
+              <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold">
+                <Star size={8} className="fill-current" />{getRating(item)}
+              </span>
+            )}
+            {getYear(item) && <span className="text-zinc-500 text-[9px]">{getYear(item)}</span>}
+            <span className="ml-auto text-[8px] uppercase font-bold bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-400">
+              {item.media_type === 'tv' ? 'TV' : 'FILM'}
             </span>
-          )}
-          {getYear(item) && <span className="text-zinc-500 text-[9px]">{getYear(item)}</span>}
-          <span className="ml-auto text-[8px] uppercase font-bold bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-400">
-            {item.media_type === 'tv' ? 'TV' : 'FILM'}
-          </span>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
@@ -691,11 +705,17 @@ export default function CinemaHub() {
                       onMouseDown={() => handleSuggestionClick(item)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800 transition-colors text-left"
                     >
-                      <img
-                        src={getPoster(item)}
-                        alt=""
-                        className="w-9 h-12 object-cover rounded-lg shrink-0 border border-white/5"
-                      />
+                      {getPoster(item) ? (
+                        <img
+                          src={getPoster(item)!}
+                          alt=""
+                          className="w-9 h-12 object-cover rounded-lg shrink-0 border border-white/5"
+                        />
+                      ) : (
+                        <div className="w-9 h-12 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0 border border-white/5 text-zinc-500">
+                          {item.media_type === 'tv' ? <Tv size={14} /> : <Film size={14} />}
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-zinc-100 truncate">{item.title || item.name}</p>
                         <p className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-0.5">
@@ -828,8 +848,12 @@ export default function CinemaHub() {
           <div className="w-full sm:max-w-xl h-[93vh] sm:h-[90vh] bg-zinc-950 border border-zinc-900 sm:border-l rounded-t-3xl sm:rounded-2xl overflow-y-auto relative flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-right duration-300">
 
             {/* Backdrop */}
-            <div className="relative h-52 sm:h-64 w-full shrink-0">
-              <img src={getBackdrop(selectedMedia)} alt="" className="w-full h-full object-cover" />
+            <div className="relative h-52 sm:h-64 w-full shrink-0 bg-zinc-900">
+              {getBackdrop(selectedMedia) ? (
+                <img src={getBackdrop(selectedMedia)!} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-950" />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-black/30 to-transparent" />
               <button
                 onClick={() => setSelectedMedia(null)}
