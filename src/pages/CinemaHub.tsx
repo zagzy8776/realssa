@@ -38,6 +38,8 @@ export default function CinemaHub() {
 
   // Catalog state — single flat list, infinite scroll
   const [catalog, setCatalog] = useState<MovieOrShow[]>([]);
+  const [heroPool, setHeroPool] = useState<MovieOrShow[]>([]);
+  const [heroIdx, setHeroIdx] = useState(0);
   const [featured, setFeatured] = useState<MovieOrShow | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -123,13 +125,18 @@ export default function CinemaHub() {
 
       if (isFirst) {
         setCatalog(fresh);
-        const hero = fresh.find(i => i.backdrop_path && i.overview) || fresh[0];
-        setFeatured(hero || null);
+        // Build hero rotation pool: items with backdrop + overview
+        const pool = fresh.filter(i => i.backdrop_path && i.overview && (i.vote_average ?? 0) >= 6);
+        setHeroPool(pool);
+        setFeatured(pool[0] || fresh[0] || null);
+        setHeroIdx(0);
       } else {
         setCatalog(prev => [...prev, ...fresh]);
+        // Expand hero pool with quality items from new page
+        const newPool = fresh.filter(i => i.backdrop_path && i.overview && (i.vote_average ?? 0) >= 6);
+        setHeroPool(prev => [...prev, ...newPool]);
       }
 
-      // TMDB trending caps at 500 pages (10,000 items). Stop at 20 pages.
       setHasMore(fresh.length > 0 && pageNum < 20);
       setPage(pageNum);
     } catch (err) {
@@ -144,6 +151,19 @@ export default function CinemaHub() {
     if (loadingMore || !hasMore) return;
     fetchPage(page + 1);
   }, [page, loadingMore, hasMore]);
+
+  // ── Hero auto-rotation every 6 seconds ──
+  useEffect(() => {
+    if (heroPool.length < 2) return;
+    const timer = setInterval(() => {
+      setHeroIdx(prev => {
+        const next = (prev + 1) % heroPool.length;
+        setFeatured(heroPool[next]);
+        return next;
+      });
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [heroPool]);
 
   // ── Autocomplete (debounced 300ms) ──
   const handleSearchInput = (value: string) => {
@@ -161,11 +181,14 @@ export default function CinemaHub() {
       try {
         const res = await fetch(apiUrl(`/api/cinema/search?q=${encodeURIComponent(value)}`));
         const data = await res.json();
+        // Filter: must be movie/tv, must have a real poster, must have a known rating
         const results = (data.results || []).filter((i: MovieOrShow) =>
-          i.media_type === 'movie' || i.media_type === 'tv'
+          (i.media_type === 'movie' || i.media_type === 'tv') &&
+          i.poster_path &&
+          (i.vote_average ?? 0) > 0
         );
         setSuggestions(results.slice(0, 8));
-        setShowSuggestions(true);
+        setShowSuggestions(results.length > 0);
       } catch (_) {}
     }, 300);
   };
@@ -173,7 +196,8 @@ export default function CinemaHub() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setShowSuggestions(false);
-    if (!searchQuery.trim()) {
+    const q = searchQuery.trim();
+    if (!q) {
       setIsSearching(false);
       setSearchResults([]);
       return;
@@ -181,7 +205,7 @@ export default function CinemaHub() {
     setIsSearching(true);
     setSearchLoading(true);
     try {
-      const res = await fetch(apiUrl(`/api/cinema/search?q=${encodeURIComponent(searchQuery)}`));
+      const res = await fetch(apiUrl(`/api/cinema/search?q=${encodeURIComponent(q)}`));
       const data = await res.json();
       const results = (data.results || []).filter((i: MovieOrShow) =>
         i.media_type === 'movie' || i.media_type === 'tv'
@@ -191,14 +215,24 @@ export default function CinemaHub() {
       console.error('Search failed:', err);
     } finally {
       setSearchLoading(false);
+      // Keep query visible so user can edit and search again
     }
   };
 
   const handleSuggestionClick = (item: MovieOrShow) => {
     setShowSuggestions(false);
-    setIsSearching(false);
-    setSearchQuery('');
+    setSuggestions([]);
+    // Keep search query for context but close suggestion list
+    // Open detail immediately
     handleOpenDetails(item);
+  };
+
+  const clearSearch = () => {
+    setIsSearching(false);
+    setSearchResults([]);
+    setSearchQuery('');
+    setSuggestions([]);
+    setShowSuggestions(false);
   };
 
   // ── Detail Modal ──
