@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Play, X, ShieldAlert, Monitor, Volume2, Maximize, EyeOff, ShieldCheck, Server, RefreshCw, Zap } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, ShieldCheck, Server, RefreshCw, Zap, ChevronRight, Globe } from 'lucide-react';
 import { HlsPlayer } from './HlsPlayer';
 import { SandboxedIframe } from './SandboxedIframe';
 import { apiUrl } from '@/lib/api-base';
@@ -10,6 +10,7 @@ export interface StreamSource {
   quality: string;
   is_embed: boolean;
   type?: 'hls' | 'iframe';
+  region?: string;
 }
 
 interface CinemaPlayerProps {
@@ -21,14 +22,25 @@ interface CinemaPlayerProps {
 export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerProps) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [isBufferingNotice, setIsBufferingNotice] = useState(false);
+  const [failedServers, setFailedServers] = useState<Set<number>>(new Set());
 
   const activeSource = sources && sources.length > 0 ? sources[activeIdx] || sources[0] : null;
 
+  const tryNextServer = useCallback(() => {
+    setFailedServers(prev => new Set([...prev, activeIdx]));
+    const nextIdx = sources.findIndex((_, i) => i > activeIdx && !failedServers.has(i));
+    if (nextIdx !== -1) {
+      setActiveIdx(nextIdx);
+      setIsBufferingNotice(false);
+    }
+  }, [activeIdx, sources, failedServers]);
+
   useEffect(() => {
-    // Show a helpful tip after 6 seconds if video is taking long
+    setIsBufferingNotice(false);
+    // Show a helpful tip after 8 seconds if video is taking long
     const timer = setTimeout(() => {
       setIsBufferingNotice(true);
-    }, 6000);
+    }, 8000);
     return () => clearTimeout(timer);
   }, [activeIdx]);
 
@@ -115,15 +127,23 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
               <div className="flex items-center gap-2 text-left">
                 <Zap size={16} className="text-amber-400 shrink-0 animate-bounce" />
                 <p className="text-[11px] font-bold text-amber-200">
-                  Slow buffer? Try changing Proxy Mode or Server below!
+                  This server is slow or blocked. Try the next one!
                 </p>
               </div>
-              <button 
-                onClick={() => setIsBufferingNotice(false)} 
-                className="text-amber-400 hover:text-white p-1"
-              >
-                <X size={14} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={tryNextServer}
+                  className="text-[10px] font-extrabold bg-amber-500 text-black px-2 py-1 rounded-full flex items-center gap-1"
+                >
+                  Next <ChevronRight size={10} />
+                </button>
+                <button 
+                  onClick={() => setIsBufferingNotice(false)} 
+                  className="text-amber-400 hover:text-white p-1"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -156,32 +176,45 @@ export default function CinemaPlayer({ sources, title, onClose }: CinemaPlayerPr
             ))}
           </div>
 
-          {/* Row 2: Server Switcher Pill Buttons */}
-          <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
-            <div className="flex items-center gap-2 overflow-x-auto max-w-full no-scrollbar">
+          {/* Row 2: Server Switcher Pill Buttons - Scrollable full list */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
               <span className="text-[10px] uppercase font-extrabold text-zinc-500 flex items-center gap-1 shrink-0">
-                <Server size={12} /> Server:
+                <Server size={12} /> {sources.length} Servers Available:
               </span>
+              <span className="text-[9px] text-zinc-600">← scroll →</span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
               {sources.map((src, index) => (
                 <button
                   key={index}
                   onClick={() => {
                     setActiveIdx(index);
                     setIsBufferingNotice(false);
+                    setFailedServers(prev => { const n = new Set(prev); n.delete(index); return n; });
                   }}
-                  className={`px-3 py-1 rounded-full text-[10px] font-extrabold transition-all duration-200 shrink-0 flex items-center gap-1.5 ${
+                  title={`${src.source_name}${src.region ? ' · ' + src.region : ''}`}
+                  className={`px-2.5 py-1 rounded-full text-[9px] font-bold transition-all duration-200 shrink-0 flex items-center gap-1 ${
                     activeIdx === index
                       ? 'bg-amber-500 text-black shadow-md scale-105'
-                      : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                      : failedServers.has(index)
+                        ? 'bg-red-900/50 text-red-400 border border-red-800/40 line-through'
+                        : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border border-white/5'
                   }`}
                 >
-                  {index === 0 && <Zap size={10} className="fill-current" />}
-                  {src.source_name.split(' ')[0]} {index + 1}
+                  {index === 0 && <Zap size={8} className="fill-current shrink-0" />}
+                  <span className="truncate max-w-[90px]">{src.source_name}</span>
                 </button>
               ))}
             </div>
-            
-            <div className="flex items-center gap-3 shrink-0">
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {activeSource.region && (
+                <span className="flex items-center gap-1 text-[9px] text-zinc-500">
+                  <Globe size={9} /> {activeSource.region}
+                </span>
+              )}
               <span className="text-zinc-400 text-[10px] font-semibold">
                 Quality: {activeSource.quality || '1080p'}
               </span>
