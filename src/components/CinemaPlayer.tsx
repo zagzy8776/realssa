@@ -47,6 +47,19 @@ export default function CinemaPlayer({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Protect parent page from being redirected by iframe ads
+  useEffect(() => {
+    const preventRedirect = (e: BeforeUnloadEvent) => {
+      const msg = "Stay on RealSSA to continue watching your movie?";
+      e.returnValue = msg;
+      return msg;
+    };
+    window.addEventListener('beforeunload', preventRedirect);
+    return () => {
+      window.removeEventListener('beforeunload', preventRedirect);
+    };
+  }, []);
+
   const goNext = useCallback(() => {
     setActiveIdx(prev => (prev + 1) % servers.length);
   }, [servers.length]);
