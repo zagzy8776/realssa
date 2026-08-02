@@ -61,11 +61,9 @@ export default function CinemaHub() {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [episodesLoading, setEpisodesLoading] = useState(false);
   
-  // Stream Playback State
-  const [activePlayerSources, setActivePlayerSources] = useState<StreamSource[]>([]);
-  const [playerTitle, setPlayerTitle] = useState('');
+  // Stream Playback State — now just needs TMDB ID, no pre-fetching sources
+  const [activePlayer, setActivePlayer] = useState<{ tmdbId: number; mediaType: 'movie'|'tv'; season: number; episode: number; title: string } | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
-  const [availableSources, setAvailableSources] = useState<StreamSource[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(false);
 
   useEffect(() => {
@@ -128,7 +126,7 @@ export default function CinemaHub() {
       setMediaDetails(details);
 
       if (media.media_type === 'movie') {
-        setAvailableSources(details.sources || []);
+        // no pre-fetch needed — player resolves on demand
       } else if (media.media_type === 'tv') {
         const rawSeasons = details.seasons || [];
         // Filter out Season 0 (Specials/Trailers which servers don't host)
@@ -172,43 +170,39 @@ export default function CinemaHub() {
 
   const handleEpisodeSelect = async (episode: Episode) => {
     setSelectedEpisode(episode);
-    setAvailableSources([]);
     setSourcesLoading(true);
     if (!selectedMedia) return;
-    
-    try {
-      const res = await fetch(apiUrl(`/api/cinema/stream?id=${selectedMedia.id}&type=tv&season=${episode.season_number}&episode=${episode.episode_number}`));
-      const data = await res.json();
-      const sources = data.sources || [];
-      setAvailableSources(sources);
-      if (sources.length > 0) {
-        const showName = selectedMedia.title || selectedMedia.name || 'Episode';
-        startPlayingMedia(sources, `${showName} - S${episode.season_number}E${episode.episode_number}`);
-      }
-    } catch (err) {
-      console.error('Failed to load episode sources:', err);
-    } finally {
-      setSourcesLoading(false);
-    }
+    const showName = selectedMedia.title || selectedMedia.name || 'Show';
+    setActivePlayer({
+      tmdbId: selectedMedia.id,
+      mediaType: 'tv',
+      season: episode.season_number,
+      episode: episode.episode_number,
+      title: `${showName} - S${episode.season_number}E${episode.episode_number}`
+    });
+    setSourcesLoading(false);
   };
 
-  const startPlayingMedia = (sources: StreamSource[], title: string) => {
-    setActivePlayerSources(sources);
-    setPlayerTitle(title);
+  const startPlayingMedia = (media: MovieOrShow, titleOverride?: string) => {
+    const title = titleOverride || media.title || media.name || 'Movie';
+    setActivePlayer({
+      tmdbId: media.id,
+      mediaType: (media.media_type || 'movie') as 'movie' | 'tv',
+      season: 1,
+      episode: 1,
+      title
+    });
   };
 
-  const handlePlayMedia = async (media: MovieOrShow) => {
+  const handlePlayMedia = (media: MovieOrShow) => {
     const title = media.title || media.name || 'Movie';
-    try {
-      const res = await fetch(apiUrl(`/api/cinema/stream?id=${media.id}&type=${media.media_type}`));
-      const data = await res.json();
-      const sources = data.sources || [];
-      if (sources.length > 0) {
-        startPlayingMedia(sources, title);
-      }
-    } catch (err) {
-      console.error('Failed to fetch stream sources:', err);
-    }
+    setActivePlayer({
+      tmdbId: media.id,
+      mediaType: (media.media_type || 'movie') as 'movie' | 'tv',
+      season: 1,
+      episode: 1,
+      title
+    });
   };
 
   const getPoster = (item: MovieOrShow) => {
@@ -697,12 +691,15 @@ export default function CinemaHub() {
         </div>
       )}
 
-      {/* Video Streaming Player overlay */}
-      {activePlayerSources.length > 0 && (
-        <CinemaPlayer 
-          sources={activePlayerSources}
-          title={playerTitle}
-          onClose={() => setActivePlayerSources([])}
+      {/* Video Streaming Player — Direct HLS first, iframe fallback */}
+      {activePlayer && (
+        <CinemaPlayer
+          tmdbId={activePlayer.tmdbId}
+          mediaType={activePlayer.mediaType}
+          season={activePlayer.season}
+          episode={activePlayer.episode}
+          title={activePlayer.title}
+          onClose={() => setActivePlayer(null)}
         />
       )}
 

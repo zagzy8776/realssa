@@ -5,6 +5,55 @@ const tmdbService = require('../services/tmdbService');
 const movieScraper = require('../services/movieScraper');
 const pureStreamExtractor = require('../services/pureStreamExtractor');
 const cinemaCronPrewarmer = require('../services/cinemaCronPrewarmer');
+const streamResolver = require('../services/streamResolver');
+
+/**
+ * GET /api/cinema/resolve-stream
+ * PRIMARY ROUTE: Extracts a direct .m3u8 HLS stream URL from the provider
+ * so the frontend HlsPlayer plays it natively — no iframes, no foreign sites.
+ * Falls back to iframe embed list if no direct stream can be extracted.
+ */
+router.get('/resolve-stream', async (req, res) => {
+  try {
+    const { id, type = 'movie', season = 1, episode = 1 } = req.query;
+    if (!id) return res.status(400).json({ error: '"id" (TMDB ID) is required' });
+
+    const result = await streamResolver.resolveStream(
+      parseInt(id),
+      type,
+      parseInt(season),
+      parseInt(episode)
+    );
+
+    if (result && result.stream_url) {
+      return res.json({
+        success: true,
+        mode: 'direct_hls',
+        provider: result.provider,
+        stream_url: result.stream_url,
+        quality: result.quality || '1080p',
+        is_hls: result.is_hls,
+        subtitles: result.subtitles || [],
+        from_cache: result.from_cache || false
+      });
+    }
+
+    // Fallback: return iframe embed list
+    const fallback = type === 'tv'
+      ? await pureStreamExtractor.extractEpisodeStreams(parseInt(id), parseInt(season), parseInt(episode))
+      : await pureStreamExtractor.extractMovieStreams(parseInt(id));
+
+    return res.json({
+      success: false,
+      mode: 'iframe_fallback',
+      message: 'Direct HLS extraction failed — returning embed list',
+      sources: fallback.sources
+    });
+  } catch (err) {
+    console.error('[Cinema Resolve Stream Error]:', err.message);
+    res.status(500).json({ error: 'Stream resolution failed', detail: err.message });
+  }
+});
 
 /**
  * GET /api/cinema/cron-prewarm
