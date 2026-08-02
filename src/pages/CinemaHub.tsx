@@ -842,9 +842,46 @@ export default function CinemaHub() {
               </div>
             </div>
           )}
+          {/* Curated 24/7 Broadcast Channels */}
+          <div className="mt-8 border-t border-zinc-900 pt-8 mb-6">
+            <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Tv size={14} />
+              Live Sports Broadcast Channels
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {[
+                { id: 28, name: 'SuperSport Premier League', theme: 'from-red-600/10 to-zinc-900 border-red-500/20 text-orange-400 hover:border-orange-500/40' },
+                { id: 45, name: 'SuperSport La Liga', theme: 'from-indigo-600/10 to-zinc-900 border-indigo-500/20 text-indigo-400 hover:border-indigo-500/40' },
+                { id: 31, name: 'SuperSport Football', theme: 'from-emerald-600/10 to-zinc-900 border-emerald-500/20 text-emerald-400 hover:border-emerald-500/40' },
+                { id: 27, name: 'SuperSport Grandstand', theme: 'from-amber-600/10 to-zinc-900 border-amber-500/20 text-amber-400 hover:border-amber-500/40' },
+                { id: 3, name: 'Sky Sports Premier League', theme: 'from-red-600/10 to-zinc-900 border-red-500/20 text-red-400 hover:border-red-500/40' },
+                { id: 2, name: 'Sky Sports Main Event', theme: 'from-zinc-700/10 to-zinc-900 border-zinc-500/20 text-zinc-400 hover:border-zinc-500/40' },
+                { id: 18, name: 'TNT Sports 1', theme: 'from-pink-600/10 to-zinc-900 border-pink-500/20 text-pink-400 hover:border-pink-500/40' },
+                { id: 19, name: 'TNT Sports 2', theme: 'from-violet-600/10 to-zinc-900 border-violet-500/20 text-violet-400 hover:border-violet-500/40' },
+                { id: 33, name: 'ESPN US', theme: 'from-red-600/10 to-zinc-900 border-red-500/20 text-red-500 hover:border-red-500/40' },
+                { id: 34, name: 'ESPN 2 US', theme: 'from-zinc-700/10 to-zinc-900 border-zinc-500/20 text-zinc-400 hover:border-zinc-500/40' },
+                { id: 39, name: 'beIN Sports US', theme: 'from-blue-600/10 to-zinc-900 border-blue-500/20 text-blue-400 hover:border-blue-500/40' },
+                { id: 46, name: 'LaLiga TV', theme: 'from-amber-600/10 to-zinc-900 border-amber-500/20 text-amber-400 hover:border-amber-500/40' },
+              ].map(ch => (
+                <button
+                  key={ch.id}
+                  onClick={() => setActiveSportsPlayer({ channelId: ch.id, title: ch.name })}
+                  className={`relative flex flex-col p-4 bg-gradient-to-br ${ch.theme} rounded-2xl border text-left hover:scale-[1.02] transition-all hover:shadow-lg hover:shadow-black/50 group`}
+                >
+                  <span className="text-[8px] uppercase font-extrabold tracking-widest text-zinc-500">Live Network Feed</span>
+                  <span className="text-zinc-200 font-extrabold text-xs mt-1.5 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
+                  <div className="mt-4 flex items-center justify-between w-full">
+                    <span className="text-[9px] bg-white/5 px-2 py-0.5 rounded text-zinc-400 font-bold border border-white/5">24/7 TV</span>
+                    <Play size={10} className="text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
         </div>
       )}
+
 
 
       {/* ── Movies & Shows Tab ── */}
