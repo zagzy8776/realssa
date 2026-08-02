@@ -709,8 +709,8 @@ export default function CinemaHub() {
           {/* ── Sport Match Watch Drawer (rbtv+ style) ── */}
           {selectedSportMatch && (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/85 backdrop-blur-sm animate-in fade-in">
-              <div className="w-full sm:max-w-md h-[55vh] sm:h-[60vh] bg-zinc-950 border border-zinc-900 sm:border-l rounded-t-3xl sm:rounded-2xl overflow-y-auto relative flex flex-col p-6 shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-right duration-300">
-                
+              <div className="w-full sm:max-w-md h-auto max-h-[70vh] bg-zinc-950 border border-zinc-900 sm:border-l rounded-t-3xl sm:rounded-2xl overflow-y-auto relative flex flex-col p-6 shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-right duration-300">
+
                 <div className="flex items-center justify-between border-b border-zinc-900 pb-4 mb-5 shrink-0">
                   <div className="flex items-center gap-2">
                     <Trophy className="text-amber-500" size={16} />
@@ -726,66 +726,93 @@ export default function CinemaHub() {
                   </button>
                 </div>
 
-                {/* Match Status Details */}
-                <div className="flex flex-col items-center justify-center gap-1.5 p-4 bg-zinc-900/50 rounded-2xl border border-zinc-900 mb-6 text-center">
+                {/* Match info pill */}
+                <div className="flex flex-col items-center gap-1.5 p-4 bg-zinc-900/50 rounded-2xl border border-zinc-900 mb-5 text-center">
                   <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">{selectedSportMatch.sport}</span>
-                  <div className="flex items-center gap-3 text-sm font-black text-white mt-1">
-                    <span>{selectedSportMatch.event}</span>
-                  </div>
+                  <div className="text-sm font-black text-white mt-1">{selectedSportMatch.event}</div>
                   <span className="text-[10px] text-amber-500 font-black uppercase flex items-center gap-1 mt-1 bg-amber-950/20 px-2 py-0.5 rounded border border-amber-900/10">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                    Kickoff: {selectedSportMatch.time || 'Live Now'}
+                    {selectedSportMatch.time || 'Live Now'}
                   </span>
                 </div>
 
-                {/* Server Selection list (rbtv+ style) */}
-                <div className="flex-1 flex flex-col justify-center">
-                  <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider mb-3.5">Select Streaming Server</p>
-                  
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {selectedSportMatch.channels && selectedSportMatch.channels.length > 0 ? (
-                      selectedSportMatch.channels.map((srv: any, index: number) => (
+                {/* ── CASE A: Direct stream IDs from scraper ── */}
+                {selectedSportMatch.channels && selectedSportMatch.channels.length > 0 ? (
+                  <div className="flex-1 flex flex-col">
+                    <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider mb-3">Select Streaming Server</p>
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {selectedSportMatch.channels.map((srv: any, index: number) => (
                         <button
                           key={index}
                           onClick={() => {
                             setActiveSportsPlayer({
                               channelId: srv.id,
-                              title: `${selectedSportMatch.event} (${srv.name})`
+                              title: `${selectedSportMatch.event} · ${srv.name}`
                             });
                             setSelectedSportMatch(null);
                           }}
-                          className="w-full flex items-center justify-between p-3.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 hover:border-amber-500/30 rounded-xl text-left transition-all group"
+                          className="w-full flex items-center justify-between p-3.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-amber-500/30 rounded-xl text-left transition-all group"
                         >
                           <div className="min-w-0">
                             <p className="text-xs font-black text-zinc-100 flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              Server {index + 1}
+                              Stream {index + 1} · {srv.name}
                             </p>
-                            <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">{srv.name}</p>
                           </div>
                           <Play size={12} className="text-zinc-600 group-hover:text-amber-400 group-hover:fill-amber-400 transition-colors shrink-0" />
                         </button>
-                      ))
-                    ) : (
-                      <div className="text-center py-6 text-xs text-zinc-500">
-                        No active channels mapped to this event. Try fallback broadcast channels below.
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
-
-                </div>
+                ) : (
+                  /* ── CASE B: ESPN match — no direct ID, open VIPRow/Strikeout homepage ── */
+                  <div className="flex-1 flex flex-col">
+                    <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider mb-3">Watch On</p>
+                    <p className="text-[10px] text-zinc-600 mb-3 leading-relaxed">
+                      Find <span className="text-zinc-400 font-bold">{selectedSportMatch.event}</span> on the streaming site and click to watch.
+                    </p>
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {[
+                        { label: 'VIPRow', key: 'viprow', id: 'viprow-browse' },
+                        { label: 'Strikeout', key: 'strikeout', id: 'strikeout-browse' },
+                      ].map(srv => (
+                        <button
+                          key={srv.key}
+                          onClick={() => {
+                            setActiveSportsPlayer({
+                              channelId: srv.key,
+                              title: `${selectedSportMatch.event} — Find on ${srv.label}`
+                            });
+                            setSelectedSportMatch(null);
+                          }}
+                          className="w-full flex items-center justify-between p-3.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-amber-500/30 rounded-xl text-left transition-all group"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-zinc-100 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              Browse {srv.label}
+                            </p>
+                            <p className="text-[9px] text-zinc-500 mt-0.5">Find your match on {srv.label}'s schedule</p>
+                          </div>
+                          <Play size={12} className="text-zinc-600 group-hover:text-amber-400 transition-colors shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>
           )}
 
-          {/* Live Sports Access — VIPRow · VIPBox · Strikeout */}
+          {/* Live Sports Access — VIPRow · Strikeout */}
           <div className="mt-8 border-t border-zinc-900 pt-8 mb-6">
             <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2">
               <Tv size={14} />
               Browse Live Sports By Category
             </h3>
-            <p className="text-[10px] text-zinc-600 mb-5">All streams use VIPRow, VIPBox and Strikeout — 3 independent CDNs. If one is blank, switch server inside the player.</p>
+            <p className="text-[10px] text-zinc-600 mb-5">All streams use VIPRow and Strikeout — 2 independent CDNs. If one server is blank, switch inside the player.</p>
+
 
             {/* ── Football / Soccer ── */}
             <p className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest mb-2.5">⚽ Football</p>

@@ -3,25 +3,37 @@ import { X, Server, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SandboxedIframe } from './SandboxedIframe';
 
 
-// All active servers
+// All active servers — ordered by reliability (least ads first)
 function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: number, episode: number) {
   const isTV = mediaType === 'tv';
   return [
     {
-      name: 'Server 1 (MultiEmbed)',
+      name: 'Server 1 · MultiEmbed',
       url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}`
     },
     {
-      name: 'Server 2 (MovieUniverse)',
+      name: 'Server 2 · 2Embed',
       url: isTV
-        ? `https://movieuniverse.skin/embed/tv/${tmdbId}/${season}/${episode}`
-        : `https://movieuniverse.skin/embed/movie/${tmdbId}`
+        ? `https://www.2embed.cc/embedtv/${tmdbId}&s=${season}&e=${episode}`
+        : `https://www.2embed.cc/embed/${tmdbId}`
     },
     {
-      name: 'Server 3 (VidSrc)',
+      name: 'Server 3 · AutoEmbed',
       url: isTV
-        ? `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}`
-        : `https://vidsrc.to/embed/movie/${tmdbId}`
+        ? `https://autoembed.co/tv/tmdb/${tmdbId}-${season}-${episode}`
+        : `https://autoembed.co/movie/tmdb/${tmdbId}`
+    },
+    {
+      name: 'Server 4 · VidSrc.net',
+      url: isTV
+        ? `https://vidsrc.net/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidsrc.net/embed/movie/${tmdbId}`
+    },
+    {
+      name: 'Server 5 · VidSrc.su',
+      url: isTV
+        ? `https://vidsrc.su/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidsrc.su/embed/movie/${tmdbId}`
     },
   ];
 }

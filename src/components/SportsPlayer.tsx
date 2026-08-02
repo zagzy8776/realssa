@@ -7,26 +7,20 @@ interface SportsPlayerProps {
   onClose: () => void;
 }
 
-// ── Active working sports streaming servers ──
-// All three route through Strikeout / their own CDNs — no DaddyLive dependency
+// ── Working sports streaming servers ──
+// VIPRow and Strikeout confirmed working by user
 const SERVERS = [
   {
     label: 'Server 1 · VIPRow',
     key: 'viprow',
     buildUrl: (id: string | number) => `https://viprow.me/embed/${id}`,
-    fallback: 'https://viprow.me/',
+    homepage: 'https://viprow.me',
   },
   {
-    label: 'Server 2 · VIPBox',
-    key: 'vipbox',
-    buildUrl: (id: string | number) => `https://www.vipbox.lc/embed.php?id=${id}`,
-    fallback: 'https://www.vipbox.lc/',
-  },
-  {
-    label: 'Server 3 · Strikeout',
+    label: 'Server 2 · Strikeout',
     key: 'strikeout',
     buildUrl: (id: string | number) => `https://strikeout.im/embed/${id}`,
-    fallback: 'https://strikeout.im/',
+    homepage: 'https://strikeout.im',
   },
 ];
 
@@ -36,15 +30,18 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
     const found = SERVERS.findIndex(s => s.key === saved);
     return found >= 0 ? found : 0;
   });
-  const [showPicker, setShowPicker] = useState(false);
 
   const activeServer = SERVERS[activeIdx];
-  const streamUrl = activeServer.buildUrl(channelId);
+
+  // If no specific channelId, show the homepage of the active server
+  const isCategory = typeof channelId === 'string' && isNaN(Number(channelId));
+  const streamUrl = isCategory
+    ? activeServer.homepage
+    : activeServer.buildUrl(channelId);
 
   const handleSwitch = (idx: number) => {
     setActiveIdx(idx);
     localStorage.setItem('realssa_sports_server', SERVERS[idx].key);
-    setShowPicker(false);
   };
 
   // Close on Escape
@@ -73,7 +70,7 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
         <div className="flex flex-col min-w-0">
           <span className="text-[9px] uppercase font-extrabold tracking-widest text-amber-500 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-            Live Sports Stream · {activeServer.label}
+            Live Sports Stream
           </span>
           <h3 className="text-white text-xs sm:text-sm font-extrabold truncate max-w-[300px] sm:max-w-md mt-0.5 flex items-center gap-2">
             <Tv size={14} className="text-zinc-400 shrink-0" />
@@ -82,53 +79,22 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
         </div>
 
         <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
-
-          {/* Server switcher */}
-          <div className="relative">
-            <button
-              onClick={() => setShowPicker(v => !v)}
-              className="flex items-center gap-1.5 bg-zinc-900 border border-white/5 hover:border-amber-500/40 rounded-xl px-3 py-1.5 text-[10px] font-black text-zinc-300 hover:text-white transition-all"
-            >
-              <RefreshCw size={10} className={showPicker ? 'text-amber-400 animate-spin' : ''} />
-              {activeServer.label}
-            </button>
-
-            {showPicker && (
-              <div className="absolute top-full right-0 mt-1.5 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 min-w-[180px] animate-in slide-in-from-top duration-150">
-                {SERVERS.map((srv, i) => (
-                  <button
-                    key={srv.key}
-                    onClick={() => handleSwitch(i)}
-                    className={`w-full flex items-center gap-2 px-4 py-3 text-[11px] font-black text-left transition-all ${
-                      i === activeIdx
-                        ? 'bg-amber-500 text-black'
-                        : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${i === activeIdx ? 'bg-black' : 'bg-emerald-500'}`} />
-                    {srv.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Open in new tab (bypass iframe blocks) */}
-          <a
-            href={activeServer.fallback}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Open in new tab"
-            className="p-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-amber-400 transition-colors border border-white/5"
-          >
-            <ExternalLink size={14} />
-          </a>
-
-          {/* Redirect shield indicator */}
+          {/* Redirect shield */}
           <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400 text-[10px] font-bold">
             <Shield size={11} />
             Redirect Protection
           </div>
+
+          {/* Open in new tab */}
+          <a
+            href={activeServer.homepage}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open stream site in new tab"
+            className="p-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-amber-400 transition-colors border border-white/5"
+          >
+            <ExternalLink size={14} />
+          </a>
 
           <button
             onClick={onClose}
@@ -140,7 +106,7 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
         </div>
       </div>
 
-      {/* ── Server tabs (quick switch below bar) ── */}
+      {/* ── Server tab bar ── */}
       <div className="flex gap-1.5 px-4 py-2 bg-zinc-950 border-b border-white/5 shrink-0 overflow-x-auto no-scrollbar">
         {SERVERS.map((srv, i) => (
           <button
@@ -179,7 +145,7 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
         </div>
         <div className="flex items-center gap-1 text-zinc-600">
           <RefreshCw size={9} />
-          <span>Blank? Try another server above</span>
+          <span>Blank? Switch server above</span>
         </div>
       </div>
 
