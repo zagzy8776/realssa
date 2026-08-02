@@ -15,9 +15,6 @@ export function SandboxedIframe({ src, className = "" }: SandboxedIframeProps) {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
         referrerPolicy="no-referrer"
         title="RealSSA Player"
-        // Blocks popup ads: omitting allow-popups and allow-top-navigation prevents
-        // ad scripts from opening new tabs or redirecting the parent window
-        sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-fullscreen"
       />
     </div>
   );

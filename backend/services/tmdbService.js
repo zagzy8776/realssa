@@ -50,14 +50,14 @@ async function processMediaImages(item) {
 /**
  * Fetch and Cache Trending movies/TV shows
  */
-async function getTrending(mediaType = 'all', timeWindow = 'day') {
-  const cacheKey = `tmdb:trending:${mediaType}:${timeWindow}`;
+async function getTrending(mediaType = 'all', timeWindow = 'day', page = 1) {
+  const cacheKey = `tmdb:trending:${mediaType}:${timeWindow}:p${page}`;
   const cached = await redisService.getCached(cacheKey);
   if (cached) return cached;
 
   try {
     const response = await tmdbClient.get(`/trending/${mediaType}/${timeWindow}`, {
-      params: getParams()
+      params: getParams({ page })
     });
     
     // Process images in parallel
@@ -65,7 +65,8 @@ async function getTrending(mediaType = 'all', timeWindow = 'day') {
     const processedResults = await Promise.all(results.map(item => processMediaImages(item)));
     
     const finalData = { ...response.data, results: processedResults };
-    await redisService.setCached(cacheKey, finalData, 3600 * 6); // Cache trending for 6 hours
+    // Cache page 1 for 6h, other pages for 1h
+    await redisService.setCached(cacheKey, finalData, page === 1 ? 3600 * 6 : 3600);
     return finalData;
   } catch (err) {
     console.error(`❌ [TMDB getTrending Error]:`, err.message);

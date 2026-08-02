@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import VideoNews from "@/pages/VideoNews";
-import { Play, Info, Search, Star, Film, Tv, X, Clock, ShieldCheck, EyeOff, Youtube, ChevronDown, Loader2 } from 'lucide-react';
+import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api-base";
 import CinemaPlayer from "@/components/CinemaPlayer";
@@ -18,9 +17,9 @@ interface MovieOrShow {
   r2_backdrop_url?: string;
   release_date?: string;
   first_air_date?: string;
-  vote_average: number;
+  vote_average?: number;
   media_type: 'movie' | 'tv';
-  genre_ids: number[];
+  genre_ids?: number[];
 }
 
 interface Episode {
@@ -37,25 +36,26 @@ interface Episode {
 export default function CinemaHub() {
   const [activeTab, setActiveTab] = useState<'movies' | 'news'>('movies');
 
-  // Catalog
-  const [trending, setTrending] = useState<MovieOrShow[]>([]);
+  // Catalog state — single flat list, infinite scroll
+  const [catalog, setCatalog] = useState<MovieOrShow[]>([]);
   const [featured, setFeatured] = useState<MovieOrShow | null>(null);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const seenIds = useRef<Set<number>>(new Set());
 
-  // Pagination
-  const [moviesPage, setMoviesPage] = useState(1);
-  const [showsPage, setShowsPage] = useState(1);
-  const [loadingMoreMovies, setLoadingMoreMovies] = useState(false);
-  const [loadingMoreShows, setLoadingMoreShows] = useState(false);
+  // Infinite scroll sentinel
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Search with autocomplete
+  // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MovieOrShow[]>([]);
   const [suggestions, setSuggestions] = useState<MovieOrShow[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
-  const suggestDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
   // Detail Modal
@@ -67,91 +67,107 @@ export default function CinemaHub() {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [episodesLoading, setEpisodesLoading] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
-  const [sourcesLoading, setSourcesLoading] = useState(false);
 
   // Player
   const [activePlayer, setActivePlayer] = useState<{
     tmdbId: number; mediaType: 'movie' | 'tv'; season: number; episode: number; title: string;
   } | null>(null);
 
-  useEffect(() => { fetchTrending(); }, []);
+  // ── Initial Load ──
+  useEffect(() => { fetchPage(1, true); }, []);
 
-  // Close suggestions on outside click
+  // ── IntersectionObserver for infinite scroll ──
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    if (isSearching) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore && hasMore && !isSearching) {
+          loadNextPage();
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadingMore, hasMore, isSearching]);
+
+  // ── Close suggestions on outside click ──
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  const fetchTrending = async () => {
-    setLoading(true);
+  const fetchPage = async (pageNum: number, isFirst = false) => {
+    if (isFirst) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      const res = await fetch(apiUrl('/api/cinema/trending'));
+      const res = await fetch(apiUrl(`/api/cinema/trending?page=${pageNum}&time_window=week`));
       const data = await res.json();
-      const results = data.results || [];
-      setTrending(results);
-      const movieWithBackdrop = results.find((item: MovieOrShow) => item.backdrop_path && item.overview);
-      setFeatured(movieWithBackdrop || results[0]);
+      const raw: MovieOrShow[] = data.results || [];
+
+      // Deduplicate by id — never show same card twice
+      const fresh = raw.filter(item => {
+        if (seenIds.current.has(item.id)) return false;
+        seenIds.current.add(item.id);
+        return true;
+      });
+
+      if (isFirst) {
+        setCatalog(fresh);
+        const hero = fresh.find(i => i.backdrop_path && i.overview) || fresh[0];
+        setFeatured(hero || null);
+      } else {
+        setCatalog(prev => [...prev, ...fresh]);
+      }
+
+      // TMDB trending caps at 500 pages (10,000 items). Stop at 20 pages.
+      setHasMore(fresh.length > 0 && pageNum < 20);
+      setPage(pageNum);
     } catch (err) {
-      console.error('Failed to fetch trending:', err);
+      console.error('Failed to fetch catalog:', err);
     } finally {
-      setLoading(false);
+      if (isFirst) setLoading(false);
+      else setLoadingMore(false);
     }
   };
 
-  const fetchMoreMovies = async () => {
-    setLoadingMoreMovies(true);
-    try {
-      const nextPage = moviesPage + 1;
-      const res = await fetch(apiUrl(`/api/cinema/trending?page=${nextPage}`));
-      const data = await res.json();
-      const newItems = (data.results || []).filter((i: MovieOrShow) => i.media_type === 'movie');
-      setTrending(prev => [...prev, ...newItems]);
-      setMoviesPage(nextPage);
-    } catch (err) {
-      console.error('Load more movies failed:', err);
-    } finally {
-      setLoadingMoreMovies(false);
-    }
-  };
+  const loadNextPage = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    fetchPage(page + 1);
+  }, [page, loadingMore, hasMore]);
 
-  const fetchMoreShows = async () => {
-    setLoadingMoreShows(true);
-    try {
-      const nextPage = showsPage + 1;
-      const res = await fetch(apiUrl(`/api/cinema/trending?page=${nextPage}`));
-      const data = await res.json();
-      const newItems = (data.results || []).filter((i: MovieOrShow) => i.media_type === 'tv');
-      setTrending(prev => [...prev, ...newItems]);
-      setShowsPage(nextPage);
-    } catch (err) {
-      console.error('Load more shows failed:', err);
-    } finally {
-      setLoadingMoreShows(false);
-    }
-  };
-
-  // Debounced autocomplete
+  // ── Autocomplete (debounced 300ms) ──
   const handleSearchInput = (value: string) => {
     setSearchQuery(value);
-    if (suggestDebounce.current) clearTimeout(suggestDebounce.current);
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+
     if (value.trim().length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
+      if (!value.trim()) { setIsSearching(false); setSearchResults([]); }
       return;
     }
-    suggestDebounce.current = setTimeout(async () => {
+
+    suggestTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(apiUrl(`/api/cinema/search?q=${encodeURIComponent(value)}`));
         const data = await res.json();
-        setSuggestions((data.results || []).slice(0, 6));
+        const results = (data.results || []).filter((i: MovieOrShow) =>
+          i.media_type === 'movie' || i.media_type === 'tv'
+        );
+        setSuggestions(results.slice(0, 8));
         setShowSuggestions(true);
       } catch (_) {}
-    }, 350);
+    }, 300);
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -167,7 +183,10 @@ export default function CinemaHub() {
     try {
       const res = await fetch(apiUrl(`/api/cinema/search?q=${encodeURIComponent(searchQuery)}`));
       const data = await res.json();
-      setSearchResults(data.results || []);
+      const results = (data.results || []).filter((i: MovieOrShow) =>
+        i.media_type === 'movie' || i.media_type === 'tv'
+      );
+      setSearchResults(results);
     } catch (err) {
       console.error('Search failed:', err);
     } finally {
@@ -177,10 +196,12 @@ export default function CinemaHub() {
 
   const handleSuggestionClick = (item: MovieOrShow) => {
     setShowSuggestions(false);
-    setSearchQuery(item.title || item.name || '');
+    setIsSearching(false);
+    setSearchQuery('');
     handleOpenDetails(item);
   };
 
+  // ── Detail Modal ──
   const handleOpenDetails = async (media: MovieOrShow) => {
     setSelectedMedia(media);
     setMediaDetails(null);
@@ -218,7 +239,7 @@ export default function CinemaHub() {
       const data = await res.json();
       setEpisodes(data.episodes || []);
     } catch (err) {
-      console.error('Failed to fetch episodes:', err);
+      console.error('Episodes fetch failed:', err);
     } finally {
       setEpisodesLoading(false);
     }
@@ -246,34 +267,35 @@ export default function CinemaHub() {
     setActivePlayer({
       tmdbId: media.id,
       mediaType: (media.media_type || 'movie') as 'movie' | 'tv',
-      season: 1,
-      episode: 1,
+      season: 1, episode: 1,
       title: media.title || media.name || 'Movie'
     });
   };
 
   const getPoster = (item: MovieOrShow) =>
-    item.r2_poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : 'https://realssanews.com.ng/logo.png');
+    item.r2_poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : '/logo.png');
 
   const getBackdrop = (item: MovieOrShow) =>
-    item.r2_backdrop_url || (item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : 'https://realssanews.com.ng/logo.png');
+    item.r2_backdrop_url || (item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : '/logo.png');
 
   const getYear = (item: MovieOrShow) => {
     const d = item.release_date || item.first_air_date || '';
-    return d ? d.substring(0, 4) : 'N/A';
+    return d ? d.substring(0, 4) : '';
   };
 
+  const getRating = (item: MovieOrShow) => ((item.vote_average ?? 0)).toFixed(1);
+
   const formatGenres = (genres: any[]) =>
-    genres?.length ? genres.slice(0, 3).map(g => g.name).join(' · ') : 'Cinema';
+    genres?.length ? genres.slice(0, 3).map(g => g.name).join(' · ') : '';
 
-  const movies = trending.filter(i => i.media_type === 'movie');
-  const shows = trending.filter(i => i.media_type === 'tv');
+  // Split catalog into movies and shows for the two sections
+  const movies = catalog.filter(i => i.media_type === 'movie');
+  const shows = catalog.filter(i => i.media_type === 'tv');
 
-  // Movie card component (reused)
   const MediaCard = ({ item }: { item: MovieOrShow }) => (
     <div
       onClick={() => handleOpenDetails(item)}
-      className="flex-shrink-0 w-32 sm:w-40 aspect-[2/3] group relative cursor-pointer rounded-xl overflow-hidden border border-white/5 hover:border-amber-500/40 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-black/50"
+      className="group relative cursor-pointer rounded-xl overflow-hidden border border-white/5 hover:border-amber-500/50 transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-black/60 bg-zinc-900 aspect-[2/3]"
     >
       <img
         src={getPoster(item)}
@@ -281,22 +303,29 @@ export default function CinemaHub() {
         className="w-full h-full object-cover"
         loading="lazy"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-      {/* Play overlay */}
+      {/* Gradient overlay always visible at bottom */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+
+      {/* Play icon on hover */}
       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-        <div className="w-10 h-10 bg-amber-500/90 rounded-full flex items-center justify-center shadow-lg">
-          <Play size={16} className="fill-black text-black ml-0.5" />
+        <div className="w-11 h-11 bg-amber-500/95 rounded-full flex items-center justify-center shadow-xl">
+          <Play size={18} className="fill-black ml-0.5" />
         </div>
       </div>
+
+      {/* Title + meta */}
       <div className="absolute bottom-0 left-0 right-0 p-2.5">
-        <h4 className="text-white text-[11px] font-bold leading-tight line-clamp-2">
-          {item.title || item.name}
-        </h4>
+        <p className="text-white text-[11px] font-bold leading-tight line-clamp-2">{item.title || item.name}</p>
         <div className="flex items-center gap-1.5 mt-1">
-          <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold">
-            <Star size={8} className="fill-current" />{(item.vote_average ?? 0).toFixed(1)}
+          {(item.vote_average ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold">
+              <Star size={8} className="fill-current" />{getRating(item)}
+            </span>
+          )}
+          {getYear(item) && <span className="text-zinc-500 text-[9px]">{getYear(item)}</span>}
+          <span className="ml-auto text-[8px] uppercase font-bold bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-400">
+            {item.media_type === 'tv' ? 'TV' : 'FILM'}
           </span>
-          <span className="text-zinc-500 text-[9px]">{getYear(item)}</span>
         </div>
       </div>
     </div>
@@ -305,8 +334,8 @@ export default function CinemaHub() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
 
-      {/* Tab Bar */}
-      <div className="bg-black/80 backdrop-blur-md border-b border-zinc-900 sticky top-14 z-40 px-4 py-2">
+      {/* ── Tab Bar — always visible ── */}
+      <div className="bg-black/90 backdrop-blur-md border-b border-zinc-900 sticky top-14 z-40 px-4 py-2">
         <div className="container mx-auto flex items-center gap-2">
           <button
             onClick={() => setActiveTab('movies')}
@@ -327,17 +356,21 @@ export default function CinemaHub() {
         </div>
       </div>
 
-      {activeTab === 'news' ? (
+      {/* ── Live News Tab ── */}
+      {activeTab === 'news' && (
         <div className="flex-1 overflow-auto">
           <VideoNews />
         </div>
-      ) : (
+      )}
+
+      {/* ── Movies & Shows Tab ── */}
+      {activeTab === 'movies' && (
         <>
           {/* Hero Banner */}
           {!isSearching && featured && (
-            <section className="relative w-full h-[58vh] sm:h-[78vh] bg-zinc-950 flex flex-col justify-end overflow-hidden">
+            <section className="relative w-full h-[56vh] sm:h-[75vh] flex flex-col justify-end overflow-hidden">
               <div className="absolute inset-0">
-                <img src={getBackdrop(featured)} alt={featured.title || featured.name} className="w-full h-full object-cover" />
+                <img src={getBackdrop(featured)} alt="" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-black/50 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent" />
               </div>
@@ -349,15 +382,17 @@ export default function CinemaHub() {
                   {featured.title || featured.name}
                 </h1>
                 <div className="flex items-center gap-2 mt-2 text-xs text-zinc-300 font-semibold flex-wrap">
-                  <span className="text-amber-400 flex items-center gap-0.5">
-                    <Star size={12} className="fill-current" />{(featured.vote_average ?? 0).toFixed(1)}
-                  </span>
-                  <span>·</span><span>{getYear(featured)}</span>
+                  {(featured.vote_average ?? 0) > 0 && (
+                    <span className="text-amber-400 flex items-center gap-0.5">
+                      <Star size={12} className="fill-current" />{getRating(featured)}
+                    </span>
+                  )}
+                  {getYear(featured) && <><span>·</span><span>{getYear(featured)}</span></>}
                   <span>·</span>
                   <span className="uppercase bg-zinc-800 px-2 py-0.5 rounded text-[9px] font-bold">{featured.media_type}</span>
                 </div>
                 <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-lg mt-3 line-clamp-3">{featured.overview}</p>
-                <div className="flex gap-3 mt-6">
+                <div className="flex gap-3 mt-5">
                   <button
                     onClick={() => handlePlayMedia(featured)}
                     className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold px-6 py-2.5 text-xs sm:text-sm rounded-full flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/30"
@@ -375,31 +410,32 @@ export default function CinemaHub() {
             </section>
           )}
 
-          {/* Main Content */}
+          {/* Main Content Area */}
           <main className="container mx-auto px-4 py-6 flex-1">
 
-            {/* Search Bar with Autocomplete */}
-            <div ref={searchRef} className="relative w-full max-w-lg mx-auto mb-8">
+            {/* ── Search Bar with Live Autocomplete ── */}
+            <div ref={searchRef} className="relative w-full max-w-xl mx-auto mb-8">
               <form onSubmit={handleSearch} className="relative flex items-center">
                 <input
                   type="text"
-                  placeholder="Search movies, TV shows..."
+                  placeholder="Search any movie or TV show..."
                   value={searchQuery}
                   onChange={e => handleSearchInput(e.target.value)}
                   onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-500 text-zinc-200 placeholder-zinc-500 rounded-full pl-5 pr-12 py-3 text-sm outline-none transition-colors"
+                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-500 text-zinc-200 placeholder-zinc-500 rounded-full pl-5 pr-14 py-3 text-sm outline-none transition-colors"
                 />
                 <button
                   type="submit"
-                  className="absolute right-2 p-2 bg-amber-500 hover:bg-amber-400 text-black rounded-full transition-colors"
+                  className="absolute right-2 p-2.5 bg-amber-500 hover:bg-amber-400 text-black rounded-full transition-colors"
                 >
                   {searchLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
                 </button>
               </form>
 
-              {/* Autocomplete Dropdown */}
+              {/* ── Live Autocomplete Dropdown ── */}
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full mt-1 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/60 z-50 overflow-hidden">
+                <div className="absolute top-full mt-2 left-0 right-0 bg-zinc-900/98 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/80 z-50 overflow-hidden backdrop-blur-sm">
+                  <p className="text-[9px] uppercase font-extrabold text-zinc-600 px-4 pt-3 pb-1 tracking-widest">Suggestions</p>
                   {suggestions.map(item => (
                     <button
                       key={item.id}
@@ -408,105 +444,127 @@ export default function CinemaHub() {
                     >
                       <img
                         src={getPoster(item)}
-                        alt={item.title || item.name}
-                        className="w-8 h-10 object-cover rounded-md shrink-0"
+                        alt=""
+                        className="w-9 h-12 object-cover rounded-lg shrink-0 border border-white/5"
                       />
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-zinc-200 truncate">{item.title || item.name}</p>
-                        <p className="text-[10px] text-zinc-500 flex items-center gap-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-zinc-100 truncate">{item.title || item.name}</p>
+                        <p className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-0.5">
                           {item.media_type === 'tv' ? <Tv size={9} /> : <Film size={9} />}
-                          {getYear(item)} · ⭐ {(item.vote_average ?? 0).toFixed(1)}
+                          <span className="uppercase font-bold">{item.media_type === 'tv' ? 'Series' : 'Movie'}</span>
+                          {getYear(item) && <><span>·</span><span>{getYear(item)}</span></>}
+                          {(item.vote_average ?? 0) > 0 && (
+                            <span className="text-amber-400 flex items-center gap-0.5 ml-1">
+                              <Star size={9} className="fill-current" />{getRating(item)}
+                            </span>
+                          )}
                         </p>
                       </div>
+                      <Play size={14} className="text-zinc-600 shrink-0" />
                     </button>
                   ))}
+                  <div className="border-t border-zinc-800 px-4 py-2">
+                    <button
+                      onMouseDown={(e) => { e.preventDefault(); handleSearch(e as any); }}
+                      className="text-xs text-amber-500 font-bold hover:text-amber-400"
+                    >
+                      See all results for "{searchQuery}" →
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Clear search */}
+            {/* ── Search Results Grid ── */}
             {isSearching && (
-              <button
-                onClick={() => { setIsSearching(false); setSearchResults([]); setSearchQuery(''); }}
-                className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-white mb-4 transition-colors"
-              >
-                <X size={13} /> Clear search
-              </button>
-            )}
-
-            {/* Loading shimmer */}
-            {loading && (
-              <div className="flex gap-3 overflow-hidden pb-2">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex-shrink-0 w-32 aspect-[2/3] bg-zinc-900 rounded-xl animate-pulse" />
-                ))}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-extrabold text-white">
+                    Results for <span className="text-amber-400">"{searchQuery}"</span>
+                  </h3>
+                  <button
+                    onClick={() => { setIsSearching(false); setSearchResults([]); setSearchQuery(''); }}
+                    className="flex items-center gap-1 text-xs text-zinc-500 hover:text-white transition-colors"
+                  >
+                    <X size={12} /> Clear
+                  </button>
+                </div>
+                {searchLoading ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
+                    {[...Array(12)].map((_, i) => (
+                      <div key={i} className="aspect-[2/3] bg-zinc-900 rounded-xl animate-pulse" />
+                    ))}
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
+                    {searchResults.map(item => <MediaCard key={item.id} item={item} />)}
+                  </div>
+                ) : (
+                  <div className="text-center py-16 text-zinc-600 flex flex-col items-center gap-3">
+                    <EyeOff size={36} />
+                    <p className="text-sm">No results for "{searchQuery}"</p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Search Results */}
-            {!loading && isSearching && (
-              searchResults.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {searchResults.map(item => <MediaCard key={item.id} item={item} />)}
-                </div>
-              ) : (
-                <div className="text-center py-16 text-zinc-500 flex flex-col items-center gap-3">
-                  <EyeOff size={32} />
-                  <p className="text-sm">No results found for "{searchQuery}"</p>
-                </div>
-              )
-            )}
-
-            {/* Catalog Rows */}
-            {!loading && !isSearching && (
+            {/* ── Catalog: Two-section vertical scroll ── */}
+            {!isSearching && (
               <div className="space-y-10">
 
-                {/* Popular Movies */}
-                <div>
-                  <h3 className="text-base sm:text-lg font-extrabold text-white mb-4 flex items-center gap-2">
-                    🔥 Popular Releases
-                  </h3>
-                  <div className="flex gap-3 overflow-x-auto pb-3 no-scrollbar">
-                    {movies.map(item => <MediaCard key={item.id} item={item} />)}
-                    {/* Load more card */}
-                    <div className="flex-shrink-0 w-32 sm:w-40 aspect-[2/3] flex items-center justify-center">
-                      <button
-                        onClick={fetchMoreMovies}
-                        disabled={loadingMoreMovies}
-                        className="flex flex-col items-center gap-2 text-zinc-500 hover:text-amber-400 transition-colors disabled:opacity-50"
-                      >
-                        {loadingMoreMovies
-                          ? <Loader2 size={22} className="animate-spin" />
-                          : <ChevronDown size={22} className="animate-bounce" />
-                        }
-                        <span className="text-[10px] font-bold">Load More</span>
-                      </button>
+                {/* Loading shimmer */}
+                {loading && (
+                  <>
+                    <div>
+                      <div className="h-5 w-40 bg-zinc-900 rounded-full animate-pulse mb-4" />
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
+                        {[...Array(12)].map((_, i) => (
+                          <div key={i} className="aspect-[2/3] bg-zinc-900 rounded-xl animate-pulse" />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
 
-                {/* Trending Series */}
-                <div>
-                  <h3 className="text-base sm:text-lg font-extrabold text-white mb-4 flex items-center gap-2">
-                    📺 Trending Series
-                  </h3>
-                  <div className="flex gap-3 overflow-x-auto pb-3 no-scrollbar">
-                    {shows.map(item => <MediaCard key={item.id} item={item} />)}
-                    {/* Load more card */}
-                    <div className="flex-shrink-0 w-32 sm:w-40 aspect-[2/3] flex items-center justify-center">
-                      <button
-                        onClick={fetchMoreShows}
-                        disabled={loadingMoreShows}
-                        className="flex flex-col items-center gap-2 text-zinc-500 hover:text-amber-400 transition-colors disabled:opacity-50"
-                      >
-                        {loadingMoreShows
-                          ? <Loader2 size={22} className="animate-spin" />
-                          : <ChevronDown size={22} className="animate-bounce" />
-                        }
-                        <span className="text-[10px] font-bold">Load More</span>
-                      </button>
+                {!loading && (
+                  <>
+                    {/* Popular Movies */}
+                    {movies.length > 0 && (
+                      <div>
+                        <h3 className="text-base sm:text-lg font-extrabold text-white mb-4 flex items-center gap-2">
+                          🔥 Popular Movies
+                        </h3>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
+                          {movies.map(item => <MediaCard key={item.id} item={item} />)}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Trending Series */}
+                    {shows.length > 0 && (
+                      <div>
+                        <h3 className="text-base sm:text-lg font-extrabold text-white mb-4 flex items-center gap-2">
+                          📺 Trending Series
+                        </h3>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
+                          {shows.map(item => <MediaCard key={item.id} item={item} />)}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* ── Infinite Scroll Sentinel ── */}
+                <div ref={sentinelRef} className="py-4 flex items-center justify-center">
+                  {loadingMore && (
+                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold">
+                      <Loader2 size={16} className="animate-spin text-amber-500" />
+                      Loading more...
                     </div>
-                  </div>
+                  )}
+                  {!hasMore && !loading && (
+                    <p className="text-zinc-700 text-xs">You've seen everything — check back later for new releases.</p>
+                  )}
                 </div>
 
               </div>
@@ -515,10 +573,10 @@ export default function CinemaHub() {
         </>
       )}
 
-      {/* Detail Drawer */}
+      {/* ── Detail Drawer ── */}
       {selectedMedia && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/85 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full sm:max-w-xl h-[92vh] sm:h-[90vh] bg-zinc-950 border border-zinc-900 sm:border-l rounded-t-3xl sm:rounded-2xl overflow-y-auto relative flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-right duration-300">
+          <div className="w-full sm:max-w-xl h-[93vh] sm:h-[90vh] bg-zinc-950 border border-zinc-900 sm:border-l rounded-t-3xl sm:rounded-2xl overflow-y-auto relative flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-right duration-300">
 
             {/* Backdrop */}
             <div className="relative h-52 sm:h-64 w-full shrink-0">
@@ -532,7 +590,7 @@ export default function CinemaHub() {
               </button>
             </div>
 
-            {/* Details */}
+            {/* Content */}
             <div className="p-5 flex-1 flex flex-col gap-5">
               <div>
                 <span className="bg-zinc-800 text-zinc-300 text-[9px] font-extrabold uppercase px-2.5 py-1 rounded-full">
@@ -542,13 +600,15 @@ export default function CinemaHub() {
                   {selectedMedia.title || selectedMedia.name}
                 </h2>
                 <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-400 font-semibold flex-wrap">
-                  <span className="text-amber-400 flex items-center gap-0.5">
-                    <Star size={11} className="fill-current" />{(selectedMedia.vote_average ?? 0).toFixed(1)}
-                  </span>
-                  · <span>{getYear(selectedMedia)}</span>
-                  {mediaDetails?.runtime && <> · <span className="flex items-center gap-0.5"><Clock size={11} />{mediaDetails.runtime}m</span></>}
+                  {(selectedMedia.vote_average ?? 0) > 0 && (
+                    <span className="text-amber-400 flex items-center gap-0.5">
+                      <Star size={11} className="fill-current" />{getRating(selectedMedia)}
+                    </span>
+                  )}
+                  {getYear(selectedMedia) && <><span>·</span><span>{getYear(selectedMedia)}</span></>}
+                  {mediaDetails?.runtime && <><span>·</span><span className="flex items-center gap-0.5"><Clock size={11} />{mediaDetails.runtime}m</span></>}
                 </div>
-                {mediaDetails?.genres && (
+                {mediaDetails?.genres?.length > 0 && (
                   <p className="text-[10px] text-zinc-600 uppercase font-bold mt-1.5 tracking-wide">
                     {formatGenres(mediaDetails.genres)}
                   </p>
@@ -561,23 +621,22 @@ export default function CinemaHub() {
               </div>
 
               {detailsLoading ? (
-                <div className="flex items-center justify-center p-8">
+                <div className="flex justify-center p-8">
                   <div className="w-7 h-7 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : selectedMedia.media_type === 'movie' ? (
-                // MOVIE — instant play button
+                // Movie play button
                 <div className="border-t border-zinc-900 pt-4">
                   <button
                     onClick={() => handlePlayMedia(selectedMedia)}
                     className="w-full flex items-center justify-center gap-2.5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-2xl font-extrabold text-black text-sm shadow-lg shadow-amber-500/25 transition-all active:scale-95"
                   >
-                    <Play size={18} className="fill-black" />
-                    Watch Now
+                    <Play size={18} className="fill-black" /> Watch Now
                   </button>
-                  <p className="text-[10px] text-zinc-600 text-center mt-2">Plays instantly on Server 1 · Switch servers anytime</p>
+                  <p className="text-[10px] text-zinc-600 text-center mt-2">Server 1 plays instantly · Tap Servers to switch</p>
                 </div>
               ) : (
-                // TV SERIES — episodes
+                // TV episodes
                 <div className="border-t border-zinc-900 pt-4 flex flex-col gap-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">Episodes</h4>
@@ -595,37 +654,33 @@ export default function CinemaHub() {
                       </select>
                     )}
                   </div>
-
                   {episodesLoading ? (
                     <div className="flex justify-center p-6">
                       <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                      {episodes.map(ep => {
-                        const isSelected = selectedEpisode?.id === ep.id;
-                        return (
-                          <button
-                            key={ep.id}
-                            onClick={() => handleEpisodeSelect(ep)}
-                            className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all duration-200 ${
-                              isSelected
-                                ? 'bg-amber-500/10 border-amber-500/40'
-                                : 'bg-zinc-900/60 border-zinc-900 hover:border-zinc-700 hover:bg-zinc-900'
-                            }`}
-                          >
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-zinc-200 truncate">
-                                Ep {ep.episode_number}: {ep.name}
-                              </p>
-                              <p className="text-[10px] text-zinc-500 mt-0.5 line-clamp-1">{ep.overview}</p>
-                            </div>
-                            <div className="ml-3 shrink-0 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-md shadow-amber-500/30">
-                              <Play size={12} className="fill-black ml-0.5" />
-                            </div>
-                          </button>
-                        );
-                      })}
+                      {episodes.map(ep => (
+                        <button
+                          key={ep.id}
+                          onClick={() => handleEpisodeSelect(ep)}
+                          className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all duration-200 ${
+                            selectedEpisode?.id === ep.id
+                              ? 'bg-amber-500/10 border-amber-500/40'
+                              : 'bg-zinc-900/60 border-zinc-900 hover:border-zinc-700 hover:bg-zinc-900'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-zinc-200 truncate">
+                              Ep {ep.episode_number}: {ep.name}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5 line-clamp-1">{ep.overview}</p>
+                          </div>
+                          <div className="ml-3 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-md shrink-0">
+                            <Play size={12} className="fill-black ml-0.5" />
+                          </div>
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -635,7 +690,7 @@ export default function CinemaHub() {
         </div>
       )}
 
-      {/* RealSSA Player */}
+      {/* ── RealSSA Player ── */}
       {activePlayer && (
         <CinemaPlayer
           tmdbId={activePlayer.tmdbId}

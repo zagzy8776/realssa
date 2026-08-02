@@ -145,15 +145,17 @@ router.get('/stream', async (req, res) => {
  */
 router.get('/trending', async (req, res) => {
   try {
-    const mediaType = req.query.media_type || 'all'; // 'all', 'movie', 'tv'
-    const timeWindow = req.query.time_window || 'day'; // 'day', 'week'
-    const data = await tmdbService.getTrending(mediaType, timeWindow);
+    const mediaType = req.query.media_type || 'all';
+    const timeWindow = req.query.time_window || 'week';
+    const page = parseInt(req.query.page) || 1;
+    const data = await tmdbService.getTrending(mediaType, timeWindow, page);
     res.json(data);
   } catch (err) {
     console.error('[Cinema API] Trending error:', err.message);
     res.status(500).json({ error: 'Failed to fetch trending movies/series' });
   }
 });
+
 
 /**
  * GET /api/cinema/search
