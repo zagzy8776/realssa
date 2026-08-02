@@ -312,3 +312,5 @@ router.get('/server-health', async (req, res) => {
 });
 
 module.exports = router;
+
+// Trigger Vercel build with new env vars
