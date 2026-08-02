@@ -693,7 +693,7 @@ export default function CinemaHub() {
                       <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    <div className="space-y-2 pr-1">
                       {episodes.map(ep => (
                         <button
                           key={ep.id}
