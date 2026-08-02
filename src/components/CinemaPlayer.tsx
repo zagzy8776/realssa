@@ -10,14 +10,11 @@ function getServer1Url(tmdbId: number, mediaType: 'movie' | 'tv', season: number
   return `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`;
 }
 
-// All 4 primary multi-host servers
+// All active servers
 function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: number, episode: number) {
   const isTV = mediaType === 'tv';
   return [
-    { name: 'Server 1 (MultiEmbed)', url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}` },
-    { name: 'Server 2 (Embed.su)', url: isTV ? `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}` : `https://embed.su/embed/movie/${tmdbId}` },
-    { name: 'Server 3 (VidSrc.to)', url: isTV ? `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}` : `https://vidsrc.to/embed/movie/${tmdbId}` },
-    { name: 'Server 4 (SuperEmbed)', url: `https://multiembed.to/embed.php?video_id=${tmdbId}${isTV ? `&s=${season}&e=${episode}` : ''}` },
+    { name: 'Server 1 (MultiEmbed)', url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}` }
   ];
 }
 

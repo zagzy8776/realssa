@@ -11,24 +11,6 @@ function resolveMovieEmbeds(tmdbId) {
       url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`,
       quality: '1080p',
       is_embed: true
-    },
-    {
-      source_name: 'Server 2 (Embed.su)',
-      url: `https://embed.su/embed/movie/${tmdbId}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
-      source_name: 'Server 3 (VidSrc.to)',
-      url: `https://vidsrc.to/embed/movie/${tmdbId}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
-      source_name: 'Server 4 (SuperEmbed)',
-      url: `https://multiembed.to/embed.php?video_id=${tmdbId}`,
-      quality: '1080p',
-      is_embed: true
     }
   ];
 }
@@ -41,24 +23,6 @@ function resolveEpisodeEmbeds(tmdbId, season, episode) {
     {
       source_name: 'Server 1 (MultiEmbed)',
       url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
-      source_name: 'Server 2 (Embed.su)',
-      url: `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
-      source_name: 'Server 3 (VidSrc.to)',
-      url: `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}`,
-      quality: '1080p',
-      is_embed: true
-    },
-    {
-      source_name: 'Server 4 (SuperEmbed)',
-      url: `https://multiembed.to/embed.php?video_id=${tmdbId}&s=${season}&e=${episode}`,
       quality: '1080p',
       is_embed: true
     }
