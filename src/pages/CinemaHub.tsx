@@ -116,7 +116,6 @@ export default function CinemaHub() {
     setSeasons([]);
     setEpisodes([]);
     setSelectedEpisode(null);
-    setAvailableSources([]);
     setDetailsLoading(true);
 
     try {
@@ -557,32 +556,18 @@ export default function CinemaHub() {
                   <div className="border-t border-zinc-900 pt-5">
                     <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                       <ShieldCheck className="text-emerald-400" size={14} />
-                      Select Streaming Server
+                      Stream This Movie
                     </h4>
-                    
-                    {availableSources.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {availableSources.map((src, index) => (
-                          <button
-                            key={index}
-                            onClick={() => handlePlayMedia(selectedMedia)}
-                            className="flex items-center justify-between p-3 bg-zinc-900 hover:bg-zinc-850 rounded-xl border border-zinc-850 hover:border-amber-500/40 text-left transition-all duration-300 group"
-                          >
-                            <div>
-                              <p className="text-xs font-bold text-zinc-200 group-hover:text-amber-500 transition-colors">
-                                {src.source_name}
-                              </p>
-                              <p className="text-[10px] text-zinc-500 mt-0.5">Secure Sandboxed Player</p>
-                            </div>
-                            <span className="text-[10px] bg-zinc-950 px-2 py-0.5 rounded font-bold text-zinc-400 group-hover:text-amber-500">
-                              {src.quality}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-zinc-500">No servers resolved yet. Check back in a bit.</p>
-                    )}
+                    <button
+                      onClick={() => handlePlayMedia(selectedMedia)}
+                      className="w-full flex items-center justify-center gap-3 p-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-xl font-extrabold text-black text-sm transition-all duration-300 shadow-lg shadow-amber-500/30"
+                    >
+                      <Play size={18} className="fill-black" />
+                      Watch Now — Finding Best Stream
+                    </button>
+                    <p className="text-[10px] text-zinc-600 text-center mt-2">
+                      Auto-selects the fastest available global stream
+                    </p>
                   </div>
                 ) : (
                   // TV SERIES SEASON & EPISODE SELECTION
@@ -652,29 +637,13 @@ export default function CinemaHub() {
                                       <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
                                     </div>
                                   ) : (
-                                    availableSources.length > 0 ? (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        {availableSources.map((src, index) => (
-                                          <button
-                                            key={index}
-                                            onClick={() => startPlayingMedia(
-                                              src, 
-                                              `${selectedMedia.name} - S${ep.season_number}E${ep.episode_number} - ${src.source_name}`
-                                            )}
-                                            className="flex items-center justify-between p-2 bg-zinc-950 hover:bg-zinc-900 rounded-lg border border-zinc-850 hover:border-amber-500/40 text-left transition-all duration-300 group"
-                                          >
-                                            <span className="text-[10px] font-bold text-zinc-300 group-hover:text-amber-500 transition-colors">
-                                              {src.source_name}
-                                            </span>
-                                            <span className="text-[9px] bg-zinc-900 px-1.5 py-0.5 rounded font-bold text-zinc-500">
-                                              {src.quality}
-                                            </span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <p className="text-[10px] text-zinc-500 text-center">No stream servers online for this episode.</p>
-                                    )
+                                    <button
+                                      onClick={() => handleEpisodeSelect(ep)}
+                                      className="w-full flex items-center justify-center gap-2 p-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-lg font-extrabold text-black text-[11px] transition-all duration-200 shadow-md shadow-amber-500/20"
+                                    >
+                                      <Play size={12} className="fill-black" />
+                                      Watch Episode
+                                    </button>
                                   )}
                                 </div>
                               )}
