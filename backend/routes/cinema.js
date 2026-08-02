@@ -153,6 +153,10 @@ router.get('/trending', async (req, res) => {
     const timeWindow = req.query.time_window || 'week';
     const page = parseInt(req.query.page) || 1;
     const data = await tmdbService.getTrending(mediaType, timeWindow, page);
+
+    // Cache at CDN edge for 6 hours — trending rarely changes
+    // stale-while-revalidate: serve stale for 1h more while refreshing in background
+    res.set('Cache-Control', 'public, max-age=21600, stale-while-revalidate=3600');
     res.json(data);
   } catch (err) {
     console.error('[Cinema API] Trending error:', err.message);
@@ -180,13 +184,14 @@ router.get('/search', async (req, res) => {
     if (tvResults.length < 3) {
       try {
         const tvmazeResults = await tvmazeService.searchShows(query);
-        // Merge, avoid duplicates by name
         const existingNames = new Set(results.map(r => (r.title || r.name || '').toLowerCase()));
         const fresh = tvmazeResults.filter(r => !existingNames.has((r.name || '').toLowerCase()));
         results = [...results, ...fresh];
       } catch (_) {}
     }
 
+    // Cache search results at CDN edge for 2 hours
+    res.set('Cache-Control', 'public, max-age=7200, stale-while-revalidate=1800');
     res.json({ ...tmdbData, results });
   } catch (err) {
     console.error('[Cinema API] Search error:', err.message);
@@ -210,6 +215,8 @@ router.get('/movies/:id', async (req, res) => {
       movieScraper.getMovieSources(movieId),
     ]);
 
+    // Cache movie details 12 hours at CDN edge
+    res.set('Cache-Control', 'public, max-age=43200, stale-while-revalidate=3600');
     res.json({
       ...(movieDetails.value || {}),
       streaming_sources: streamingSources.value || [],
@@ -241,6 +248,8 @@ router.get('/shows/:id', async (req, res) => {
       watchmodeService.getStreamingSources(showId, 'tv', redisService),
     ]);
 
+    // Cache show details 12 hours at CDN edge
+    res.set('Cache-Control', 'public, max-age=43200, stale-while-revalidate=3600');
     res.json({
       ...(showDetails.value || {}),
       streaming_sources: streamingSources.value || [],
@@ -294,6 +303,8 @@ router.get('/episodes/:showId/:season/:episode/sources', async (req, res) => {
 router.get('/server-health', async (req, res) => {
   try {
     const health = await streamHealthMonitor.getServerHealthStatus();
+    // Cache server health for 5 minutes
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
     res.json({ servers: health, timestamp: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch server health' });
