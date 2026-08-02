@@ -20,6 +20,12 @@ function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: numb
     {
       name: 'Server 3 · VidSrc',
       url: isTV
+        ? `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidsrc.to/embed/movie/${tmdbId}`
+    },
+    {
+      name: 'Server 4 · VidSrc.su',
+      url: isTV
         ? `https://vidsrc.su/embed/tv/${tmdbId}/${season}/${episode}`
         : `https://vidsrc.su/embed/movie/${tmdbId}`
     },
