@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import VideoNews from "@/pages/VideoNews";
-import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2 } from 'lucide-react';
+import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api-base";
@@ -168,6 +168,35 @@ export default function CinemaHub() {
       const raw = localStorage.getItem('realssa:continue_watching');
       if (raw) setContinueWatching(JSON.parse(raw));
     } catch (_) {}
+  }, []);
+
+  // ── URL Deep-linking: ?id=...&type=... or ?play=... ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mediaId = params.get('id') || params.get('play');
+    const mediaType = params.get('type') || 'movie';
+
+    if (mediaId) {
+      const idNum = parseInt(mediaId);
+      if (!isNaN(idNum)) {
+        // Construct dummy item to fetch and open drawer
+        const dummy: MovieOrShow = {
+          id: idNum,
+          media_type: mediaType as 'movie' | 'tv',
+          overview: '',
+          poster_path: '',
+          backdrop_path: ''
+        };
+        handleOpenDetails(dummy);
+
+        // If play parameter was used, auto-trigger play once data loads
+        if (params.has('play')) {
+          setTimeout(() => {
+            handlePlayMedia(dummy);
+          }, 1200);
+        }
+      }
+    }
   }, []);
 
   // ── IntersectionObserver for infinite scroll ──
@@ -866,63 +895,93 @@ export default function CinemaHub() {
                 <div className="flex justify-center p-8">
                   <div className="w-7 h-7 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : selectedMedia.media_type === 'movie' ? (
-                // Movie play button
-                <div className="border-t border-zinc-900 pt-4">
-                  <button
-                    onClick={() => handlePlayMedia(selectedMedia)}
-                    className="w-full flex items-center justify-center gap-2.5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-2xl font-extrabold text-black text-sm shadow-lg shadow-amber-500/25 transition-all active:scale-95"
-                  >
-                    <Play size={18} className="fill-black" /> Watch Now
-                  </button>
-                  <p className="text-[10px] text-zinc-600 text-center mt-2">Server 1 plays instantly · Tap Servers to switch</p>
-                </div>
               ) : (
-                // TV episodes
-                <div className="border-t border-zinc-900 pt-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">Episodes</h4>
-                    {seasons.length > 1 && (
-                      <select
-                        value={selectedSeasonNum}
-                        onChange={e => handleSeasonChange(parseInt(e.target.value))}
-                        className="bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-amber-500"
-                      >
-                        {seasons.map(s => (
-                          <option key={s.id} value={s.season_number}>
-                            {s.name || `Season ${s.season_number}`}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                <div className="border-t border-zinc-900 pt-4 flex flex-col gap-4">
+                  {/* Share buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const title = selectedMedia.title || selectedMedia.name || 'Movie';
+                        const url = `https://www.realssanews.com.ng/videos?id=${selectedMedia.id}&type=${selectedMedia.media_type || 'movie'}`;
+                        const text = `🍿 Watch "${title}" on RealSSA Cinema! Streaming is super fast and saves 80% data:\n\n${url}`;
+                        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all"
+                    >
+                      <Share2 size={13} /> WhatsApp
+                    </button>
+                    <button
+                      onClick={() => {
+                        const title = selectedMedia.title || selectedMedia.name || 'Movie';
+                        const url = `https://www.realssanews.com.ng/videos?id=${selectedMedia.id}&type=${selectedMedia.media_type || 'movie'}`;
+                        const text = `🍿 Watch "${title}" on RealSSA Cinema! Streaming is super fast and saves 80% data:\n\n${url}`;
+                        window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, '_blank');
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold transition-all"
+                    >
+                      <Share2 size={13} /> Telegram
+                    </button>
                   </div>
-                  {episodesLoading ? (
-                    <div className="flex justify-center p-6">
-                      <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+
+                  {selectedMedia.media_type === 'movie' ? (
+                    // Movie play button
+                    <div>
+                      <button
+                        onClick={() => handlePlayMedia(selectedMedia)}
+                        className="w-full flex items-center justify-center gap-2.5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-2xl font-extrabold text-black text-sm shadow-lg shadow-amber-500/25 transition-all active:scale-95"
+                      >
+                        <Play size={18} className="fill-black" /> Watch Now
+                      </button>
+                      <p className="text-[10px] text-zinc-600 text-center mt-2">Server 1 plays instantly · Tap Servers to switch</p>
                     </div>
                   ) : (
-                    <div className="space-y-2 pr-1">
-                      {episodes.map(ep => (
-                        <button
-                          key={ep.id}
-                          onClick={() => handleEpisodeSelect(ep)}
-                          className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all duration-200 ${
-                            selectedEpisode?.id === ep.id
-                              ? 'bg-amber-500/10 border-amber-500/40'
-                              : 'bg-zinc-900/60 border-zinc-900 hover:border-zinc-700 hover:bg-zinc-900'
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-zinc-200 truncate">
-                              Ep {ep.episode_number}: {ep.name}
-                            </p>
-                            <p className="text-[10px] text-zinc-500 mt-0.5 line-clamp-1">{ep.overview}</p>
-                          </div>
-                          <div className="ml-3 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-md shrink-0">
-                            <Play size={12} className="fill-black ml-0.5" />
-                          </div>
-                        </button>
-                      ))}
+                    // TV episodes
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">Episodes</h4>
+                        {seasons.length > 1 && (
+                          <select
+                            value={selectedSeasonNum}
+                            onChange={e => handleSeasonChange(parseInt(e.target.value))}
+                            className="bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-amber-500"
+                          >
+                            {seasons.map(s => (
+                              <option key={s.id} value={s.season_number}>
+                                {s.name || `Season ${s.season_number}`}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                      {episodesLoading ? (
+                        <div className="flex justify-center p-6">
+                          <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="space-y-2 pr-1">
+                          {episodes.map(ep => (
+                            <button
+                              key={ep.id}
+                              onClick={() => handleEpisodeSelect(ep)}
+                              className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all duration-200 ${
+                                selectedEpisode?.id === ep.id
+                                  ? 'bg-amber-500/10 border-amber-500/40'
+                                  : 'bg-zinc-900/60 border-zinc-900 hover:border-zinc-700 hover:bg-zinc-900'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-zinc-200 truncate">
+                                  Ep {ep.episode_number}: {ep.name}
+                                </p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5 line-clamp-1">{ep.overview}</p>
+                              </div>
+                              <div className="ml-3 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-md shrink-0">
+                                <Play size={12} className="fill-black ml-0.5" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

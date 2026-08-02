@@ -644,6 +644,45 @@ const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }
           </div>
         </div>
       )}
+
+      {/* ── Cinema Cross-Pollination Nudge CTA ── */}
+      <div style={{
+        marginTop: 16,
+        padding: '14px 16px',
+        borderRadius: 14,
+        background: 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(249,115,22,0.12) 100%)',
+        border: '1px solid rgba(245,158,11,0.3)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 20 }}>🎬</span>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: '#f1f5f9' }}>Done checking scores?</span>
+            <span style={{ fontSize: 9.5, fontWeight: 600, color: '#94a3b8', marginTop: 1 }}>Watch free blockbusters on Cinema!</span>
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            window.location.href = '/videos';
+          }}
+          style={{
+            background: '#f59e0b',
+            color: '#000',
+            border: 'none',
+            borderRadius: 8,
+            padding: '6px 12px',
+            fontSize: 10,
+            fontWeight: 800,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Watch Now
+        </button>
+      </div>
     </div>
   );
 };
