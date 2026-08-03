@@ -40,6 +40,7 @@ tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
 postgres-native-tls = "0.5"
 native-tls = "0.2"
 futures = "0.3"
+rand = "0.8"
 
 # Static regex compilation
 once_cell = "1"

@@ -5,6 +5,7 @@ use tracing::info;
 use tokio_postgres::Client;
 use postgres_native_tls::MakeTlsConnector;
 use native_tls::TlsConnector;
+use rand::seq::SliceRandom;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LearnedInsight {
@@ -230,6 +231,61 @@ impl HumanBrainEngine {
         });
     }
 
+    /// Generates a brand new sentence word-by-word using a Bigram Markov Chain built from matching database insights
+    fn generate_text_from_insights(&self, insights: &[LearnedInsight]) -> String {
+        if insights.is_empty() {
+            return "RealSSA intelligence active and processing.".to_string();
+        }
+
+        let mut transitions: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        let mut start_words = Vec::new();
+
+        for insight in insights {
+            let words: Vec<&str> = insight.phrase.split_whitespace().collect();
+            if words.len() > 1 {
+                start_words.push(words[0].to_string());
+                for i in 0..words.len() - 1 {
+                    let w1 = words[i].to_string();
+                    let w2 = words[i+1].to_string();
+                    transitions.entry(w1).or_default().push(w2);
+                }
+            }
+        }
+
+        let mut rng = rand::thread_rng();
+        let mut current_word = match start_words.choose(&mut rng) {
+            Some(w) => w.clone(),
+            None => return insights[0].phrase.clone(),
+        };
+
+        let mut generated_words = vec![current_word.clone()];
+        let max_words = 22;
+
+        for _ in 0..max_words {
+            if let Some(followers) = transitions.get(&current_word) {
+                if let Some(next_w) = followers.choose(&mut rng) {
+                    generated_words.push(next_w.clone());
+                    current_word = next_w.clone();
+                    
+                    // Stop early on punctuation signals
+                    if current_word.ends_with('.') || current_word.ends_with(',') {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        let mut text = generated_words.join(" ");
+        if !text.ends_with('.') && !text.ends_with(',') {
+            text.push('.');
+        }
+        text
+    }
+
     /// Save or increment a learned human phrase in the sharded database
     pub async fn record_insight(&self, category: &str, phrase: &str, context: &str, nuance: &str) {
         let db_idx = get_db_index(phrase);
@@ -404,7 +460,7 @@ impl HumanBrainEngine {
         (total_insights, total_occurrences)
     }
 
-    /// Process interactive chat request using Neon pgvector similarity scores
+    /// Process interactive chat request using Neon pgvector similarity scores and local Bigram synthesis
     pub async fn chat(&self, user_msg: &str) -> (String, String) {
         let user_embedding = compute_embedding(user_msg);
         let query_vector_str = format!("[{}]", user_embedding.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(","));
@@ -423,7 +479,7 @@ impl HumanBrainEngine {
                          FROM human_learning_vectors
                          WHERE category != 'user_history'
                          ORDER BY (1.0 - (embedding <=> $1::vector)) DESC
-                         LIMIT 15",
+                         LIMIT 20",
                         &[&q_vec]
                     ).await {
                         let mut items = Vec::new();
@@ -591,27 +647,29 @@ impl HumanBrainEngine {
                 }
 
                 if !matched_insights.is_empty() {
-                    let knowledge = matched_insights.iter()
-                        .take(3)
-                        .map(|item| item.phrase.trim().to_string())
-                        .collect::<Vec<_>>().join("\n\n");
+                    // Build local Markov chain and generate dynamic response
+                    let generated_reply = self.generate_text_from_insights(&matched_insights);
                     let reply = format!(
-                        "Here is what I've learned about that ({} total insights across 6 Neon DBs):\n\n{}\n\n(Source: sharded distributed neural index)",
-                        total_insights,
-                        knowledge
+                        "{} (Synthesized dynamically from sharded memory | {} total insights)",
+                        generated_reply,
+                        total_insights
                     );
                     return (reply, self.get_formatted_human_context(10).await);
                 }
             }
 
             // Vector similarity fallback
-            if let Some((score, best)) = scored.first() {
+            if let Some((score, _best)) = scored.first() {
                 if *score > 0.35 {
+                    let matching_insights: Vec<LearnedInsight> = scored.iter()
+                        .take(15)
+                        .map(|(_, item)| item.clone())
+                        .collect();
+                    let generated_reply = self.generate_text_from_insights(&matching_insights);
                     let reply = format!(
-                        "Based on my sharded neural memory (vector match {:.2}, {} total insights):\n\n{}",
-                        score,
-                        total_insights,
-                        best.phrase
+                        "{} (Synthesized dynamically | match score {:.2})",
+                        generated_reply,
+                        score
                     );
                     return (reply, self.get_formatted_human_context(10).await);
                 }
@@ -625,12 +683,16 @@ impl HumanBrainEngine {
         }
 
         // 4. Default best score
-        if let Some((score, best)) = scored.first() {
+        if let Some((score, _best)) = scored.first() {
             if *score > 0.30 {
+                let matching_insights: Vec<LearnedInsight> = scored.iter()
+                    .take(15)
+                    .map(|(_, item)| item.clone())
+                    .collect();
+                let generated_reply = self.generate_text_from_insights(&matching_insights);
                 let reply = format!(
-                    "\"{}\" — {} (Match score: {:.2})",
-                    best.phrase,
-                    best.human_nuance,
+                    "\"{}\" — (Match score: {:.2})",
+                    generated_reply,
                     score
                 );
                 return (reply, self.get_formatted_human_context(10).await);
