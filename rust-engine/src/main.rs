@@ -367,8 +367,8 @@ struct TeachRequest {
 
 // ─── Human Brain Endpoints ───────────────────────────────────────────────────
 async fn human_brain_insights_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let memory = state.human_brain.get_formatted_human_context(15);
-    let (total_insights, occurrences) = state.human_brain.get_stats();
+    let memory = state.human_brain.get_formatted_human_context(15).await;
+    let (total_insights, occurrences) = state.human_brain.get_stats().await;
     Json(serde_json::json!({
         "success": true,
         "memory": memory,
@@ -382,7 +382,7 @@ async fn human_brain_chat_handler(
     Json(payload): Json<ChatRequest>,
 ) -> impl IntoResponse {
     let (reply, memory_used) = state.human_brain.chat(&payload.message).await;
-    let (total_insights, occurrences) = state.human_brain.get_stats();
+    let (total_insights, occurrences) = state.human_brain.get_stats().await;
     Json(serde_json::json!({
         "success": true,
         "reply": reply,
@@ -396,7 +396,7 @@ async fn human_brain_native_chat_handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ChatRequest>,
 ) -> impl IntoResponse {
-    let (reply, vector_score) = state.human_brain.native_rust_inference(&payload.message);
+    let (reply, vector_score) = state.human_brain.native_rust_inference(&payload.message).await;
     Json(serde_json::json!({
         "success": true,
         "engine": "Native Rust Vector Neural Engine",
@@ -409,7 +409,7 @@ async fn human_brain_rlhf_handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<RlhfRequest>,
 ) -> impl IntoResponse {
-    state.human_brain.apply_rlhf_feedback(&payload.category, &payload.phrase, payload.reward);
+    state.human_brain.apply_rlhf_feedback(&payload.category, &payload.phrase, payload.reward).await;
     Json(serde_json::json!({
         "success": true,
         "message": "RLHF reward signal applied & saved to Rust persistent storage",
@@ -429,8 +429,8 @@ async fn human_brain_teach_handler(
         &payload.phrase,
         &payload.context,
         &payload.nuance,
-    );
-    let (total_insights, occurrences) = state.human_brain.get_stats();
+    ).await;
+    let (total_insights, occurrences) = state.human_brain.get_stats().await;
     Json(serde_json::json!({
         "success": true,
         "message": "Knowledge taught & saved to Rust persistent memory",
