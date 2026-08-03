@@ -2226,138 +2226,71 @@ const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) =>
 // Get live stream schedule scraped in real-time from mirrors
 app.get('/api/sports/stream-schedule', async (req, res) => {
   try {
-    const cheerio = require('cheerio');
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept': 'application/json, text/plain, */*',
       'Accept-Language': 'en-US,en;q=0.9',
     };
 
     let events = [];
+    let streamedSuFetched = false;
 
-    // ── SOURCE 1: Strikeout.im schedule ──
-    const strikeoutSources = ['https://strikeout.im', 'https://strikeout.nu', 'https://strikeout.cc'];
-    for (const base of strikeoutSources) {
+    // ── SOURCE 1: Streamed.su API ──
+    const streamedSuEndpoints = [
+      'https://streamed.su/api/matches/live',
+      'https://streamed.su/api/matches/all'
+    ];
+
+    for (const url of streamedSuEndpoints) {
       if (events.length > 0) break;
       try {
-        console.log(`[sportsBot] Trying Strikeout schedule from ${base}`);
-        const resp = await axios.get(`${base}/`, {
-          headers: { ...headers, 'Referer': `${base}/` },
-          timeout: 10000,
-        });
-        if (resp.status === 200 && resp.data) {
-          const $ = cheerio.load(resp.data);
+        console.log(`[sportsBot] Trying Streamed.su API from ${url}`);
+        const resp = await axios.get(url, { headers, timeout: 6000 });
+        if (resp.status === 200 && Array.isArray(resp.data)) {
+          streamedSuFetched = true;
+          resp.data.forEach(item => {
+            // Normalize sport names
+            let sport = item.category || item.sport || 'Sports';
+            sport = sport.charAt(0).toUpperCase() + sport.slice(1);
 
-          // Parse match rows — Strikeout lists events in tables or divs with time + link
-          $('tr, .match, .event, .live-match, [class*="match"], [class*="event"]').each((_, el) => {
-            const links = $(el).find('a[href]');
-            const streamLinks = [];
-
-            links.each((_, a) => {
-              const href = $(a).attr('href') || '';
-              // Strikeout embed IDs: /embed/{id} or /watch/{id} or /{sport}/{slug}-{id}
-              const embedMatch = href.match(/\/embed\/(\d+)/);
-              const watchMatch = href.match(/\/watch\/(\d+)/);
-              const slugMatch  = href.match(/\/-?(\d+)\/?$/);
-              const chId = embedMatch?.[1] || watchMatch?.[1] || slugMatch?.[1];
-              if (chId) {
-                streamLinks.push({ id: chId, name: `Strikeout Stream` });
-              }
-            });
-
-            if (streamLinks.length > 0) {
-              const text = $(el).text().trim().replace(/\s+/g, ' ');
-              const timeMatch = text.match(/(\d{1,2}:\d{2}\s*(?:AM|PM|GMT)?)/i);
-              const timeText = timeMatch ? timeMatch[1].trim() : 'Live';
-              let eventText = text;
-              if (timeMatch) eventText = eventText.replace(timeMatch[0], '').trim();
-              streamLinks.forEach(l => { eventText = eventText.replace(l.name, ''); });
-              eventText = eventText.replace(/^[\s\-:|]+|[\s\-:|]+$/g, '').trim();
-
-              // Try to detect sport from parent heading
-              let sport = 'Sports';
-              let parent = $(el).parent();
-              for (let i = 0; i < 5; i++) {
-                const heading = parent.find('h1,h2,h3,h4,strong,b').first().text().trim();
-                if (heading) { sport = heading; break; }
-                parent = parent.parent();
-              }
-
-              if (eventText && eventText.length > 3) {
-                events.push({ sport, time: timeText, event: eventText, channels: streamLinks });
+            const title = item.title || item.name || '';
+            const matchId = item.id || '';
+            
+            // Check if live or scheduled
+            const isLive = item.live || item.isLive || false;
+            const dateStr = item.date || item.time || '';
+            let displayTime = 'Live';
+            if (dateStr) {
+              try {
+                const d = new Date(dateStr);
+                displayTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              } catch (e) {
+                displayTime = dateStr;
               }
             }
+
+            if (title && matchId) {
+              events.push({
+                sport,
+                time: isLive ? '🔴 Live' : displayTime,
+                event: title,
+                id: matchId,
+                channels: [
+                  { id: matchId, name: 'Streamed.su' }
+                ],
+                isLive
+              });
+            }
           });
-
-          // Method 2: scan ALL anchor tags for embed/watch numeric IDs
-          if (events.length === 0) {
-            $('a[href]').each((_, a) => {
-              const href = $(a).attr('href') || '';
-              const text = $(a).text().trim();
-              const embedMatch = href.match(/\/embed\/(\d+)/);
-              const watchMatch = href.match(/\/watch\/(\d+)/);
-              const chId = embedMatch?.[1] || watchMatch?.[1];
-              if (chId && text.length > 3) {
-                events.push({
-                  sport: 'Sports',
-                  time: 'Live',
-                  event: text,
-                  channels: [{ id: chId, name: 'Strikeout' }],
-                });
-              }
-            });
-          }
-
-          if (events.length > 0) {
-            console.log(`[sportsBot] Strikeout: found ${events.length} events from ${base}`);
-            break;
-          }
+          console.log(`[sportsBot] Streamed.su: found ${events.length} events`);
         }
       } catch (e) {
-        console.warn(`[sportsBot] Strikeout ${base} failed:`, e.message);
+        console.warn(`[sportsBot] Streamed.su fetch failed for ${url}:`, e.message);
       }
     }
 
-    // ── SOURCE 2: VIPRow schedule ──
-    if (events.length === 0) {
-      const viprowSources = ['https://viprow.me', 'https://viprow.nu', 'https://viprow.one'];
-      for (const base of viprowSources) {
-        if (events.length > 0) break;
-        try {
-          console.log(`[sportsBot] Trying VIPRow schedule from ${base}`);
-          const resp = await axios.get(`${base}/`, {
-            headers: { ...headers, 'Referer': `${base}/` },
-            timeout: 10000,
-          });
-          if (resp.status === 200 && resp.data) {
-            const $ = cheerio.load(resp.data);
-            $('a[href]').each((_, a) => {
-              const href = $(a).attr('href') || '';
-              const text = $(a).text().trim();
-              // VIPRow embed: /embed/{id} or numeric ID in URL
-              const idMatch = href.match(/\/embed\/(\d+)/) || href.match(/\/(\d{4,})\/?$/);
-              if (idMatch && text.length > 3) {
-                events.push({
-                  sport: 'Sports',
-                  time: 'Live',
-                  event: text,
-                  channels: [{ id: idMatch[1], name: 'VIPRow' }],
-                });
-              }
-            });
-            if (events.length > 0) {
-              console.log(`[sportsBot] VIPRow: found ${events.length} events from ${base}`);
-              break;
-            }
-          }
-        } catch(e) {
-          console.warn(`[sportsBot] VIPRow ${base} failed:`, e.message);
-        }
-      }
-    }
-
-    // ── SOURCE 3: ESPN free hidden API (always returns real match data) ──
-    if (events.length === 0) {
+    // ── SOURCE 2: ESPN scoreboard API fallback (if streamed.su is unreachable/blocked) ──
+    if (!streamedSuFetched || events.length === 0) {
       console.log('[sportsBot] Falling back to ESPN free API');
       const espnLeagues = [
         { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard',   sport: 'Premier League Football' },
@@ -2380,30 +2313,42 @@ app.get('/api/sports/stream-schedule', async (req, res) => {
             const fixtures = data?.events || data?.competitions || [];
             fixtures.forEach(ev => {
               const competitors = ev.competitions?.[0]?.competitors || ev.competitors || [];
-              const home = competitors.find(c => c.homeAway === 'home')?.team?.shortDisplayName || competitors[0]?.team?.shortDisplayName || '';
-              const away = competitors.find(c => c.homeAway === 'away')?.team?.shortDisplayName || competitors[1]?.team?.shortDisplayName || '';
+              const home = competitors.find(c => c.homeAway === 'home')?.team?.displayName || competitors[0]?.team?.displayName || '';
+              const away = competitors.find(c => c.homeAway === 'away')?.team?.displayName || competitors[1]?.team?.displayName || '';
               const name = home && away ? `${home} vs ${away}` : (ev.name || ev.shortName || '');
               const status = ev.competitions?.[0]?.status?.type?.description || ev.status?.type?.description || '';
-              const displayTime = ev.competitions?.[0]?.status?.displayClock || ev.date?.substring(11, 16) || 'Soon';
-              const isLive = status === 'In Progress' || status === 'Halftime';
-              // Only include live or today's matches
+              
+              // format time
+              let displayTime = 'Live';
+              const dateStr = ev.date || '';
+              if (dateStr) {
+                try {
+                  const d = new Date(dateStr);
+                  displayTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } catch (e) {
+                  displayTime = dateStr;
+                }
+              }
+
+              const isLive = status === 'In Progress' || status === 'Halftime' || status.toLowerCase().includes('live');
+              
               if (name) {
                 events.push({
                   sport,
-                  time: isLive ? `🔴 ${displayTime}` : displayTime,
+                  time: isLive ? '🔴 Live' : displayTime,
                   event: name,
-                  channels: [],  // No direct stream ID — user will use VIPRow
-                  isEspn: true,
-                  status,
+                  id: '', // no direct streamed.su ID
+                  channels: [], // empty means fallback browsing
+                  isLive
                 });
               }
             });
-          } catch(e) { /* skip league */ }
+          } catch (e) { /* skip league */ }
         })
       );
 
       if (events.length > 0) {
-        console.log(`[sportsBot] ESPN API: found ${events.length} events`);
+        console.log(`[sportsBot] ESPN API fallback: found ${events.length} events`);
       }
     }
 

@@ -84,6 +84,7 @@ export default function CinemaHub() {
   const [sportsSearchQuery, setSportsSearchQuery] = useState('');
   const [sportsMatchesLoading, setSportsMatchesLoading] = useState(false);
   const [selectedSportMatch, setSelectedSportMatch] = useState<any | null>(null);
+  const [selectedSportFilter, setSelectedSportFilter] = useState('All');
 
   // ── Continue Watching (localStorage persistence) ──
   const [continueWatching, setContinueWatching] = useState<Array<{
@@ -598,11 +599,12 @@ export default function CinemaHub() {
               <Trophy className="text-amber-500 animate-pulse" size={24} />
               RealSSA Live Sports TV
             </h2>
-            <p className="text-xs text-zinc-400">Search active clubs or leagues to stream any match live in HD with redirect-hijack protection.</p>
+            <p className="text-xs text-zinc-400 font-semibold mt-1">Search active clubs or leagues to stream any match live in HD with redirect-hijack protection.</p>
           </div>
 
+
           {/* Search Live Matches & Clubs */}
-          <div className="relative w-full max-w-md mx-auto mb-8">
+          <div className="relative w-full max-w-md mx-auto mb-6">
             <div className="relative flex items-center">
               <Search className="absolute left-4 text-zinc-500" size={16} />
               <input
@@ -623,6 +625,24 @@ export default function CinemaHub() {
             </div>
           </div>
 
+          {/* Sport Filter Tabs (Pills) */}
+          <div className="flex items-center justify-start sm:justify-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none shrink-0">
+            {['All', 'Football', 'Basketball', 'F1 / Motor', 'Combat', 'Tennis', 'Other'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setSelectedSportFilter(tab)}
+                className={`px-4 py-2 rounded-full text-xs font-black transition-all shrink-0 active:scale-95 ${
+                  selectedSportFilter === tab
+                    ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/10'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-850 hover:bg-zinc-850'
+                }`}
+              >
+                {tab === 'Football' ? '⚽ ' : tab === 'Basketball' ? '🏀 ' : tab === 'F1 / Motor' ? '🏎️ ' : tab === 'Combat' ? '🥊 ' : tab === 'Tennis' ? '🎾 ' : ''}
+                {tab}
+              </button>
+            ))}
+          </div>
+
           {/* Live Matches Scoreboard / Stream Center */}
           <div className="mb-10">
             <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -632,23 +652,53 @@ export default function CinemaHub() {
             </h3>
 
             {sportsMatchesLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="w-7 h-7 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[1, 2, 3, 4].map(n => (
+                  <div key={n} className="bg-zinc-900/40 border border-zinc-850 rounded-2xl p-4 animate-pulse flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="h-4 bg-zinc-800 rounded w-1/3" />
+                      <div className="h-4 bg-zinc-800 rounded w-2/3" />
+                    </div>
+                    <div className="w-16 h-8 bg-zinc-800 rounded-xl" />
+                  </div>
+                ))}
               </div>
             ) : (() => {
               const query = sportsSearchQuery.toLowerCase().trim();
               const filtered = sportsMatches.filter(m => {
-                if (!query) return true;
-                return (
+                const matchesQuery = !query ||
                   m.event?.toLowerCase().includes(query) ||
-                  m.sport?.toLowerCase().includes(query)
-                );
+                  m.sport?.toLowerCase().includes(query);
+
+                if (!matchesQuery) return false;
+                if (selectedSportFilter === 'All') return true;
+
+                const sport = (m.sport || '').toLowerCase();
+                if (selectedSportFilter === 'Football') {
+                  return sport.includes('football') || sport.includes('soccer') || sport.includes('league') || sport.includes('champions');
+                }
+                if (selectedSportFilter === 'Basketball') {
+                  return sport.includes('basketball') || sport.includes('nba');
+                }
+                if (selectedSportFilter === 'F1 / Motor') {
+                  return sport.includes('f1') || sport.includes('formula') || sport.includes('racing') || sport.includes('motor');
+                }
+                if (selectedSportFilter === 'Combat') {
+                  return sport.includes('ufc') || sport.includes('mma') || sport.includes('boxing') || sport.includes('wrestling') || sport.includes('fight') || sport.includes('combat');
+                }
+                if (selectedSportFilter === 'Tennis') {
+                  return sport.includes('tennis');
+                }
+                // Other
+                const known = ['football', 'soccer', 'league', 'champions', 'basketball', 'nba', 'f1', 'formula', 'racing', 'motor', 'ufc', 'mma', 'boxing', 'wrestling', 'fight', 'combat', 'tennis'];
+                const isKnown = known.some(k => sport.includes(k));
+                return !isKnown;
               });
 
               if (filtered.length === 0) {
                 return (
                   <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-8 text-center text-zinc-500 text-xs">
-                    No active live matches found matching your search.
+                    No active live matches found matching your filters.
                   </div>
                 );
               }
@@ -681,8 +731,8 @@ export default function CinemaHub() {
                                   <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                                   {match.time || 'LIVE'}
                                 </span>
-                                <span className="bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded border border-white/5 font-bold">
-                                  {match.channels?.length || 0} Servers
+                                <span className="bg-zinc-805 text-zinc-500 px-2 py-0.5 rounded border border-white/5 font-bold">
+                                  {match.id ? 'Direct Embed' : 'Fallback Info'}
                                 </span>
                               </div>
                               <h4 className="text-zinc-200 font-black text-xs leading-snug group-hover:text-white transition-colors truncate">
@@ -704,6 +754,7 @@ export default function CinemaHub() {
               );
             })()}
           </div>
+
 
 
           {/* ── Sport Match Watch Drawer (rbtv+ style) ── */}

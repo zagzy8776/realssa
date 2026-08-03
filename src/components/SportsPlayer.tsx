@@ -8,16 +8,21 @@ interface SportsPlayerProps {
 }
 
 // ── Working sports streaming servers ──
-// VIPRow and Strikeout confirmed working by user
 const SERVERS = [
   {
-    label: 'Server 1 · VIPRow',
+    label: 'Server 1 · Streamed.su',
+    key: 'streamed',
+    buildUrl: (id: string | number) => `https://streamed.su/embed/${id}`,
+    homepage: 'https://streamed.su',
+  },
+  {
+    label: 'Server 2 · VIPRow',
     key: 'viprow',
     buildUrl: (id: string | number) => `https://viprow.me/embed/${id}`,
     homepage: 'https://viprow.me',
   },
   {
-    label: 'Server 2 · Strikeout',
+    label: 'Server 3 · Strikeout',
     key: 'strikeout',
     buildUrl: (id: string | number) => `https://strikeout.im/embed/${id}`,
     homepage: 'https://strikeout.im',
@@ -31,10 +36,27 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
     return found >= 0 ? found : 0;
   });
 
+  // Auto-switch to corresponding server if channelId matches a provider key
+  useEffect(() => {
+    if (channelId === 'viprow') {
+      setActiveIdx(1);
+    } else if (channelId === 'strikeout') {
+      setActiveIdx(2);
+    } else if (channelId === 'streamed') {
+      setActiveIdx(0);
+    }
+  }, [channelId]);
+
   const activeServer = SERVERS[activeIdx];
 
-  // If no specific channelId, show the homepage of the active server
-  const isCategory = typeof channelId === 'string' && isNaN(Number(channelId));
+  // If no specific channelId or if category browsing, show the homepage of the active server
+  const isCategory = typeof channelId === 'string' && (
+    isNaN(Number(channelId)) || 
+    channelId === 'viprow' || 
+    channelId === 'strikeout' || 
+    channelId === 'streamed'
+  );
+  
   const streamUrl = isCategory
     ? activeServer.homepage
     : activeServer.buildUrl(channelId);
