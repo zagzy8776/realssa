@@ -32,7 +32,8 @@ async function cleanOldArticles() {
     for (const item of allPools) {
       try {
         const result = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '24 hours'`
+
         );
         totalPurged += result.rowCount || 0;
         if (result.rowCount > 0) {
@@ -164,7 +165,7 @@ function getDbPool() {
       pool = pools[0].pool;
       return pool;
     }
-  } catch (e) {}
+  } catch (e) { }
   return null;
 }
 
@@ -196,7 +197,7 @@ async function runBufferCron() {
           posted_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
-      await client.query(`ALTER TABLE buffer_posts_log ADD COLUMN IF NOT EXISTS title_clean TEXT`).catch(() => {});
+      await client.query(`ALTER TABLE buffer_posts_log ADD COLUMN IF NOT EXISTS title_clean TEXT`).catch(() => { });
 
       // Check how many posts are already queued in Buffer
       const queueCount = await getBufferQueueCount();
@@ -288,7 +289,7 @@ async function runBufferCron() {
         if (dupCheck.rows.length > 0) {
           console.log(`[Buffer Cron] ⏭️ Skipping duplicate title: "${article.title.slice(0, 50)}..."`);
           // Mark hash as posted so we don't inspect it again
-          await client.query(`INSERT INTO buffer_posts_log (story_hash, title_clean) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [article.story_hash, cleanTitle]).catch(() => {});
+          await client.query(`INSERT INTO buffer_posts_log (story_hash, title_clean) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [article.story_hash, cleanTitle]).catch(() => { });
           continue;
         }
 
@@ -314,7 +315,7 @@ async function runBufferCron() {
       }
       return { ok: true, queued, attempted: articlesToProcess.length };
     } finally {
-      await client.query(`SELECT pg_advisory_unlock(888777)`).catch(() => {});
+      await client.query(`SELECT pg_advisory_unlock(888777)`).catch(() => { });
     }
   } catch (err) {
     console.error('[Buffer Cron] Error:', err.message);

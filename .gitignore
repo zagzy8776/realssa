@@ -56,3 +56,4 @@ release-key.jks
 *.timestamp-*.mjs
 
 .vercel
+"rust-engine/data/human_insights.json"  

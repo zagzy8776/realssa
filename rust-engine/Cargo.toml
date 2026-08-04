@@ -41,6 +41,7 @@ postgres-native-tls = "0.5"
 native-tls = "0.2"
 futures = "0.3"
 rand = "0.8"
+bincode = "1"
 
 # Static regex compilation
 once_cell = "1"

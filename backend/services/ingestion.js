@@ -733,7 +733,8 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     const mainCategories = allCategories.filter(c => mainSlugs.has(c.category) && activeCategoriesSet.has(c.category));
     const worldCategories = allCategories.filter(c => !mainSlugs.has(c.category) && activeCategoriesSet.has(c.category));
 
-    // Pick 3 coldest active world categories
+    // Pick 6 coldest active world categories (was 3 — widened so every country
+    // rotates through faster and the world feed stays fresh)
     let coldestWorld = [];
     try {
       const res = await pool.query(
@@ -741,14 +742,15 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
          WHERE tier = 2
            AND (quarantined_until IS NULL OR quarantined_until < NOW())
          ORDER BY last_ingested_at ASC NULLS FIRST
-         LIMIT 3`
+         LIMIT 6`
       );
       const coldSlugs = new Set(res.rows.map(r => r.category));
       coldestWorld = worldCategories.filter(c => coldSlugs.has(c.category));
     } catch (e) {
       console.warn('feed_schedule query failed, falling back to random world pick:', e.message);
-      coldestWorld = worldCategories.sort(() => 0.5 - Math.random()).slice(0, 3);
+      coldestWorld = worldCategories.sort(() => 0.5 - Math.random()).slice(0, 6);
     }
+
 
     // Always include all main categories — never let rotation produce zero feeds
     categoriesToFetch = [...mainCategories, ...coldestWorld];
@@ -763,20 +765,49 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
 
   // 3. Build feed fetch list
   const allUrls = [];
+  // Rotating window: each cycle advances the slice offset so EVERY feed URL in a
+  // category eventually gets pulled — no more permanently "parked" feeds sitting
+  // at index 2+. The offset is derived from the current 20-min cron slot.
+  const cycleIndex = Math.floor(Date.now() / (20 * 60 * 1000));
   for (const { category, feeds, videoFeeds } of categoriesToFetch) {
-    // Vercel optimization: cap feeds, Fly.io does all
-    const feedLimit = process.env.VERCEL ? 2 : undefined;
-    const videoLimit = process.env.VERCEL ? 1 : undefined;
+    // Vercel optimization: pull a rotating window of feeds per cycle so the DB
+    // compute meter stays lean while still covering all feeds over time.
+    // Fly.io (no VERCEL env) pulls ALL feeds every cycle.
+    const feedWindow = process.env.VERCEL ? 6 : undefined;
+    const videoWindow = process.env.VERCEL ? 2 : undefined;
 
-    const pickedFeeds = (feeds || []).slice(0, feedLimit);
+    const feedList = feeds || [];
+    let pickedFeeds;
+    if (feedWindow && feedList.length > feedWindow) {
+      // Rotate the window start based on the cycle so feeds #7+ get their turn
+      const start = (cycleIndex * feedWindow) % feedList.length;
+      pickedFeeds = [];
+      for (let k = 0; k < feedWindow; k++) {
+        pickedFeeds.push(feedList[(start + k) % feedList.length]);
+      }
+    } else {
+      pickedFeeds = feedList;
+    }
     for (const url of pickedFeeds) {
       allUrls.push({ category, url, contentType: 'article' });
     }
-    const pickedVideo = (videoFeeds || []).slice(0, videoLimit);
+
+    const videoList = videoFeeds || [];
+    let pickedVideo;
+    if (videoWindow && videoList.length > videoWindow) {
+      const vstart = (cycleIndex * videoWindow) % videoList.length;
+      pickedVideo = [];
+      for (let k = 0; k < videoWindow; k++) {
+        pickedVideo.push(videoList[(vstart + k) % videoList.length]);
+      }
+    } else {
+      pickedVideo = videoList;
+    }
     for (const url of pickedVideo) {
       allUrls.push({ category, url, contentType: 'video' });
     }
   }
+
 
   // 4. Wait for all feeds to fetch in parallel and process them immediately to prevent OOM
   const BATCH_SIZE = 10;
@@ -875,8 +906,11 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
       const { category, feed, contentType } = itemResult;
       if (!feed || !feed.items) continue;
 
-      // Free tier: max 15 items per feed to keep cycles fast
-      const sliceLimit = process.env.VERCEL ? 2 : 15;
+      // Free tier: pull more items per feed so the scroll has real depth.
+      // Fly.io pulls up to 15; Vercel pulls 10 (was 2) now that the feed
+      // window rotates, keeping the DB lean while filling the feed.
+      const sliceLimit = process.env.VERCEL ? 10 : 15;
+
       for (const item of feed.items.slice(0, sliceLimit)) {
         const externalLink = item.link || item.guid;
         if (!externalLink) continue;
@@ -1271,7 +1305,8 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
   }
 
   // --- Self-Cleaning Database Across ALL 5 Databases ---
-  // Delete articles older than 48 hours (2 days) across all 5 database clusters
+  // Delete articles older than 24 hours so fresh content continuously replaces
+  // stale content — the feed never shows anything older than a day.
   try {
     // Plan 7: self-trim runs ONLY on the primary news pool (snowy-field).
     // Using `pools` instead of `getAllPools()` avoids pinging the AI branch or
@@ -1282,12 +1317,13 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
 
       try {
         const cleanResult = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '24 hours'`
         );
         if (cleanResult.rowCount > 0) {
-          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 48 hours.`);
+          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 24 hours.`);
         }
       } catch (pCleanErr) {
+
         console.warn(`[Self-cleaning Warning on ${item.name}]: ${pCleanErr.message}`);
       }
     }

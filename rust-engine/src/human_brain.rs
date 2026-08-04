@@ -5,7 +5,8 @@ use tracing::info;
 use tokio_postgres::Client;
 use postgres_native_tls::MakeTlsConnector;
 use native_tls::TlsConnector;
-use rand::seq::SliceRandom;
+
+use crate::neural_network::{TransformerConfig, TransformerWeights};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LearnedInsight {
@@ -113,6 +114,7 @@ impl NeonDbClient {
 // ─────────────────────────────────────────────────────────────────────────────
 pub struct HumanBrainEngine {
     dbs: Vec<NeonDbClient>,
+    transformer: Arc<tokio::sync::Mutex<TransformerWeights>>,
 }
 
 impl HumanBrainEngine {
@@ -127,7 +129,19 @@ impl HumanBrainEngine {
         ];
 
         let dbs = urls.into_iter().map(|url| NeonDbClient::new(&url)).collect::<Vec<_>>();
-        let engine = Self { dbs };
+        
+        // Initialize or load custom Transformer brain file
+        let transformer = if let Ok(tf) = TransformerWeights::load_from_file("brain_weights.bin") {
+            info!("[Neon Brain] Loaded existing custom Transformer weights");
+            Arc::new(tokio::sync::Mutex::new(tf))
+        } else {
+            info!("[Neon Brain] Initializing fresh custom Transformer weights");
+            let tf = TransformerWeights::new(TransformerConfig::default());
+            let _ = tf.save_to_file("brain_weights.bin");
+            Arc::new(tokio::sync::Mutex::new(tf))
+        };
+
+        let engine = Self { dbs, transformer };
         
         // Asynchronously check and seed the database in the background to avoid blocking server boot
         engine.seed_initial_memory_async();
@@ -231,62 +245,90 @@ impl HumanBrainEngine {
         });
     }
 
-    /// Generates a brand new sentence word-by-word using a Bigram Markov Chain built from matching database insights
-    fn generate_text_from_insights(&self, insights: &[LearnedInsight]) -> String {
+    /// Generates a response using the v2 multi-layer Transformer with BPE tokenization
+    async fn generate_text_from_insights(&self, insights: &[LearnedInsight], user_msg: &str) -> String {
         if insights.is_empty() {
             return "RealSSA intelligence active and processing.".to_string();
         }
 
-        let mut transitions: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-        let mut start_words = Vec::new();
+        let tf = self.transformer.lock().await;
 
-        for insight in insights {
-            let words: Vec<&str> = insight.phrase.split_whitespace().collect();
-            if words.len() > 1 {
-                start_words.push(words[0].to_string());
-                for i in 0..words.len() - 1 {
-                    let w1 = words[i].to_string();
-                    let w2 = words[i+1].to_string();
-                    transitions.entry(w1).or_default().push(w2);
-                }
-            }
-        }
+        // Wrap user message in conversation prompt format for the Transformer
+        let prompt = format!("User: {}\nBot:", user_msg);
+        let input_tokens = tf.tokenize(&prompt);
 
-        let mut rng = rand::thread_rng();
-        let mut current_word = match start_words.choose(&mut rng) {
-            Some(w) => w.clone(),
-            None => return insights[0].phrase.clone(),
+        let mut generated_tokens = if input_tokens.is_empty() {
+            // Fallback: tokenize first insight
+            tf.tokenize(&insights[0].phrase)
+        } else {
+            input_tokens
         };
 
-        let mut generated_words = vec![current_word.clone()];
-        let max_words = 22;
+        // Context truncation
+        if generated_tokens.len() > tf.config.seq_len - 10 {
+            generated_tokens = generated_tokens[generated_tokens.len() - (tf.config.seq_len - 10)..].to_vec();
+        }
 
-        for _ in 0..max_words {
-            if let Some(followers) = transitions.get(&current_word) {
-                if let Some(next_w) = followers.choose(&mut rng) {
-                    generated_words.push(next_w.clone());
-                    current_word = next_w.clone();
-                    
-                    // Stop early on punctuation signals
-                    if current_word.ends_with('.') || current_word.ends_with(',') {
-                        break;
-                    }
-                } else {
-                    break;
-                }
+        // Autoregressive generation: predict tokens one-by-one
+        let max_new_tokens = 60;
+        let mut new_token_ids = Vec::new();
+
+        for _ in 0..max_new_tokens {
+            let context = if generated_tokens.len() > tf.config.seq_len {
+                &generated_tokens[generated_tokens.len() - tf.config.seq_len..]
             } else {
+                &generated_tokens
+            };
+
+            let logits = tf.forward(context);
+            let next_id = tf.sample_next_token_id(&logits, 0.7);
+
+            generated_tokens.push(next_id);
+            new_token_ids.push(next_id);
+
+            let next_token_str = tf.detokenize(&[next_id]);
+            if next_token_str.contains('\n') || next_token_str.contains("User:") {
                 break;
             }
         }
 
-        let mut text = generated_words.join(" ");
-        if !text.ends_with('.') && !text.ends_with(',') {
+        // Decode only the newly generated tokens (not the prompt)
+        let mut text = tf.detokenize(&new_token_ids);
+
+        // Strip any leftover "Bot:" prefix from decoded text
+        if let Some(stripped) = text.strip_prefix("Bot:") {
+            text = stripped.trim().to_string();
+        }
+        if let Some(stripped) = text.strip_prefix("bot:") {
+            text = stripped.trim().to_string();
+        }
+
+        // Fallback: if generation produced nothing useful, return best matching insight
+        if text.trim().is_empty() || text.trim().len() < 5 {
+            text = insights[0].phrase.clone();
+            // If the insight is a conversation pair, extract just the Bot answer
+            if text.contains("Bot:") {
+                if let Some(bot_part) = text.split("Bot:").nth(1) {
+                    text = bot_part.trim().to_string();
+                }
+            }
+        }
+
+        // Capitalize first letter
+        if !text.is_empty() {
+            let mut chars = text.chars();
+            text = chars.next().unwrap().to_uppercase().collect::<String>() + chars.as_str();
+        }
+
+        // Ensure sentence ends with punctuation
+        if !text.ends_with('.') && !text.ends_with('!') && !text.ends_with('?') && !text.ends_with(',') {
             text.push('.');
         }
+
         text
     }
 
-    /// Save or increment a learned human phrase in the sharded database
+    /// Save or increment a learned human phrase in the sharded database and run an offline backprop training step
     pub async fn record_insight(&self, category: &str, phrase: &str, context: &str, nuance: &str) {
         let db_idx = get_db_index(phrase);
         let now_ts = std::time::SystemTime::now()
@@ -307,6 +349,21 @@ impl HumanBrainEngine {
                 &[&category.to_string(), &phrase.trim().to_string(), &context.to_string(), &nuance.to_string(), &now_ts, &vector_str]
             ).await;
         }
+
+        // Asynchronously backprop-train the Transformer weights on the newly taught phrase
+        let sentence = phrase.to_string();
+        let tf_clone = self.transformer.clone();
+        tokio::spawn(async move {
+            let mut tf = tf_clone.lock().await;
+            tf.update_vocabulary(&[sentence.clone()]);
+            let tokens = tf.tokenize(&sentence);
+            if tokens.len() > 1 {
+                for i in 0..tokens.len() - 1 {
+                    let _loss = tf.train_step(&tokens[0..=i], tokens[i+1], 0.01);
+                }
+                let _ = tf.save_to_file("brain_weights.bin");
+            }
+        });
     }
 
     /// Apply RLHF reward signal feedback to database entry
@@ -598,8 +655,9 @@ impl HumanBrainEngine {
 
             // Keyword / name direct matches
             let stop_words = ["what", "who", "is", "are", "the", "a", "an", "how", "why", "about", "does", "mean", "explain", "meaning"];
-            let keywords: Vec<&str> = lower_msg.split_whitespace()
-                .filter(|w| w.len() > 2 && !stop_words.contains(w))
+            let keywords: Vec<String> = lower_msg.split_whitespace()
+                .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+                .filter(|w| w.len() > 2 && !stop_words.contains(&w.as_str()))
                 .collect();
 
             if !keywords.is_empty() {
@@ -647,8 +705,8 @@ impl HumanBrainEngine {
                 }
 
                 if !matched_insights.is_empty() {
-                    // Build local Markov chain and generate dynamic response
-                    let generated_reply = self.generate_text_from_insights(&matched_insights);
+                    // Build local Transformer memory context and generate response
+                    let generated_reply = self.generate_text_from_insights(&matched_insights, user_msg).await;
                     let reply = format!(
                         "{} (Synthesized dynamically from sharded memory | {} total insights)",
                         generated_reply,
@@ -665,7 +723,7 @@ impl HumanBrainEngine {
                         .take(15)
                         .map(|(_, item)| item.clone())
                         .collect();
-                    let generated_reply = self.generate_text_from_insights(&matching_insights);
+                    let generated_reply = self.generate_text_from_insights(&matching_insights, user_msg).await;
                     let reply = format!(
                         "{} (Synthesized dynamically | match score {:.2})",
                         generated_reply,
@@ -676,7 +734,8 @@ impl HumanBrainEngine {
             }
 
             let reply = format!(
-                "I don't have enough details on that yet. I have {} insights sharded across my Neon cluster. I'm actively crawling the web every 90 seconds. Try asking again soon!",
+                "I don't have enough details on that yet. I have {} insights sharded across my Neon cluster. I'm actively crawling the web every few minutes. Try asking again soon!",
+
                 total_insights
             );
             return (reply, self.get_formatted_human_context(10).await);
@@ -689,7 +748,7 @@ impl HumanBrainEngine {
                     .take(15)
                     .map(|(_, item)| item.clone())
                     .collect();
-                let generated_reply = self.generate_text_from_insights(&matching_insights);
+                let generated_reply = self.generate_text_from_insights(&matching_insights, user_msg).await;
                 let reply = format!(
                     "\"{}\" — (Match score: {:.2})",
                     generated_reply,
@@ -738,8 +797,14 @@ impl HumanBrainEngine {
             let mut cycle: usize = 0;
 
             loop {
-                tokio::time::sleep(Duration::from_secs(90)).await;
+                // Plan 7: poll every 6 min (360s) instead of 90s. Neon suspends a
+                // compute after ~5 min (300s) idle, so a 90s poll kept snowy-field
+                // awake 24/7 and drained the shared 100 CU-hr meter. 360s lets it
+                // auto-suspend between reads. News only changes on ingest, so a
+                // slower poll loses no meaningful freshness.
+                tokio::time::sleep(Duration::from_secs(360)).await;
                 cycle = cycle.wrapping_add(1);
+
 
                 // own site check
                 for source in own_sources.iter() {
@@ -784,5 +849,21 @@ impl HumanBrainEngine {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_brain_generation() {
+        let engine = HumanBrainEngine::new();
+        let test_prompts = vec!["who are you", "who built you", "hello"];
+
+        for prompt in test_prompts {
+            let reply = engine.generate_text_from_insights(&[], prompt).await;
+            println!("\n[PROMPT]: \"{}\"\n[REPLY]:  \"{}\"", prompt, reply);
+        }
     }
 }

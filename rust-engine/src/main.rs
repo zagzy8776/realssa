@@ -3,6 +3,7 @@ mod parser;
 mod img;
 mod proxy;
 mod human_brain;
+mod neural_network;
 
 use axum::{
     extract::{Query, State},

@@ -300,10 +300,10 @@ const authLimiter = rateLimit({
 // ── Scraper & Direct Request Protection Middleware ──
 const antiScraper = (req, res, next) => {
   const userAgent = (req.headers['user-agent'] || '').toLowerCase();
-  
+
   // 1. Block popular scripting and scraping clients
   const badAgents = [
-    'python', 'requests', 'beautifulsoup', 'urllib', 'scrapy', 'axios', 
+    'python', 'requests', 'beautifulsoup', 'urllib', 'scrapy', 'axios',
     'curl', 'wget', 'postman', 'insomnia', 'http-client', 'got', 'node-fetch'
   ];
   if (badAgents.some(agent => userAgent.includes(agent))) {
@@ -315,10 +315,10 @@ const antiScraper = (req, res, next) => {
     const referer = req.headers.referer || '';
     const origin = req.headers.origin || '';
     const isFromApp = allowedOrigins.some(allowed => referer.startsWith(allowed) || origin.startsWith(allowed));
-    
+
     // Also allow internal system crons/webhooks (often have no referer, but check for local loopback/secret)
     const isCron = req.path.startsWith('/api/cron') || req.query.secret === process.env.CRON_SECRET;
-    
+
     if (!isFromApp && !isCron) {
       return res.status(403).json({ error: 'Access denied: Unauthorized cross-origin request.' });
     }
@@ -341,10 +341,10 @@ app.post('/api/telemetry', async (req, res) => {
     if (!payload) {
       return res.status(200).send('OK'); // Always return 200 to sendBeacon
     }
-    
+
     // Dump payload straight into Redis buffer/Memory queue (sub-millisecond)
-    bufferTelemetry(payload).catch(() => {});
-    
+    bufferTelemetry(payload).catch(() => { });
+
     return res.status(200).send('OK');
   } catch (err) {
     return res.status(200).send('OK');
@@ -599,7 +599,7 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) {
       console.error('[Admin Login Fallback Error]', e.message);
     }
-    
+
     // Return the original enterprise login error message
     res.status(400).json({ error: err.message });
   }
@@ -692,7 +692,7 @@ app.post('/api/extract', async (req, res) => {
             </div>`;
           extracted.byline = 'RealSSA AI News Desk';
         }
-      } catch (_) {}
+      } catch (_) { }
       return res.json(extracted);
     }
 
@@ -709,7 +709,7 @@ app.post('/api/extract', async (req, res) => {
       if (dbRes.rows.length > 0) {
         const row = dbRes.rows[0];
         const content = row.content || row.original_excerpt || row.title;
-        return res.json({ title: row.title, content, textContent: content, length: content.length, excerpt: row.original_excerpt||'', byline: row.source_name||'RealSSA News Desk', siteName: row.source_name||'RealSSA', image: row.image });
+        return res.json({ title: row.title, content, textContent: content, length: content.length, excerpt: row.original_excerpt || '', byline: row.source_name || 'RealSSA News Desk', siteName: row.source_name || 'RealSSA', image: row.image });
       }
     }
 
@@ -720,7 +720,7 @@ app.post('/api/extract', async (req, res) => {
   }
 });
 app._legacyExtractPlaceholder = async url => {  // dead code placeholder
-    try {
+  try {
     const html = '';
 
     // Extract OG / Twitter image for the Reels card hero
@@ -746,7 +746,7 @@ app._legacyExtractPlaceholder = async url => {  // dead code placeholder
     const dom = new JSDOM(html, { url });
     const reader = new Readability(dom.window.document);
     let article = reader.parse();
-    
+
     // If readability fails or returns empty, try DB fallback before failing
     if (!article || !article.textContent || article.textContent.trim().length < 100) {
       if (process.env.DATABASE_URL) {
@@ -784,7 +784,7 @@ app._legacyExtractPlaceholder = async url => {  // dead code placeholder
     try {
       const fullBreakdown = await generateFullArticleBreakdown(article.title, targetText);
       if (fullBreakdown && fullBreakdown.full_breakdown) {
-        const bulletHtml = Array.isArray(fullBreakdown.bullet_points) 
+        const bulletHtml = Array.isArray(fullBreakdown.bullet_points)
           ? fullBreakdown.bullet_points.map(b => `<li style="margin-bottom:6px;">${b}</li>`).join('')
           : `<li>${article.title}</li>`;
 
@@ -985,7 +985,7 @@ async function enrichArticlesWithReactions(articles, deviceId) {
   try {
     const idMap = {};
     const articleIds = [];
-    
+
     articles.forEach(article => {
       if (article.id) {
         const idStr = String(article.id);
@@ -1086,8 +1086,9 @@ app.get('/api/articles', async (req, res) => {
             content_type,
             '5 min read' as read_time
           FROM rss_articles 
-          ORDER BY published_at DESC LIMIT 200
+          ORDER BY published_at DESC LIMIT 500
         `;
+
 
         let articlesData = [];
         try {
@@ -1125,8 +1126,9 @@ app.get('/api/articles', async (req, res) => {
           articlesData.sort((a, b) => new Date(b.date) - new Date(a.date));
         }
 
-        // Apply LIMIT 100
-        articlesData = articlesData.slice(0, 100);
+        // Apply LIMIT 300 — deeper feed so the infinite scroll has real depth
+        articlesData = articlesData.slice(0, 300);
+
 
         rssArticles = articlesData.map(row => ({
           id: row.id,
@@ -1430,7 +1432,7 @@ app.post('/api/articles/:id/view', async (req, res) => {
     const rawId = req.params.id;
     const dbId = rawId.startsWith('rss-') ? rawId.replace('rss-', '') : rawId;
     let viewCount = 1;
-    
+
     if (process.env.DATABASE_URL && rawId.startsWith('rss-')) {
       const result = await pool.query(
         'UPDATE rss_articles SET view_count = COALESCE(view_count, 0) + 1 WHERE id = $1 RETURNING view_count',
@@ -2255,7 +2257,7 @@ app.get('/api/sports/stream-schedule', async (req, res) => {
 
             const title = item.title || item.name || '';
             const matchId = item.id || '';
-            
+
             // Check if live or scheduled
             const isLive = item.live || item.isLive || false;
             const dateStr = item.date || item.time || '';
@@ -2293,16 +2295,16 @@ app.get('/api/sports/stream-schedule', async (req, res) => {
     if (!streamedSuFetched || events.length === 0) {
       console.log('[sportsBot] Falling back to ESPN free API');
       const espnLeagues = [
-        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard',   sport: 'Premier League Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard', sport: 'Premier League Football' },
         { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard', sport: 'Champions League' },
-        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard',   sport: 'La Liga Football' },
-        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard',   sport: 'Serie A Football' },
-        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard',   sport: 'Bundesliga Football' },
-        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard',   sport: 'MLS Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard', sport: 'La Liga Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard', sport: 'Serie A Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard', sport: 'Bundesliga Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard', sport: 'MLS Football' },
         { url: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard', sport: 'NBA Basketball' },
-        { url: 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',   sport: 'NFL American Football' },
-        { url: 'https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard',      sport: 'Formula 1' },
-        { url: 'https://site.api.espn.com/apis/site/v2/sports/tennis/scoreboard',         sport: 'Tennis' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard', sport: 'NFL American Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard', sport: 'Formula 1' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/tennis/scoreboard', sport: 'Tennis' },
       ];
 
       await Promise.allSettled(
@@ -2317,7 +2319,7 @@ app.get('/api/sports/stream-schedule', async (req, res) => {
               const away = competitors.find(c => c.homeAway === 'away')?.team?.displayName || competitors[1]?.team?.displayName || '';
               const name = home && away ? `${home} vs ${away}` : (ev.name || ev.shortName || '');
               const status = ev.competitions?.[0]?.status?.type?.description || ev.status?.type?.description || '';
-              
+
               // format time
               let displayTime = 'Live';
               const dateStr = ev.date || '';
@@ -2331,7 +2333,7 @@ app.get('/api/sports/stream-schedule', async (req, res) => {
               }
 
               const isLive = status === 'In Progress' || status === 'Halftime' || status.toLowerCase().includes('live');
-              
+
               if (name) {
                 events.push({
                   sport,
@@ -2368,7 +2370,7 @@ app.get('/api/sports/matches', async (req, res) => {
     await pool.query(`
       ALTER TABLE live_matches ADD COLUMN IF NOT EXISTS home_team_crest TEXT;
       ALTER TABLE live_matches ADD COLUMN IF NOT EXISTS away_team_crest TEXT;
-    `).catch(() => {});
+    `).catch(() => { });
 
     const result = await pool.query(`
       SELECT DISTINCT ON (provider_match_id) * FROM (
@@ -2464,7 +2466,7 @@ app.get('/api/cron/sports', async (req, res) => {
 app.get('/api/cron/ingest', async (req, res) => {
   const secret = req.query.secret || req.headers['x-cron-secret'];
   const cronSec = process.env.CRON_SECRET || 'realssa-cron-secret-2026';
-  
+
   if (secret && secret !== cronSec && secret !== 'realssa-cron-secret-2026') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -2502,7 +2504,7 @@ app.get('/api/cron/buffer', async (req, res) => {
     : undefined;
   const secret = req.query.secret || req.headers['x-cron-secret'] || bearerToken;
   const cronSec = process.env.CRON_SECRET || 'realssa-cron-secret-2026';
-  
+
   if (!secret || (secret !== cronSec && secret !== 'realssa-cron-secret-2026')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -2548,7 +2550,7 @@ app.get('/api/streams/live', async (req, res) => {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
-    `).catch(() => {});
+    `).catch(() => { });
     const result = await pool.query("SELECT * FROM live_streams WHERE is_live = true ORDER BY created_at DESC LIMIT 20");
     res.json(result.rows || []);
   } catch (err) {
@@ -2622,7 +2624,7 @@ app.get('/api/news/social', async (req, res) => {
   try {
     if (!process.env.DATABASE_URL) return res.json([]);
     const limit = parseInt(req.query.limit) || 100;
-    
+
     // Fetch articles from the database from top sources
     const result = await pool.query(
       `SELECT id, title, COALESCE(ai_summary, original_excerpt) AS excerpt, source_name, published_at, image, external_link, category
@@ -2911,11 +2913,11 @@ app.get('/api/news/nigerian', makeDbFirstRoute('nigerian', nigerianFeeds, ['nige
 // Get Local news based on GPS coordinates or Vercel IP headers (instant location sensor)
 app.get('/api/news/local', async (req, res) => {
   try {
-    let country = req.headers['cf-ipcountry'] || 
-                  req.headers['x-vercel-ip-country'] || 
-                  req.headers['x-country-code'] || 
-                  req.headers['x-appengine-country'] || 
-                  'NG';
+    let country = req.headers['cf-ipcountry'] ||
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['x-country-code'] ||
+      req.headers['x-appengine-country'] ||
+      'NG';
 
     const { lat, lng } = req.query;
     if (lat && lng) {
@@ -3397,10 +3399,10 @@ app.get('/api/news/search', async (req, res) => {
     // 2. Fallback to Full-Text Keyword Search & Multilingual Translation Search
     if (!usedSemantic) {
       console.log('🔍 Running standard keyword + translation search...');
-      
+
       const keywordParams = category ? [q, category, queryLower] : [q, queryLower];
       const categoryFilterFTS = category ? 'AND category = $2' : '';
-      const localLangQuery = category 
+      const localLangQuery = category
         ? `OR (
              LOWER(title_translations->'pidgin'->>'title') LIKE $3 OR
              LOWER(title_translations->'yoruba'->>'title') LIKE $3 OR
@@ -3556,7 +3558,7 @@ async function handleStreak(req, res) {
         last_read_at TIMESTAMPTZ DEFAULT NOW(),
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
-    `).catch(() => {});
+    `).catch(() => { });
     const result = await usersPool.query(
       'SELECT current_streak, longest_streak, last_read_at FROM user_streaks WHERE device_id = $1',
       [deviceId]
@@ -3609,11 +3611,11 @@ app.post('/api/users/dwell', async (req, res) => {
     // 60-120s= +5  (strong interest)
     // 120s+  = +8  (deep read)
     let contribution = 0;
-    if (seconds < 10)       contribution = -1;
-    else if (seconds < 30)  contribution = 1;
-    else if (seconds < 60)  contribution = 3;
+    if (seconds < 10) contribution = -1;
+    else if (seconds < 30) contribution = 1;
+    else if (seconds < 60) contribution = 3;
     else if (seconds < 120) contribution = 5;
-    else                    contribution = 8;
+    else contribution = 8;
 
     await usersPool.query(
       `INSERT INTO user_category_affinities (device_id, category, score, last_interacted_at)
@@ -4010,9 +4012,9 @@ app.post('/api/ads/create', async (req, res) => {
         clicks INT DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
-    `).catch(() => {});
+    `).catch(() => { });
 
-    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS company_name TEXT`).catch(() => {});
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS company_name TEXT`).catch(() => { });
 
     const insertRes = await usersPool.query(`
       INSERT INTO native_ads (company_name, headline, description, category, image_url, target_link, advertiser_email, budget_naira)
@@ -4221,7 +4223,7 @@ app.post('/api/chat', async (req, res) => {
   try {
     const cleanMsg = message.trim().replace(/[^a-zA-Z0-9\s]/g, '');
     const keywords = cleanMsg.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
-    
+
     let searchRows = [];
     if (keywords.length > 0) {
       const searchPattern = `%${keywords.join('%')}%`;
@@ -4251,21 +4253,21 @@ app.post('/api/chat', async (req, res) => {
     if (contextList.length > 0) {
       newsContext = '\n\nRealSSA Live Real-Time News Feed Context:\n' +
         contextList.map(r => `- [${r.category}] "${r.title}" (Source: ${r.source_name || 'RealSSA'})`).join('\n');
-      
+
       sources = searchRows.slice(0, 3).map(r => ({
         title: r.title,
         url: `${SITE_URL || 'https://www.realssanews.com.ng'}/read?url=${encodeURIComponent(r.external_link)}`
       }));
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // 2. Fetch learned human speech & phrasing patterns from brainStore
   let humanMemory = '';
   try {
     humanMemory = await getHumanContextForPrompt(12);
-  } catch (_) {}
+  } catch (_) { }
 
-  const humanInstruction = humanMemory 
+  const humanInstruction = humanMemory
     ? `\n\nLearned Human Speech & Phrasing Memory:\n${humanMemory}`
     : '';
 
@@ -4593,7 +4595,7 @@ app.get('/api/check-frame', async (req, res) => {
 // Reduces images from 1-5MB originals to ~30-80KB WebP. Sharp runs on libvips (C library) so
 // this is close to Rust-level performance for image operations in our Node.js stack.
 let sharp;
-try { sharp = require('sharp'); } catch(_) { sharp = null; }
+try { sharp = require('sharp'); } catch (_) { sharp = null; }
 
 const imgCache = new Map(); // { buf: Buffer, mime: string, ts: number }
 const IMG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -4657,7 +4659,7 @@ app.get('/api/img', async (req, res) => {
           .toBuffer();
 
         const saving = Math.round((1 - compressed.length / origBuf.length) * 100);
-        console.log(`[img] ${new URL(imgUrl).hostname} ${Math.round(origBuf.length/1024)}KB → ${Math.round(compressed.length/1024)}KB WebP (${saving}% saved)`);
+        console.log(`[img] ${new URL(imgUrl).hostname} ${Math.round(origBuf.length / 1024)}KB → ${Math.round(compressed.length / 1024)}KB WebP (${saving}% saved)`);
 
         imgCache.set(cacheKey, { buf: compressed, mime: 'image/webp', ts: Date.now() });
         if (imgCache.size > 200) {
@@ -4748,7 +4750,7 @@ app.get('/api/proxy-page', async (req, res) => {
       html.includes('cf_chl_') ||
       html.includes('__cf_chl_rt_tk') ||
       (html.includes('Cloudflare') && html.includes('challenge'));
-    
+
     if (isCfChallenge) {
       const cfFallback = `<!DOCTYPE html>
 <html lang="en">
@@ -4788,7 +4790,7 @@ app.get('/api/proxy-page', async (req, res) => {
     try {
       const u = new URL(safeUrl);
       origin = `${u.protocol}//${u.host}`;
-    } catch (_) {}
+    } catch (_) { }
 
     // 1. Inject <base> tag so browser resolves relative asset paths automatically
     const baseTag = `<base href="${origin}/" target="_blank">`;
@@ -4928,7 +4930,7 @@ app.get('/api/search/web', async (req, res) => {
                 source: new URL(r.url).hostname.replace('www.', ''),
                 date: new Date().toLocaleDateString()
               }));
-              
+
               // Write to SQL Cache (wrapped in try-catch so it won't crash if DB is down)
               try {
                 await pool.query(
@@ -5215,10 +5217,10 @@ app.get('/api/search/ai', async (req, res) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { 
+        generationConfig: {
           responseMimeType: "application/json",
-          maxOutputTokens: 1000, 
-          temperature: 0.2 
+          maxOutputTokens: 1000,
+          temperature: 0.2
         }
       }),
       signal: AbortSignal.timeout(15000)
@@ -5249,7 +5251,7 @@ app.get('/api/search/ai', async (req, res) => {
       aiOverview: {
         title: wikiDetails?.title || cleanQuery,
         subtitle: "Search Insights",
-        summary: wikiDetails?.wikiExtract 
+        summary: wikiDetails?.wikiExtract
           ? `${wikiDetails.wikiExtract.substring(0, 300)}...`
           : `No AI Summary could be generated at this moment. You can view the web search results below.`,
         imageUrl: wikiDetails?.imageUrl || null,
@@ -5933,16 +5935,16 @@ app.post('/api/reactions/:id', async (req, res) => {
   const { type, deviceId } = req.body;
   if (!['fire', 'heart', 'wow'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
   if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
-  
+
   try {
     if (!process.env.DATABASE_URL) return res.json({ [type]: 1 });
-    
+
     // Check if this device has already reacted to this article
     const existing = await pool.query(
       "SELECT reaction_type FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
       [deviceId, id]
     );
-    
+
     if (existing.rows.length > 0) {
       const prevType = existing.rows[0].reaction_type;
       if (prevType === type) {
@@ -5985,22 +5987,22 @@ app.post('/api/reactions/:id', async (req, res) => {
         [id, type]
       );
     }
-    
+
     // Get updated counts
     const r = await pool.query("SELECT reaction_type, count FROM article_reactions WHERE article_id=$1", [id]);
     const c = { fire: 0, heart: 0, wow: 0 }; r.rows.forEach(x => { c[x.reaction_type] = parseInt(x.count); });
-    
+
     // Also send back what the user's current reaction is (or null)
     const userReact = await pool.query(
       "SELECT reaction_type FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
       [deviceId, id]
     );
     const userReaction = userReact.rows.length > 0 ? userReact.rows[0].reaction_type : null;
-    
+
     res.json({ counts: c, userReaction });
-  } catch (err) { 
-    console.error('Reaction:', err.message); 
-    res.status(500).json({ error: 'Failed to process reaction' }); 
+  } catch (err) {
+    console.error('Reaction:', err.message);
+    res.status(500).json({ error: 'Failed to process reaction' });
   }
 });
 
@@ -6010,10 +6012,10 @@ app.get('/api/reactions/:id', async (req, res) => {
   const { deviceId } = req.query;
   try {
     if (!process.env.DATABASE_URL) return res.json({ fire: 0, heart: 0, wow: 0, userReaction: null });
-    
+
     const r = await pool.query("SELECT reaction_type, count FROM article_reactions WHERE article_id=$1", [id]);
     const c = { fire: 0, heart: 0, wow: 0 }; r.rows.forEach(x => { c[x.reaction_type] = parseInt(x.count); });
-    
+
     let userReaction = null;
     if (deviceId) {
       const userReact = await pool.query(
@@ -6024,10 +6026,10 @@ app.get('/api/reactions/:id', async (req, res) => {
         userReaction = userReact.rows[0].reaction_type;
       }
     }
-    
+
     res.json({ counts: c, userReaction });
-  } catch (err) { 
-    res.json({ fire: 0, heart: 0, wow: 0, userReaction: null }); 
+  } catch (err) {
+    res.json({ fire: 0, heart: 0, wow: 0, userReaction: null });
   }
 });
 
@@ -6219,7 +6221,7 @@ app.get('/api/admin/broadcast-text', async (req, res) => {
     let usdBuy = '1,640', usdSell = '1,650';
     let gbpBuy = '2,080', gbpSell = '2,100';
     let eurBuy = '1,780', eurSell = '1,800';
-    
+
     // 1. Fetch Parallel Exchange Rates
     const ratesRes = await pool.query(
       `SELECT currency, street_buy, street_sell FROM parallel_rates ORDER BY updated_at DESC LIMIT 6`
@@ -6315,7 +6317,7 @@ app.get('/api/politicians', async (req, res) => {
 app.get('/api/events', async (req, res) => {
   try {
     if (!process.env.DATABASE_URL) return res.json([]);
-    
+
     // Fetch upcoming and recent events
     const result = await pool.query(
       `SELECT id, title, description, category, event_date, location, ticket_link, created_at
@@ -6323,7 +6325,7 @@ app.get('/api/events', async (req, res) => {
        WHERE event_date >= NOW() - INTERVAL '3 days'
        ORDER BY event_date ASC`
     );
-    
+
     // For each event, fetch linked articles count
     const events = [];
     for (const ev of result.rows) {
@@ -6336,7 +6338,7 @@ app.get('/api/events', async (req, res) => {
         linked_articles_count: parseInt(artCount.rows[0].count)
       });
     }
-    
+
     res.json(events);
   } catch (err) {
     console.error('Events API error:', err.message);
