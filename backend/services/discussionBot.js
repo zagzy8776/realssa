@@ -11,6 +11,8 @@ const usersPool = new Pool({
   ssl: usersDbUrl ? { rejectUnauthorized: false } : undefined
 });
 
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
+
 // 50 realistic personas
 const BOT_PERSONAS = [
   "Abiodun K.", "Chinedu_Dev", "Aisha_Abuja", "Tunde_Lagos", "Fatima_Mustapha",
@@ -24,7 +26,7 @@ const BOT_PERSONAS = [
   "Abubakar_Y", "Tari_PortHarcourt", "Gozie_O"
 ];
 
-// Topic-specific comments to ensure they make logical sense
+// Topic-specific fallback comments if Gemini is rate-limited or fails
 const CONTEXT_COMMENTS = {
   sports: [
     "What a match! Totally deserved outcome.",
@@ -63,7 +65,6 @@ const CONTEXT_COMMENTS = {
   ]
 };
 
-// Reply templates to simulate debates
 const REPLY_TEMPLATES = [
   "Are you sure? I think you're missing the bigger picture here.",
   "Exactly! Glad someone else pointed this out.",
@@ -73,11 +74,43 @@ const REPLY_TEMPLATES = [
 ];
 
 /**
+ * Call Gemini API using key rotation
+ */
+async function callGemini(promptText) {
+  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  const key = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
+  if (!key) return null;
+
+  try {
+    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: {
+          maxOutputTokens: 120,
+          temperature: 0.7
+        }
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    }
+  } catch (err) {
+    console.error('[Discussion Bot] Gemini API request failed:', err.message);
+  }
+  return null;
+}
+
+/**
  * Inserts a single comment row safely
  */
 async function insertComment(articleId, authorName, content, parentId = null) {
   const deviceId = 'simulated-bot-' + Math.floor(Math.random() * 100);
-  const likes = Math.floor(Math.random() * 8); // Start with 0-7 likes
+  const likes = Math.floor(Math.random() * 8);
   try {
     const res = await usersPool.query(
       `INSERT INTO comments (article_id, parent_id, author_name, device_id, content, likes, created_at)
@@ -93,32 +126,61 @@ async function insertComment(articleId, authorName, content, parentId = null) {
 }
 
 /**
- * Simulates a full nested conversation on an article
+ * Simulates a full AI-powered nested conversation on an article
  */
-async function buildDiscussionThread(articleId, category) {
-  // Determine relevant comments pool
-  const catKey = category && CONTEXT_COMMENTS[category.toLowerCase()] ? category.toLowerCase() : 'general';
-  const templates = CONTEXT_COMMENTS[catKey];
-
+async function buildDiscussionThread(articleId, title, excerpt, category) {
   // Pick random participants
   const participants = [...BOT_PERSONAS].sort(() => 0.5 - Math.random());
-  
-  // 1. First main comment
+  const catKey = category && CONTEXT_COMMENTS[category.toLowerCase()] ? category.toLowerCase() : 'general';
+
+  // 1. Generate First Comment
   const delay1 = Math.floor(Math.random() * 5000) + 1000; // 1-6 seconds
   setTimeout(async () => {
-    const mainComment = await insertComment(articleId, participants[0], templates[0]);
+    const mainPrompt = `You are a Nigerian reader commenting on a news article. Write a short, natural comment (1-2 sentences) expressing a realistic opinion on this article.
+    Title: "${title}"
+    Excerpt: "${excerpt || ''}"
+    Category: "${category || 'news'}"
+    Keep it informal and realistic, using standard Nigerian English or light slang if appropriate. Do not use hashtags or emojis. Return only the raw comment text.`;
+    
+    let commentText = await callGemini(mainPrompt);
+    if (!commentText) {
+      const templates = CONTEXT_COMMENTS[catKey];
+      commentText = templates[Math.floor(Math.random() * templates.length)];
+    }
+
+    const mainComment = await insertComment(articleId, participants[0], commentText);
     if (!mainComment) return;
 
-    // 2. Second main comment
+    // 2. Generate Second Comment (Independent opinion)
     const delay2 = Math.floor(Math.random() * 15000) + 10000; // 10-25 seconds
     setTimeout(async () => {
-      await insertComment(articleId, participants[1], templates[1]);
+      const secondPrompt = `You are another Nigerian reader sharing a different perspective on this news article. Write a short, natural comment (1-2 sentences).
+      Title: "${title}"
+      Category: "${category || 'news'}"
+      Keep it informal and realistic, using standard Nigerian English. Do not use hashtags or emojis. Return only the raw comment text.`;
+
+      let secondCommentText = await callGemini(secondPrompt);
+      if (!secondCommentText) {
+        const templates = CONTEXT_COMMENTS[catKey];
+        secondCommentText = templates[Math.min(2, Math.floor(Math.random() * templates.length))];
+      }
+
+      await insertComment(articleId, participants[1], secondCommentText);
     }, delay2);
 
-    // 3. A reply to the first main comment (simulating a debate)
+    // 3. Generate Reply/Debate (Replying to the first comment)
     const delay3 = Math.floor(Math.random() * 30000) + 20000; // 20-50 seconds
     setTimeout(async () => {
-      const replyText = REPLY_TEMPLATES[Math.floor(Math.random() * REPLY_TEMPLATES.length)];
+      const replyPrompt = `You are a Nigerian reader replying to another user's comment in the comment section of a news article.
+      Article Title: "${title}"
+      Previous Comment by ${participants[0]}: "${commentText}"
+      Write a short, natural, conversational reply (1-2 sentences) either agreeing, disagreeing, or arguing. Keep it informal. Do not use hashtags or emojis. Return only the raw reply text.`;
+
+      let replyText = await callGemini(replyPrompt);
+      if (!replyText) {
+        replyText = REPLY_TEMPLATES[Math.floor(Math.random() * REPLY_TEMPLATES.length)];
+      }
+
       await insertComment(articleId, participants[2], replyText, mainComment.id);
     }, delay3);
 
@@ -126,7 +188,7 @@ async function buildDiscussionThread(articleId, category) {
 }
 
 /**
- * Checks for recent articles and starts discussion threads
+ * Checks for recent articles and starts AI discussion threads
  */
 async function monitorAndSimulate() {
   try {
@@ -134,7 +196,7 @@ async function monitorAndSimulate() {
     
     // Fetch articles published in the last 15 minutes
     const articlesRes = await pool.query(`
-      SELECT 'rss-' || id as id, category 
+      SELECT 'rss-' || id as id, title, original_excerpt as excerpt, category 
       FROM rss_articles 
       WHERE published_at >= NOW() - INTERVAL '15 minutes'
       ORDER BY published_at DESC 
@@ -149,8 +211,8 @@ async function monitorAndSimulate() {
       );
 
       if (commentCheck.rows.length === 0) {
-        console.log(`[Discussion Bot] Initiating debate on article: ${article.id} (${article.category})`);
-        await buildDiscussionThread(article.id, article.category);
+        console.log(`[Discussion Bot] Initiating AI debate on article: ${article.id} ("${article.title}")`);
+        await buildDiscussionThread(article.id, article.title, article.excerpt, article.category);
       }
     }
   } catch (err) {
@@ -162,10 +224,8 @@ async function monitorAndSimulate() {
  * Starts the bot interval loop
  */
 function initDiscussionBot() {
-  console.log('📢 Discussion Bot initialized.');
-  // Run immediately on launch
+  console.log('📢 AI Discussion Bot initialized.');
   monitorAndSimulate().catch(() => {});
-  // Then run every 5 minutes
   setInterval(() => {
     monitorAndSimulate().catch(() => {});
   }, 5 * 60 * 1000);
