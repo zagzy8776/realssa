@@ -106,7 +106,8 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-[#050505] overflow-hidden select-none select-none"
+      className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-[#050505] overflow-hidden select-none"
+
     >
       {/* ── Glass Reflection Sheen Overlay ── */}
       <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none z-20 mix-blend-overlay" />

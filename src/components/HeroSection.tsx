@@ -224,8 +224,8 @@ const HeroSection = () => {
                   key={chan.id}
                   onClick={() => handleChannelSwitch(chan)}
                   className={`px-3 py-1 rounded-full text-[10px] md:text-xs font-semibold uppercase tracking-wider transition-all ${isSelected
-                      ? "bg-amber-500 text-black shadow-md font-bold scale-105"
-                      : "text-white/70 hover:text-white"
+                    ? "bg-amber-500 text-black shadow-md font-bold scale-105"
+                    : "text-white/70 hover:text-white"
                     }`}
                 >
                   {chan.name}
@@ -249,19 +249,21 @@ const HeroSection = () => {
 
       {/* 3. The Glassmorphism Welcome Modal */}
       <div className="relative z-20 container mx-auto px-4 flex flex-col items-center text-center">
-        <div className="animate-fade-in bg-black/45 backdrop-blur-md border border-white/10 p-8 md:p-12 rounded-3xl shadow-2xl max-w-4xl w-full">
+        <div className="animate-fade-in bg-black/45 backdrop-blur-md border border-white/10 p-6 sm:p-8 md:p-12 rounded-3xl shadow-2xl max-w-4xl w-full">
 
-          <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-4 drop-shadow-lg">
+
+          <h1 className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-3 md:mb-4 drop-shadow-lg">
             Welcome to <span className="text-gradient-gold">RealSSA</span>
           </h1>
 
-          <h2 className="text-xl md:text-3xl text-white/90 font-medium mb-6 drop-shadow-md">
+          <h2 className="text-lg sm:text-xl md:text-3xl text-white/90 font-medium mb-4 md:mb-6 drop-shadow-md">
             The Pulse of Africa & The World
           </h2>
 
-          <p className="text-base md:text-lg text-white/80 mb-10 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-sm sm:text-base md:text-lg text-white/80 mb-6 md:mb-10 max-w-2xl mx-auto leading-relaxed line-clamp-3 sm:line-clamp-none">
             Your premier, real-time news aggregator. Swipe through the latest breaking politics, trending sports highlights, tech startups, and viral culture straight from the source.
           </p>
+
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/nigerian-news">

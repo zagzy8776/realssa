@@ -9,20 +9,30 @@ const ReadProgressBar = ({ articleId, className = '' }: ReadProgressBarProps) =>
   const [scrollProgress, setScrollProgress] = useState(0);
 
   useEffect(() => {
-    const handleScroll = () => {
+    let ticking = false;
+    const update = () => {
       const scrolled = (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100;
       setScrollProgress(Math.min(scrolled, 100));
+      ticking = false;
+    };
+    // rAF-throttled so we only recompute once per frame (smooth on low-end phones)
+    const handleScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        window.requestAnimationFrame(update);
+      }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    
+
     // Initial calculation
-    handleScroll();
+    update();
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
 
   return (
     <div className={`fixed top-0 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-800 z-50 ${className}`}>

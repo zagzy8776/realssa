@@ -84,13 +84,17 @@ const Header = () => {
   const [suggestions, setSuggestions] = useState<{ url: string; title: string; isSearch?: boolean }[]>([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  // Scroll handler to collapse mobile search bar on scroll down (keep open while typing)
+  // Scroll handler to collapse mobile search bar on scroll down (keep open while typing).
+  // rAF-throttled so we only touch state once per frame — avoids re-render churn
+  // and jank on low-end phones.
   useEffect(() => {
     let lastScrollY = window.scrollY;
-    
-    const handleScroll = () => {
+    let ticking = false;
+
+    const update = () => {
       if (isSearchFocused) {
         setShowMobileSearch(true);
+        ticking = false;
         return;
       }
       const currentScrollY = window.scrollY;
@@ -100,11 +104,20 @@ const Header = () => {
         setShowMobileSearch(true);
       }
       lastScrollY = currentScrollY;
+      ticking = false;
     };
-    
+
+    const handleScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        window.requestAnimationFrame(update);
+      }
+    };
+
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isSearchFocused]);
+
 
   // Keep portal dropdown aligned under the search bar
   useEffect(() => {
@@ -297,8 +310,8 @@ const Header = () => {
           {/* Logo & Back Button Container */}
           <div className="flex items-center gap-1 md:gap-2">
             {showBackButton && (
-              <button 
-                onClick={handleBack} 
+              <button
+                onClick={handleBack}
                 className="p-1.5 mr-0.5 text-foreground/80 hover:text-foreground active:scale-95 transition-all rounded-full hover:bg-accent flex items-center justify-center"
                 aria-label="Go back"
               >
@@ -318,11 +331,10 @@ const Header = () => {
           <div className="flex items-center gap-1 md:gap-2 animate-in fade-in zoom-in duration-500 shrink-0">
             <button
               onClick={() => setIsStreakOpen((open) => !open)}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full active:scale-95 transition-all cursor-pointer border ${
-                streak > 0 
-                  ? 'bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 text-orange-500' 
-                  : 'bg-muted hover:bg-muted/80 border-border text-foreground'
-              }`}
+              className={`flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full active:scale-95 transition-all cursor-pointer border ${streak > 0
+                ? 'bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 text-orange-500'
+                : 'bg-muted hover:bg-muted/80 border-border text-foreground'
+                }`}
               title="Click to view Reading Streak & Points"
             >
               <span className={`font-bold text-xs ${streak > 0 ? 'text-orange-500' : 'text-gray-400'}`}>STREAK {streak}</span>
@@ -347,7 +359,7 @@ const Header = () => {
                 className="relative w-full max-w-sm bg-gradient-to-br from-card to-background border border-border rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col gap-6 animate-in zoom-in-95 duration-250"
                 onClick={(e) => e.stopPropagation()}
               >
-                
+
                 {/* Background glow effects */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="absolute bottom-0 left-0 w-32 h-32 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -356,7 +368,7 @@ const Header = () => {
                   <h3 className="font-bold text-lg text-foreground flex items-center gap-1.5">
                     Reading Streak
                   </h3>
-                  <button 
+                  <button
                     onClick={() => setIsStreakOpen(false)}
                     className="p-1 rounded-full hover:bg-muted text-muted-foreground transition"
                     aria-label="Close streak modal"
@@ -370,7 +382,7 @@ const Header = () => {
                     <span className="group-hover:scale-110 transition duration-300 transform inline-block">STREAK</span>
                     <span className="absolute inset-0 rounded-full border-2 border-orange-500/20 animate-ping"></span>
                   </div>
-                  
+
                   <div>
                     <div className="text-3xl font-extrabold tracking-tight text-foreground">{streak} Days</div>
                     <p className="text-xs text-muted-foreground mt-0.5">Your current daily reading habit</p>
@@ -400,13 +412,12 @@ const Header = () => {
                       const isActive = idx <= todayIdx;
                       return (
                         <div key={idx} className="flex flex-col items-center gap-1.5 flex-1">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border transition-all duration-300 ${
-                            idx === todayIdx
-                              ? 'bg-orange-500 text-white border-orange-500 scale-[1.05] shadow-md shadow-orange-500/20'
-                              : isActive
-                                ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25'
-                                : 'bg-muted text-muted-foreground border-border'
-                          }`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border transition-all duration-300 ${idx === todayIdx
+                            ? 'bg-orange-500 text-white border-orange-500 scale-[1.05] shadow-md shadow-orange-500/20'
+                            : isActive
+                              ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25'
+                              : 'bg-muted text-muted-foreground border-border'
+                            }`}>
                             {idx === todayIdx && streak > 0 ? '✓' : day}
                           </div>
                           <span className="text-[9px] font-semibold text-muted-foreground/60">{day}</span>
@@ -417,7 +428,7 @@ const Header = () => {
                 </div>
 
                 <div className="text-center text-xs text-muted-foreground px-4 leading-relaxed">
-                  {streak > 0 
+                  {streak > 0
                     ? "Fantastic! You've read today's news to secure your streak. See you tomorrow!"
                     : "Read any summary article today to start your reading streak flame!"}
                 </div>
@@ -431,13 +442,13 @@ const Header = () => {
                     <span className="flex items-center gap-1">Advanced Settings (Restore Profile)</span>
                     <span>{isSecureOpen ? "Hide" : "Show"}</span>
                   </button>
-                  
+
                   {isSecureOpen && (
                     <div className="space-y-3 mt-3 animate-in fade-in duration-200">
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
                         Your reading streak and saved data are saved to your anonymous key. Save it to restore your profile on other devices.
                       </p>
-                      
+
                       {/* Export key */}
                       <div className="flex gap-2">
                         <input
@@ -513,254 +524,261 @@ const Header = () => {
           </div>
         </div>
 
-        {/* Integrated RealSSA Search Bar Gateway */}
+        {/* Integrated RealSSA Search Bar Gateway.
+            Collapse uses grid-rows transition (0fr → 1fr) instead of max-height so
+            it animates smoothly AND removes itself from flow when hidden — no more
+            content jumping up/down each time the scroll direction flips on mobile. */}
         <div className={cn(
-          "border-t border-border/40 bg-background/95 dark:bg-[#1A1622]/95 backdrop-blur-md relative z-50 transition-all duration-300 shadow-lg",
+          "border-t border-border/40 bg-background/95 dark:bg-[#1A1622]/95 backdrop-blur-md relative z-50 grid transition-[grid-template-rows,opacity] duration-300 shadow-lg motion-reduce:transition-none",
           showMobileSearch || isSearchFocused
-            ? "max-h-[80px] opacity-100 overflow-visible"
-            : "max-h-0 opacity-0 border-t-0 pointer-events-none overflow-hidden md:max-h-[80px] md:opacity-100 md:border-t md:overflow-visible"
+            ? "grid-rows-[1fr] opacity-100 overflow-visible"
+            : "grid-rows-[0fr] opacity-0 border-t-0 pointer-events-none overflow-hidden md:grid-rows-[1fr] md:opacity-100 md:border-t md:overflow-visible"
         )}>
-          <div ref={searchWrapRef} className="py-2.5 px-3 max-w-4xl mx-auto relative">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!searchQuery.trim()) return;
-                const dest = isDirectUrl(searchQuery.trim())
-                  ? searchQuery.trim()
-                  : `realssa://search?q=${encodeURIComponent(searchQuery.trim())}`;
-                
-                navigate(`/browser?url=${encodeURIComponent(dest)}`);
-                setIsSearchFocused(false);
-                setSuggestions([]);
-              }}
-              className="relative flex items-center gap-2 md:gap-3 glass-search px-3 md:px-4 py-2 focus-within:border-amber-500/50 group min-w-0"
-            >
-              <Search className="w-4 h-4 text-amber-500 shrink-0" />
-              <div className="relative flex-1 min-w-0">
-                <input
-                  id="homepage-search-input"
-                  type="search"
-                  inputMode="search"
-                  enterKeyHint="search"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  placeholder="Search or enter URL..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    handleAutocomplete(e.target.value);
-                  }}
-                  onFocus={() => setIsSearchFocused(true)}
-                  onBlur={() => {
-                    setTimeout(() => {
-                      setIsSearchFocused(false);
-                      setSuggestions([]);
-                    }, 200);
-                  }}
-                  className="w-full min-w-0 bg-transparent border-none text-[16px] md:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none py-1.5 pr-7"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => { setSearchQuery(''); setSuggestions([]); }}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-              <button
-                type="submit"
-                className="bg-amber-500 hover:bg-amber-400 text-black text-[10px] md:text-xs font-extrabold px-2.5 md:px-3.5 py-1.5 rounded-xl uppercase flex items-center gap-1 shrink-0 shadow-sm transition-transform active:scale-95 cursor-pointer whitespace-nowrap"
-              >
-                SEARCH
-              </button>
-            </form>
+          <div className="min-h-0 overflow-hidden md:overflow-visible">
 
-            {/* Autocomplete dropdown — portaled so sticky/overflow header can't clip it */}
-            {isSearchFocused && suggestions.length > 0 && suggestBox && createPortal(
-              <div
-                className="fixed glass-dropdown rounded-xl overflow-hidden z-[100000] animate-in fade-in slide-in-from-top-1 duration-150"
-                style={{
-                  top: suggestBox.top,
-                  left: suggestBox.left,
-                  width: suggestBox.width,
+            <div ref={searchWrapRef} className="py-2.5 px-3 max-w-4xl mx-auto relative">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!searchQuery.trim()) return;
+                  const dest = isDirectUrl(searchQuery.trim())
+                    ? searchQuery.trim()
+                    : `realssa://search?q=${encodeURIComponent(searchQuery.trim())}`;
+
+                  navigate(`/browser?url=${encodeURIComponent(dest)}`);
+                  setIsSearchFocused(false);
+                  setSuggestions([]);
                 }}
-                role="listbox"
-                aria-label="Search suggestions"
+                className="relative flex items-center gap-2 md:gap-3 glass-search px-3 md:px-4 py-2 focus-within:border-amber-500/50 group min-w-0"
               >
-                {suggestions.map((s, i) => (
-                  <button
-                    key={`${s.isSearch ? "s" : "h"}-${s.title}-${i}`}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      goToSuggestion(s);
+                <Search className="w-4 h-4 text-amber-500 shrink-0" />
+                <div className="relative flex-1 min-w-0">
+                  <input
+                    id="homepage-search-input"
+                    type="search"
+                    inputMode="search"
+                    enterKeyHint="search"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="Search or enter URL..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      handleAutocomplete(e.target.value);
                     }}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      goToSuggestion(s);
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        setIsSearchFocused(false);
+                        setSuggestions([]);
+                      }, 200);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-amber-500/10 transition-colors text-left group border-b border-border/10 last:border-0"
-                  >
-                    {s.isSearch ? (
-                      <Search className="w-3 h-3 text-amber-500 shrink-0" />
-                    ) : (
-                      <Globe className="w-3 h-3 text-amber-500 shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium text-foreground truncate">{s.title}</div>
-                      {!s.isSearch && (
-                        <div className="text-[10px] text-muted-foreground truncate">{s.url}</div>
+                    className="w-full min-w-0 bg-transparent border-none text-[16px] md:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none py-1.5 pr-7"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => { setSearchQuery(''); setSuggestions([]); }}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  className="bg-amber-500 hover:bg-amber-400 text-black text-[10px] md:text-xs font-extrabold px-2.5 md:px-3.5 py-1.5 rounded-xl uppercase flex items-center gap-1 shrink-0 shadow-sm transition-transform active:scale-95 cursor-pointer whitespace-nowrap"
+                >
+                  SEARCH
+                </button>
+              </form>
+
+              {/* Autocomplete dropdown — portaled so sticky/overflow header can't clip it */}
+              {isSearchFocused && suggestions.length > 0 && suggestBox && createPortal(
+                <div
+                  className="fixed glass-dropdown rounded-xl overflow-hidden z-[100000] animate-in fade-in slide-in-from-top-1 duration-150"
+                  style={{
+                    top: suggestBox.top,
+                    left: suggestBox.left,
+                    width: suggestBox.width,
+                  }}
+                  role="listbox"
+                  aria-label="Search suggestions"
+                >
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={`${s.isSearch ? "s" : "h"}-${s.title}-${i}`}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        goToSuggestion(s);
+                      }}
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        goToSuggestion(s);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-amber-500/10 transition-colors text-left group border-b border-border/10 last:border-0"
+                    >
+                      {s.isSearch ? (
+                        <Search className="w-3 h-3 text-amber-500 shrink-0" />
+                      ) : (
+                        <Globe className="w-3 h-3 text-amber-500 shrink-0" />
                       )}
-                      {s.isSearch && s.title.toLowerCase() === searchQuery.trim().toLowerCase() && (
-                        <div className="text-[10px] text-muted-foreground truncate">Search with RealSSA</div>
-                      )}
-                    </div>
-                    <ArrowRight className="w-3 h-3 text-muted-foreground group-hover:text-amber-400 shrink-0" />
-                  </button>
-                ))}
-              </div>,
-              document.body
-            )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium text-foreground truncate">{s.title}</div>
+                        {!s.isSearch && (
+                          <div className="text-[10px] text-muted-foreground truncate">{s.url}</div>
+                        )}
+                        {s.isSearch && s.title.toLowerCase() === searchQuery.trim().toLowerCase() && (
+                          <div className="text-[10px] text-muted-foreground truncate">Search with RealSSA</div>
+                        )}
+                      </div>
+                      <ArrowRight className="w-3 h-3 text-muted-foreground group-hover:text-amber-400 shrink-0" />
+                    </button>
+                  ))}
+                </div>,
+                document.body
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Mobile Drawer Dimmed Backdrop */}
-        {isMenuOpen && (
-          <div
-            onClick={() => setIsMenuOpen(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] transition-opacity duration-300 animate-in fade-in cursor-pointer"
-            aria-hidden="true"
-          />
-        )}
-
-        {/* Universal Navigation Drawer - Sleek Slide-out style */}
-        <nav
-          className={cn(
-            "transition-all duration-300 ease-in-out fixed right-0 bottom-0 top-14 md:top-20 bg-background/97 backdrop-blur-md border-l border-border z-[9999] w-full sm:w-80 shadow-2xl flex flex-col opacity-100",
-            isMenuOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
+          {/* Mobile Drawer Dimmed Backdrop */}
+          {isMenuOpen && (
+            <div
+              onClick={() => setIsMenuOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] transition-opacity duration-300 animate-in fade-in cursor-pointer"
+              aria-hidden="true"
+            />
           )}
-        >
-          <div className="flex-1 overflow-y-auto pb-24 custom-scrollbar flex flex-col gap-1 p-2">
-            
-            {/* Extended Weather Widget inside Drawer (Desktop/Tablet detail) */}
-            <div className="px-4 py-3 border-b border-border/40 mb-2">
-              <WeatherWidget variant="glass" />
-            </div>
 
-            {/* Main Navigation Links */}
-            {visibleNavLinks.map((link) => (
-              <Link
-                key={link.href}
-                to={link.href}
-                onClick={() => setIsMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
-                  "text-muted-foreground hover:text-primary hover:bg-muted",
-                  "active:scale-[0.98] active:bg-muted/80"
-                )}
-              >
-                <span>{link.label}</span>
-              </Link>
-            ))}
-
-            {/* Regions Section */}
-            <div className="px-4 py-2 mt-2 border-t border-border/50">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Regions</p>
-              <div className="flex flex-col gap-1">
-                {visibleRegionsLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    to={link.href}
-                    onClick={() => setIsMenuOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
-                      "text-muted-foreground hover:text-primary hover:bg-muted",
-                      "active:scale-[0.98] active:bg-muted/80"
-                    )}
-                  >
-                    <span>{link.label}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            {/* Library Section */}
-            <div className="px-4 py-2 mt-2 border-t border-border/50">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Library</p>
-              <div className="flex flex-col gap-1">
-                {libraryLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    to={link.href}
-                    onClick={() => setIsMenuOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
-                      "text-muted-foreground hover:text-primary hover:bg-muted",
-                      "active:scale-[0.98] active:bg-muted/80"
-                    )}
-                  >
-                    <span>{link.label}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            {/* Admin Logout Button - Drawer */}
-            {isAdmin && (
-              <button
-                onClick={handleLogout}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
-                  "text-muted-foreground hover:text-destructive hover:bg-muted",
-                  "active:scale-[0.98] active:bg-muted/80"
-                )}
-              >
-                <LogOut size={18} />
-                <span>Logout</span>
-              </button>
+          {/* Universal Navigation Drawer - Sleek Slide-out style */}
+          <nav
+            className={cn(
+              "transition-all duration-300 ease-in-out fixed right-0 bottom-0 top-14 md:top-20 bg-background/97 backdrop-blur-md border-l border-border z-[9999] w-full sm:w-80 shadow-2xl flex flex-col opacity-100",
+              isMenuOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
             )}
+          >
+            <div className="flex-1 overflow-y-auto pb-24 custom-scrollbar flex flex-col gap-1 p-2">
 
-            {/* Settings Section */}
-            <div className="px-4 py-3 mt-1 border-t border-border/50 pb-8">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Settings</p>
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">Appearance</span>
-                  <DarkModeToggle />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">Push Notifications</span>
-                  <PushNotificationManager iconOnly={false} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">Shake to Discover</span>
-                  <button
-                    onClick={() => toggleShake(!shakeEnabled)}
-                    className={cn(
-                      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2",
-                      shakeEnabled ? "bg-amber-500" : "bg-muted"
-                    )}
-                  >
-                    <span
+              {/* Extended Weather Widget inside Drawer (Desktop/Tablet detail) */}
+              <div className="px-4 py-3 border-b border-border/40 mb-2">
+                <WeatherWidget variant="glass" />
+              </div>
+
+              {/* Main Navigation Links */}
+              {visibleNavLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  to={link.href}
+                  onClick={() => setIsMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
+                    "text-muted-foreground hover:text-primary hover:bg-muted",
+                    "active:scale-[0.98] active:bg-muted/80"
+                  )}
+                >
+                  <span>{link.label}</span>
+                </Link>
+              ))}
+
+              {/* Regions Section */}
+              <div className="px-4 py-2 mt-2 border-t border-border/50">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Regions</p>
+                <div className="flex flex-col gap-1">
+                  {visibleRegionsLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      to={link.href}
+                      onClick={() => setIsMenuOpen(false)}
                       className={cn(
-                        "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out",
-                        shakeEnabled ? "translate-x-5" : "translate-x-0"
+                        "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
+                        "text-muted-foreground hover:text-primary hover:bg-muted",
+                        "active:scale-[0.98] active:bg-muted/80"
                       )}
-                    />
-                  </button>
+                    >
+                      <span>{link.label}</span>
+                    </Link>
+                  ))}
                 </div>
               </div>
+
+              {/* Library Section */}
+              <div className="px-4 py-2 mt-2 border-t border-border/50">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Library</p>
+                <div className="flex flex-col gap-1">
+                  {libraryLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      to={link.href}
+                      onClick={() => setIsMenuOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
+                        "text-muted-foreground hover:text-primary hover:bg-muted",
+                        "active:scale-[0.98] active:bg-muted/80"
+                      )}
+                    >
+                      <span>{link.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              {/* Admin Logout Button - Drawer */}
+              {isAdmin && (
+                <button
+                  onClick={handleLogout}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
+                    "text-muted-foreground hover:text-destructive hover:bg-muted",
+                    "active:scale-[0.98] active:bg-muted/80"
+                  )}
+                >
+                  <LogOut size={18} />
+                  <span>Logout</span>
+                </button>
+              )}
+
+              {/* Settings Section */}
+              <div className="px-4 py-3 mt-1 border-t border-border/50 pb-8">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Settings</p>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">Appearance</span>
+                    <DarkModeToggle />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">Push Notifications</span>
+                    <PushNotificationManager iconOnly={false} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">Shake to Discover</span>
+                    <button
+                      onClick={() => toggleShake(!shakeEnabled)}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2",
+                        shakeEnabled ? "bg-amber-500" : "bg-muted"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out",
+                          shakeEnabled ? "translate-x-5" : "translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
             </div>
+          </nav>
 
-          </div>
-        </nav>
-
+        </div>
       </div>
     </header>
+
   );
 };
 

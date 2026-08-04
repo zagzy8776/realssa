@@ -387,8 +387,23 @@
   animation: pillPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
+/* ── Horizontal rail helpers ──────────────────────────
+   .snap-start-child snaps each card's left edge to the rail start so swipes
+   land cleanly instead of resting mid-card. .edge-fade-x paints a soft mask on
+   both ends so the row visibly "continues" off-screen (a strong scroll-affordance
+   cue on phones where scrollbars are hidden). */
+.snap-start-child>* {
+  scroll-snap-align: start;
+}
+
+.edge-fade-x {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%);
+}
+
 .snap-x-mandatory {
   scroll-snap-type: x mandatory;
+
 }
 
 /* Horizontal Card Sections */

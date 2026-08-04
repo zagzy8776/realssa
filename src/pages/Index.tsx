@@ -42,6 +42,8 @@ const Index = () => {
   const lastSyncTimeRef = useRef(0);
   const [activeFilter, setActiveFilter] = useState('all');
   const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+
   const [stories, setStories] = useState([]);
   const [allArticles, setAllArticles] = useState([]);
   const [trendingArticles, setTrendingArticles] = useState([]);
@@ -346,14 +348,26 @@ const Index = () => {
   const filteredArticles = getFilteredArticles();
   const visibleArticles = filteredArticles.slice(0, visibleCount);
 
+  // Infinite scroll via IntersectionObserver sentinel — avoids reading
+  // document.body.offsetHeight on every scroll frame (which forces layout
+  // reflow and stutters on low-end phones).
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800 && !loading && visibleCount < allArticles.length)
-        setVisibleCount(prev => prev + 12);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    if (loading || visibleCount >= allArticles.length) return;
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount(prev => prev + 12);
+        }
+      },
+      { rootMargin: '800px 0px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
   }, [loading, visibleCount, allArticles.length]);
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -484,10 +498,11 @@ const Index = () => {
                     ))}
                   </div>
                   {visibleCount < allArticles.length && (
-                    <div className="py-8 text-center">
+                    <div ref={loadMoreRef} className="py-8 text-center">
                       <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" role="status" />
                     </div>
                   )}
+
                 </div>
               ) : (
                 <div className="text-center py-10 text-muted-foreground">
@@ -515,29 +530,52 @@ const Index = () => {
         </section>
       </main>
 
-      {/* Floating AI Search button — opens the RealSSA AI search modal */}
-      <button
-        onClick={() => setIsAiSearchOpen(true)}
-        title="AI Search"
-        aria-label="Open AI search"
-        className="fixed bottom-[148px] md:bottom-24 right-4 md:right-8 z-[999] h-[42px] w-[42px] rounded-full bg-primary text-primary-foreground cursor-pointer shadow-[0_6px_24px_rgba(245,158,11,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-105"
+      {/* Unified Floating Action Button — one tap reveals AI Search + Live Wire.
+          Consolidates what used to be two stacked FABs so they no longer
+          clutter the thumb-zone or overlap the last card's action row on
+          small phones. Anchored above the mobile bottom-nav via safe-area. */}
+      <div
+        className="fixed right-4 md:right-8 z-[999] flex flex-col items-end gap-3"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
       >
-        <Search className="w-5 h-5" />
-      </button>
+        {/* Expanded actions (mount only when open) */}
+        <div
+          className={`flex flex-col items-end gap-3 transition-all duration-200 origin-bottom-right ${fabOpen ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto' : 'opacity-0 translate-y-2 scale-95 pointer-events-none'
+            }`}
+        >
+          <button
+            onClick={() => { setIsAiSearchOpen(true); setFabOpen(false); }}
+            aria-label="Open AI search"
+            className="h-11 rounded-full bg-primary text-primary-foreground shadow-[0_6px_24px_rgba(245,158,11,0.4)] flex items-center gap-2 px-4 transition-transform duration-150 hover:scale-105 active:scale-95"
+          >
+            <Search className="w-5 h-5 shrink-0" />
+            <span className="text-sm font-bold whitespace-nowrap">AI Search</span>
+          </button>
+          <button
+            onClick={() => { navigate('/wire'); setFabOpen(false); }}
+            aria-label="Open Live Broadcast Wire"
+            className="h-11 rounded-full bg-black/90 backdrop-blur-md border border-[#3A3345] shadow-[0_6px_24px_rgba(0,0,0,0.6)] flex items-center gap-2 px-4 transition-transform duration-150 hover:scale-105 active:scale-95"
+          >
+            <span className="text-amber-500 font-extrabold text-sm">📢</span>
+            <span className="text-white text-xs font-bold whitespace-nowrap">Live Wire</span>
+            <span className="w-[7px] h-[7px] rounded-full bg-[#f59e0b] animate-pulse shrink-0" />
+          </button>
+        </div>
 
-      {/* Floating Live Wire button */}
-      <button
-        onClick={() => navigate('/wire')}
-        title="Live Broadcast Wire"
-        className="fixed bottom-[96px] md:bottom-8 right-4 md:right-8 z-[999] h-[42px] rounded-[21px] bg-black/90 backdrop-blur-md border border-[#3A3345] cursor-pointer shadow-[0_6px_24px_rgba(0,0,0,0.6)] flex items-center gap-2 px-4 transition-all duration-150 hover:scale-105 hover:shadow-[0_6px_24px_rgba(245,158,11,0.3)]"
-      >
-        <span className="text-amber-500 font-extrabold text-sm">📢</span>
-        <span className="text-white text-xs font-bold whitespace-nowrap">Live Wire</span>
-        <span className="w-[7px] h-[7px] rounded-full bg-[#f59e0b] animate-pulse shrink-0" />
-      </button>
+        {/* Main FAB toggle */}
+        <button
+          onClick={() => setFabOpen(o => !o)}
+          aria-label={fabOpen ? 'Close quick actions' : 'Open quick actions'}
+          aria-expanded={fabOpen}
+          className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-[0_6px_24px_rgba(245,158,11,0.5)] flex items-center justify-center transition-transform duration-200 hover:scale-105 active:scale-95"
+        >
+          <Search className={`w-6 h-6 transition-transform duration-300 ${fabOpen ? 'rotate-90 scale-90' : ''}`} />
+        </button>
+      </div>
 
 
       <Footer />
+
     </div>
   );
 };

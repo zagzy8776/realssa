@@ -171,7 +171,7 @@ const NewsCard = ({
         } else {
           setReactions(parsed);
         }
-      } catch {}
+      } catch { }
       return; // Use cache; skip network fetch
     }
 
@@ -184,7 +184,7 @@ const NewsCard = ({
           localStorage.setItem(`reactions_${id}`, JSON.stringify(data));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [id, reactionsProp]);
 
   const handleReaction = useCallback(async (e: React.MouseEvent | null, type: string) => {
@@ -193,13 +193,13 @@ const NewsCard = ({
       e.stopPropagation();
     }
     if (!id) return;
-    
+
     const deviceId = localStorage.getItem('realssa_device_uuid') || '';
     if (!deviceId) return;
 
     const isToggleOff = reacted === type;
     const newReacted = isToggleOff ? null : type;
-    
+
     setReacted(newReacted);
     setReactions(prev => {
       const copy = { ...prev };
@@ -483,22 +483,20 @@ const NewsCard = ({
             <button
               disabled={hasVotedVerify}
               onClick={handleVerifyClick}
-              className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[11px] font-bold ${
-                hasVotedVerify 
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
-                  : 'bg-muted/30 text-muted-foreground border-border hover:bg-emerald-500/10 hover:text-emerald-400'
-              }`}
+              className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[11px] font-bold ${hasVotedVerify
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                : 'bg-muted/30 text-muted-foreground border-border hover:bg-emerald-500/10 hover:text-emerald-400'
+                }`}
             >
               ✓ {verifiedCount} Verified
             </button>
             <button
               disabled={hasVotedVerify}
               onClick={handleFlagClick}
-              className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[11px] font-bold ${
-                hasVotedVerify 
-                  ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                  : 'bg-muted/30 text-muted-foreground border-border hover:bg-red-500/10 hover:text-red-400'
-              }`}
+              className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[11px] font-bold ${hasVotedVerify
+                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                : 'bg-muted/30 text-muted-foreground border-border hover:bg-red-500/10 hover:text-red-400'
+                }`}
             >
               ⚠ {rumorCount} Rumor
             </button>
@@ -527,9 +525,9 @@ const NewsCard = ({
 
           <div className="flex items-center gap-3 relative" style={{ color: '#8C8494', flexShrink: 0 }}>
             {floatingBubbles.map(bubble => (
-              <div 
-                key={bubble.id} 
-                className="floating-bubble" 
+              <div
+                key={bubble.id}
+                className="floating-bubble"
                 style={{ left: `${bubble.left}%` }}
               >
                 {bubble.emoji}
@@ -537,7 +535,7 @@ const NewsCard = ({
             ))}
             <button
               onClick={(e) => handleReaction(e, 'fire')}
-              className={`flex items-center gap-0.5 transition-colors ${reacted === 'fire' ? 'text-amber-500' : 'hover:text-amber-500'}`}
+              className={`flex items-center justify-center gap-0.5 min-w-[36px] min-h-[36px] -my-1.5 transition-colors ${reacted === 'fire' ? 'text-amber-500' : 'hover:text-amber-500'}`}
               aria-label={`React with fire. ${reactions.fire} reactions`}
             >
               <Flame className="w-4 h-4" />
@@ -546,7 +544,7 @@ const NewsCard = ({
 
             <button
               onClick={(e) => handleReaction(e, 'heart')}
-              className={`flex items-center gap-0.5 transition-colors ${reacted === 'heart' ? 'text-red-500' : 'hover:text-red-500'}`}
+              className={`flex items-center justify-center gap-0.5 min-w-[36px] min-h-[36px] -my-1.5 transition-colors ${reacted === 'heart' ? 'text-red-500' : 'hover:text-red-500'}`}
               aria-label={`React with heart. ${reactions.heart} reactions`}
             >
               <Heart className="w-4 h-4" />
@@ -556,10 +554,11 @@ const NewsCard = ({
             {showBookmark && (
               <button
                 onClick={handleBookmark}
-                className="hover:text-amber-500 transition-colors"
+                className="flex items-center justify-center min-w-[36px] min-h-[36px] -my-1.5 hover:text-amber-500 transition-colors"
                 aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
               >
                 {isBookmarked ? (
+
                   <BookmarkCheck className="w-4 h-4 text-amber-500" />
                 ) : (
                   <Bookmark className="w-4 h-4" />
