@@ -12,6 +12,7 @@ const usersPool = new Pool({
 });
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
+const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
 
 // 50 realistic personas
 const BOT_PERSONAS = [
@@ -26,7 +27,7 @@ const BOT_PERSONAS = [
   "Abubakar_Y", "Tari_PortHarcourt", "Gozie_O"
 ];
 
-// Topic-specific fallback comments if Gemini is rate-limited or fails
+// Topic-specific fallback comments if APIs fail
 const CONTEXT_COMMENTS = {
   sports: [
     "What a match! Totally deserved outcome.",
@@ -100,9 +101,56 @@ async function callGemini(promptText) {
       return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
     }
   } catch (err) {
-    console.error('[Discussion Bot] Gemini API request failed:', err.message);
+    console.warn('[Discussion Bot] Gemini API request failed:', err.message);
   }
   return null;
+}
+
+/**
+ * Call Cerebras API (as backup or alternative)
+ */
+async function callCerebras(promptText) {
+  const key = process.env.CEREBRAS_API_KEY;
+  if (!key) return null;
+
+  try {
+    const res = await fetch(CEREBRAS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-oss-120b', // fallback models: zai-glm-4.7, gemma-4-31b
+        messages: [{ role: 'user', content: promptText }],
+        max_tokens: 120,
+        temperature: 0.7
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data?.choices?.[0]?.message?.content?.trim() || null;
+    }
+  } catch (err) {
+    console.warn('[Discussion Bot] Cerebras API request failed:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Orchestrates API call with fallback chain
+ */
+async function generateAiContent(promptText) {
+  // 1. Try Gemini first (active and working)
+  let response = await callGemini(promptText);
+  if (response) return response;
+
+  // 2. Try Cerebras as backup
+  console.log('[Discussion Bot] Gemini failed/limit hit, falling back to Cerebras...');
+  response = await callCerebras(promptText);
+  return response;
 }
 
 /**
@@ -142,7 +190,7 @@ async function buildDiscussionThread(articleId, title, excerpt, category) {
     Category: "${category || 'news'}"
     Keep it informal and realistic, using standard Nigerian English or light slang if appropriate. Do not use hashtags or emojis. Return only the raw comment text.`;
     
-    let commentText = await callGemini(mainPrompt);
+    let commentText = await generateAiContent(mainPrompt);
     if (!commentText) {
       const templates = CONTEXT_COMMENTS[catKey];
       commentText = templates[Math.floor(Math.random() * templates.length)];
@@ -159,7 +207,7 @@ async function buildDiscussionThread(articleId, title, excerpt, category) {
       Category: "${category || 'news'}"
       Keep it informal and realistic, using standard Nigerian English. Do not use hashtags or emojis. Return only the raw comment text.`;
 
-      let secondCommentText = await callGemini(secondPrompt);
+      let secondCommentText = await generateAiContent(secondPrompt);
       if (!secondCommentText) {
         const templates = CONTEXT_COMMENTS[catKey];
         secondCommentText = templates[Math.min(2, Math.floor(Math.random() * templates.length))];
@@ -176,7 +224,7 @@ async function buildDiscussionThread(articleId, title, excerpt, category) {
       Previous Comment by ${participants[0]}: "${commentText}"
       Write a short, natural, conversational reply (1-2 sentences) either agreeing, disagreeing, or arguing. Keep it informal. Do not use hashtags or emojis. Return only the raw reply text.`;
 
-      let replyText = await callGemini(replyPrompt);
+      let replyText = await generateAiContent(replyPrompt);
       if (!replyText) {
         replyText = REPLY_TEMPLATES[Math.floor(Math.random() * REPLY_TEMPLATES.length)];
       }
