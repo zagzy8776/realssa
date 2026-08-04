@@ -643,139 +643,138 @@ const Header = () => {
               )}
             </div>
           </div>
-
-          {/* Mobile Drawer Dimmed Backdrop */}
-          {isMenuOpen && (
-            <div
-              onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] transition-opacity duration-300 animate-in fade-in cursor-pointer"
-              aria-hidden="true"
-            />
-          )}
-
-          {/* Universal Navigation Drawer - Sleek Slide-out style */}
-          <nav
-            className={cn(
-              "transition-all duration-300 ease-in-out fixed right-0 bottom-0 top-14 md:top-20 bg-background/97 backdrop-blur-md border-l border-border z-[9999] w-full sm:w-80 shadow-2xl flex flex-col opacity-100",
-              isMenuOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
-            )}
-          >
-            <div className="flex-1 overflow-y-auto pb-24 custom-scrollbar flex flex-col gap-1 p-2">
-
-              {/* Extended Weather Widget inside Drawer (Desktop/Tablet detail) */}
-              <div className="px-4 py-3 border-b border-border/40 mb-2">
-                <WeatherWidget variant="glass" />
-              </div>
-
-              {/* Main Navigation Links */}
-              {visibleNavLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  to={link.href}
-                  onClick={() => setIsMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
-                    "text-muted-foreground hover:text-primary hover:bg-muted",
-                    "active:scale-[0.98] active:bg-muted/80"
-                  )}
-                >
-                  <span>{link.label}</span>
-                </Link>
-              ))}
-
-              {/* Regions Section */}
-              <div className="px-4 py-2 mt-2 border-t border-border/50">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Regions</p>
-                <div className="flex flex-col gap-1">
-                  {visibleRegionsLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      to={link.href}
-                      onClick={() => setIsMenuOpen(false)}
-                      className={cn(
-                        "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
-                        "text-muted-foreground hover:text-primary hover:bg-muted",
-                        "active:scale-[0.98] active:bg-muted/80"
-                      )}
-                    >
-                      <span>{link.label}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-
-              {/* Library Section */}
-              <div className="px-4 py-2 mt-2 border-t border-border/50">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Library</p>
-                <div className="flex flex-col gap-1">
-                  {libraryLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      to={link.href}
-                      onClick={() => setIsMenuOpen(false)}
-                      className={cn(
-                        "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
-                        "text-muted-foreground hover:text-primary hover:bg-muted",
-                        "active:scale-[0.98] active:bg-muted/80"
-                      )}
-                    >
-                      <span>{link.label}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-
-              {/* Admin Logout Button - Drawer */}
-              {isAdmin && (
-                <button
-                  onClick={handleLogout}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
-                    "text-muted-foreground hover:text-destructive hover:bg-muted",
-                    "active:scale-[0.98] active:bg-muted/80"
-                  )}
-                >
-                  <LogOut size={18} />
-                  <span>Logout</span>
-                </button>
-              )}
-
-              {/* Settings Section */}
-              <div className="px-4 py-3 mt-1 border-t border-border/50 pb-8">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Settings</p>
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">Appearance</span>
-                    <DarkModeToggle />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">Push Notifications</span>
-                    <PushNotificationManager iconOnly={false} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">Shake to Discover</span>
-                    <button
-                      onClick={() => toggleShake(!shakeEnabled)}
-                      className={cn(
-                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2",
-                        shakeEnabled ? "bg-amber-500" : "bg-muted"
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out",
-                          shakeEnabled ? "translate-x-5" : "translate-x-0"
-                        )}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </nav>
-
         </div>
+
+        {/* Mobile Drawer Dimmed Backdrop */}
+        {isMenuOpen && (
+          <div
+            onClick={() => setIsMenuOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] transition-opacity duration-300 animate-in fade-in cursor-pointer"
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Universal Navigation Drawer - Sleek Slide-out style */}
+        <nav
+          className={cn(
+            "transition-all duration-300 ease-in-out fixed right-0 bottom-0 top-14 md:top-20 bg-background/97 backdrop-blur-md border-l border-border z-[9999] w-full sm:w-80 shadow-2xl flex flex-col opacity-100",
+            isMenuOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
+          )}
+        >
+          <div className="flex-1 overflow-y-auto pb-24 custom-scrollbar flex flex-col gap-1 p-2">
+
+            {/* Extended Weather Widget inside Drawer (Desktop/Tablet detail) */}
+            <div className="px-4 py-3 border-b border-border/40 mb-2">
+              <WeatherWidget variant="glass" />
+            </div>
+
+            {/* Main Navigation Links */}
+            {visibleNavLinks.map((link) => (
+              <Link
+                key={link.href}
+                to={link.href}
+                onClick={() => setIsMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
+                  "text-muted-foreground hover:text-primary hover:bg-muted",
+                  "active:scale-[0.98] active:bg-muted/80"
+                )}
+              >
+                <span>{link.label}</span>
+              </Link>
+            ))}
+
+            {/* Regions Section */}
+            <div className="px-4 py-2 mt-2 border-t border-border/50">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Regions</p>
+              <div className="flex flex-col gap-1">
+                {visibleRegionsLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    to={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
+                      "text-muted-foreground hover:text-primary hover:bg-muted",
+                      "active:scale-[0.98] active:bg-muted/80"
+                    )}
+                  >
+                    <span>{link.label}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Library Section */}
+            <div className="px-4 py-2 mt-2 border-t border-border/50">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Library</p>
+              <div className="flex flex-col gap-1">
+                {libraryLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    to={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200",
+                      "text-muted-foreground hover:text-primary hover:bg-muted",
+                      "active:scale-[0.98] active:bg-muted/80"
+                    )}
+                  >
+                    <span>{link.label}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Admin Logout Button - Drawer */}
+            {isAdmin && (
+              <button
+                onClick={handleLogout}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200",
+                  "text-muted-foreground hover:text-destructive hover:bg-muted",
+                  "active:scale-[0.98] active:bg-muted/80"
+                )}
+              >
+                <LogOut size={18} />
+                <span>Logout</span>
+              </button>
+            )}
+
+            {/* Settings Section */}
+            <div className="px-4 py-3 mt-1 border-t border-border/50 pb-8">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Settings</p>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Appearance</span>
+                  <DarkModeToggle />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Push Notifications</span>
+                  <PushNotificationManager iconOnly={false} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Shake to Discover</span>
+                  <button
+                    onClick={() => toggleShake(!shakeEnabled)}
+                    className={cn(
+                      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2",
+                      shakeEnabled ? "bg-amber-500" : "bg-muted"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out",
+                        shakeEnabled ? "translate-x-5" : "translate-x-0"
+                      )}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </nav>
       </div>
     </header>
 
