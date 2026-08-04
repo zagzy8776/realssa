@@ -1,59 +1,55 @@
 const { Pool } = require('pg');
 
-// Multi-Database Pool Manager for Load Balancing across 5 Neon Databases
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-Database Pool Manager — Plan 7 (consolidated).
+//
+// CONTEXT (see DB_CAPACITY_PLAN.md): the 10 Neon "databases" are actually
+// branches inside ONE Neon project, so they share ONE 100 CU-hr compute meter.
+// Spreading writes across them did NOT add quota — it just woke more computes
+// and drained the shared budget ~10× faster, which is what took the site off.
+//
+// Plan 7 fix:
+//   • Point ALL news categories at the single real news DB (snowy-field, the
+//     branch you call "realssa bb") via process.env.DATABASE_URL.
+//   • Stop the cross-pool failover / cleanup wake-storm that kept pinging dead
+//     (green-butterfly) and empty (icy-glitter/long-mode) branches.
+//   • Keep the AI brain pool (sweet-brook) separate — it's tiny and only used
+//     by the AI subsystem.
+//
+// Net effect: every category now writes AND reads from snowy-field (so all
+// categories show on the site), the other branches go idle and auto-suspend,
+// and the shared meter stops draining. Credentials come from env vars only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The single source of truth for all news content = snowy-field ("realssa bb").
+const PRIMARY_URL = process.env.DATABASE_URL || '';
+
+// Every category routes to the primary (snowy-field) pool. We keep the category
+// lists purely for reference/labelling — they all resolve to the same pool now.
 const DB_CONFIGS = [
   {
     id: 1,
-    name: 'DB1 (Royal Dream)',
-    url: process.env.DATABASE_URL_1 || 'postgresql://neondb_owner:npg_LXS6rJEbRCl2@ep-sweet-field-azj0x1ei.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
-    categories: ['nigerian-news', 'sports', 'business', 'politics']
-  },
-  {
-    id: 2,
-    name: 'DB2 (Sweet Field)',
-    url: process.env.DATABASE_URL_2 || 'postgresql://neondb_owner:npg_LXS6rJEbRCl2@ep-sweet-field-azj0x1ei.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
-    categories: ['crypto', 'entertainment', 'culture', 'lifestyle']
-  },
-  {
-    id: 3,
-    name: 'DB3 (Green Butterfly)',
-    url: process.env.DATABASE_URL_3 || 'postgresql://neondb_owner:npg_gQl3RcnC8MWS@ep-green-butterfly-azlp8ez4.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
-    categories: ['world', 'usa', 'uk', 'africa']
-  },
-  {
-    id: 4,
-    name: 'DB4 (Icy Glitter)',
-    url: process.env.DATABASE_URL_4 || 'postgresql://neondb_owner:npg_PLk86fymaGsx@ep-icy-glitter-az3nsoqd.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
-    categories: ['ghana', 'kenya', 'south-africa', 'jobs', 'tech']
-  },
-  {
-    id: 6,
-    name: 'DB6 (Cinema Movies)',
-    url: process.env.NEON_DATABASE_URL_1 || process.env.DATABASE_URL,
-    categories: ['movies', 'cinema-movies']
-  },
-  {
-    id: 7,
-    name: 'DB7 (Cinema Shows)',
-    url: process.env.NEON_DATABASE_URL_2 || process.env.DATABASE_URL,
-    categories: ['shows', 'series', 'episodes']
-  },
-  {
-    id: 8,
-    name: 'DB8 (Cinema Sources)',
-    url: process.env.NEON_DATABASE_URL_3 || process.env.DATABASE_URL,
-    categories: ['video_sources', 'stream_links']
+    name: 'Primary News (snowy-field / "realssa bb")',
+    url: PRIMARY_URL,
+    categories: [
+      'nigerian-news', 'sports', 'business', 'politics',
+      'crypto', 'entertainment', 'culture', 'lifestyle',
+      'world', 'usa', 'uk', 'africa',
+      'ghana', 'kenya', 'south-africa', 'jobs', 'tech',
+      'movies', 'cinema-movies', 'shows', 'series', 'episodes',
+      'video_sources', 'stream_links'
+    ]
   }
 ];
 
 const AI_DB_CONFIG = {
   id: 5,
   name: 'DB5 (Sweet Brook - AI & Models Brain)',
-  url: process.env.DATABASE_URL_AI || 'postgresql://neondb_owner:npg_ESj7doa4hVMW@ep-sweet-brook-az3jbxv3.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require',
+  url: process.env.DATABASE_URL_AI || '',
   categories: ['ai-models', 'embeddings', 'entities', 'memory']
 };
 
-// Initialize pool instances with error handling
+// Initialize the single content pool.
 const contentPools = DB_CONFIGS.map(cfg => {
   const rawUrl = cfg.url || process.env.DATABASE_URL || '';
   const cleanUrl = rawUrl ? rawUrl.split('?')[0] : '';
@@ -75,9 +71,11 @@ const contentPools = DB_CONFIGS.map(cfg => {
   };
 });
 
-// Dedicated AI Pool for Vector Embeddings, Model Training & Bot Memory
+// Dedicated AI Pool for Vector Embeddings, Model Training & Bot Memory.
+// Falls back to the primary news DB if no dedicated AI URL is configured, so
+// the AI subsystem never crashes on a missing env var.
 const aiPoolInstance = new Pool({
-  connectionString: AI_DB_CONFIG.url,
+  connectionString: (AI_DB_CONFIG.url || PRIMARY_URL).split('?')[0],
   ssl: { rejectUnauthorized: false },
   max: 15,
   idleTimeoutMillis: 30000,
@@ -95,74 +93,57 @@ const aiPoolWrapper = {
 
 const allPools = [...contentPools, aiPoolWrapper];
 
-let rrIndex = 0;
+// The primary content pool — the only one that serves news.
+const primaryPool = contentPools[0];
 
 /**
- * Get next database pool in round-robin order for general read load balancing
+ * Get the primary read pool. With Plan 7 consolidation there is only one news
+ * pool (snowy-field), so round-robin collapses to always returning it.
  */
 function getNextReadPool() {
-  const selected = contentPools[rrIndex % contentPools.length];
-  rrIndex = (rrIndex + 1) % contentPools.length;
-  return selected;
+  return primaryPool;
 }
 
 /**
- * Get assigned database pool for a specific news category
+ * Get the database pool for a specific news category. All categories now live
+ * in snowy-field, so this always returns the primary pool.
  */
-function getPoolForCategory(category) {
-  if (!category) return getNextReadPool();
-  const normalized = category.toLowerCase().trim();
-  const matched = contentPools.find(p => p.categories.includes(normalized));
-  return matched || getNextReadPool();
+function getPoolForCategory(_category) {
+  return primaryPool;
 }
 
 /**
- * Get dedicated AI & Model Database Pool (DB5)
+ * Get dedicated AI & Model Database Pool (DB5).
  */
 function getAiPool() {
   return aiPoolInstance;
 }
 
 /**
- * Execute query across pools using round-robin and automatic failover across all 5 databases
+ * Execute a query on the primary news DB (snowy-field).
+ *
+ * Plan 7: we intentionally do NOT fail over across other pools anymore. The old
+ * failover looped every pool on error, which woke dead/empty branches and burned
+ * the shared compute meter. A genuine error now surfaces instead of triggering a
+ * wake-storm.
  */
 async function queryMultiDb(text, params) {
-  const startIndex = rrIndex;
-  let lastError = null;
-
-  for (let i = 0; i < allPools.length; i++) {
-    const target = allPools[(startIndex + i) % allPools.length];
-    try {
-      const res = await target.pool.query(text, params);
-      return res;
-    } catch (err) {
-      console.warn(`[MultiDb Failover] Query failed on ${target.name}: ${err.message}. Retrying next pool...`);
-      lastError = err;
-    }
-  }
-
-  throw lastError || new Error('All 5 database pools failed to execute query.');
+  return primaryPool.pool.query(text, params);
 }
 
 /**
- * Execute query on ALL database pools in parallel
+ * Execute a query on all *news* pools. With consolidation this is just the
+ * primary pool — the AI pool is deliberately excluded so news maintenance
+ * (e.g. the 48h self-trim DELETE) never pings the AI branch or any dead branch.
  */
 async function queryAllDbs(text, params) {
-  const results = await Promise.allSettled(
-    allPools.map(p => p.pool.query(text, params))
-  );
-  
-  const fulfilled = results.filter(r => r.status === 'fulfilled');
-  if (fulfilled.length === 0) {
-    const firstErr = results.find(r => r.status === 'rejected')?.reason;
-    throw firstErr || new Error('Failed to execute query on any database pool.');
-  }
-
-  return fulfilled[0].value;
+  return primaryPool.pool.query(text, params);
 }
 
 /**
- * Get array of all database pools
+ * Get array of all database pools (content + AI). Callers that iterate this for
+ * news maintenance should prefer `pools`/`getNextReadPool()` so they don't touch
+ * the AI branch.
  */
 function getAllPools() {
   return allPools;

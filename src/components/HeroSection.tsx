@@ -88,7 +88,7 @@ const HeroSection = () => {
     });
 
     return () => {
-      listenerPromise.then(l => l.remove()).catch(() => {});
+      listenerPromise.then(l => l.remove()).catch(() => { });
     };
   }, []);
 
@@ -122,7 +122,7 @@ const HeroSection = () => {
         } else {
           setActiveChannel(CHANNELS[0]); // Default back to Channels TV
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     checkLiveEvents();
@@ -150,39 +150,40 @@ const HeroSection = () => {
     setLiveStreamUrl(null);
     try {
       localStorage.setItem("realssa_last_hero_channel", channel.id);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const isNative = Capacitor.isNativePlatform();
   const shouldPlay = !isCellular || userApprovedCellularPlay;
 
   return (
-    <section className="relative overflow-hidden w-full h-[85vh] md:h-[90vh] flex items-center justify-center bg-black">
-      
+    <section className="relative overflow-hidden w-full h-[62vh] md:h-[90vh] flex items-center justify-center bg-black">
+
+
       {/* 1. Background Video / HLS Stream Player */}
       <div className="absolute inset-0 w-full h-full pointer-events-none z-0">
         <ErrorBoundary fallback={
-          <div 
+          <div
             className="absolute inset-0 bg-cover bg-center opacity-85 transition-opacity duration-1000"
             style={{ backgroundImage: `url('https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1600')` }}
           />
         }>
           {videoError ? (
             // Video failed/offline: fallback static premium background image
-            <div 
+            <div
               className="absolute inset-0 bg-cover bg-center opacity-85 transition-opacity duration-1000"
               style={{ backgroundImage: `url('https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1600')` }}
             />
           ) : !shouldPlay ? (
             // Cellular-safe mode: Show static preview image with play prompt to save data
-            <div 
+            <div
               className="absolute inset-0 bg-cover bg-center opacity-70 transition-opacity duration-500"
               style={{ backgroundImage: `url('https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1600')` }}
             />
           ) : isNative || isLiveEventActive || activeChannel.hlsUrl ? (
             // Mobile/WebView or HLS stream supported
             <div className="absolute inset-0 w-full h-full opacity-80">
-              <HlsPlayer 
+              <HlsPlayer
                 src={liveStreamUrl || activeChannel.hlsUrl || ""}
                 autoPlay={true}
                 controls={false}
@@ -222,11 +223,10 @@ const HeroSection = () => {
                 <button
                   key={chan.id}
                   onClick={() => handleChannelSwitch(chan)}
-                  className={`px-3 py-1 rounded-full text-[10px] md:text-xs font-semibold uppercase tracking-wider transition-all ${
-                    isSelected 
-                      ? "bg-amber-500 text-black shadow-md font-bold scale-105" 
+                  className={`px-3 py-1 rounded-full text-[10px] md:text-xs font-semibold uppercase tracking-wider transition-all ${isSelected
+                      ? "bg-amber-500 text-black shadow-md font-bold scale-105"
                       : "text-white/70 hover:text-white"
-                  }`}
+                    }`}
                 >
                   {chan.name}
                 </button>
@@ -237,7 +237,7 @@ const HeroSection = () => {
 
         {/* Data Saver Mode Warning / Tap to Watch on Cellular */}
         {isCellular && !userApprovedCellularPlay && !videoError && (
-          <button 
+          <button
             onClick={() => setUserApprovedCellularPlay(true)}
             className="flex items-center gap-2 px-4 py-2 bg-amber-500/95 hover:bg-amber-500 text-black rounded-full text-xs font-bold transition-all scale-100 hover:scale-105 active:scale-95 shadow-lg pointer-events-auto"
           >
@@ -250,11 +250,11 @@ const HeroSection = () => {
       {/* 3. The Glassmorphism Welcome Modal */}
       <div className="relative z-20 container mx-auto px-4 flex flex-col items-center text-center">
         <div className="animate-fade-in bg-black/45 backdrop-blur-md border border-white/10 p-8 md:p-12 rounded-3xl shadow-2xl max-w-4xl w-full">
-          
+
           <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-4 drop-shadow-lg">
             Welcome to <span className="text-gradient-gold">RealSSA</span>
           </h1>
-          
+
           <h2 className="text-xl md:text-3xl text-white/90 font-medium mb-6 drop-shadow-md">
             The Pulse of Africa & The World
           </h2>
@@ -279,7 +279,7 @@ const HeroSection = () => {
           </div>
         </div>
       </div>
-      
+
       {/* 4. Scroll Indicator */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 animate-bounce text-white/50 flex flex-col items-center">
         <span className="text-xs uppercase tracking-widest mb-2 font-medium">Scroll to explore</span>

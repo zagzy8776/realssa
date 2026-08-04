@@ -2,8 +2,8 @@ import { apiUrl } from '@/lib/api-base';
 import Header from "@/components/Header";
 import SocialButtons from "@/components/SocialButtons";
 import HeroSection from "@/components/HeroSection";
-import { SearchBar } from "@/components/SearchBar";
 import Footer from "@/components/Footer";
+
 import LazyAd from "@/components/LazyAd";
 import NewsCard from "@/components/NewsCard";
 import NewsTicker from "@/components/NewsTicker";
@@ -24,7 +24,18 @@ import { Search } from "lucide-react";
 import RealSSASearchModal from "@/components/RealSSASearchModal";
 import { useNavigate } from "react-router-dom";
 
-let initialLoadDone = false;
+// Gate the cinematic splash to once per browser session.
+// It persists across in-app route changes AND full page reloads within the
+// same tab, so returning users aren't forced through the 4.2s intro again.
+const SPLASH_SESSION_KEY = 'realssa_splash_shown';
+let initialLoadDone = (() => {
+  try {
+    return sessionStorage.getItem(SPLASH_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+})();
+
 
 const Index = () => {
   const navigate = useNavigate();
@@ -50,7 +61,7 @@ const Index = () => {
 
   useEffect(() => {
     fetchStories();
-    
+
     // Clean up stale localStorage entries (e.g. offline digest older than 48 hours)
     try {
       const offlineDigestStr = localStorage.getItem('realssa_offline_digest');
@@ -60,7 +71,7 @@ const Index = () => {
           localStorage.removeItem('realssa_offline_digest');
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Register app-close telemetry sync hooks to ensure light user profiles get saved
     const handleCloseSync = () => {
@@ -78,7 +89,7 @@ const Index = () => {
           );
           lastSyncTimeRef.current = now;
         }
-      } catch (err) {}
+      } catch (err) { }
     };
 
     window.addEventListener('beforeunload', handleCloseSync);
@@ -103,12 +114,12 @@ const Index = () => {
                   keepalive: true
                 }).then(() => {
                   lastSyncTimeRef.current = now;
-                }).catch(() => {});
+                }).catch(() => { });
               }
-            } catch (err) {}
+            } catch (err) { }
           }
         });
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     return () => {
@@ -118,7 +129,7 @@ const Index = () => {
       }
     };
   }, []);
- 
+
   const fetchStories = async () => {
     try {
       setError(null);
@@ -132,11 +143,11 @@ const Index = () => {
           localStorage.setItem('realssa_device_uuid', savedId);
         }
         deviceId = savedId;
-      } catch (uuidErr) {}
+      } catch (uuidErr) { }
 
       const ts = Date.now();
       const deviceParam = deviceId ? `&deviceId=${deviceId}` : '';
-      
+
       const isNotPunch = (item: any) => {
         const sourceName = (item.source_name || item.source || '').toLowerCase().trim();
         const url = (item.url || item.external_link || item.externalLink || '').toLowerCase();
@@ -181,7 +192,7 @@ const Index = () => {
         return timeB - timeA;
       });
 
-      const initialUnique = initialFiltered.filter((v: any, i: number, a: any[]) => 
+      const initialUnique = initialFiltered.filter((v: any, i: number, a: any[]) =>
         a.findIndex(t => t.title === v.title) === i
       );
 
@@ -221,7 +232,7 @@ const Index = () => {
           ]);
 
           combinedNews.sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
-          const finalUnique = combinedNews.filter((v, i, a) => 
+          const finalUnique = combinedNews.filter((v, i, a) =>
             !usedIds.has(v.id) && a.findIndex(t => t.title === v.title) === i
           );
 
@@ -235,7 +246,7 @@ const Index = () => {
                 return 0;
               });
             }
-          } catch (e) {}
+          } catch (e) { }
 
           setAllArticles(finalUnique);
 
@@ -248,7 +259,7 @@ const Index = () => {
             ].filter(Boolean);
             const uniqueIds = Array.from(new Set(visibleIds));
             sessionStorage.setItem('home_page_article_ids', JSON.stringify(uniqueIds));
-          } catch (cacheErr) {}
+          } catch (cacheErr) { }
 
         }).catch((lazyErr) => console.error('Lazy loading failed:', lazyErr));
       }, 4000);
@@ -267,16 +278,18 @@ const Index = () => {
                   articles: digestData
                 }));
               }
-            }).catch(() => {});
+            }).catch(() => { });
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // Hide initial loading state after first successful fetch
       if (initialLoading) {
         setInitialLoading(false);
         initialLoadDone = true;
+        try { sessionStorage.setItem(SPLASH_SESSION_KEY, '1'); } catch { }
       }
     } catch (err) {
+
       // Offline fallback trigger: attempt to load from cached offline Daily Digest
       let loadedFromCache = false;
       try {
@@ -288,7 +301,7 @@ const Index = () => {
             setStories(cachedArticles.slice(0, 2));
             setTrendingArticles(cachedArticles.slice(2, 7));
             loadedFromCache = true;
-            
+
             const ageHours = Math.floor((Date.now() - timestamp) / 3600000);
             setError(`Offline Mode. Showing Daily Digest cached ${ageHours} hour(s) ago.`);
           }
@@ -363,7 +376,8 @@ const Index = () => {
       <SocialButtons />
 
       <main>
-        <HeroSection stories={stories} />
+        <HeroSection />
+
         {/* Trending Hashtags — powered by real-time keyword extraction */}
         <div className="container mx-auto px-4 -mt-4 mb-2">
           <TrendingHashtags />
@@ -501,6 +515,16 @@ const Index = () => {
         </section>
       </main>
 
+      {/* Floating AI Search button — opens the RealSSA AI search modal */}
+      <button
+        onClick={() => setIsAiSearchOpen(true)}
+        title="AI Search"
+        aria-label="Open AI search"
+        className="fixed bottom-[148px] md:bottom-24 right-4 md:right-8 z-[999] h-[42px] w-[42px] rounded-full bg-primary text-primary-foreground cursor-pointer shadow-[0_6px_24px_rgba(245,158,11,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-105"
+      >
+        <Search className="w-5 h-5" />
+      </button>
+
       {/* Floating Live Wire button */}
       <button
         onClick={() => navigate('/wire')}
@@ -511,6 +535,7 @@ const Index = () => {
         <span className="text-white text-xs font-bold whitespace-nowrap">Live Wire</span>
         <span className="w-[7px] h-[7px] rounded-full bg-[#f59e0b] animate-pulse shrink-0" />
       </button>
+
 
       <Footer />
     </div>

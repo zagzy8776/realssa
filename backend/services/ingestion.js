@@ -416,14 +416,14 @@ async function isSafeUrl(urlStr) {
 async function fetchOgImage(url) {
   try {
     if (!(await isSafeUrl(url))) return null;
-    const res = await fetch(url, { 
+    const res = await fetch(url, {
       signal: AbortSignal.timeout(5000),
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; RealSSABot/1.0; +https://realssanews.com.ng)'
       }
     });
     const html = await res.text();
-    
+
     // Try multiple OG image patterns
     const patterns = [
       /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"'>]+)["']/i,
@@ -431,7 +431,7 @@ async function fetchOgImage(url) {
       /<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"'>]+)["']/i,
       /<meta[^>]*property=["']twitter:image["'][^>]*content=["']([^"'>]+)["']/i
     ];
-    
+
     for (const pattern of patterns) {
       const match = html.match(pattern);
       if (match && match[1]) {
@@ -445,7 +445,7 @@ async function fetchOgImage(url) {
           const urlObj = new URL(url);
           imgUrl = urlObj.origin + imgUrl;
         }
-        
+
         if (isLikelyStoryImage(imgUrl)) {
           return imgUrl;
         }
@@ -591,10 +591,10 @@ function notificationScore(title, category, feedUrl) {
 // ── Title De-duplication ───────────────────────────────────────────────────
 // Strip stop words and punctuation, return array of meaningful keywords
 const STOP_WORDS = new Set([
-  'a','an','the','and','or','but','in','on','at','to','for','of','with',
-  'by','from','is','are','was','were','be','been','has','have','had',
-  'it','its','as','up','out','into','over','after','says','said','new',
-  'just','will','that','this','his','her','their','our','your','about'
+  'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+  'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'has', 'have', 'had',
+  'it', 'its', 'as', 'up', 'out', 'into', 'over', 'after', 'says', 'said', 'new',
+  'just', 'will', 'that', 'this', 'his', 'her', 'their', 'our', 'your', 'about'
 ]);
 
 function titleKeywords(title) {
@@ -693,7 +693,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     // ── Round-Robin Rotation Engine ──────────────────────────────────────────────────
     // Tier 1 (main categories): ALL run every cycle — they update fast and are the core UX
     // Tier 2 (world countries): pick the 3 coldest by last_ingested_at — deterministic rotation
-    
+
     // Fetch all slugs for database mapping
     const allSlugs = allCategories.map(c => c.category);
     try {
@@ -712,7 +712,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
                 CASE WHEN u.cat = ANY($2::text[]) THEN 1 ELSE 2 END
          FROM unnest($1::text[]) AS u(cat)
          ON CONFLICT (category) DO NOTHING`,
-         [allSlugs, [...mainSlugs]]
+        [allSlugs, [...mainSlugs]]
       );
     } catch (e) {
       console.warn('feed_schedule upsert skipped:', e.message);
@@ -791,20 +791,20 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         },
         signal: AbortSignal.timeout(25000)
       })
-      .then(res => {
-        if (!res.ok) throw new Error(`Status code ${res.status}`);
-        return res.text();
-      })
-      .then(xmlText => {
-        const sanitizedXml = xmlText.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&amp;');
-        return rssParser.parseString(sanitizedXml);
-      })
-      .then(async feed => {
-        const responseTime = Date.now() - startTime;
-        if (pool) {
-          try {
-            await pool.query(
-              `INSERT INTO feed_health (feed_url, category, last_success, last_error, error_count, avg_response_ms)
+        .then(res => {
+          if (!res.ok) throw new Error(`Status code ${res.status}`);
+          return res.text();
+        })
+        .then(xmlText => {
+          const sanitizedXml = xmlText.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&amp;');
+          return rssParser.parseString(sanitizedXml);
+        })
+        .then(async feed => {
+          const responseTime = Date.now() - startTime;
+          if (pool) {
+            try {
+              await pool.query(
+                `INSERT INTO feed_health (feed_url, category, last_success, last_error, error_count, avg_response_ms)
                VALUES ($1, $2, NOW(), NULL, 0, $3)
                ON CONFLICT (feed_url) DO UPDATE
                SET category = EXCLUDED.category,
@@ -812,63 +812,63 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
                    last_error = NULL,
                    error_count = 0,
                    avg_response_ms = ROUND((feed_health.avg_response_ms * 4 + EXCLUDED.avg_response_ms) / 5.0)`,
-              [url, category, responseTime]
-            );
+                [url, category, responseTime]
+              );
 
-            await pool.query(
-              `UPDATE feed_schedule SET failure_count = 0, quarantined_until = NULL WHERE category = $1`,
-              [category]
-            );
-          } catch (dbErr) {
-            console.error(`Failed to update feed success log for ${category}:`, dbErr.message);
+              await pool.query(
+                `UPDATE feed_schedule SET failure_count = 0, quarantined_until = NULL WHERE category = $1`,
+                [category]
+              );
+            } catch (dbErr) {
+              console.error(`Failed to update feed success log for ${category}:`, dbErr.message);
+            }
           }
-        }
-        return { category, feed, url, contentType };
-      })
-      .catch(async err => {
-        console.warn(`Feed error (${url}): ${err.message}`);
-        const responseTime = Date.now() - startTime;
-        if (pool) {
-          try {
-            await pool.query(
-              `INSERT INTO feed_health (feed_url, category, last_success, last_error, error_count, avg_response_ms)
+          return { category, feed, url, contentType };
+        })
+        .catch(async err => {
+          console.warn(`Feed error (${url}): ${err.message}`);
+          const responseTime = Date.now() - startTime;
+          if (pool) {
+            try {
+              await pool.query(
+                `INSERT INTO feed_health (feed_url, category, last_success, last_error, error_count, avg_response_ms)
                VALUES ($1, $2, NULL, $3, 1, $4)
                ON CONFLICT (feed_url) DO UPDATE
                SET category = EXCLUDED.category,
                    last_error = EXCLUDED.last_error,
                    error_count = feed_health.error_count + 1,
                    avg_response_ms = ROUND((feed_health.avg_response_ms * 4 + EXCLUDED.avg_response_ms) / 5.0)`,
-              [url, category, err.message, responseTime]
-            );
+                [url, category, err.message, responseTime]
+              );
 
-            const failRes = await pool.query(
-              `UPDATE feed_schedule 
+              const failRes = await pool.query(
+                `UPDATE feed_schedule 
                SET failure_count = failure_count + 1 
                WHERE category = $1 
                RETURNING failure_count`,
-              [category]
-            );
-            if (failRes.rows.length > 0) {
-              const count = failRes.rows[0].failure_count;
-              if (count >= 3) {
-                await pool.query(
-                  `UPDATE feed_schedule 
+                [category]
+              );
+              if (failRes.rows.length > 0) {
+                const count = failRes.rows[0].failure_count;
+                if (count >= 3) {
+                  await pool.query(
+                    `UPDATE feed_schedule 
                    SET quarantined_until = NOW() + INTERVAL '24 hours' 
                    WHERE category = $1`,
-                  [category]
-                );
-                console.error(`🚨 Category [${category}] QUARANTINED for 24 hours due to 3 consecutive failures.`);
+                    [category]
+                  );
+                  console.error(`🚨 Category [${category}] QUARANTINED for 24 hours due to 3 consecutive failures.`);
+                }
               }
+            } catch (dbErr) {
+              console.error(`Failed to update feed failure log for ${category}:`, dbErr.message);
             }
-          } catch (dbErr) {
-            console.error(`Failed to update feed failure log for ${category}:`, dbErr.message);
           }
-        }
-        return null;
-      });
+          return null;
+        });
     });
     const batchResults = await Promise.all(batchPromises);
-    
+
     // Process this batch immediately
     for (const itemResult of batchResults) {
       if (!itemResult) continue;
@@ -877,7 +877,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
 
       // Free tier: max 15 items per feed to keep cycles fast
       const sliceLimit = process.env.VERCEL ? 2 : 15;
-      for (const item of feed.items.slice(0, sliceLimit)) { 
+      for (const item of feed.items.slice(0, sliceLimit)) {
         const externalLink = item.link || item.guid;
         if (!externalLink) continue;
 
@@ -907,7 +907,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         }
 
         const title = decodeHtmlEntities(item.title || 'Untitled').trim();
-        
+
         // Clean source names from verbose boilerplate suffixes
         const cleanSourceName = (rawName) => {
           if (!rawName) return 'RealSSA News';
@@ -936,7 +936,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         // Fast keyword deduplication check
         let isKeywordDuplicate = false;
         let isBorderlineDuplicate = false;
-        
+
         for (const row of recentTitles) {
           const sim = titleSimilarity(title, row.title);
           if (sim >= 0.65) {
@@ -960,7 +960,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         existingStoryHashes.add(storyHash);
         const originalExcerpt = (item.contentSnippet || item.summary || '').replace(/<[^>]+>/g, '').slice(0, 500);
         let image = extractImage(item);
-        
+
         // YouTube video thumbnail
         if (contentType === 'video' && externalLink.includes('watch?v=')) {
           const vId = externalLink.split('v=')[1]?.split('&')[0];
@@ -968,7 +968,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
             image = `https://img.youtube.com/vi/${vId}/hqdefault.jpg`;
           }
         }
-        
+
         // Open Graph Fallback (try to fetch image from article page)
         if (!image) {
           console.log(`No RSS image for "${title}", trying OG fetch...`);
@@ -978,7 +978,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
             console.log(`✅ Found valid OG image: ${image.substring(0, 50)}...`);
           }
         }
-        
+
         // No real image found — use RealSSA default logo instead of skipping
         if (!image) {
           console.log(`No image found for "${title}" — using RealSSA fallback`);
@@ -1042,7 +1042,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         // Insert into DB
         try {
           let queryStr, queryValues;
-          
+
           if (!process.env.VERCEL) {
             queryStr = `INSERT INTO rss_articles
                (url_hash, title, original_excerpt, ai_summary, category, image, author, source_name, external_link, published_at, content_type, is_featured, story_hash, full_content, title_translations, summary_translations, embedding)
@@ -1126,7 +1126,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
               generateDiscussionStarter(pool, `rss-${articleId}`, title, aiSummary || description, category)
                 .catch(err => console.warn('Discussion starter trigger error:', err.message));
             }
-            
+
             // Insert extracted entities
             if (extractedEntities.length > 0) {
               for (const ent of extractedEntities) {
@@ -1179,7 +1179,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
                     story_hash TEXT UNIQUE,
                     notified_at TIMESTAMPTZ DEFAULT NOW()
                   )
-                `).catch(() => {});
+                `).catch(() => { });
 
                 // 1. Deduplication check
                 const checkNotified = await activePool.query('SELECT 1 FROM notified_articles WHERE story_hash = $1', [articleHash]);
@@ -1273,9 +1273,13 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
   // --- Self-Cleaning Database Across ALL 5 Databases ---
   // Delete articles older than 48 hours (2 days) across all 5 database clusters
   try {
-    const { getAllPools } = require('../config/multiDb');
-    const allPools = getAllPools();
-    for (const item of allPools) {
+    // Plan 7: self-trim runs ONLY on the primary news pool (snowy-field).
+    // Using `pools` instead of `getAllPools()` avoids pinging the AI branch or
+    // any dead/empty branch, which used to wake sleeping computes and burn the
+    // shared Neon compute meter every cleanup cycle.
+    const { pools } = require('../config/multiDb');
+    for (const item of pools) {
+
       try {
         const cleanResult = await item.pool.query(
           `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '2 days'`

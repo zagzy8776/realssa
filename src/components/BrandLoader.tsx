@@ -12,13 +12,26 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
       setPhase(3); // Skip reveals for inline loading spinner
       return;
     }
-    
-    // Phase 0: Fades in background & Star (800ms)
-    const timer1 = setTimeout(() => setPhase(1), 800);
-    // Phase 1: Giant Gold R Entrance (1400ms duration)
-    const timer2 = setTimeout(() => setPhase(2), 2200);
-    // Phase 2: Drag reveal EALSSA (2000ms duration)
-    const timer3 = setTimeout(() => setPhase(3), 4200);
+
+    // Respect users who prefer reduced motion — skip straight to the final
+    // resting state instead of running the 4.2s cinematic intro.
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion) {
+      setPhase(3);
+      return;
+    }
+
+    // Phase 0: Fades in background & Star (600ms)
+    const timer1 = setTimeout(() => setPhase(1), 600);
+    // Phase 1: Giant Gold R Entrance (~1100ms duration)
+    const timer2 = setTimeout(() => setPhase(2), 1700);
+    // Phase 2: Drag reveal EALSSA (~1400ms duration)
+    const timer3 = setTimeout(() => setPhase(3), 3100);
+
 
     return () => {
       clearTimeout(timer1);
@@ -33,20 +46,21 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
 
     let animFrame: number;
 
-    const handleMouseMove = (e: MouseMoveEvent) => {
+    const handleMouseMove = (e: MouseEvent) => {
+
       const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
       const tx = (e.clientX - cx) / cx; // Normalizes x to [-1, 1]
       const ty = (e.clientY - cy) / cy; // Normalizes y to [-1, 1]
-      
+
       setTilt({ x: tx, y: ty });
     };
 
     const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
       // Gamma is left-to-right tilt (-90 to 90), Beta is front-to-back tilt (-180 to 180)
-      const gamma = e.gamma ? e.gamma / 45 : 0; 
+      const gamma = e.gamma ? e.gamma / 45 : 0;
       const beta = e.beta ? e.beta / 45 : 0;
-      
+
       // Clamp values between [-1, 1]
       const tx = Math.max(-1, Math.min(1, gamma));
       const ty = Math.max(-1, Math.min(1, beta));
@@ -90,7 +104,7 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
 
   // ── Render Full Splash Screen ─────────────────────────────────────────────
   return (
-    <div 
+    <div
       ref={containerRef}
       className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-[#050505] overflow-hidden select-none select-none"
     >
@@ -116,7 +130,7 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
       </div>
 
       {/* ── 3D Volumetric 4-Pointed Star ── */}
-      <div 
+      <div
         className={cn(
           "absolute transition-all ease-out-back z-10 flex items-center justify-center pointer-events-none",
           phase === 0 ? "scale-0 opacity-0" : "scale-100 opacity-100",
@@ -129,10 +143,10 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
           transitionDuration: "1000ms"
         }}
       >
-        <svg 
-          width="120" 
-          height="120" 
-          viewBox="0 0 24 24" 
+        <svg
+          width="120"
+          height="120"
+          viewBox="0 0 24 24"
           className="relative z-10 drop-shadow-[0_0_15px_rgba(251,191,36,0.85)]"
         >
           <defs>
@@ -149,7 +163,7 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
               <stop offset="0%" stopColor="#78350f" /><stop offset="100%" stopColor="#451a03" />
             </linearGradient>
           </defs>
-          
+
           {/* Facet 1 (Top-Right, Light) */}
           <polygon points="12,12 12,2 14.5,9.5" fill="url(#goldLight)" />
           {/* Facet 2 (Top-Right, Medium) */}
@@ -170,7 +184,7 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
       </div>
 
       {/* ── Logo & Title Layout Container ── */}
-      <div 
+      <div
         className="flex flex-col items-center justify-center relative z-10 select-none mt-20"
         style={{
           perspective: "1000px",
@@ -180,7 +194,7 @@ export default function BrandLoader({ size = "full" }: { size?: "full" | "inline
       >
         {/* Brand Letters Reveal Box */}
         <div className="flex items-center justify-center relative">
-          
+
           {/* Giant "R" Entrance and Position Shift */}
           <span
             className={cn(
