@@ -289,6 +289,10 @@ async function start() {
   const { initPricesBot } = require('./services/pricesBot');
   initPricesBot(pool);
 
+  console.log('👉 Running Discussion Bot (Mock automated comments)');
+  const { initDiscussionBot } = require('./services/discussionBot');
+  initDiscussionBot();
+
   console.log('====================================');
 }
 
