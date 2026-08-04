@@ -3989,6 +3989,25 @@ app.get('/api/cron/streams', async (req, res) => {
   }
 });
 
+// Helper to broadcast ad to Buffer after payment
+async function broadcastAdToBuffer(ad) {
+  try {
+    const { postToBuffer, isBufferConfigured } = require('./services/buffer');
+    if (isBufferConfigured()) {
+      const brandPrefix = ad.company_name ? `${ad.company_name.toUpperCase()}: ` : '';
+      const hooks = {
+        twitter: `🚨 SPONSORED: ${brandPrefix}${ad.headline}\n\n${ad.description.slice(0, 130)}`,
+        instagram: `📢 FEATURED ADVERTISER: ${ad.company_name || ad.headline}\n\n${ad.description}\n\nLink in bio 🔗\n\n#RealSSANews #Sponsored`,
+        facebook: `📢 SPONSORED: ${ad.company_name || ''} - ${ad.headline}\n\n${ad.description}`
+      };
+      await postToBuffer(hooks, ad.target_link, ad.image_url, false);
+      console.log(`[Ad Engine] Buffer broadcast successfully dispatched for ad ${ad.id}`);
+    }
+  } catch (bufErr) {
+    console.warn('[Ad Engine] Buffer broadcast notice:', bufErr.message);
+  }
+}
+
 // --- Self-Serve Naira Ad Exchange Endpoints ---
 app.post('/api/ads/create', async (req, res) => {
   const { companyName, headline, description, category, imageUrl, targetLink, advertiserEmail, budgetNaira } = req.body;
@@ -3997,6 +4016,7 @@ app.post('/api/ads/create', async (req, res) => {
   }
 
   try {
+    // 1. Ensure table exists with the default status as 'pending_payment'
     await usersPool.query(`
       CREATE TABLE IF NOT EXISTS native_ads (
         id SERIAL PRIMARY KEY,
@@ -4008,47 +4028,235 @@ app.post('/api/ads/create', async (req, res) => {
         target_link TEXT NOT NULL,
         advertiser_email TEXT NOT NULL,
         budget_naira INT DEFAULT 5000,
-        status TEXT DEFAULT 'active',
+        status TEXT DEFAULT 'pending_payment',
         clicks INT DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `).catch(() => { });
 
+    // 2. Ensure new tracking columns exist (self-healing)
     await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS company_name TEXT`).catch(() => { });
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending'`).catch(() => { });
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS payment_reference TEXT UNIQUE`).catch(() => { });
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS payment_amount INT`).catch(() => { });
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS payment_date TIMESTAMPTZ`).catch(() => { });
 
+    // 3. Insert the new ad with 'pending_payment' status
     const insertRes = await usersPool.query(`
-      INSERT INTO native_ads (company_name, headline, description, category, image_url, target_link, advertiser_email, budget_naira)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO native_ads (company_name, headline, description, category, image_url, target_link, advertiser_email, budget_naira, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending_payment')
       RETURNING *
     `, [companyName || 'Featured Brand', headline, description, category || 'business', imageUrl || null, targetLink, advertiserEmail, budgetNaira || 5000]);
 
-    // Dispatch social broadcast via Buffer in background
-    setImmediate(async () => {
-      try {
-        const { postToBuffer, isBufferConfigured } = require('./services/buffer');
-        if (isBufferConfigured()) {
-          const brandPrefix = companyName ? `${companyName.toUpperCase()}: ` : '';
-          const hooks = {
-            twitter: `🚨 SPONSORED: ${brandPrefix}${headline}\n\n${description.slice(0, 130)}`,
-            instagram: `📢 FEATURED ADVERTISER: ${companyName || headline}\n\n${description}\n\nLink in bio 🔗\n\n#RealSSANews #Sponsored`,
-            facebook: `📢 SPONSORED: ${companyName || ''} - ${headline}\n\n${description}`
-          };
-          await postToBuffer(hooks, targetLink, imageUrl, false);
-        }
-      } catch (bufErr) {
-        console.warn('[Ad Engine] Buffer broadcast notice:', bufErr.message);
-      }
-    });
-
     return res.status(200).json({
       success: true,
-      message: 'Campaign created successfully',
+      message: 'Campaign reserved successfully. Please complete payment to activate.',
       ad: insertRes.rows[0]
     });
   } catch (err) {
     console.error('Ad creation error:', err.message);
     return res.status(500).json({ error: 'Failed to create ad campaign', message: err.message });
   }
+});
+
+// Paystack payment initialize endpoint
+app.post('/api/payments/initialize', async (req, res) => {
+  const { adId } = req.body;
+  if (!adId) {
+    return res.status(400).json({ error: 'Ad ID is required' });
+  }
+
+  try {
+    const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE id = $1', [adId]);
+    if (adQuery.rows.length === 0) {
+      return res.status(404).json({ error: 'Ad campaign not found' });
+    }
+    const ad = adQuery.rows[0];
+
+    const amountInKobo = ad.budget_naira * 100;
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackSecret) {
+      return res.status(500).json({ error: 'Server configuration error: missing Paystack API key' });
+    }
+
+    const axios = require('axios');
+    const origin = req.headers.referer || req.headers.origin || 'https://realssanews.com.ng';
+    const callbackUrl = origin.includes('?') ? origin.split('?')[0] : origin;
+
+    const response = await axios.post(
+      'https://api.paystack.co/transaction/initialize',
+      {
+        email: ad.advertiser_email,
+        amount: amountInKobo,
+        callback_url: callbackUrl,
+        metadata: {
+          adId: ad.id
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${paystackSecret}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const { authorization_url, reference } = response.data.data;
+
+    // Save reference in the database
+    await usersPool.query(
+      'UPDATE native_ads SET payment_reference = $1 WHERE id = $2',
+      [reference, adId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      authorizationUrl: authorization_url,
+      reference: reference
+    });
+  } catch (err) {
+    console.error('Paystack initialization error:', err.response?.data || err.message);
+    return res.status(500).json({
+      error: 'Failed to initialize payment',
+      message: err.response?.data?.message || err.message
+    });
+  }
+});
+
+// Paystack payment verification endpoint
+app.get('/api/payments/verify', async (req, res) => {
+  const { reference } = req.query;
+  if (!reference) {
+    return res.status(400).json({ error: 'Transaction reference is required' });
+  }
+
+  try {
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackSecret) {
+      return res.status(500).json({ error: 'Server configuration error: missing Paystack API key' });
+    }
+
+    const axios = require('axios');
+    const response = await axios.get(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${paystackSecret}`
+        }
+      }
+    );
+
+    const { status, amount, metadata } = response.data.data;
+
+    if (status === 'success') {
+      const adId = metadata?.adId;
+      let ad;
+      if (adId) {
+        const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE id = $1', [adId]);
+        ad = adQuery.rows[0];
+      } else {
+        const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE payment_reference = $1', [reference]);
+        ad = adQuery.rows[0];
+      }
+
+      if (!ad) {
+        return res.status(404).json({ error: 'Ad campaign not found for this transaction' });
+      }
+
+      if (ad.status !== 'active') {
+        const amountInNaira = amount / 100;
+        const updateRes = await usersPool.query(
+          `UPDATE native_ads 
+           SET status = 'active', payment_status = 'paid', payment_amount = $1, payment_date = NOW() 
+           WHERE id = $2 RETURNING *`,
+          [amountInNaira, ad.id]
+        );
+        ad = updateRes.rows[0];
+
+        // Trigger social media broadcast via Buffer
+        await broadcastAdToBuffer(ad);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Payment verified and campaign activated',
+        ad: ad
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: `Payment status is ${status}`,
+        reference: reference
+      });
+    }
+  } catch (err) {
+    console.error('Paystack verification error:', err.response?.data || err.message);
+    return res.status(500).json({
+      error: 'Failed to verify payment',
+      message: err.response?.data?.message || err.message
+    });
+  }
+});
+
+// Paystack webhook endpoint
+app.post('/api/payments/webhook', async (req, res) => {
+  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackSecret) {
+    return res.status(500).send('Server configuration error');
+  }
+
+  const crypto = require('crypto');
+  const signature = req.headers['x-paystack-signature'];
+  const hash = crypto.createHmac('sha512', paystackSecret)
+                      .update(JSON.stringify(req.body))
+                      .digest('hex');
+
+  if (hash !== signature) {
+    console.warn('[Payments Webhook] Invalid webhook signature detected');
+    return res.status(401).send('Invalid signature');
+  }
+
+  const event = req.body.event;
+  const data = req.body.data;
+
+  console.log(`[Payments Webhook] Received Paystack event: ${event}`);
+
+  if (event === 'charge.success') {
+    const reference = data.reference;
+    const amount = data.amount;
+    const adId = data.metadata?.adId;
+
+    try {
+      let ad;
+      if (adId) {
+        const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE id = $1', [adId]);
+        ad = adQuery.rows[0];
+      } else {
+        const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE payment_reference = $1', [reference]);
+        ad = adQuery.rows[0];
+      }
+
+      if (ad && ad.status !== 'active') {
+        const amountInNaira = amount / 100;
+        const updateRes = await usersPool.query(
+          `UPDATE native_ads 
+           SET status = 'active', payment_status = 'paid', payment_amount = $1, payment_date = NOW() 
+           WHERE id = $2 RETURNING *`,
+          [amountInNaira, ad.id]
+        );
+        const updatedAd = updateRes.rows[0];
+
+        // Trigger social media broadcast via Buffer
+        await broadcastAdToBuffer(updatedAd);
+        console.log(`[Payments Webhook] Webhook successfully activated campaign ${updatedAd.id}`);
+      }
+    } catch (err) {
+      console.error('[Payments Webhook] Error processing success event:', err.message);
+      return res.status(500).send('Database error');
+    }
+  }
+
+  return res.status(200).send('OK');
 });
 
 app.get('/api/ads/active', async (req, res) => {
