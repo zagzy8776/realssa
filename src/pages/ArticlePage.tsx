@@ -364,16 +364,9 @@ const ArticlePage = () => {
           `Read the full story: ${article.title} — brought to you by RealSSA News, Africa's leading news platform.`
         }
         image={article.image || undefined}
-        url={
-          // If it's an RSS article WITHOUT an AI summary, canonical points to original source
-          // (protects against duplicate content penalty)
-          // If it has an AI summary, canonical is our URL (we have unique content)
-          article.source === 'rss' && !(article as any).ai_summary && article.externalLink
-            ? article.externalLink
-            : `https://realssanews.com.ng/article/${article.id}`
-        }
+        url={`https://www.realssanews.com.ng/article/${article.id}`}
         type="article"
-        author="RealSSA Editor"
+        author="RealSSA News Editorial Board"
         publishedTime={article.date ? new Date(article.date).toISOString() : undefined}
         section={article.category || 'News'}
         tags={article.category ? [article.category, 'Africa', 'RealSSA News'] : ['Africa', 'RealSSA News']}
@@ -382,6 +375,17 @@ const ArticlePage = () => {
       <Header />
       <div className="container mx-auto px-4 py-8">
         <article className="max-w-4xl mx-auto">
+          {/* Breadcrumb Trail */}
+          <nav className="mb-4 text-xs md:text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
+            <Link to="/" className="hover:text-primary transition-colors">Home</Link>
+            <span>/</span>
+            <Link to={`/?category=${encodeURIComponent(article.category || 'News')}`} className="hover:text-primary transition-colors capitalize">
+              {article.category || 'News'}
+            </Link>
+            <span>/</span>
+            <span className="text-foreground font-medium truncate max-w-[200px] md:max-w-[350px]">{decodeHTMLEntities(article.title)}</span>
+          </nav>
+
           {/* Category badge & Truth Index */}
           <div className="mb-6 flex items-center flex-wrap gap-3">
             <CategoryBadge category={article.category} />

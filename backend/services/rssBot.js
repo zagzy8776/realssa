@@ -3,6 +3,7 @@ const Parser = require('rss-parser');
 const { ingestAllFeeds } = require('./ingestion');
 const { generateSocialHooks } = require('./summariser');
 const { postToBuffer } = require('./buffer');
+const { postToTelegramChannel } = require('./telegramPublisher');
 
 const SITE_URL = 'https://realssanews.com.ng';
 
@@ -308,6 +309,19 @@ async function runBufferCron() {
           );
           queued += 1;
           console.log(`[Buffer Cron] ✅ Queued: "${article.title.slice(0, 60)}"`);
+
+          // Auto-broadcast to Telegram Channel
+          postToTelegramChannel({
+            id: article.id || article.story_hash,
+            title: article.title,
+            excerpt: article.original_excerpt || article.excerpt,
+            ai_summary: article.ai_summary,
+            category: article.category,
+            image: article.image,
+            readTime: '3 min read'
+          }).catch(err => {
+            console.warn('[TelegramPublisher] RSS auto-post error:', err.message);
+          });
         }
 
         // 30s gap = 2 req/min, safe for all AI providers

@@ -44,6 +44,8 @@
     { "source": "/sitemap.xml", "destination": "/api/index.js" },
     { "source": "/news-sitemap.xml", "destination": "/api/index.js" },
     { "source": "/pages-sitemap.xml", "destination": "/api/index.js" },
+    { "source": "/article/(.*)", "destination": "/api/index.js" },
+    { "source": "/read", "destination": "/api/index.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

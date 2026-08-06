@@ -119,7 +119,14 @@ const SEO = ({
           '@type': 'NewsArticle',
           headline: title,
           description: metaDescription,
-          image: [absoluteImage],
+          image: [
+            {
+              '@type': 'ImageObject',
+              url: absoluteImage,
+              width: 1200,
+              height: 630
+            }
+          ],
           datePublished: publishedTime || new Date().toISOString(),
           dateModified: modifiedTime || publishedTime || new Date().toISOString(),
           author: [
@@ -130,11 +137,14 @@ const SEO = ({
             },
           ],
           publisher: {
-            '@type': 'Organization',
+            '@type': 'NewsMediaOrganization',
             name: SITE_NAME,
+            url: SITE_URL,
             logo: {
               '@type': 'ImageObject',
               url: DEFAULT_IMAGE,
+              width: 600,
+              height: 60
             },
           },
           mainEntityOfPage: {
@@ -176,13 +186,34 @@ const SEO = ({
     sameAs: [
       'https://x.com/realssanews',
       'https://www.facebook.com/RealSSANews',
+      'https://t.me/realssanews',
+      'https://whatsapp.com/channel/0029VbDetsPGufIx3Totk938'
     ],
   };
 
-  const breadcrumbSchema = section && type !== 'article' ? {
+  const breadcrumbSchema = section ? {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
-    itemListElement: [
+    itemListElement: type === 'article' ? [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: SITE_URL
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: section,
+        item: `${SITE_URL}/?category=${encodeURIComponent(section)}`
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: title,
+        item: canonicalUrl
+      }
+    ] : [
       {
         '@type': 'ListItem',
         position: 1,

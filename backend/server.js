@@ -16,6 +16,7 @@ const { initIntelligenceAgent } = require('./services/aiIntelligenceAgent');
 const { initTrendingSynthesizer } = require('./services/aiTrendingSynthesizer');
 const { moderateUserComment } = require('./services/aiCommunityBot');
 const notificationService = require('./services/notificationService');
+const { postToTelegramChannel } = require('./services/telegramPublisher');
 const { runMigrations } = require('./worker');
 const { runCrawler } = require('./services/crawlerService');
 const { generateRateCardSvg } = require('./services/rateCard');
@@ -1444,6 +1445,200 @@ app.post('/api/articles/:id/view', async (req, res) => {
   } catch (err) {
     console.error('Failed to update view count:', err.message);
     res.status(500).json({ error: 'Failed to update view count', views: 0 });
+// ── Dynamic Server-Side Pre-Rendering for Crawlers (SEO & Social Cards) ──────
+app.get('/article/:id', async (req, res) => {
+  const userAgent = (req.headers['user-agent'] || '').toLowerCase();
+  const isCrawler = /googlebot|bingbot|yandexbot|baiduspider|duckduckbot|slurp|twitterbot|facebookexternalhit|whatsapp|telegrambot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest\/0\.|pingdom|slackbot|vkShare/i.test(userAgent);
+
+  const articleId = req.params.id;
+
+  try {
+    let article = null;
+    
+    // Fetch article from DB if RSS or numeric
+    if (articleId.startsWith('rss-') && process.env.DATABASE_URL) {
+      const rawId = articleId.replace('rss-', '');
+      const result = await pool.query(
+        `SELECT id, title, original_excerpt as excerpt, ai_summary, category, image, author, source_name, external_link, published_at as date FROM rss_articles WHERE id = $1`,
+        [rawId]
+      );
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        article = {
+          id: `rss-${row.id}`,
+          title: row.title,
+          excerpt: row.excerpt || row.title,
+          ai_summary: row.ai_summary,
+          category: row.category || 'News',
+          image: row.image || 'https://www.realssanews.com.ng/logo.png',
+          author: row.author || 'RealSSA Editor',
+          date: row.date ? new Date(row.date).toISOString() : new Date().toISOString(),
+          externalLink: row.external_link
+        };
+      }
+    } else {
+      const articles = readJsonFile(articlesFilePath);
+      article = articles.find(a => String(a.id) === String(articleId));
+    }
+
+    if (!article) {
+      return res.status(404).send(`<!DOCTYPE html><html><head><title>Article Not Found | RealSSA News</title></head><body><h1>Article Not Found</h1><p><a href="https://www.realssanews.com.ng">Return to RealSSA News Home</a></p></body></html>`);
+    }
+
+    const title = `${article.title} | RealSSA News`;
+    const canonicalUrl = `https://www.realssanews.com.ng/article/${article.id}`;
+    const rawSummary = (Array.isArray(article.ai_summary) ? article.ai_summary.join(' ') : article.ai_summary) || article.excerpt || article.title;
+    const description = rawSummary.replace(/"/g, '&quot;').slice(0, 160);
+    const imageUrl = (article.image && article.image.startsWith('http')) ? article.image : 'https://www.realssanews.com.ng/logo.png';
+    const category = article.category || 'News';
+    const publishedTime = article.date ? new Date(article.date).toISOString() : new Date().toISOString();
+    const authorName = article.author || 'RealSSA News Editorial Board';
+
+    // Build rich extended JSON-LD schema array (NewsArticle, BreadcrumbList, WebSite, NewsMediaOrganization, ImageObject)
+    const jsonLdData = [
+      {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": article.title,
+        "description": description,
+        "image": [
+          {
+            "@type": "ImageObject",
+            "url": imageUrl,
+            "width": 1200,
+            "height": 630
+          }
+        ],
+        "datePublished": publishedTime,
+        "dateModified": publishedTime,
+        "author": [
+          {
+            "@type": "Organization",
+            "name": authorName,
+            "url": "https://www.realssanews.com.ng"
+          }
+        ],
+        "publisher": {
+          "@type": "NewsMediaOrganization",
+          "name": "RealSSA News",
+          "url": "https://www.realssanews.com.ng",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://www.realssanews.com.ng/logo.png",
+            "width": 600,
+            "height": 60
+          }
+        },
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": canonicalUrl
+        },
+        "articleSection": category,
+        "isAccessibleForFree": true,
+        "inLanguage": "en"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://www.realssanews.com.ng"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": category,
+            "item": `https://www.realssanews.com.ng/?category=${encodeURIComponent(category)}`
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": article.title,
+            "item": canonicalUrl
+          }
+        ]
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "RealSSA News",
+        "url": "https://www.realssanews.com.ng"
+      }
+    ];
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${title}</title>
+  <meta name="description" content="${description}" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="canonical" href="${canonicalUrl}" />
+
+  <!-- Open Graph / Facebook / WhatsApp -->
+  <meta property="og:site_name" content="RealSSA News" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="${article.title}" />
+  <meta property="og:description" content="${description}" />
+  <meta property="og:image" content="${imageUrl}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:url" content="${canonicalUrl}" />
+  <meta property="article:published_time" content="${publishedTime}" />
+  <meta property="article:section" content="${category}" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@realssanews" />
+  <meta name="twitter:title" content="${article.title}" />
+  <meta name="twitter:description" content="${description}" />
+  <meta name="twitter:image" content="${imageUrl}" />
+
+  <script type="application/ld+json">
+    ${JSON.stringify(jsonLdData)}
+  </script>
+</head>
+<body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; color: #111; background: #fff;">
+  <header style="border-bottom: 2px solid #f59e0b; padding-bottom: 12px; margin-bottom: 24px;">
+    <a href="https://www.realssanews.com.ng" style="text-decoration: none; color: #f59e0b; font-weight: bold; font-size: 1.5rem;">RealSSA News</a>
+  </header>
+  <nav style="font-size: 0.875rem; color: #666; margin-bottom: 16px;">
+    <a href="https://www.realssanews.com.ng">Home</a> &gt; <span>${category}</span> &gt; <span>${article.title}</span>
+  </nav>
+  <article>
+    <h1 style="font-size: 2rem; margin-bottom: 12px; line-height: 1.2;">${article.title}</h1>
+    <div style="font-size: 0.875rem; color: #555; margin-bottom: 20px;">
+      <span>Published by ${authorName}</span> | <span>${new Date(publishedTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+    </div>
+    ${imageUrl ? `<img src="${imageUrl}" alt="${article.title}" style="width: 100%; max-height: 450px; object-fit: cover; border-radius: 8px; margin-bottom: 24px;" />` : ''}
+    
+    <div style="background: #f8fafc; border-left: 4px solid #f59e0b; padding: 16px; margin-bottom: 24px; border-radius: 4px;">
+      <h3 style="margin-top: 0; color: #b45309;">⚡ Quick Read Summary</h3>
+      <p style="margin-bottom: 0;">${description}</p>
+    </div>
+
+    <div style="font-size: 1.125rem; line-height: 1.8;">
+      <p>${article.excerpt || description}</p>
+      ${article.content ? `<div>${article.content}</div>` : ''}
+    </div>
+  </article>
+
+  <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 0.875rem; color: #666;">
+    <p>Follow RealSSA News on <a href="https://whatsapp.com/channel/0029VbDetsPGufIx3Totk938" style="color:#25D366;font-weight:bold;">WhatsApp Channel</a> | <a href="https://t.me/realssanews" style="color:#0088cc;font-weight:bold;">Telegram</a> | <a href="https://x.com/realssanews">X (Twitter)</a></p>
+    <p>&copy; ${new Date().getFullYear()} RealSSA News. All rights reserved.</p>
+  </footer>
+</body>
+</html>`;
+
+    res.header('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error('[Article Pre-renderer Error]:', err);
+    return res.redirect('/');
   }
 });
 
@@ -1627,6 +1822,12 @@ app.post('/api/articles', (req, res) => {
 
   articles.push(newArticle);
   writeJsonFile(articlesFilePath, articles);
+  
+  // Auto-broadcast new article to Telegram Channel asynchronously
+  postToTelegramChannel(newArticle).catch(err => {
+    console.warn('[TelegramPublisher] Background broadcast error:', err.message);
+  });
+
   res.status(201).json(newArticle);
 });
 

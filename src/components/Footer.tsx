@@ -1,4 +1,4 @@
-import { Facebook, Twitter, Instagram, Youtube, Rss } from "lucide-react";
+import { Facebook, Twitter, Instagram, Youtube, Rss, MessageCircle, Send } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 
@@ -56,18 +56,40 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Social Links */}
+          {/* Social & Channel Links */}
           <div className="md:col-span-1">
-            <h4 className="font-semibold text-foreground mb-4">Follow Us</h4>
+            <h4 className="font-semibold text-foreground mb-4">Follow RealSSA Channels</h4>
+            <div className="flex flex-col gap-2.5 mb-4">
+              <a
+                href="https://whatsapp.com/channel/0029VbDetsPGufIx3Totk938"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 border border-[#25D366]/30 text-xs font-semibold transition-all"
+              >
+                <MessageCircle size={16} />
+                <span>Follow on WhatsApp Channel</span>
+              </a>
+              <a
+                href="https://t.me/realssanews"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#0088cc]/10 text-[#0088cc] hover:bg-[#0088cc]/20 border border-[#0088cc]/30 text-xs font-semibold transition-all"
+              >
+                <Send size={16} />
+                <span>Follow on Telegram Channel</span>
+              </a>
+            </div>
             <div className="flex gap-3">
               {socialLinks.map((link) => (
                 <a
                   key={link.label}
                   href={link.href}
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-9 h-9 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all duration-200"
                   aria-label={link.label}
                 >
-                  <link.icon size={18} />
+                  <link.icon size={16} />
                 </a>
               ))}
             </div>
