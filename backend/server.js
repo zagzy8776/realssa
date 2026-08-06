@@ -1436,6 +1436,8 @@ app.post('/api/articles/:id/view', async (req, res) => {
   } catch (err) {
     console.error('Failed to update view count:', err.message);
     res.status(500).json({ error: 'Failed to update view count', views: 0 });
+  }
+});
 // ── Dynamic Server-Side Pre-Rendering for Crawlers (SEO & Social Cards) ──────
 app.get('/article/:id', async (req, res) => {
   const userAgent = (req.headers['user-agent'] || '').toLowerCase();
@@ -2655,11 +2657,8 @@ app.get('/api/cron/sports', async (req, res) => {
 });
 
 // Primary RSS & Category Ingestion Cron Endpoint (Vercel & External Crons)
-app.all(['/api/cron/ingest', '/api/cron/ingest/'], async (req, res) => {
-  const bearerToken = req.headers.authorization?.startsWith('Bearer ')
-    ? req.headers.authorization.slice('Bearer '.length)
-    : undefined;
-  const secret = req.query.secret || req.headers['x-cron-secret'] || bearerToken;
+app.get('/api/cron/ingest', async (req, res) => {
+  const secret = req.query.secret || req.headers['x-cron-secret'];
   const cronSec = process.env.CRON_SECRET || 'realssa-cron-secret-2026';
 
   if (secret && secret !== cronSec && secret !== 'realssa-cron-secret-2026') {
@@ -2668,47 +2667,26 @@ app.all(['/api/cron/ingest', '/api/cron/ingest/'], async (req, res) => {
 
   const category = req.query.category || null;
 
-  try {
-    const Parser = require('rss-parser');
-    const rssParser = new Parser({
-      timeout: 3000,
-      customFields: {
-        item: [
-          ['media:content', 'media:content'],
-          ['media:thumbnail', 'media:thumbnail'],
-          ['enclosure', 'enclosure'],
-          ['content:encoded', 'content:encoded'],
-          ['description', 'description']
-        ]
-      }
-    });
-    const { ingestAllFeeds } = require('./services/ingestion');
-    console.log(`[Cron Ingest] Triggering ingestion cycle for category [${category || 'all'}]...`);
+  // Return HTTP 200 immediately to prevent Vercel cron timeout
+  res.status(200).json({
+    success: true,
+    message: category ? `Ingestion started for category [${category}]` : 'Full RSS ingestion started',
+    category: category || 'all',
+    timestamp: new Date().toISOString()
+  });
 
-    // Race ingestion against a strict 7.5s serverless execution deadline
-    const SERVERLESS_TIMEOUT_MS = 7500;
-    const timeoutPromise = new Promise((resolve) =>
-      setTimeout(() => resolve({ newCount: 0, timedOut: true }), SERVERLESS_TIMEOUT_MS)
-    );
-
-    const results = await Promise.race([
-      ingestAllFeeds(pool, rssParser, category),
-      timeoutPromise
-    ]);
-
-    console.log(`[Cron Ingest] Ingestion status for [${category || 'all'}]: ${results?.timedOut ? 'Completed within budget' : 'Full sync finished'}. Added ${results?.newCount || 0} articles.`);
-
-    return res.status(200).json({
-      success: true,
-      message: results?.timedOut ? `Ingestion window closed for category [${category || 'all'}]` : `Ingestion completed for category [${category || 'all'}]`,
-      category: category || 'all',
-      newCount: results?.newCount || 0,
-      timestamp: new Date().toISOString()
-    });
-  } catch (err) {
-    console.error('❌ Ingest cron execution failed:', err.message);
-    return res.status(500).json({ error: err.message, category: category || 'all' });
-  }
+  setImmediate(async () => {
+    try {
+      const Parser = require('rss-parser');
+      const rssParser = new Parser({ timeout: 10000 });
+      const { ingestAllFeeds } = require('./services/ingestion');
+      console.log(`[Cron Ingest] Triggering ingestion cycle... (Category: ${category || 'all'})`);
+      const results = await ingestAllFeeds(pool, rssParser, category);
+      console.log(`[Cron Ingest] Cycle complete for ${category || 'all'}. Added ${results?.newCount || 0} articles.`);
+    } catch (err) {
+      console.error('❌ Ingest cron background job failed:', err.message);
+    }
+  });
 });
 
 // Primary Buffer Social Auto-Posting Cron Endpoint
@@ -4137,6 +4115,43 @@ app.get('/api/migrate', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET & POST /api/cron/ingest?category=ghana&secret=realssa-cron-secret-2026
+app.all(['/api/cron/ingest', '/api/cron/ingest/'], async (req, res) => {
+  const secret = req.query.secret || req.headers['x-cron-secret'];
+  if (secret && secret !== CRON_SECRET && secret !== 'realssa-cron-secret-2026') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const category = req.query.category || null;
+
+  res.status(200).json({
+    success: true,
+    message: 'Ingestion started',
+    category: category || 'all',
+    timestamp: new Date().toISOString()
+  });
+
+  setImmediate(async () => {
+    try {
+      const parser = new Parser({
+        customFields: {
+          item: [
+            ['media:content', 'media:content'],
+            ['media:thumbnail', 'media:thumbnail'],
+            ['enclosure', 'enclosure'],
+            ['content:encoded', 'content:encoded'],
+            ['description', 'description']
+          ]
+        }
+      });
+      const result = await ingestAllFeeds(pool, parser, category || null);
+      console.log(`✅ Ingestion complete: ${result.newCount} new, ${result.summaryCount} summaries`);
+    } catch (error) {
+      console.error('❌ Cron ingestion error:', error.message);
+    }
+  });
 });
 
 // GET /api/cron/streams?secret=xxx
