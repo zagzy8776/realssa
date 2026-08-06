@@ -38,6 +38,7 @@ const ArticlePage = () => {
   const [article, setArticle] = useState<NewsItem | null>(null);
   const [relatedArticles, setRelatedArticles] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [slowLoad, setSlowLoad] = useState(false); // shows escape hatch after 5s
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -176,7 +177,12 @@ const ArticlePage = () => {
     };
 
     fetchArticle();
+
+    // After 5 seconds of still loading, reveal the escape-hatch buttons
+    const slowTimer = setTimeout(() => setSlowLoad(true), 5000);
+    return () => clearTimeout(slowTimer);
   }, [id]);
+
 
   const fetchComments = async (articleId: string) => {
     try {
@@ -346,9 +352,27 @@ const ArticlePage = () => {
               ))}
             </div>
           </div>
-          <p className="text-xs text-muted-foreground text-center mt-8">
-            Loading article... If this takes a moment, the server is waking up.
-          </p>
+
+          {/* Escape hatch — appears after 5 seconds so users are never stuck */}
+          {slowLoad && (
+            <div className="mt-8 text-center space-y-3 animate-fade-in">
+              <p className="text-sm text-muted-foreground">Taking longer than expected…</p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+                >
+                  🔄 Try Again
+                </button>
+                <button
+                  onClick={() => navigate('/')}
+                  className="px-4 py-2 rounded-lg bg-amber-500 text-black text-sm font-medium hover:bg-amber-400 transition-colors"
+                >
+                  🏠 Go to Homepage
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

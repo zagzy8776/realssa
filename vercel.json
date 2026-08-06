@@ -1,8 +1,14 @@
 {
   "functions": {
-    "api/index.js": { "maxDuration": 10 }
+    "api/index.js": { "maxDuration": 30 }
   },
   "headers": [
+    {
+      "source": "/api/articles/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=300, stale-while-revalidate=600" }
+      ]
+    },
     {
       "source": "/assets/(.*)",
       "headers": [

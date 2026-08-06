@@ -1691,6 +1691,10 @@ app.get('/api/articles/:id', async (req, res) => {
         ai_summary: row.ai_summary || null
       };
 
+      // 🚀 Edge CDN cache: Vercel will cache this at the edge for 5 minutes
+      // After first Telegram click, ALL subsequent users get this in <10ms (no DB, no cold start)
+      res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+
       // Send response right away — user gets the article instantly
       res.json(article);
 
