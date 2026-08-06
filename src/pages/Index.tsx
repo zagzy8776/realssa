@@ -24,17 +24,10 @@ import { Search } from "lucide-react";
 import RealSSASearchModal from "@/components/RealSSASearchModal";
 import { useNavigate } from "react-router-dom";
 
-// Gate the cinematic splash to once per browser session.
-// It persists across in-app route changes AND full page reloads within the
-// same tab, so returning users aren't forced through the 4.2s intro again.
+// HTML skeleton in index.html handles all first-load visuals.
+// Never show the cinematic BrandLoader splash — skip it every session.
 const SPLASH_SESSION_KEY = 'realssa_splash_shown';
-let initialLoadDone = (() => {
-  try {
-    return sessionStorage.getItem(SPLASH_SESSION_KEY) === '1';
-  } catch {
-    return false;
-  }
-})();
+let initialLoadDone = true; // Always true — HTML skeleton replaces this
 
 
 const Index = () => {
@@ -51,7 +44,7 @@ const Index = () => {
   const [breakingIds, setBreakingIds] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
-  const [initialLoading, setInitialLoading] = useState(!initialLoadDone);
+  const [initialLoading] = useState(false); // HTML skeleton handles first load — never show BrandLoader
   const [error, setError] = useState(null);
 
   const LIVE_VIDEOS = [

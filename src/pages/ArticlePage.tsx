@@ -70,8 +70,12 @@ const ArticlePage = () => {
 
         // For rss- prefixed IDs, fetch directly from the single-article endpoint
         if (id && String(id).startsWith('rss-')) {
+          // Use AbortController with 12s timeout so Telegram users never get stuck forever
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 12000);
           try {
-            const response = await fetch(apiUrl(`/api/articles/${id}`));
+            const response = await fetch(apiUrl(`/api/articles/${id}`), { signal: controller.signal });
+            clearTimeout(timeoutId);
             if (response.ok) {
               const foundArticle = await response.json();
               setArticle(foundArticle);
@@ -80,7 +84,13 @@ const ArticlePage = () => {
               fetchComments(foundArticle.id);
               return;
             }
-          } catch (rssErr) {
+          } catch (rssErr: any) {
+            clearTimeout(timeoutId);
+            if (rssErr.name === 'AbortError') {
+              setError('Server is taking too long to respond. Please try again.');
+              setLoading(false);
+              return;
+            }
             console.warn('RSS article fetch failed:', rssErr);
           }
           setError('Article not found');
