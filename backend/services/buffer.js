@@ -9,7 +9,7 @@
  */
 
 const BUFFER_ACCESS_TOKEN = process.env.BUFFER_ACCESS_TOKEN || process.env.BUFFER_S_TOKEN || 'XgC6VYuJXL4xvvPRJolhwEdpK5iC4xwJutuSVPqf7Aw';
-const BUFFER_PROFILE_IDS  = process.env.BUFFER_PROFILE_IDS  || process.env.BUFFER_FILE_IDS || '6a5c8546e2638b94d7959a2c,6a46f43d5ab6d2f1069abed2';
+const BUFFER_PROFILE_IDS  = process.env.BUFFER_PROFILE_IDS  || process.env.BUFFER_FILE_IDS || '6a5c8546e2638b94d7959a2c,6a46f43d5ab6d2f1069abed2,6a6a49004b2d03035f635405';
 
 const BUFFER_API_ENDPOINT = 'https://api.buffer.com/graphql';
 
@@ -138,9 +138,11 @@ async function postToBuffer(hooks, link, imageUrl, now = false) {
 
   const profileIds = BUFFER_PROFILE_IDS.split(',').map(id => id.trim()).filter(Boolean);
 
-  // Ensure Instagram ID is always included
+  // Ensure Instagram and TikTok IDs are always included
   const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
+  const TIKTOK_ID = '6a6a49004b2d03035f635405';
   if (!profileIds.includes(INSTAGRAM_ID)) profileIds.push(INSTAGRAM_ID);
+  if (!profileIds.includes(TIKTOK_ID)) profileIds.push(TIKTOK_ID);
 
   if (profileIds.length === 0) {
     console.warn('[Buffer] BUFFER_PROFILE_IDS is empty — skipping.');
@@ -176,31 +178,33 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
   try {
     const mode = now ? 'shareNow' : 'addToQueue';
     const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
+    const TIKTOK_ID = '6a6a49004b2d03035f635405';
     const isInstagram = profileId === INSTAGRAM_ID;
+    const isTikTok = profileId === TIKTOK_ID;
+    const isMediaPlatform = isInstagram || isTikTok;
 
-    // Instagram always needs an image — use logo as fallback rather than skipping
+    // Instagram/TikTok always need an image — use logo as fallback rather than skipping
     const LOGO = 'https://realssanews.com.ng/logo.png';
     const effectiveImage = (imageUrl && imageUrl !== LOGO) ? imageUrl : LOGO;
 
     // Pick the right text per platform
-    // Instagram: no link in caption (links don\'t work), use instagram-specific text
+    // Media Platforms (IG/TikTok): no link in caption (links don't work)
     // Twitter/X: append link, enforce 280 char hard limit
     // Facebook:  append link as attachment, use facebook text
     let text;
-    if (isInstagram) {
-      // Instagram: no URL in caption, just the caption + hashtags
+    if (isMediaPlatform) {
+      // Instagram/TikTok: no URL in caption, just the caption + hashtags
       text = hooks.instagram || hooks.twitter;
-      // Strip any accidental URLs from IG caption
+      // Strip any accidental URLs from caption
       text = text.replace(/https?:\/\/\S+/g, '').trim();
-      // IG caption max 2200 chars but keep it punchy
+      // Caption max 2200 chars but keep it punchy
       if (text.length > 2200) text = text.slice(0, 2197) + '…';
     } else {
       // Twitter/X and Facebook: append the article link
-      const isTwitter = !isInstagram; // treat all non-IG as needing link
+      const isTwitter = !isMediaPlatform; // treat all non-media as needing link
       const baseText = isTwitter ? (hooks.twitter || hooks.facebook) : (hooks.facebook || hooks.twitter);
       text = link ? `${baseText}\n\n${link}` : baseText;
       // Twitter hard limit: 280 chars. Link = ~23 chars + newlines = 25 reserved.
-      // So cap total at 280.
       if (text.length > 280) text = text.slice(0, 277) + '…';
     }
 
@@ -216,10 +220,11 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
       input.metadata = { instagram: { type: 'post', shouldShareToFeed: true } };
     }
 
-    // Attach image — Instagram always gets one (logo fallback if needed), others only if real image
-    if (isInstagram || (effectiveImage && effectiveImage !== LOGO)) {
+    // Attach image — Instagram/TikTok always get one (logo fallback if needed), others only if real image
+    if (isMediaPlatform || (effectiveImage && effectiveImage !== LOGO)) {
       input.assets = [{ image: { url: effectiveImage } }];
     }
+
 
     const mutation = {
       query: `
