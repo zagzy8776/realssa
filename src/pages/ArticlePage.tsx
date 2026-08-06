@@ -382,12 +382,27 @@ const ArticlePage = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">{error}</h2>
-          <Button onClick={handleBack} variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Home
-          </Button>
+        <div className="text-center px-6 max-w-sm">
+          <div className="text-4xl mb-4">📰</div>
+          <h2 className="text-xl font-bold mb-2 text-foreground">This article has moved</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Taking you to the latest news on RealSSA…
+          </p>
+          {/* Animated gold progress bar — redirects after 3s */}
+          <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+            <div
+              className="h-1.5 bg-amber-500 rounded-full"
+              style={{ animation: 'slideProgress 3s linear forwards', width: '0%' }}
+              onAnimationEnd={() => navigate('/')}
+            />
+          </div>
+          <style>{`@keyframes slideProgress { from { width: 0% } to { width: 100% } }`}</style>
+          <button
+            onClick={() => navigate('/')}
+            className="mt-6 px-6 py-2 rounded-lg bg-amber-500 text-black text-sm font-semibold hover:bg-amber-400 transition-colors"
+          >
+            Go Now →
+          </button>
         </div>
       </div>
     );
