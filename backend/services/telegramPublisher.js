@@ -24,19 +24,24 @@ async function postToTelegramChannel(article) {
     return false;
   }
 
-  const title = article.title || 'Breaking News';
+  // Helper to strip HTML tags from RSS fields (fixes Sky News href link bug)
+  const cleanText = (txt) => {
+    if (!txt) return '';
+    return txt.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  };
+
+  const cleanTitle = cleanText(article.title || 'Breaking News');
   const rawSummary = (Array.isArray(article.ai_summary) ? article.ai_summary.join(' ') : article.ai_summary) || article.excerpt || '';
-  const summary = rawSummary.slice(0, 300);
+  const cleanSummary = cleanText(rawSummary).slice(0, 300);
   const category = (article.category || 'News').toUpperCase();
   const readTime = article.readTime || '2 min read';
   const articleUrl = `https://www.realssanews.com.ng/article/${article.id}`;
-  const externalUrl = article.externalLink || article.external_link || article.url || articleUrl;
   const whatsappChannel = process.env.WHATSAPP_CHANNEL_URL || 'https://whatsapp.com/channel/0029VbDetsPGufIx3Totk938';
 
   // Construct Markdown message
   const caption = 
-    `📰 *${title.trim()}*\n\n` +
-    `⚡ *AI Summary:*\n${summary.trim()}\n\n` +
+    `📰 *${cleanTitle}*\n\n` +
+    `📝 *Quick Take:*\n${cleanSummary}\n\n` +
     `🏷️ *Category:* #${category.replace(/[^A-Z0-9]/gi, '')} | ⏱️ ${readTime}\n\n` +
     `👉 [Read Full Article on RealSSA](${articleUrl})\n` +
     `📲 [Join WhatsApp Channel](${whatsappChannel})`;

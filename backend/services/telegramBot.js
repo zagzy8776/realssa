@@ -135,11 +135,13 @@ async function handleBriefCommand(chatId) {
 
     let briefText = `⚡ *RealSSA Morning Briefing:*\n\n`;
     res.rows.forEach((row, i) => {
+      const cleanTitle = (row.title || '').replace(/<[^>]*>/g, '').trim();
+      const cleanExcerpt = (row.excerpt || '').replace(/<[^>]*>/g, '').trim();
       const dateStr = new Date(row.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       briefText += 
-        `${i + 1}. *${row.title}*\n` +
+        `${i + 1}. *${cleanTitle}*\n` +
         `⏱️ _${dateStr} | ${row.source_name || 'RealSSA'}_\n` +
-        `👉 ${row.excerpt ? row.excerpt.slice(0, 180) + '...' : 'Read summary on the site.'}\n` +
+        `👉 ${cleanExcerpt ? cleanExcerpt.slice(0, 180) + '...' : 'Read summary on the site.'}\n` +
         `🔗 [Read Full Coverage](${SITE_URL}/article/rss-${row.id})\n\n`;
     });
 
@@ -171,11 +173,13 @@ async function handleQueryCommand(chatId, term) {
 
     let resultText = `🔍 *Search results for "${term}":*\n\n`;
     res.rows.forEach((row, i) => {
+      const cleanTitle = (row.title || '').replace(/<[^>]*>/g, '').trim();
+      const cleanExcerpt = (row.excerpt || '').replace(/<[^>]*>/g, '').trim();
       const dateStr = new Date(row.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       resultText += 
-        `${i + 1}. *${row.title}*\n` +
+        `${i + 1}. *${cleanTitle}*\n` +
         `⏱️ _${dateStr} | ${row.source_name || 'RealSSA'}_\n` +
-        `👉 ${row.excerpt ? row.excerpt.slice(0, 180) + '...' : 'Read full coverage.'}\n` +
+        `👉 ${cleanExcerpt ? cleanExcerpt.slice(0, 180) + '...' : 'Read full coverage.'}\n` +
         `🔗 [View on RealSSA](${SITE_URL}/article/rss-${row.id})\n\n`;
     });
 
@@ -207,20 +211,22 @@ async function handleInlineQuery(inlineQuery) {
     const res = await queryMultiDb(queryStr, [`%${term}%`]);
     
     const results = (res.rows || []).map((row) => {
+      const cleanTitle = (row.title || '').replace(/<[^>]*>/g, '').trim();
+      const cleanExcerpt = (row.excerpt || '').replace(/<[^>]*>/g, '').trim();
       const dateStr = new Date(row.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const articleUrl = `${SITE_URL}/article/rss-${row.id}`;
       
       // Inline Markdown message block
       const messageText = 
-        `📰 *${row.title}*\n\n` +
-        `⚡ *Editor's Summary:*\n${row.excerpt ? row.excerpt.slice(0, 280) + '...' : 'Read full summary on the site.'}\n\n` +
+        `📰 *${cleanTitle}*\n\n` +
+        `📝 *Summary:*\n${cleanExcerpt ? cleanExcerpt.slice(0, 280) + '...' : 'Read full summary on the site.'}\n\n` +
         `🏷️ _Source: ${row.source_name || 'RealSSA'} | ${dateStr}_`;
 
       const result = {
         type: 'article',
         id: `rss-${row.id}`,
-        title: row.title,
-        description: row.excerpt ? row.excerpt.slice(0, 100) + '...' : `News from ${row.source_name}`,
+        title: cleanTitle,
+        description: cleanExcerpt ? cleanExcerpt.slice(0, 100) + '...' : `News from ${row.source_name}`,
         input_message_content: {
           message_text: messageText,
           parse_mode: 'Markdown',
@@ -234,6 +240,7 @@ async function handleInlineQuery(inlineQuery) {
           ]
         }
       };
+
 
       // Ingest image preview if valid URL exists
       if (row.image && row.image.startsWith('http')) {
