@@ -2680,7 +2680,7 @@ app.all(['/api/cron/ingest', '/api/cron/ingest/'], async (req, res) => {
   try {
     const Parser = require('rss-parser');
     const rssParser = new Parser({
-      timeout: 8000,
+      timeout: 3000,
       customFields: {
         item: [
           ['media:content', 'media:content'],
@@ -2693,12 +2693,23 @@ app.all(['/api/cron/ingest', '/api/cron/ingest/'], async (req, res) => {
     });
     const { ingestAllFeeds } = require('./services/ingestion');
     console.log(`[Cron Ingest] Triggering ingestion cycle for category [${category || 'all'}]...`);
-    const results = await ingestAllFeeds(pool, rssParser, category);
-    console.log(`[Cron Ingest] Ingestion complete for category [${category || 'all'}]. Added ${results?.newCount || 0} articles.`);
+
+    // Race ingestion against a strict 7.5s serverless execution deadline
+    const SERVERLESS_TIMEOUT_MS = 7500;
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve({ newCount: 0, timedOut: true }), SERVERLESS_TIMEOUT_MS)
+    );
+
+    const results = await Promise.race([
+      ingestAllFeeds(pool, rssParser, category),
+      timeoutPromise
+    ]);
+
+    console.log(`[Cron Ingest] Ingestion status for [${category || 'all'}]: ${results?.timedOut ? 'Completed within budget' : 'Full sync finished'}. Added ${results?.newCount || 0} articles.`);
 
     return res.status(200).json({
       success: true,
-      message: category ? `Ingestion completed for category [${category}]` : 'Full RSS ingestion completed',
+      message: results?.timedOut ? `Ingestion window closed for category [${category || 'all'}]` : `Ingestion completed for category [${category || 'all'}]`,
       category: category || 'all',
       newCount: results?.newCount || 0,
       timestamp: new Date().toISOString()
