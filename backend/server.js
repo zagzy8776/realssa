@@ -90,137 +90,126 @@ if (process.env.DATABASE_URL) {
       console.log('✅ Database connected:', res.rows[0]);
       app.set('pool', pool);
 
-      // Run auto-migrations first so all base tables (rss_articles, live_matches, etc.) exist
-      try {
-        await runMigrations();
-        console.log('✅ Database auto-migrations completed.');
-      } catch (migErr) {
-        console.error('❌ Startup migrations failed:', migErr.message);
-      }
-
-      // Ensure Sports Hub tables exist (matches, followed_matches)
-      try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS matches (
-            id SERIAL PRIMARY KEY,
-            provider_match_id TEXT UNIQUE NOT NULL,
-            competition_name TEXT,
-            home_team_name TEXT,
-            home_team_crest TEXT,
-            away_team_name TEXT,
-            away_team_crest TEXT,
-            status TEXT,
-            minute TEXT,
-            home_score INTEGER,
-            away_score INTEGER,
-            kickoff_at TIMESTAMPTZ,
-            updated_at TIMESTAMPTZ DEFAULT NOW()
-          );
-          
-          CREATE TABLE IF NOT EXISTS followed_matches (
-            id SERIAL PRIMARY KEY,
-            device_id TEXT NOT NULL,
-            provider_match_id TEXT NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            UNIQUE(device_id, provider_match_id)
-          );
-          
-          CREATE TABLE IF NOT EXISTS user_article_reactions (
-            device_id VARCHAR(255) NOT NULL,
-            article_id VARCHAR(255) NOT NULL,
-            reaction_type VARCHAR(50) NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            PRIMARY KEY (device_id, article_id)
-          );
-        `);
-        console.log('✅ Sports Hub tables verified.');
-      } catch (err) {
-        console.error('❌ Failed to ensure Sports Hub tables:', err.message);
-      }
-
-      // Ensure User affinities table exists in usersPool
-      try {
-        await usersPool.query(`
-          CREATE TABLE IF NOT EXISTS user_category_affinities (
-            device_id VARCHAR(255) NOT NULL,
-            category VARCHAR(100) NOT NULL,
-            score INTEGER DEFAULT 0,
-            last_interacted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (device_id, category)
-          );
-          CREATE INDEX IF NOT EXISTS idx_user_category_affinities_device ON user_category_affinities(device_id);
-        `);
-        console.log('✅ User affinities table verified.');
-      } catch (err) {
-        console.error('❌ Failed to ensure User affinities table:', err.message);
-      }
-
-      // Cleanup and modify rss_articles
-      try {
-        // Delete Punch news entirely as per user request
-        const deletePunchResult = await pool.query(`
-          DELETE FROM rss_articles 
-          WHERE source_name ~* 'punch' OR external_link ~* 'punchng.com'
-        `);
-        console.log(`🧹 Database startup check: deleted ${deletePunchResult.rowCount} Punch articles.`);
-
-        // Ensure full_content column exists for the new Extractor Engine
-        await pool.query(`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS full_content TEXT;`);
-        console.log('✅ Extractor Engine: ensured full_content column exists.');
-
-        // Ensure has_embedding column exists for Qdrant offloading
-        await pool.query(`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS has_embedding BOOLEAN DEFAULT false;`);
-        console.log('✅ Qdrant: ensured has_embedding column exists.');
-
-        // Create search_cache table for Fly.io shared caching
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS search_cache (
-            query TEXT PRIMARY KEY,
-            results_json JSONB NOT NULL,
-            provider TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        console.log('✅ Search Cache: ensured search_cache table exists.');
-
-        // Clean up expired cache entries older than 24 hours
-        const cacheClean = await pool.query(`
-          DELETE FROM search_cache WHERE created_at < NOW() - INTERVAL '24 hours';
-        `);
-        console.log(`🧹 Search Cache: deleted ${cacheClean.rowCount} expired entries.`);
-
-        // Clean up logos for the rest
-        const logoCleanResult = await pool.query(`
-          UPDATE rss_articles 
-          SET image = 'https://realssanews.com.ng/logo.png' 
-          WHERE image ~* '(logo|icon|brand|placeholder|avatar|favicon)'
-             OR image IS NULL
-        `);
-        console.log(`🧹 Database startup check: set logo images to RealSSA fallback for ${logoCleanResult.rowCount} rows`);
-      } catch (dbErr) {
-        console.error('❌ Failed to run startup cleanup / modifications:', dbErr.message);
-      }
-
-      // Sanitize historical source_name columns by removing verbose boilerplate suffixes
-      try {
-        const sourceCleanResult = await pool.query(`
-          UPDATE rss_articles
-          SET source_name = regexp_replace(
-            source_name, 
-            '\\s*(-\\s*Latest News|\\|\\s*Nigeria''s Most Widely Read Newspaper|-\\s*BBC News|\\s*-\\s*The Cable|\\s*-\\s*Vanguard News|\\s*-\\s*Premium Times).*$', 
-            '', 
-            'i'
-          )
-          WHERE source_name ~* 'Latest News|Most Widely Read|BBC News|The Cable|Vanguard News|Premium Times'
-        `);
-        console.log(`🧹 Database startup check: cleaned source names for ${sourceCleanResult.rowCount} rows`);
-      } catch (dbErr) {
-        console.error('❌ Failed to run startup source name sanitization:', dbErr.message);
-      }
-
-      // Initialize background cron bots ONLY on persistent servers (Fly.dev/Docker/Local),
-      // NEVER inside Vercel Serverless Functions where active timers cause function crashes.
+      // Heavy startup migrations & DB cleanup queries run ONLY on persistent server boot (Fly.dev/Docker/Local),
+      // NEVER on every single Vercel Serverless cold-start where query spam crashes invocations.
       if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
+        // Run auto-migrations first so all base tables (rss_articles, live_matches, etc.) exist
+        try {
+          await runMigrations();
+          console.log('✅ Database auto-migrations completed.');
+        } catch (migErr) {
+          console.error('❌ Startup migrations failed:', migErr.message);
+        }
+
+        // Ensure Sports Hub tables exist (matches, followed_matches)
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS matches (
+              id SERIAL PRIMARY KEY,
+              provider_match_id TEXT UNIQUE NOT NULL,
+              competition_name TEXT,
+              home_team_name TEXT,
+              home_team_crest TEXT,
+              away_team_name TEXT,
+              away_team_crest TEXT,
+              status TEXT,
+              minute TEXT,
+              home_score INTEGER,
+              away_score INTEGER,
+              kickoff_at TIMESTAMPTZ,
+              updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            
+            CREATE TABLE IF NOT EXISTS followed_matches (
+              id SERIAL PRIMARY KEY,
+              device_id TEXT NOT NULL,
+              provider_match_id TEXT NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              UNIQUE(device_id, provider_match_id)
+            );
+            
+            CREATE TABLE IF NOT EXISTS user_article_reactions (
+              device_id VARCHAR(255) NOT NULL,
+              article_id VARCHAR(255) NOT NULL,
+              reaction_type VARCHAR(50) NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              PRIMARY KEY (device_id, article_id)
+            );
+          `);
+          console.log('✅ Sports Hub tables verified.');
+        } catch (err) {
+          console.error('❌ Failed to ensure Sports Hub tables:', err.message);
+        }
+
+        // Ensure User affinities table exists in usersPool
+        try {
+          await usersPool.query(`
+            CREATE TABLE IF NOT EXISTS user_category_affinities (
+              device_id VARCHAR(255) NOT NULL,
+              category VARCHAR(100) NOT NULL,
+              score INTEGER DEFAULT 0,
+              last_interacted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (device_id, category)
+            );
+            CREATE INDEX IF NOT EXISTS idx_user_category_affinities_device ON user_category_affinities(device_id);
+          `);
+          console.log('✅ User affinities table verified.');
+        } catch (err) {
+          console.error('❌ Failed to ensure User affinities table:', err.message);
+        }
+
+        // Cleanup and modify rss_articles
+        try {
+          const deletePunchResult = await pool.query(`
+            DELETE FROM rss_articles 
+            WHERE source_name ~* 'punch' OR external_link ~* 'punchng.com'
+          `);
+          console.log(`🧹 Database startup check: deleted ${deletePunchResult.rowCount} Punch articles.`);
+
+          await pool.query(`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS full_content TEXT;`);
+          await pool.query(`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS has_embedding BOOLEAN DEFAULT false;`);
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS search_cache (
+              query TEXT PRIMARY KEY,
+              results_json JSONB NOT NULL,
+              provider TEXT NOT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+
+          const cacheClean = await pool.query(`
+            DELETE FROM search_cache WHERE created_at < NOW() - INTERVAL '24 hours';
+          `);
+          console.log(`🧹 Search Cache: deleted ${cacheClean.rowCount} expired entries.`);
+
+          const logoCleanResult = await pool.query(`
+            UPDATE rss_articles 
+            SET image = 'https://realssanews.com.ng/logo.png' 
+            WHERE image ~* '(logo|icon|brand|placeholder|avatar|favicon)'
+               OR image IS NULL
+          `);
+          console.log(`🧹 Database startup check: set logo images to RealSSA fallback for ${logoCleanResult.rowCount} rows`);
+        } catch (dbErr) {
+          console.error('❌ Failed to run startup cleanup / modifications:', dbErr.message);
+        }
+
+        // Sanitize historical source_name columns
+        try {
+          const sourceCleanResult = await pool.query(`
+            UPDATE rss_articles
+            SET source_name = regexp_replace(
+              source_name, 
+              '\\s*(-\\s*Latest News|\\|\\s*Nigeria''s Most Widely Read Newspaper|-\\s*BBC News|\\s*-\\s*The Cable|\\s*-\\s*Vanguard News|\\s*-\\s*Premium Times).*$', 
+              '', 
+              'i'
+            )
+            WHERE source_name ~* 'Latest News|Most Widely Read|BBC News|The Cable|Vanguard News|Premium Times'
+          `);
+          console.log(`🧹 Database startup check: cleaned source names for ${sourceCleanResult.rowCount} rows`);
+        } catch (dbErr) {
+          console.error('❌ Failed to run startup source name sanitization:', dbErr.message);
+        }
+
         console.log('🤖 Booting background cron bots on persistent host...');
         initRssBot(pool);
         initSportsBot(pool, notificationService);
@@ -228,7 +217,7 @@ if (process.env.DATABASE_URL) {
         initTrendingSynthesizer(pool);
         initTelemetryFlusher(pool);
       } else {
-        console.log('⚡ Vercel Serverless environment detected — background setInterval bots disabled for clean function execution.');
+        console.log('⚡ Vercel Serverless environment detected — background migrations & setInterval bots disabled for instant cold starts.');
       }
     }
   });
