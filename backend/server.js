@@ -6924,6 +6924,15 @@ if (!process.env.VERCEL) {
     console.error('❌ Failed to initialize background cron bots:', botErr.message);
   }
 
+  try {
+    console.log('🤖 Initializing Telegram Bot (@RealSSABot)...');
+    const { startTelegramBot } = require('./services/telegramBot');
+    startTelegramBot();
+  } catch (tgErr) {
+    console.error('❌ Failed to initialize Telegram Bot:', tgErr.message);
+  }
+
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Try POST /api/auth/login with username: admin, password: admin123`);
