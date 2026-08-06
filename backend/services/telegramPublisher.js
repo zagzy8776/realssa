@@ -30,14 +30,18 @@ async function postToTelegramChannel(article) {
   const category = (article.category || 'News').toUpperCase();
   const readTime = article.readTime || '2 min read';
   const articleUrl = `https://www.realssanews.com.ng/article/${article.id}`;
+  const externalUrl = article.externalLink || article.external_link || article.url || articleUrl;
   const whatsappChannel = process.env.WHATSAPP_CHANNEL_URL || 'https://whatsapp.com/channel/0029VbDetsPGufIx3Totk938';
 
   // Construct Markdown message
+  // Primary link = external article (never expires)
+  // Secondary link = RealSSA page (for AI summary + comments)
   const caption = 
     `📰 *${title.trim()}*\n\n` +
     `⚡ *AI Summary:*\n${summary.trim()}\n\n` +
     `🏷️ *Category:* #${category.replace(/[^A-Z0-9]/gi, '')} | ⏱️ ${readTime}\n\n` +
-    `👉 [Read Full Article on RealSSA](${articleUrl})\n` +
+    `👉 [Read Full Article](${externalUrl})\n` +
+    `🌍 [View on RealSSA](${articleUrl})\n` +
     `📲 [Join WhatsApp Channel](${whatsappChannel})`;
 
   try {
