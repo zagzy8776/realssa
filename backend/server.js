@@ -1672,44 +1672,14 @@ app.get('/api/articles/:id', async (req, res) => {
 
       const row = result.rows[0];
 
-      // 🚀 ON-DEMAND AI SUMMARY GENERATION
-      let aiSummary = row.ai_summary;
-      if (!aiSummary && row.content_type === 'article' && row.excerpt) {
-        console.log(`⚡ Generating AI summary for article ${articleId}: "${row.title}"`);
-        try {
-          aiSummary = await generateSummary(row.title, row.excerpt);
-          if (aiSummary) {
-            // Save to database for future requests
-            await pool.query(
-              'UPDATE rss_articles SET ai_summary = $1 WHERE id = $2',
-              [aiSummary, articleId]
-            );
-            // Decay scores by 50% for all categories associated with this device
-            // (Assuming device_id passed via header or query for personalized interaction)
-            const deviceId = req.headers['x-device-id'];
-            if (deviceId) {
-              await usersPool.query(
-                `UPDATE user_category_affinities 
-                 SET score = GREATEST(score * 0.5, 0.1) 
-                 WHERE device_id = $1`,
-                [deviceId]
-              );
-            }
-            console.log(`✅ AI summary generated and cached for article ${articleId}`);
-          }
-        } catch (summaryError) {
-          console.error(`❌ Failed to generate summary for article ${articleId}:`, summaryError.message);
-          // Continue without AI summary - use original excerpt
-        }
-      }
-
+      // ⚡ RESPOND IMMEDIATELY with available data — never block on AI generation
       const article = {
         id: row.id,
         title: row.title,
-        excerpt: aiSummary || row.excerpt,
-        content: aiSummary || row.excerpt,
+        excerpt: row.ai_summary || row.excerpt,
+        content: row.ai_summary || row.excerpt,
         category: row.category || 'news',
-        image: row.image,  // Image guaranteed from ingestion
+        image: row.image,
         readTime: row.read_time,
         author: row.author,
         source: 'rss',
@@ -1718,10 +1688,31 @@ app.get('/api/articles/:id', async (req, res) => {
         contentType: row.content_type || 'article',
         status: 'published',
         featured: false,
-        ai_summary: aiSummary
+        ai_summary: row.ai_summary || null
       };
 
-      return res.json(article);
+      // Send response right away — user gets the article instantly
+      res.json(article);
+
+      // 🔄 Generate AI summary in the background AFTER responding (fire-and-forget)
+      if (!row.ai_summary && row.content_type === 'article' && row.excerpt) {
+        setImmediate(async () => {
+          try {
+            const generated = await generateSummary(row.title, row.excerpt);
+            if (generated) {
+              await pool.query(
+                'UPDATE rss_articles SET ai_summary = $1 WHERE id = $2',
+                [generated, articleId]
+              );
+              console.log(`✅ Background AI summary cached for article ${articleId}`);
+            }
+          } catch (err) {
+            console.warn(`⚠️ Background AI summary failed for ${articleId}:`, err.message);
+          }
+        });
+      }
+
+      return;
     }
 
     // JSON file article
