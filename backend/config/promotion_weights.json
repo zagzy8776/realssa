@@ -1,0 +1,9 @@
+{
+  "freshness": 0.25,
+  "ctr": 0.20,
+  "engagement": 0.20,
+  "readingTime": 0.10,
+  "trendScore": 0.10,
+  "authority": 0.10,
+  "categoryWeight": 0.05
+}

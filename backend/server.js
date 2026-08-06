@@ -2623,6 +2623,48 @@ app.get('/api/sports/matches', async (req, res) => {
   }
 });
 
+// ── RealSSA OS Platform Subsystem Endpoints ────────────────────────────────────
+
+// POST /api/insight/evaluate — RealSSA Insight (AI Editor Health Score & Confidence)
+app.post('/api/insight/evaluate', async (req, res) => {
+  try {
+    const { headline, excerpt, category } = req.body || {};
+    if (!headline) return res.status(400).json({ error: 'Headline is required' });
+
+    const InsightService = require('./services/insight.service');
+    const evaluation = await InsightService.evaluateHeadlineAndContent(headline, excerpt, category);
+    res.json(evaluation);
+  } catch (err) {
+    console.error('❌ [RealSSA Insight Error]:', err.message);
+    res.status(500).json({ error: 'Failed to evaluate headline' });
+  }
+});
+
+// POST /api/signal/analyze — RealSSA Signal (Search Console Free Traffic Engine)
+app.post('/api/signal/analyze', async (req, res) => {
+  try {
+    const { queries } = req.body || {};
+    const SignalService = require('./services/signal.service');
+    const result = await SignalService.analyzeSearchQueries(queries || []);
+    res.json(result);
+  } catch (err) {
+    console.error('❌ [RealSSA Signal Error]:', err.message);
+    res.status(500).json({ error: 'Failed to analyze search queries' });
+  }
+});
+
+// GET /api/pulse/scores — RealSSA Pulse (Event-Driven Promotion Scores)
+app.get('/api/pulse/scores', async (req, res) => {
+  try {
+    const { runQuery } = require('./services/sqliteMultiEngine');
+    const scores = await runQuery('intelligence', 'SELECT * FROM article_scores ORDER BY promotion_score DESC LIMIT 50');
+    res.json({ success: true, count: scores.length, scores });
+  } catch (err) {
+    console.error('❌ [RealSSA Pulse Error]:', err.message);
+    res.status(500).json({ error: 'Failed to fetch pulse scores' });
+  }
+});
+
 // Manual sports poll trigger (call from cron or admin to force a refresh)
 app.get('/api/cron/sports', async (req, res) => {
   const secret = req.query.secret || req.headers['x-cron-secret'];

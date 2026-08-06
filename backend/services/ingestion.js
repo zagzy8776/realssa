@@ -1153,7 +1153,24 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
 
           if (result.rows.length > 0) {
             const articleId = result.rows[0].id;
-            newArticleIds.push(`rss-${articleId}`);
+            const formattedId = `rss-${articleId}`;
+            newArticleIds.push(formattedId);
+
+            // Dispatch to RealSSA OS EventBus Kernel
+            try {
+              const eventBus = require('./eventBus');
+              eventBus.dispatch('article:created', {
+                id: formattedId,
+                title,
+                category,
+                sourceName,
+                excerpt: description,
+                ai_summary: aiSummary,
+                image: imageUrl
+              });
+            } catch (evErr) {
+              console.warn('[EventBus Ingest Dispatch Skipped]:', evErr.message);
+            }
 
             // Generate AI Discussion Starter comment for featured or AI-summarized articles
             if (isFeatured || aiSummary) {

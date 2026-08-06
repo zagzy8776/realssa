@@ -4,6 +4,12 @@
  */
 
 const axios = require('axios');
+const eventBus = require('./eventBus');
+
+// Event-driven listener for automated Telegram publishing
+eventBus.on('article:created', (article) => {
+  postToTelegramChannel(article).catch(err => console.error('[TelegramPublisher Listener Error]:', err.message));
+});
 
 /**
  * Post an article to the RealSSA Telegram Channel
