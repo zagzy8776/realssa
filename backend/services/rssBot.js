@@ -32,8 +32,19 @@ async function cleanOldArticles() {
     let totalPurged = 0;
     for (const item of allPools) {
       try {
+        // Stage 1: Free up space by clearing out heavy columns older than 24 hours
+        await item.pool.query(
+          `UPDATE rss_articles 
+           SET full_content = NULL, 
+               embedding = NULL, 
+               title_translations = NULL, 
+               summary_translations = NULL 
+           WHERE published_at < NOW() - INTERVAL '24 hours'`
+        );
+
+        // Stage 2: Clean out full rows older than 3 days
         const result = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '10 days'`
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '3 days'`
         );
         totalPurged += result.rowCount || 0;
         if (result.rowCount > 0) {
@@ -45,6 +56,7 @@ async function cleanOldArticles() {
     }
     console.log(`[${new Date().toISOString()}] 🗑️ Total 48-Hour Garbage Collection complete: ${totalPurged} old articles removed.`);
   } catch (err) {
+
     console.error('❌ Garbage Collector failed:', err.message);
   }
 }

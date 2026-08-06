@@ -1333,19 +1333,29 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     for (const item of pools) {
 
       try {
+        // Stage 1: Free up 90%+ space by nullifying heavy columns for articles older than 24 hours
+        await item.pool.query(
+          `UPDATE rss_articles 
+           SET full_content = NULL, 
+               embedding = NULL, 
+               title_translations = NULL, 
+               summary_translations = NULL 
+           WHERE published_at < NOW() - INTERVAL '24 hours'`
+        );
+
+        // Stage 2: Delete entire records older than 3 days (72 hours)
         const cleanResult = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '10 days'`
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '3 days'`
         );
         if (cleanResult.rowCount > 0) {
-          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 10 days.`);
+          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 3 days.`);
         }
       } catch (pCleanErr) {
-
-
         console.warn(`[Self-cleaning Warning on ${item.name}]: ${pCleanErr.message}`);
       }
     }
   } catch (err) {
+
     console.error('Self-cleaning error:', err.message);
   }
 
