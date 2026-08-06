@@ -218,16 +218,18 @@ if (process.env.DATABASE_URL) {
         console.error('❌ Failed to run startup source name sanitization:', dbErr.message);
       }
 
-      // Initialize the RSS bot to periodically fetch news
-      initRssBot(pool);
-      // Initialize the Sports bot to periodically fetch matches
-      initSportsBot(pool, notificationService);
-      // Initialize the AI Intelligence & Verification Agent
-      initIntelligenceAgent(pool);
-      // Initialize the AI Trending Topic Synthesizer Agent
-      initTrendingSynthesizer(pool);
-      // Initialize the Telemetry Shock-Absorber Buffer & Cron Flusher
-      initTelemetryFlusher(pool);
+      // Initialize background cron bots ONLY on persistent servers (Fly.dev/Docker/Local),
+      // NEVER inside Vercel Serverless Functions where active timers cause function crashes.
+      if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
+        console.log('🤖 Booting background cron bots on persistent host...');
+        initRssBot(pool);
+        initSportsBot(pool, notificationService);
+        initIntelligenceAgent(pool);
+        initTrendingSynthesizer(pool);
+        initTelemetryFlusher(pool);
+      } else {
+        console.log('⚡ Vercel Serverless environment detected — background setInterval bots disabled for clean function execution.');
+      }
     }
   });
 }
