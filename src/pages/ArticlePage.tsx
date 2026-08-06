@@ -70,6 +70,23 @@ const ArticlePage = () => {
 
         // For rss- prefixed IDs, fetch directly from the single-article endpoint
         if (id && String(id).startsWith('rss-')) {
+          // ── Stale-While-Revalidate: serve from cache instantly if available ──
+          const ART_CACHE_KEY = `realssa_article_${id}`;
+          const ART_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+          try {
+            const cached = JSON.parse(localStorage.getItem(ART_CACHE_KEY) || 'null');
+            if (cached && Date.now() - cached.ts < ART_CACHE_TTL && cached.article) {
+              setArticle(cached.article);
+              setLoading(false);
+              // Still fetch fresh in background silently
+              fetch(apiUrl(`/api/articles/${id}`))
+                .then(r => r.ok ? r.json() : null)
+                .then(fresh => { if (fresh) { setArticle(fresh); localStorage.setItem(ART_CACHE_KEY, JSON.stringify({ ts: Date.now(), article: fresh })); } })
+                .catch(() => {});
+              return;
+            }
+          } catch (cacheErr) { }
+
           // Use AbortController with 12s timeout so Telegram users never get stuck forever
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -82,6 +99,8 @@ const ArticlePage = () => {
               setRelatedArticles([]);
               setLoading(false);
               fetchComments(foundArticle.id);
+              // Save to cache
+              try { localStorage.setItem(`realssa_article_${id}`, JSON.stringify({ ts: Date.now(), article: foundArticle })); } catch {}
               return;
             }
           } catch (rssErr: any) {

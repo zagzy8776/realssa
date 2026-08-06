@@ -149,6 +149,26 @@ const Index = () => {
         return sourceName !== 'punch' && sourceName !== 'the punch' && !url.includes('punchng.com');
       };
 
+      // ── Stale-While-Revalidate: show cached articles INSTANTLY ──────────
+      // If we have a recent cache (< 5 min), render it immediately so the
+      // page feels instant, then fetch fresh data silently in the background.
+      const CACHE_KEY = 'realssa_home_cache_v2';
+      const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+      let servedFromCache = false;
+      try {
+        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+        if (cached && ts - cached.ts < CACHE_TTL && Array.isArray(cached.articles) && cached.articles.length > 0) {
+          setAllArticles(cached.articles);
+          if (Array.isArray(cached.stories)) setStories(cached.stories);
+          setLoading(false);
+          servedFromCache = true;
+        }
+      } catch (cacheReadErr) { }
+
+      // ── Pre-warm the Vercel serverless function with a lightweight ping ──
+      // Fire-and-forget — wakes up the cold function before the real fetch hits
+      fetch(apiUrl('/api/articles?limit=1')).catch(() => {});
+
       // Stage 1: Load critical above-the-fold content immediately
       const [featuredRes, articlesRes, groupsRes] = await Promise.allSettled([
         fetch(apiUrl(`/api/articles/featured?t=${ts}`)),
@@ -193,8 +213,16 @@ const Index = () => {
 
       // Set fresh timestamp-sorted articles
       setAllArticles(initialUnique);
+      setLoading(false);
 
-      setLoading(false); // Stop main loading indicator once above-the-fold content renders!
+      // ── Save to cache for next visit ─────────────────────────────────────
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          ts: Date.now(),
+          articles: initialUnique.slice(0, 40), // Cap at 40 items to keep localStorage lean
+          stories: loadedStories.slice(0, 5),
+        }));
+      } catch (cacheWriteErr) { }
 
       // Stage 2: Lazy load secondary below-the-fold content in background after a 4-second delay to optimize initial paint
       setTimeout(() => {
