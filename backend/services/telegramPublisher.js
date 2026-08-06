@@ -34,15 +34,13 @@ async function postToTelegramChannel(article) {
   const whatsappChannel = process.env.WHATSAPP_CHANNEL_URL || 'https://whatsapp.com/channel/0029VbDetsPGufIx3Totk938';
 
   // Construct Markdown message
-  // Primary link = external article (never expires)
-  // Secondary link = RealSSA page (for AI summary + comments)
   const caption = 
     `📰 *${title.trim()}*\n\n` +
     `⚡ *AI Summary:*\n${summary.trim()}\n\n` +
     `🏷️ *Category:* #${category.replace(/[^A-Z0-9]/gi, '')} | ⏱️ ${readTime}\n\n` +
-    `👉 [Read Full Article](${externalUrl})\n` +
-    `🌍 [View on RealSSA](${articleUrl})\n` +
+    `👉 [Read Full Article on RealSSA](${articleUrl})\n` +
     `📲 [Join WhatsApp Channel](${whatsappChannel})`;
+
 
   try {
     // If article has a valid image URL, try sending as Photo

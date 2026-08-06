@@ -33,8 +33,7 @@ async function cleanOldArticles() {
     for (const item of allPools) {
       try {
         const result = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '24 hours'`
-
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '10 days'`
         );
         totalPurged += result.rowCount || 0;
         if (result.rowCount > 0) {

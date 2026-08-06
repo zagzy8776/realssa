@@ -1334,12 +1334,13 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
 
       try {
         const cleanResult = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '24 hours'`
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '10 days'`
         );
         if (cleanResult.rowCount > 0) {
-          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 24 hours.`);
+          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 10 days.`);
         }
       } catch (pCleanErr) {
+
 
         console.warn(`[Self-cleaning Warning on ${item.name}]: ${pCleanErr.message}`);
       }
