@@ -93,12 +93,26 @@ const ScrollToTop = () => {
   return null;
 };
 
-import BrandLoader from "./components/BrandLoader";
 
-// Unified RealSSA Brand loader shown between route transitions
+// Suspense fallback: dark screen with subtle gold pulse dot — skeleton already showed the layout
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#050505]">
-    <BrandLoader size="inline" />
+    <span
+      style={{
+        width: 10,
+        height: 10,
+        borderRadius: '50%',
+        background: '#f59e0b',
+        boxShadow: '0 0 18px 4px rgba(251,191,36,0.5)',
+        animation: 'pagePulse 1.2s ease-in-out infinite'
+      }}
+    />
+    <style>{`
+      @keyframes pagePulse {
+        0%, 100% { opacity: 0.25; transform: scale(0.8); }
+        50%       { opacity: 1;    transform: scale(1.2); }
+      }
+    `}</style>
   </div>
 );
 

@@ -97,65 +97,168 @@
   <!-- Preload critical assets for fast LCP -->
   <link rel="preload" as="image" href="/logo.png" />
 
-  <!-- Startup loader styles -->
+  <!-- Startup loader styles — Hybrid 3+4 Gold Skeleton -->
   <style>
+    /* ── Reset & Canvas ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     #startup-loader {
       position: fixed;
       inset: 0;
       z-index: 9999;
+      background: #050505;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    /* ── Ambient radial glow ── */
+    #startup-loader::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 50% at 50% 20%, rgba(251,191,36,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── Header skeleton ── */
+    .sk-header {
+      display: flex;
       align-items: center;
-      justify-content: center;
-      background-color: #0f0f0f;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(251,191,36,0.08);
+      flex-shrink: 0;
+    }
+    .sk-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sk-star {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+    .sk-brand-pill {
+      width: 100px;
+      height: 14px;
+      border-radius: 4px;
+      background: rgba(251,191,36,0.12);
+    }
+    .sk-nav-pills {
+      display: flex;
+      gap: 10px;
+    }
+    .sk-nav-pill {
+      width: 56px;
+      height: 10px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
     }
 
-    .realssa-letter {
-      font-family: "Inter", "Arial Black", sans-serif;
-      font-weight: 900;
-      font-size: clamp(72px, 10vw, 96px);
-      line-height: 1;
-      color: #fbbf24;
-      text-shadow: 0 0 40px rgba(251, 191, 36, 1), 0 0 80px rgba(251, 191, 36, 0.5);
-      user-select: none;
-      animation: realssaFade 1.4s ease-in-out infinite;
+    /* ── Category tab rail ── */
+    .sk-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 10px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .sk-tab {
+      height: 9px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.05);
+      flex-shrink: 0;
     }
 
-    .realssa-sub {
-      margin-top: 1rem;
-      color: rgba(255, 255, 255, 0.4);
-      font-size: 0.875rem;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      font-weight: 600;
-      font-family: sans-serif;
-      animation: realssaFade 1.4s ease-in-out infinite;
-      animation-delay: 0.9s;
+    /* ── Main body grid ── */
+    .sk-body {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      padding: 14px 16px;
+      flex: 1;
+      overflow: hidden;
+    }
+    @media (min-width: 768px) {
+      .sk-body { grid-template-columns: 1.6fr 1fr; }
     }
 
-    @keyframes realssaFade {
+    /* ── Hero card ── */
+    .sk-hero {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(251,191,36,0.08);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .sk-hero-img {
+      height: 200px;
+      background: rgba(255,255,255,0.04);
+      flex-shrink: 0;
+    }
+    @media (min-width: 768px) { .sk-hero-img { height: 260px; } }
+    .sk-hero-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .sk-badge { width: 60px; height: 9px; border-radius: 6px; background: rgba(251,191,36,0.18); }
+    .sk-line { height: 10px; border-radius: 4px; background: rgba(255,255,255,0.07); }
+    .sk-line.w-full { width: 100%; }
+    .sk-line.w-80  { width: 80%; }
+    .sk-line.w-60  { width: 60%; }
+    .sk-line.w-40  { width: 40%; }
+    .sk-line.thin  { height: 8px; background: rgba(255,255,255,0.04); }
 
-      0%,
-      100% {
-        opacity: 0.1;
-        transform: translateY(4px);
-      }
+    /* ── Side card list ── */
+    .sk-side { display: flex; flex-direction: column; gap: 10px; }
+    .sk-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      overflow: hidden;
+    }
+    .sk-thumb {
+      width: 62px;
+      height: 52px;
+      border-radius: 7px;
+      background: rgba(255,255,255,0.05);
+      flex-shrink: 0;
+    }
+    .sk-card-body { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow: hidden; }
 
-      50% {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    /* ── Global gold laser shimmer ── */
+    @keyframes goldShimmer {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(400%); }
+    }
+    .shimmer-wrap {
+      position: relative;
+      overflow: hidden;
+    }
+    .shimmer-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        105deg,
+        transparent 30%,
+        rgba(251,191,36,0.18) 50%,
+        rgba(255,255,255,0.08) 55%,
+        rgba(251,191,36,0.10) 60%,
+        transparent 70%
+      );
+      animation: goldShimmer 1.8s cubic-bezier(0.4,0,0.2,1) infinite;
     }
 
-    /* Respect users who prefer reduced motion — hold at a calm, legible state */
+    /* Reduced motion: remove shimmer, keep layout visible */
     @media (prefers-reduced-motion: reduce) {
-
-      .realssa-letter,
-      .realssa-sub {
-        animation: none !important;
-        opacity: 1 !important;
-        transform: none !important;
-      }
+      .shimmer-wrap::after { animation: none; }
     }
   </style>
 
@@ -196,19 +299,103 @@
     </div>
   </noscript>
   <div id="root">
+    <!-- ── Hybrid 3+4 Gold Skeleton Loader ─────────────────────────────── -->
     <div id="startup-loader" role="status" aria-live="polite" aria-label="RealSSA News is loading">
-      <div style="display: flex; align-items: flex-end; gap: 4px;" aria-hidden="true">
 
-        <span class="realssa-letter" style="animation-delay: 0s;">R</span>
-        <span class="realssa-letter" style="animation-delay: 0.14s;">E</span>
-        <span class="realssa-letter" style="animation-delay: 0.28s;">A</span>
-        <span class="realssa-letter" style="animation-delay: 0.42s;">L</span>
-        <span class="realssa-letter" style="animation-delay: 0.56s;">S</span>
-        <span class="realssa-letter" style="animation-delay: 0.70s;">S</span>
-        <span class="realssa-letter" style="animation-delay: 0.84s;">A</span>
+      <!-- Header -->
+      <header class="sk-header">
+        <div class="sk-logo">
+          <!-- Inline SVG gold star — no image request needed -->
+          <svg class="sk-star" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#fef08a"/>
+                <stop offset="50%" stop-color="#f59e0b"/>
+                <stop offset="100%" stop-color="#b45309"/>
+              </linearGradient>
+            </defs>
+            <polygon points="12,12 12,2 14.5,9.5" fill="url(#sg)" opacity="0.95"/>
+            <polygon points="12,12 14.5,9.5 22,12" fill="url(#sg)" opacity="0.75"/>
+            <polygon points="12,12 22,12 14.5,14.5" fill="url(#sg)" opacity="0.60"/>
+            <polygon points="12,12 14.5,14.5 12,22" fill="url(#sg)" opacity="0.40"/>
+            <polygon points="12,12 12,22 9.5,14.5" fill="url(#sg)" opacity="0.80"/>
+            <polygon points="12,12 9.5,14.5 2,12"  fill="url(#sg)" opacity="0.70"/>
+            <polygon points="12,12 2,12 9.5,9.5"  fill="url(#sg)" opacity="0.55"/>
+            <polygon points="12,12 9.5,9.5 12,2"  fill="url(#sg)" opacity="0.90"/>
+          </svg>
+          <div class="sk-brand-pill shimmer-wrap"></div>
+        </div>
+        <div class="sk-nav-pills">
+          <div class="sk-nav-pill shimmer-wrap"></div>
+          <div class="sk-nav-pill shimmer-wrap"></div>
+          <div class="sk-nav-pill shimmer-wrap"></div>
+        </div>
+      </header>
+
+      <!-- Category tab rail -->
+      <div class="sk-tabs" aria-hidden="true">
+        <div class="sk-tab shimmer-wrap" style="width:52px"></div>
+        <div class="sk-tab shimmer-wrap" style="width:72px"></div>
+        <div class="sk-tab shimmer-wrap" style="width:44px"></div>
+        <div class="sk-tab shimmer-wrap" style="width:68px"></div>
+        <div class="sk-tab shimmer-wrap" style="width:56px"></div>
+        <div class="sk-tab shimmer-wrap" style="width:80px"></div>
       </div>
-      <p class="realssa-sub">News</p>
-    </div>
+
+      <!-- Main body -->
+      <div class="sk-body" aria-hidden="true">
+
+        <!-- Hero card -->
+        <div class="sk-hero">
+          <div class="sk-hero-img shimmer-wrap"></div>
+          <div class="sk-hero-body">
+            <div class="sk-badge shimmer-wrap"></div>
+            <div class="sk-line w-full shimmer-wrap"></div>
+            <div class="sk-line w-80  shimmer-wrap"></div>
+            <div class="sk-line w-60  shimmer-wrap"></div>
+            <div class="sk-line w-40 thin shimmer-wrap" style="margin-top:4px"></div>
+            <div class="sk-line w-60 thin shimmer-wrap"></div>
+          </div>
+        </div>
+
+        <!-- Side cards -->
+        <div class="sk-side">
+          <div class="sk-card">
+            <div class="sk-thumb shimmer-wrap"></div>
+            <div class="sk-card-body">
+              <div class="sk-line w-full shimmer-wrap"></div>
+              <div class="sk-line w-80  shimmer-wrap"></div>
+              <div class="sk-line w-40 thin shimmer-wrap"></div>
+            </div>
+          </div>
+          <div class="sk-card">
+            <div class="sk-thumb shimmer-wrap"></div>
+            <div class="sk-card-body">
+              <div class="sk-line w-full shimmer-wrap"></div>
+              <div class="sk-line w-60  shimmer-wrap"></div>
+              <div class="sk-line w-40 thin shimmer-wrap"></div>
+            </div>
+          </div>
+          <div class="sk-card">
+            <div class="sk-thumb shimmer-wrap"></div>
+            <div class="sk-card-body">
+              <div class="sk-line w-full shimmer-wrap"></div>
+              <div class="sk-line w-80  shimmer-wrap"></div>
+              <div class="sk-line w-40 thin shimmer-wrap"></div>
+            </div>
+          </div>
+          <div class="sk-card">
+            <div class="sk-thumb shimmer-wrap"></div>
+            <div class="sk-card-body">
+              <div class="sk-line w-full shimmer-wrap"></div>
+              <div class="sk-line w-60  shimmer-wrap"></div>
+              <div class="sk-line w-40 thin shimmer-wrap"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /sk-body -->
+    </div><!-- /startup-loader -->
   </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
