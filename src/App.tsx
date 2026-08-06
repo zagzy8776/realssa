@@ -93,10 +93,12 @@ const ScrollToTop = () => {
   return null;
 };
 
-// Minimal full-screen page loader shown between route transitions
+import BrandLoader from "./components/BrandLoader";
+
+// Unified RealSSA Brand loader shown between route transitions
 const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
-    <div className="h-8 w-8 rounded-full border-4 border-primary border-r-transparent animate-spin" />
+  <div className="min-h-screen flex items-center justify-center bg-[#050505]">
+    <BrandLoader size="inline" />
   </div>
 );
 
