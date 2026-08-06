@@ -32,6 +32,7 @@ const SocietalArchitecture = lazy(() => import("./pages/library/SocietalArchitec
 const AdminLogin          = lazy(() => import("./pages/AdminLogin"));
 const ArticlePage         = lazy(() => import("./pages/ArticlePage"));
 const AdminDashboard      = lazy(() => import("./pages/AdminDashboard"));
+const InternalDashboard   = lazy(() => import("./pages/InternalDashboard"));
 const EditNewsPage        = lazy(() => import("./pages/EditNewsPage"));
 const NigerianNews        = lazy(() => import("./pages/NigerianNews"));
 const WorldNews           = lazy(() => import("./pages/WorldNews"));
@@ -142,6 +143,7 @@ const App = () => {
                 <Route path="/library/societal-architecture" element={<SocietalArchitecture />} />
                 <Route path="/admin-login" element={<AdminLogin />} />
                 <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                <Route path="/internal/dashboard" element={<InternalDashboard />} />
                 <Route path="/edit-news/:id" element={<EditNewsPage />} />
                 <Route path="/post-news" element={<NewsPost />} />
                 <Route path="/article/:id" element={<ArticlePage />} />
