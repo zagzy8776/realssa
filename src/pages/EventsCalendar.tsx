@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "@/lib/api-base";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Link } from "react-router-dom";
@@ -89,7 +90,7 @@ export default function EventsCalendar() {
   const fetchEvents = async () => {
     try {
       setLoadingEvents(true);
-      const host = window.location.hostname === "localhost" ? "http://localhost:5000" : "";
+      const host = API_BASE_URL;
       const res = await fetch(`${host}/api/events`);
       
       if (!res.ok) throw new Error("Database offline");
@@ -115,7 +116,7 @@ export default function EventsCalendar() {
   const fetchEventArticles = async (eventId: number) => {
     try {
       setLoadingArticles(true);
-      const host = window.location.hostname === "localhost" ? "http://localhost:5000" : "";
+      const host = API_BASE_URL;
       const res = await fetch(`${host}/api/events/${eventId}/articles`);
       if (!res.ok) throw new Error();
       const data = await res.json();

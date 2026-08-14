@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Landmark, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Activity } from "lucide-react";
 import { toast } from "sonner";
+import { API_BASE_URL } from "@/lib/api-base";
 
 interface ExchangeRate {
   currency: string;
@@ -43,7 +44,7 @@ export default function LocalMarketHub() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const host = window.location.hostname === "localhost" ? "http://localhost:5000" : "";
+      const host = API_BASE_URL;
       
       const [ratesRes, pricesRes, stocksRes] = await Promise.all([
         fetch(`${host}/api/rates`),

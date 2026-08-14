@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Globe, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api-base";
 
 interface Rate {
   currency: string;
@@ -26,7 +27,7 @@ export default function Widgets() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const host = window.location.hostname === "localhost" ? "http://localhost:5000" : "";
+      const host = API_BASE_URL;
       
       if (type === "rates") {
         const res = await fetch(`${host}/api/rates`);

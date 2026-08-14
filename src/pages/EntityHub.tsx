@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "@/lib/api-base";
 import { useParams, Link } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -53,7 +54,7 @@ export default function EntityHub() {
   const fetchEntityData = async () => {
     try {
       setLoading(true);
-      const host = window.location.hostname === "localhost" ? "http://localhost:5000" : "";
+      const host = API_BASE_URL;
       const res = await fetch(`${host}/api/entities/${encodeURIComponent(name || "")}`);
       if (!res.ok) throw new Error("Failed to fetch entity details");
       const json = await res.json();

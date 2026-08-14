@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "@/lib/api-base";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent } from "@/components/ui/card";
@@ -398,7 +399,7 @@ export default function LiveWire() {
   const fetchWirePosts = async () => {
     try {
       setLoading(true);
-      const host = window.location.hostname === "localhost" ? "http://localhost:5000" : "";
+      const host = API_BASE_URL;
       const res = await fetch(`${host}/api/news/social?limit=100`);
       
       if (!res.ok) throw new Error();
@@ -425,7 +426,7 @@ export default function LiveWire() {
     const fetchLiveFeed = async () => {
       try {
         setLoadingProfilePosts(true);
-        const host = window.location.hostname === "localhost" ? "http://localhost:5000" : "";
+        const host = API_BASE_URL;
         const res = await fetch(`${host}/api/news/publisher/${selectedProfilePublisher.handle}/live`);
         if (!res.ok) throw new Error();
         const data = await res.json();

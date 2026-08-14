@@ -1,9 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 
 // Use canonical URL with 'www' to ensure consistency and avoid CORS/redirect issues
-export const API_BASE_URL = import.meta.env?.MODE === 'development'
-  ? (import.meta.env?.VITE_API_URL || 'http://localhost:5000')
-  : 'https://www.realssanews.com.ng';
+export const API_BASE_URL = import.meta.env?.VITE_API_URL || 'https://www.realssanews.com.ng';
 
 export const RUST_ENGINE_URL = import.meta.env?.MODE === 'development'
   ? (import.meta.env?.VITE_RUST_ENGINE_URL || 'http://localhost:8080')
