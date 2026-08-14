@@ -1343,12 +1343,12 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
            WHERE published_at < NOW() - INTERVAL '24 hours'`
         );
 
-        // Stage 2: Delete entire records older than 3 days (72 hours)
+        // Stage 2: Delete entire records older than 24 hours (1 day retention)
         const cleanResult = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '3 days'`
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '24 hours'`
         );
         if (cleanResult.rowCount > 0) {
-          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 3 days.`);
+          console.log(`🧹 Self-cleaning on ${item.name}: Deleted ${cleanResult.rowCount} articles older than 24 hours.`);
         }
       } catch (pCleanErr) {
         console.warn(`[Self-cleaning Warning on ${item.name}]: ${pCleanErr.message}`);

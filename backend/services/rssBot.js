@@ -42,19 +42,19 @@ async function cleanOldArticles() {
            WHERE published_at < NOW() - INTERVAL '24 hours'`
         );
 
-        // Stage 2: Clean out full rows older than 3 days
+        // Clean out full rows older than 24 hours (1 day retention)
         const result = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '3 days'`
+          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '24 hours'`
         );
         totalPurged += result.rowCount || 0;
         if (result.rowCount > 0) {
-          console.log(`[${new Date().toISOString()}] 🗑️ Garbage Collector removed ${result.rowCount} old articles from ${item.name}.`);
+          console.log(`[${new Date().toISOString()}] 🗑️ Garbage Collector removed ${result.rowCount} articles older than 24 hours from ${item.name}.`);
         }
       } catch (pErr) {
         console.warn(`[Garbage Collector Warning on ${item.name}]: ${pErr.message}`);
       }
     }
-    console.log(`[${new Date().toISOString()}] 🗑️ Total 48-Hour Garbage Collection complete: ${totalPurged} old articles removed.`);
+    console.log(`[${new Date().toISOString()}] 🗑️ Total 24-Hour Garbage Collection complete: ${totalPurged} old articles removed.`);
   } catch (err) {
 
     console.error('❌ Garbage Collector failed:', err.message);
@@ -129,7 +129,6 @@ const BUFFER_POST_GAP_MS = Number(
 
 async function getBufferQueueCount() {
   try {
-    const { getBufferProfiles } = require('./buffer');
     const { isBufferConfigured } = require('./buffer');
     if (!isBufferConfigured()) return 0;
 
@@ -142,28 +141,53 @@ async function getBufferQueueCount() {
     const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
     const checkId = BUFFER_PROFILE_IDS.find(id => id !== INSTAGRAM_ID) || BUFFER_PROFILE_IDS[0];
 
-    const query = {
+    // Step 1: Get Organization ID
+    const orgRes = await fetch('https://api.buffer.com/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
+      body: JSON.stringify({
+        query: `query GetOrganizations { account { organizations { id } } }`
+      })
+    });
+    if (!orgRes.ok) return 0;
+    const orgData = await orgRes.json();
+    const orgId = orgData?.data?.account?.organizations?.[0]?.id;
+    if (!orgId) return 0;
+
+    // Step 2: Query scheduled posts
+    const postsQuery = {
       query: `
-        query GetQueuedPosts($channelId: ChannelId!) {
-          channel(id: $channelId) {
-            posts(filter: { status: scheduled }) {
-              edges { node { id } }
+        query GetQueuedPosts($input: PostsInput!) {
+          posts(input: $input) {
+            edges {
+              node {
+                id
+                status
+              }
             }
           }
         }
       `,
-      variables: { channelId: checkId }
+      variables: {
+        input: {
+          organizationId: orgId,
+          filter: {
+            channelIds: [checkId],
+            status: ['scheduled']
+          }
+        }
+      }
     };
 
     const res = await fetch('https://api.buffer.com/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
-      body: JSON.stringify(query)
+      body: JSON.stringify(postsQuery)
     });
 
     if (!res.ok) return 0;
     const data = await res.json();
-    return data?.data?.channel?.posts?.edges?.length ?? 0;
+    return data?.data?.posts?.edges?.length ?? 0;
   } catch {
     return 0;
   }

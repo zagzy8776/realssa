@@ -232,7 +232,7 @@ impl HumanBrainEngine {
                                 let vector_str = format!("[{}]", emb.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(","));
                                 let _ = cl.execute(
                                     "INSERT INTO human_learning_vectors (category, phrase, context, human_nuance, frequency_count, last_updated, rl_reward_score, embedding)
-                                     VALUES ($1, $2, $3, $4, 1, $5, 1.0, $6::vector)
+                                     VALUES ($1, $2, $3, $4, 1, $5, 1.0, $6::text::vector)
                                      ON CONFLICT (category, phrase) DO NOTHING",
                                     &[&cat.to_string(), &phrase.to_string(), &context.to_string(), &nuance.to_string(), &now_ts, &vector_str]
                                 ).await;
@@ -341,7 +341,7 @@ impl HumanBrainEngine {
         
         if let Ok(client) = self.dbs[db_idx].get_client().await {
             let q = "INSERT INTO human_learning_vectors (category, phrase, context, human_nuance, frequency_count, last_updated, rl_reward_score, embedding)
-                     VALUES ($1, $2, $3, $4, 1, $5, 1.0, $6::vector)
+                     VALUES ($1, $2, $3, $4, 1, $5, 1.0, $6::text::vector)
                      ON CONFLICT (category, phrase)
                      DO UPDATE SET frequency_count = human_learning_vectors.frequency_count + 1, last_updated = EXCLUDED.last_updated";
             let _ = client.execute(
@@ -394,23 +394,30 @@ impl HumanBrainEngine {
             let q_vec = query_vector_str.clone();
             tasks.push(tokio::spawn(async move {
                 if let Ok(client) = client_wrapper.get_client().await {
-                    if let Ok(rows) = client.query(
+                    match client.query(
                         "SELECT category, phrase, context, human_nuance, rl_reward_score,
-                                (1.0 - (embedding <=> $1::vector)) as similarity
+                                (1.0 - (embedding <=> $1::text::vector)) as similarity
                          FROM human_learning_vectors
-                         ORDER BY (0.7 * (1.0 - (embedding <=> $1::vector)) + 0.3 * LEAST(GREATEST(rl_reward_score, 0.0), 2.0)) DESC
+                         WHERE embedding IS NOT NULL
+                         ORDER BY (0.7 * (1.0 - (embedding <=> $1::text::vector)) + 0.3 * LEAST(GREATEST(rl_reward_score, 0.0), 2.0)) DESC
                          LIMIT 1",
                         &[&q_vec]
                     ).await {
-                        if let Some(row) = rows.first() {
-                            let sim: f64 = row.get("similarity");
-                            let score = (0.7 * sim) + (0.3 * row.get::<_, f64>("rl_reward_score").clamp(0.0, 2.0));
-                            return Some((
-                                score as f32,
-                                row.get::<_, String>("category"),
-                                row.get::<_, String>("phrase"),
-                                row.get::<_, String>("human_nuance")
-                            ));
+                        Ok(rows) => {
+                            if let Some(row) = rows.first() {
+                                let sim: f64 = row.get("similarity");
+                                let rl: f32 = row.get("rl_reward_score");
+                                let score = (0.7 * sim) + (0.3 * (rl as f64).clamp(0.0, 2.0));
+                                return Some((
+                                    score as f32,
+                                    row.get::<_, String>("category"),
+                                    row.get::<_, String>("phrase"),
+                                    row.get::<_, Option<String>>("human_nuance").unwrap_or_default()
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[NEON DB ERROR]: {:?}", e);
                         }
                     }
                 }
@@ -464,7 +471,7 @@ impl HumanBrainEngine {
                                 "- [{}] \"{}\" (Nuance: {})",
                                 row.get::<_, String>("category"),
                                 row.get::<_, String>("phrase"),
-                                row.get::<_, String>("human_nuance")
+                                row.get::<_, Option<String>>("human_nuance").unwrap_or_default()
                             ));
                         }
                         return items;
@@ -532,17 +539,17 @@ impl HumanBrainEngine {
                 if let Ok(client) = client_wrapper.get_client().await {
                     if let Ok(rows) = client.query(
                         "SELECT category, phrase, context, human_nuance, frequency_count, last_updated, rl_reward_score,
-                                (1.0 - (embedding <=> $1::vector)) as similarity
+                                (1.0 - (embedding <=> $1::text::vector)) as similarity
                          FROM human_learning_vectors
-                         WHERE category != 'user_history'
-                         ORDER BY (1.0 - (embedding <=> $1::vector)) DESC
+                         WHERE category != 'user_history' AND embedding IS NOT NULL
+                         ORDER BY (1.0 - (embedding <=> $1::text::vector)) DESC
                          LIMIT 20",
                         &[&q_vec]
                     ).await {
                         let mut items = Vec::new();
                         for row in rows {
                             let sim: f64 = row.get("similarity");
-                            let rl: f64 = row.get("rl_reward_score");
+                            let rl: f32 = row.get("rl_reward_score");
                             let cat: String = row.get("category");
                             
                             let category_boost = match cat.as_str() {
@@ -553,17 +560,17 @@ impl HumanBrainEngine {
                                 _ => 0.0,
                             };
                             
-                            let combined = (0.7 * sim) + (0.3 * rl.clamp(0.0, 2.0)) + category_boost;
+                            let combined = (0.7 * sim) + (0.3 * (rl as f64).clamp(0.0, 2.0)) + category_boost;
                             items.push((
                                 combined as f32,
                                 LearnedInsight {
                                     category: cat,
                                     phrase: row.get("phrase"),
-                                    context: row.get("context"),
-                                    human_nuance: row.get("human_nuance"),
+                                    context: row.get::<_, Option<String>>("context").unwrap_or_default(),
+                                    human_nuance: row.get::<_, Option<String>>("human_nuance").unwrap_or_default(),
                                     frequency_count: row.get::<_, i32>("frequency_count") as u32,
                                     last_updated: row.get::<_, i64>("last_updated") as u64,
-                                    rl_reward_score: rl as f32,
+                                    rl_reward_score: rl,
                                     embedding_vector: vec![],
                                 }
                             ));
@@ -681,11 +688,11 @@ impl HumanBrainEngine {
                                     items.push(LearnedInsight {
                                         category: row.get("category"),
                                         phrase: row.get("phrase"),
-                                        context: row.get("context"),
-                                        human_nuance: row.get("human_nuance"),
+                                        context: row.get::<_, Option<String>>("context").unwrap_or_default(),
+                                        human_nuance: row.get::<_, Option<String>>("human_nuance").unwrap_or_default(),
                                         frequency_count: row.get::<_, i32>("frequency_count") as u32,
                                         last_updated: row.get::<_, i64>("last_updated") as u64,
-                                        rl_reward_score: row.get("rl_reward_score"),
+                                        rl_reward_score: row.get::<_, f32>("rl_reward_score"),
                                         embedding_vector: vec![],
                                     });
                                 }
@@ -859,6 +866,10 @@ mod tests {
     #[tokio::test]
     async fn test_brain_generation() {
         let engine = HumanBrainEngine::new();
+        
+        let (reply, score) = engine.native_rust_inference("Zagzy assets").await;
+        println!("\n[TEST SCORE]: {}\n[TEST REPLY]: {}", score, reply);
+
         let test_prompts = vec!["who are you", "who built you", "hello"];
 
         for prompt in test_prompts {
