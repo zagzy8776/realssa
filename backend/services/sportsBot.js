@@ -259,14 +259,29 @@ async function pollMatches(pool, notificationService) {
     // Also fetch live matches from API-SPORTS to ensure high-fidelity team crests & live scores
     await fetchApiSportsMatches(pool);
 
-    // Housekeeping: Clean up followed matches database older than 2 days
+    // Housekeeping: Clean up matches, live_matches, followed_matches, and live_streams older than 24 hours
     await pool.query(`
       DELETE FROM followed_matches 
       WHERE provider_match_id IN (
         SELECT provider_match_id FROM matches 
-        WHERE kickoff_at < NOW() - INTERVAL '2 days'
+        WHERE kickoff_at < NOW() - INTERVAL '24 hours'
       )
-    `);
+    `).catch(e => console.warn('[sportsBot GC] followed_matches clean:', e.message));
+
+    await pool.query(`
+      DELETE FROM matches 
+      WHERE kickoff_at < NOW() - INTERVAL '24 hours'
+    `).catch(e => console.warn('[sportsBot GC] matches clean:', e.message));
+
+    await pool.query(`
+      DELETE FROM live_matches 
+      WHERE kickoff_at < NOW() - INTERVAL '24 hours'
+    `).catch(e => console.warn('[sportsBot GC] live_matches clean:', e.message));
+
+    await pool.query(`
+      DELETE FROM live_streams 
+      WHERE created_at < NOW() - INTERVAL '24 hours'
+    `).catch(e => console.warn('[sportsBot GC] live_streams clean:', e.message));
   } catch (err) {
     console.error('[sportsBot] Error during polling:', err.message);
   } finally {

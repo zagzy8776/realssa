@@ -2426,16 +2426,16 @@ app.get('/api/sports/stream-schedule', async (req, res) => {
     let events = [];
     let streamedSuFetched = false;
 
-    // ── SOURCE 1: Streamed.su API ──
+    // ── SOURCE 1: Streamed.st API ──
     const streamedSuEndpoints = [
-      'https://streamed.su/api/matches/live',
-      'https://streamed.su/api/matches/all'
+      'https://streamed.st/api/matches/live',
+      'https://streamed.st/api/matches/all'
     ];
 
     for (const url of streamedSuEndpoints) {
       if (events.length > 0) break;
       try {
-        console.log(`[sportsBot] Trying Streamed.su API from ${url}`);
+        console.log(`[sportsBot] Trying Streamed.st API from ${url}`);
         const resp = await axios.get(url, { headers, timeout: 6000 });
         if (resp.status === 200 && Array.isArray(resp.data)) {
           streamedSuFetched = true;
@@ -2467,16 +2467,16 @@ app.get('/api/sports/stream-schedule', async (req, res) => {
                 event: title,
                 id: matchId,
                 channels: [
-                  { id: matchId, name: 'Streamed.su' }
+                  { id: matchId, name: 'Streamed.st' }
                 ],
                 isLive
               });
             }
           });
-          console.log(`[sportsBot] Streamed.su: found ${events.length} events`);
+          console.log(`[sportsBot] Streamed.st: found ${events.length} events`);
         }
       } catch (e) {
-        console.warn(`[sportsBot] Streamed.su fetch failed for ${url}:`, e.message);
+        console.warn(`[sportsBot] Streamed.st fetch failed for ${url}:`, e.message);
       }
     }
 

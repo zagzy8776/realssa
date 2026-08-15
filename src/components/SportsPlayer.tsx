@@ -10,10 +10,10 @@ interface SportsPlayerProps {
 // ── Working sports streaming servers ──
 const SERVERS = [
   {
-    label: 'Server 1 · Streamed.su',
+    label: 'Server 1 · Streamed.st',
     key: 'streamed',
-    buildUrl: (id: string | number) => `https://streamed.su/embed/${id}`,
-    homepage: 'https://streamed.su',
+    buildUrl: (id: string | number) => `https://streamed.st/embed/${id}`,
+    homepage: 'https://streamed.st',
   },
   {
     label: 'Server 2 · VIPRow',

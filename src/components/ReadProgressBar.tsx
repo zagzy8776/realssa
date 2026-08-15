@@ -35,7 +35,7 @@ const ReadProgressBar = ({ articleId, className = '' }: ReadProgressBarProps) =>
 
 
   return (
-    <div className={`fixed top-0 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-800 z-50 ${className}`}>
+    <div className={`fixed top-0 left-0 right-0 h-1 bg-transparent z-[99999] ${className}`}>
       <div
         className="h-full bg-gradient-to-r from-primary to-purple-600 transition-all duration-100 ease-out"
         style={{ width: `${scrollProgress}%` }}

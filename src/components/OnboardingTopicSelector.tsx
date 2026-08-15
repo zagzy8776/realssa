@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Sparkles, ArrowRight, Flame, Trophy, TrendingUp, Cpu, Film, Briefcase, Globe, Landmark, Coins } from 'lucide-react';
+import { Check, Sparkles, ArrowRight, Flame, Trophy, TrendingUp, Cpu, Film, Briefcase, Globe, Coins, X } from 'lucide-react';
 
 const TOPIC_KEY = 'realssa_user_selected_topics';
 const ONBOARDED_KEY = 'realssa_onboarding_completed';
@@ -19,64 +19,64 @@ const TOPICS: TopicItem[] = [
     name: 'Nigeria News',
     subtitle: 'Local politics, metro & breaking',
     icon: Flame,
-    image: 'https://images.unsplash.com/photo-1618828665011-0abd973f7ad8?auto=format&fit=crop&w=600&q=80',
-    color: 'from-emerald-900/90 to-black/90'
+    image: '/images/nigeria_heritage_bg.png',
+    color: 'from-black/85 via-black/25 to-transparent'
   },
   {
     id: 'sports',
-    name: 'Football & Sports',
+    name: 'Football + Sports',
     subtitle: 'Premier League, Super Eagles & Live',
     icon: Trophy,
-    image: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=600&q=80',
-    color: 'from-amber-900/90 to-black/90'
+    image: '/images/football_retro_bg.png',
+    color: 'from-black/85 via-amber-950/25 to-transparent'
   },
   {
     id: 'business',
-    name: 'Business & Markets',
+    name: 'Business + Markets',
     subtitle: 'Naira rates, inflation & stocks',
     icon: TrendingUp,
-    image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=600&q=80',
-    color: 'from-blue-900/90 to-black/90'
+    image: '/images/business_mindset_bg.png',
+    color: 'from-black/85 via-blue-950/25 to-transparent'
   },
   {
     id: 'tech',
-    name: 'Tech & AI',
+    name: 'Tech + AI',
     subtitle: 'Gadgets, startups & innovation',
     icon: Cpu,
-    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80',
-    color: 'from-purple-900/90 to-black/90'
+    image: '/images/tech_ai_robot_bg.png',
+    color: 'from-black/85 via-purple-950/25 to-transparent'
   },
   {
     id: 'entertainment',
-    name: 'Entertainment',
-    subtitle: 'Nollywood, Afrobeats & Cinema',
+    name: 'Entertainment + Gaming',
+    subtitle: 'Nollywood, Afrobeats & Gaming',
     icon: Film,
-    image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
-    color: 'from-pink-900/90 to-black/90'
+    image: '/images/entertainment_game_bg.png',
+    color: 'from-black/85 via-pink-950/25 to-transparent'
   },
   {
     id: 'jobs',
-    name: 'Jobs & Career',
+    name: 'Jobs + Careers',
     subtitle: 'Hiring alerts & remote roles',
     icon: Briefcase,
-    image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80',
-    color: 'from-cyan-900/90 to-black/90'
+    image: '/images/jobs_careers_bg.png',
+    color: 'from-black/85 via-cyan-950/25 to-transparent'
   },
   {
     id: 'world',
-    name: 'World & Politics',
+    name: 'World + Politics',
     subtitle: 'Global events & geopolitics',
     icon: Globe,
-    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80',
-    color: 'from-indigo-900/90 to-black/90'
+    image: '/images/politics_world_bg.png',
+    color: 'from-black/85 via-indigo-950/25 to-transparent'
   },
   {
     id: 'crypto',
-    name: 'Crypto & FX',
+    name: 'Crypto + FX',
     subtitle: 'Bitcoin, P2P & Forex rates',
     icon: Coins,
-    image: 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?auto=format&fit=crop&w=600&q=80',
-    color: 'from-yellow-900/90 to-black/90'
+    image: '/images/crypto_fx_bg.png',
+    color: 'from-black/85 via-yellow-950/25 to-transparent'
   }
 ];
 
@@ -91,10 +91,27 @@ export default function OnboardingTopicSelector() {
     }
   }, []);
 
+  // Lock background page scroll when modal is active to isolate modal scrolling
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   const toggleTopic = (id: string) => {
     setSelected(prev =>
       prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
     );
+  };
+
+  const handleDismiss = () => {
+    localStorage.setItem(ONBOARDED_KEY, 'true');
+    setIsOpen(false);
   };
 
   const handleSave = () => {
@@ -107,15 +124,28 @@ export default function OnboardingTopicSelector() {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-xl p-4 sm:p-6 animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-xl bg-card border border-border/60 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-card-foreground my-auto relative overflow-hidden">
+    <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-xl p-4 sm:p-6 pt-[calc(env(safe-area-inset-top)+1rem)] animate-fade-in overflow-y-auto overscroll-contain">
+      <div 
+        className="w-full max-w-xl bg-card border border-border/60 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-card-foreground my-0 sm:my-auto relative overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         
-        {/* Header section with Pinterest style badge & counter */}
-        <div className="text-center space-y-3">
+        {/* Close Button */}
+        <button
+          type="button"
+          onClick={handleDismiss}
+          className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+          aria-label="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        {/* Header section */}
+        <div className="text-center space-y-3 pr-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-semibold uppercase tracking-widest border border-primary/20">
             <Sparkles className="w-4 h-4 text-primary" /> Welcome to RealSSA
           </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-sans">
             What interests you?
           </h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
@@ -130,8 +160,8 @@ export default function OnboardingTopicSelector() {
           </div>
         </div>
 
-        {/* Pinterest Visual Card Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 max-h-[55vh] overflow-y-auto p-1 custom-scrollbar">
+        {/* Pinterest Visual Card Grid - overscroll-contain & touch-pan-y isolate modal scrolling */}
+        <div className="grid grid-cols-2 gap-3 max-h-[55vh] overflow-y-auto p-1 custom-scrollbar overscroll-contain touch-pan-y">
           {TOPICS.map(topic => {
             const isSelected = selected.includes(topic.id);
             const Icon = topic.icon;
@@ -150,13 +180,11 @@ export default function OnboardingTopicSelector() {
                 <img
                   src={topic.image}
                   alt={topic.name}
-                  className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${
-                    isSelected ? 'filter brightness-90' : 'filter brightness-75'
-                  }`}
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 opacity-85 brightness-95"
                   loading="lazy"
                 />
 
-                {/* Dark Gradient Overlay */}
+                {/* Dark Gradient Overlay for readability */}
                 <div className={`absolute inset-0 bg-gradient-to-t ${topic.color}`} />
 
                 {/* Selection Checkmark Badge */}
@@ -178,7 +206,7 @@ export default function OnboardingTopicSelector() {
 
                 {/* Card Content */}
                 <div className="absolute bottom-0 inset-x-0 p-3 z-10 flex flex-col justify-end">
-                  <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5 drop-shadow-sm">
+                  <h3 className="text-sm font-bold text-white tracking-tight font-sans flex items-center gap-1.5 drop-shadow-sm">
                     {topic.name}
                   </h3>
                   <p className="text-[11px] text-white/80 line-clamp-1 font-normal">

@@ -302,9 +302,15 @@ const Header = () => {
 
   return (
     <header className={cn(
-      "sticky top-0 z-[9999] pt-[env(safe-area-inset-top)] border-b transition-colors",
+      "sticky top-0 z-[9999] border-b transition-colors",
       isMenuOpen ? "bg-background/95" : "glass-nav"
-    )}>
+    )} style={{ marginTop: isMenuOpen ? 'calc(-1 * env(safe-area-inset-top, 0px))' : undefined }}>
+      {/* Safe-area fill strip — covers the status-bar zone with the header background */}
+      <div
+        className={isMenuOpen ? "bg-background/95" : "glass-nav-fill"}
+        style={{ height: 'env(safe-area-inset-top, 0px)' }}
+        aria-hidden="true"
+      />
       <div className="container mx-auto px-3 md:px-4">
         <div className="flex items-center justify-between h-14 md:h-20">
           {/* Logo & Back Button Container */}

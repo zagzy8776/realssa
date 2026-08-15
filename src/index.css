@@ -626,6 +626,15 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
+/* Safe-area fill strip — same bg as glass-nav, painted above the header content */
+.glass-nav-fill {
+  background: rgba(22, 19, 26, 0.96);
+}
+
+.light .glass-nav-fill {
+  background: rgba(255, 255, 255, 0.96);
+}
+
 /* Glass pill — for small tag/badge/chip elements */
 .glass-pill {
   background: rgba(255, 255, 255, 0.08);

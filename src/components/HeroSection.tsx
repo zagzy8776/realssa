@@ -18,12 +18,6 @@ interface LiveChannel {
 
 const CHANNELS: LiveChannel[] = [
   {
-    id: "peller-jarvis-wedding",
-    name: "Peller & Jarvis Traditional Wedding Live",
-    source: "YouTube Live",
-    embedUrl: "https://www.youtube.com/embed/MnG0Ldos2wU?autoplay=0"
-  },
-  {
     id: "channels-tv",
     name: "Channels TV",
     source: "Channels TV",
@@ -157,8 +151,7 @@ const HeroSection = () => {
   const shouldPlay = !isCellular || userApprovedCellularPlay;
 
   return (
-    <section className="relative overflow-hidden w-full h-[62vh] md:h-[90vh] flex items-center justify-center bg-black">
-
+    <section className="relative overflow-hidden w-full min-h-[640px] md:h-[90vh] flex flex-col items-center justify-center bg-black py-12 md:py-0">
 
       {/* 1. Background Video / HLS Stream Player */}
       <div className="absolute inset-0 w-full h-full pointer-events-none z-0">
@@ -207,23 +200,23 @@ const HeroSection = () => {
       <div className="absolute inset-0 bg-black/60 z-10" />
       <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/25 z-10" />
 
-      {/* Channel Switcher Overlay (Political & partisan neutral selector) */}
-      <div className="absolute top-[65px] left-1/2 -translate-x-1/2 z-30 flex flex-col gap-3 items-center px-4 max-w-lg w-full">
-        <div className="flex flex-wrap gap-2 justify-center">
+      {/* Channel Switcher Overlay */}
+      <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 z-30 flex flex-col gap-2 items-center px-4 max-w-lg w-full">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
           {isLiveEventActive && (
             <div className="px-3 py-1 bg-red-600/90 text-white rounded-full text-xs font-bold flex items-center gap-1 shadow-lg shadow-red-900/30 animate-pulse">
               <Radio className="w-3 h-3" />
               <span>{liveEventTitle}</span>
             </div>
           )}
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 p-1 rounded-full items-center">
+          <div className="flex bg-black/50 backdrop-blur-md border border-white/15 p-1 rounded-full items-center max-w-full overflow-x-auto custom-scrollbar">
             {CHANNELS.map((chan) => {
               const isSelected = !isLiveEventActive && activeChannel.id === chan.id;
               return (
                 <button
                   key={chan.id}
                   onClick={() => handleChannelSwitch(chan)}
-                  className={`px-3 py-1 rounded-full text-[10px] md:text-xs font-semibold uppercase tracking-wider transition-all ${isSelected
+                  className={`px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all whitespace-nowrap ${isSelected
                     ? "bg-amber-500 text-black shadow-md font-bold scale-105"
                     : "text-white/70 hover:text-white"
                     }`}
@@ -239,42 +232,40 @@ const HeroSection = () => {
         {isCellular && !userApprovedCellularPlay && !videoError && (
           <button
             onClick={() => setUserApprovedCellularPlay(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-500/95 hover:bg-amber-500 text-black rounded-full text-xs font-bold transition-all scale-100 hover:scale-105 active:scale-95 shadow-lg pointer-events-auto"
+            className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/95 hover:bg-amber-500 text-black rounded-full text-[11px] font-bold transition-all scale-100 hover:scale-105 active:scale-95 shadow-lg pointer-events-auto"
           >
-            <PlayCircle className="w-4 h-4" />
+            <PlayCircle className="w-3.5 h-3.5" />
             <span>Tap to Stream Live (Cellular Data)</span>
           </button>
         )}
       </div>
 
       {/* 3. The Glassmorphism Welcome Modal */}
-      <div className="relative z-20 container mx-auto px-4 flex flex-col items-center text-center">
-        <div className="animate-fade-in bg-black/45 backdrop-blur-md border border-white/10 p-6 sm:p-8 md:p-12 rounded-3xl shadow-2xl max-w-4xl w-full">
+      <div className="relative z-20 container mx-auto px-4 flex flex-col items-center text-center mt-28 sm:mt-32">
+        <div className="animate-fade-in bg-black/50 backdrop-blur-lg border border-white/15 p-5 sm:p-8 md:p-10 rounded-3xl shadow-2xl max-w-3xl w-full">
 
-
-          <h1 className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-3 md:mb-4 drop-shadow-lg">
+          <h1 className="font-display text-3xl sm:text-5xl md:text-6xl font-bold text-white leading-tight mb-2 md:mb-3 drop-shadow-lg">
             Welcome to <span className="text-gradient-gold">RealSSA</span>
           </h1>
 
-          <h2 className="text-lg sm:text-xl md:text-3xl text-white/90 font-medium mb-4 md:mb-6 drop-shadow-md">
+          <h2 className="text-base sm:text-xl md:text-2xl text-white/90 font-medium mb-3 md:mb-5 drop-shadow-md">
             The Pulse of Africa & The World
           </h2>
 
-          <p className="text-sm sm:text-base md:text-lg text-white/80 mb-6 md:mb-10 max-w-2xl mx-auto leading-relaxed line-clamp-3 sm:line-clamp-none">
+          <p className="text-xs sm:text-sm md:text-base text-white/80 mb-6 max-w-xl mx-auto leading-relaxed">
             Your premier, real-time news aggregator. Swipe through the latest breaking politics, trending sports highlights, tech startups, and viral culture straight from the source.
           </p>
 
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/nigerian-news">
-              <button className="w-full sm:w-auto px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-primary/30 group">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link to="/nigerian-news" className="w-full sm:w-auto">
+              <button className="w-full sm:w-auto px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-primary/30 group">
                 Start Reading
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             </Link>
-            <Link to="/videos">
-              <button className="w-full sm:w-auto px-8 py-4 bg-white/10 hover:bg-white/20 text-white rounded-full font-semibold transition-all duration-300 backdrop-blur-sm border border-white/20 flex items-center justify-center gap-2">
-                <PlayCircle className="w-5 h-5" />
+            <Link to="/videos" className="w-full sm:w-auto">
+              <button className="w-full sm:w-auto px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-semibold transition-all duration-300 backdrop-blur-sm border border-white/20 flex items-center justify-center gap-2">
+                <PlayCircle className="w-4 h-4" />
                 Watch More Live TV
               </button>
             </Link>
@@ -283,9 +274,9 @@ const HeroSection = () => {
       </div>
 
       {/* 4. Scroll Indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 animate-bounce text-white/50 flex flex-col items-center">
-        <span className="text-xs uppercase tracking-widest mb-2 font-medium">Scroll to explore</span>
-        <ArrowRight className="w-5 h-5 rotate-90" />
+      <div className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 z-20 animate-bounce text-white/40 flex-col items-center">
+        <span className="text-[10px] uppercase tracking-widest mb-1 font-medium">Scroll to explore</span>
+        <ArrowRight className="w-4 h-4 rotate-90" />
       </div>
 
     </section>

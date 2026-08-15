@@ -902,11 +902,7 @@ const VideoNews = () => {
                       {activeStream.quality} • {activeStream.language}
                     </span>
                   )}
-                  <span className="flex items-center gap-1"><Radio className="h-4 w-4 text-red-500"/> LIVE</span>
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-4 leading-relaxed border-t border-zinc-800/85 pt-3">
-                  Disclaimer: All live broadcasts and video streams shown are aggregated third-party feeds from public domains (e.g., YouTube, Rumble). RealSSA News does not host, upload, or transmit any copyrighted video content directly.
-                </p>
               </div>
             </div>
             
