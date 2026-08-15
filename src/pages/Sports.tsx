@@ -924,7 +924,7 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
         </div>
 
         {/* ── Modal Tabs Bar ── */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#0f172a', overflowX: 'auto', scrollbarWidth: 'none' }}>
+        <div className="scrollbar-hide" style={{ display: 'flex', borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#0f172a', overflowX: 'auto', scrollbarWidth: 'none' }}>
           {[
             { id: 'overview',   label: 'Overview',   icon: BarChart3 },
             { id: 'stats',      label: 'Statistics', icon: Activity },
@@ -1365,7 +1365,7 @@ const Sports = () => {
 
           {/* ── Pill Tab Bar ── */}
           <div style={{ borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#080e1a', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' }}>
+            <div className="scrollbar-hide" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', scrollbarWidth: 'none' }}>
               {TABS.map(tab => {
                 const isActive = activeTab === tab.id;
                 const Icon = tab.icon;

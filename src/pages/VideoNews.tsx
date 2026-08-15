@@ -634,7 +634,7 @@ const LazyIframe = ({ embedUrl, thumbnail, title, autoPlay = false }: { embedUrl
   );
 };
 
-const VideoNews = () => {
+const VideoNews = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [isPlayerActive, setIsPlayerActive] = useState(true);
   const [autoplayAllowed, setAutoplayAllowed] = useState(true);
 
@@ -815,9 +815,9 @@ const VideoNews = () => {
     : VIDEO_CHANNELS.filter(c => c.category === channelCategory);
 
   return (
-    <div className="min-h-screen bg-background">
-      <ReadProgressBar />
-      <Header />
+    <div className={isEmbedded ? "bg-background" : "min-h-screen bg-background"}>
+      {!isEmbedded && <ReadProgressBar />}
+      {!isEmbedded && <Header />}
       
       {/* Featured Live TV / Matches Section */}
       <div className="bg-zinc-950 text-white pt-8 pb-12">
@@ -1073,8 +1073,7 @@ const VideoNews = () => {
           </div>
         )}
       </div>
-      
-      <Footer />
+      {!isEmbedded && <Footer />}
 
       {/* Sticky Mini Player */}
       {isMiniPlayer && (

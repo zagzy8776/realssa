@@ -228,12 +228,18 @@
   }
 
   /* Hide scrollbar but keep functionality */
-  .scrollbar-hide {
+  .scrollbar-hide,
+  .scrollbar-none,
+  .no-scrollbar,
+  .hide-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
 
-  .scrollbar-hide::-webkit-scrollbar {
+  .scrollbar-hide::-webkit-scrollbar,
+  .scrollbar-none::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar,
+  .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
 
@@ -500,11 +506,17 @@
   }
 
   /* Keep the .scrollbar-hide utility working on desktop rails/carousels */
-  .scrollbar-hide::-webkit-scrollbar {
+  .scrollbar-hide::-webkit-scrollbar,
+  .scrollbar-none::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar,
+  .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
 
-  .scrollbar-hide {
+  .scrollbar-hide,
+  .scrollbar-none,
+  .no-scrollbar,
+  .hide-scrollbar {
     scrollbar-width: none;
   }
 }

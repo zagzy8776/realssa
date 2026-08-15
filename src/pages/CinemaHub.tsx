@@ -6,6 +6,8 @@ import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api-base";
 import CinemaPlayer from "@/components/CinemaPlayer";
 import SportsPlayer from "@/components/SportsPlayer";
+import Header from "@/components/Header";
+import ReadProgressBar from "@/components/ReadProgressBar";
 
 interface MovieOrShow {
   id: number;
@@ -34,6 +36,57 @@ interface Episode {
   air_date?: string;
 }
 
+const FALLBACK_CATALOG: MovieOrShow[] = [
+  {
+    id: 572802,
+    title: "Spider-Man: Brand New Day",
+    overview: "Peter Parker's life is turned upside down when a new villain emerges in New York, forcing him to balance his personal life with his heroic duties.",
+    poster_path: "/iPOn6DinuVyLY17YM9mKuPofV08.jpg",
+    backdrop_path: "/5rhTDKUhPYvpdQIijFIs5VoWsON.jpg",
+    r2_poster_url: "https://image.tmdb.org/t/p/w500/iPOn6DinuVyLY17YM9mKuPofV08.jpg",
+    r2_backdrop_url: "https://image.tmdb.org/t/p/original/5rhTDKUhPYvpdQIijFIs5VoWsON.jpg",
+    release_date: "2024-05-15",
+    vote_average: 7.9,
+    media_type: "movie"
+  },
+  {
+    id: 124364,
+    name: "House of the Dragon",
+    overview: "The story of the House Targaryen, set 200 years before the events of Game of Thrones.",
+    poster_path: "/7V0Ebks0GgpKvQ7QbLAIdX5dos4.jpg",
+    backdrop_path: "/7V0Ebks0GgpKvQ7QbLAIdX5dos4.jpg",
+    r2_poster_url: "https://image.tmdb.org/t/p/w500/7V0Ebks0GgpKvQ7QbLAIdX5dos4.jpg",
+    r2_backdrop_url: "https://image.tmdb.org/t/p/original/7V0Ebks0GgpKvQ7QbLAIdX5dos4.jpg",
+    first_air_date: "2022-08-21",
+    vote_average: 8.4,
+    media_type: "tv"
+  },
+  {
+    id: 119051,
+    name: "Reacher",
+    overview: "Jack Reacher, a veteran military police investigator, is falsely accused of murder and finds himself in the middle of a deadly conspiracy.",
+    poster_path: "/f1VCQIG2iCyOookdgOzwtUpwWC0.jpg",
+    backdrop_path: "/f1VCQIG2iCyOookdgOzwtUpwWC0.jpg",
+    r2_poster_url: "https://image.tmdb.org/t/p/w500/f1VCQIG2iCyOookdgOzwtUpwWC0.jpg",
+    r2_backdrop_url: "https://image.tmdb.org/t/p/original/f1VCQIG2iCyOookdgOzwtUpwWC0.jpg",
+    first_air_date: "2022-02-04",
+    vote_average: 8.1,
+    media_type: "tv"
+  },
+  {
+    id: 823464,
+    title: "Godzilla x Kong: The New Empire",
+    overview: "Two ancient titans, Godzilla and Kong, clash in an epic battle as humans unravel their intertwined origins and connection to Skull Island.",
+    poster_path: "/bMG4TxKlN6u865rLE75n7LIaz6l.jpg",
+    backdrop_path: "/jv46Jy02FTQz3m6Ri46JmU4866s.jpg",
+    r2_poster_url: "https://image.tmdb.org/t/p/w500/bMG4TxKlN6u865rLE75n7LIaz6l.jpg",
+    r2_backdrop_url: "https://image.tmdb.org/t/p/original/jv46Jy02FTQz3m6Ri46JmU4866s.jpg",
+    release_date: "2024-03-27",
+    vote_average: 7.2,
+    media_type: "movie"
+  }
+];
+
 export default function CinemaHub() {
   const [activeTab, setActiveTab] = useState<'movies' | 'news' | 'sports'>('movies');
 
@@ -50,6 +103,10 @@ export default function CinemaHub() {
 
   // Infinite scroll sentinel
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Horizontal scroll rail refs
+  const movieRailRef = useRef<HTMLDivElement>(null);
+  const showRailRef = useRef<HTMLDivElement>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -139,6 +196,10 @@ export default function CinemaHub() {
   useEffect(() => {
     if (import.meta.env?.MODE === 'development') return;
 
+    // Skip inspect/anti-hack loops on mobile to avoid background thread CPU throttling
+    const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) return;
+
     // 1. Disable right-click context menu
     const preventContextMenu = (e: MouseEvent) => e.preventDefault();
     document.addEventListener('contextmenu', preventContextMenu);
@@ -159,7 +220,7 @@ export default function CinemaHub() {
     const preventSelection = (e: Event) => e.preventDefault();
     document.addEventListener('selectstart', preventSelection);
 
-    // 4. Anti-DevTools Debugger Loop
+    // 4. Anti-DevTools Debugger Loop (checked every 3 seconds)
     // Triggers debugger breakpoint if browser devtools console is open, freezing the window
     const antiDevTools = setInterval(() => {
       const startTime = Date.now();
@@ -172,7 +233,7 @@ export default function CinemaHub() {
           if (main) main.style.filter = 'blur(10px)';
         } catch (_) {}
       }
-    }, 1000);
+    }, 3000);
 
     return () => {
       document.removeEventListener('contextmenu', preventContextMenu);
@@ -290,6 +351,14 @@ export default function CinemaHub() {
       setPage(pageNum);
     } catch (err) {
       console.error('Failed to fetch catalog:', err);
+      if (isFirst) {
+        setCatalog(FALLBACK_CATALOG);
+        const pool = FALLBACK_CATALOG.filter(i => i.backdrop_path && i.overview && (i.vote_average ?? 0) >= 6);
+        setHeroPool(pool);
+        setFeatured(pool[0] || FALLBACK_CATALOG[0] || null);
+        setHeroIdx(0);
+        setHasMore(false);
+      }
     } finally {
       if (isFirst) setLoading(false);
       else setLoadingMore(false);
@@ -313,6 +382,28 @@ export default function CinemaHub() {
     }, 6000);
     return () => clearInterval(timer);
   }, [heroPool]);
+
+  const handleNextHero = () => {
+    if (heroPool.length === 0) return;
+    const next = (heroIdx + 1) % heroPool.length;
+    setHeroIdx(next);
+    setFeatured(heroPool[next]);
+  };
+
+  const handlePrevHero = () => {
+    if (heroPool.length === 0) return;
+    const prev = (heroIdx - 1 + heroPool.length) % heroPool.length;
+    setHeroIdx(prev);
+    setFeatured(heroPool[prev]);
+  };
+
+  const scrollRail = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
+    if (ref.current) {
+      const { scrollLeft, clientWidth } = ref.current;
+      const offset = direction === 'left' ? -clientWidth * 0.75 : clientWidth * 0.75;
+      ref.current.scrollTo({ left: scrollLeft + offset, behavior: 'smooth' });
+    }
+  };
 
   // ── Autocomplete (debounced 300ms) ──
   const handleSearchInput = (value: string) => {
@@ -502,7 +593,8 @@ export default function CinemaHub() {
     return (
       <div
         onClick={() => handleOpenDetails(item)}
-        className="group relative cursor-pointer rounded-xl overflow-hidden border border-white/5 hover:border-amber-500/50 transition-all duration-200 hover:scale-[1.03] hover:shadow-lg hover:shadow-black/60 bg-zinc-900 aspect-[2/3]"
+        className="group relative cursor-pointer rounded-2xl overflow-hidden border border-white/5 hover:border-amber-500/35 transition-all duration-300 hover:scale-[1.04] hover:shadow-[0_12px_28px_rgba(0,0,0,0.85),0_8px_24px_rgba(245,158,11,0.12)] bg-zinc-900 aspect-[2/3] select-none"
+        style={{ transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
       >
         {posterUrl ? (
           <img
@@ -512,7 +604,7 @@ export default function CinemaHub() {
             loading="lazy"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-3 text-center select-none">
+          <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-3 text-center">
             <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500 group-hover:text-amber-400 group-hover:bg-amber-500/10 transition-colors">
               {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
             </div>
@@ -521,27 +613,31 @@ export default function CinemaHub() {
             </p>
           </div>
         )}
-        {/* Gradient overlay always visible at bottom */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+        
+        {/* Shadow Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300" />
 
-        {/* Play icon on hover */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <div className="w-11 h-11 bg-amber-500/95 rounded-full flex items-center justify-center shadow-xl">
-            <Play size={18} className="fill-black ml-0.5" />
+        {/* Ambient top highlight */}
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+        {/* Play Icon Badge */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-90 group-hover:scale-100">
+          <div className="w-12 h-12 bg-amber-500 hover:bg-amber-400 text-black rounded-full flex items-center justify-center shadow-xl shadow-amber-500/25 active:scale-90 transition-transform">
+            <Play size={20} className="fill-black ml-1" />
           </div>
         </div>
 
-        {/* Title + meta */}
-        <div className="absolute bottom-0 left-0 right-0 p-2.5">
-          <p className="text-white text-[11px] font-bold leading-tight line-clamp-2">{item.title || item.name}</p>
-          <div className="flex items-center gap-1.5 mt-1">
+        {/* Card Metadata info */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 transform translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
+          <p className="text-white text-xs font-black leading-tight line-clamp-1 group-hover:line-clamp-2 transition-all">{item.title || item.name}</p>
+          <div className="flex items-center gap-1.5 mt-1 opacity-80 group-hover:opacity-100 transition-opacity">
             {(item.vote_average ?? 0) > 0 && (
-              <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold">
-                <Star size={8} className="fill-current" />{getRating(item)}
+              <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold bg-amber-500/10 px-1 py-0.5 rounded">
+                <Star size={9} className="fill-current" />{getRating(item)}
               </span>
             )}
-            {getYear(item) && <span className="text-zinc-500 text-[9px]">{getYear(item)}</span>}
-            <span className="ml-auto text-[8px] uppercase font-bold bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-400">
+            {getYear(item) && <span className="text-zinc-400 text-[9px] font-bold">{getYear(item)}</span>}
+            <span className="ml-auto text-[8px] uppercase font-black bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-400 border border-white/5">
               {item.media_type === 'tv' ? 'TV' : 'FILM'}
             </span>
           </div>
@@ -552,33 +648,44 @@ export default function CinemaHub() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
+      <ReadProgressBar />
+      <Header />
 
-      {/* ── Tab Bar — always visible ── */}
-      <div className="bg-black/90 backdrop-blur-md border-b border-zinc-900 sticky top-14 z-40 px-4 py-2">
-        <div className="container mx-auto flex items-center gap-2">
+      {/* ── Tab Bar — Floating Glassmorphic Pill ── */}
+      <div className="sticky top-16 z-40 px-4 py-3 flex justify-center pointer-events-none">
+        <div className="pointer-events-auto bg-zinc-950/65 backdrop-blur-2xl border border-white/10 p-1.5 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.1)] flex items-center gap-1 max-w-full overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('movies')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold transition-all ${
-              activeTab === 'movies' ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 select-none ${
+              activeTab === 'movies'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-md shadow-amber-500/20 font-extrabold'
+                : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Film size={13} /> Movies & Shows
+            <Film size={14} className={activeTab === 'movies' ? 'fill-black' : ''} />
+            <span className="whitespace-nowrap">Movies & Shows</span>
           </button>
           <button
             onClick={() => setActiveTab('news')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold transition-all ${
-              activeTab === 'news' ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 select-none ${
+              activeTab === 'news'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-md shadow-amber-500/20 font-extrabold'
+                : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Youtube size={13} /> Live News
+            <Youtube size={14} />
+            <span className="whitespace-nowrap">Live News</span>
           </button>
           <button
             onClick={() => setActiveTab('sports')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold transition-all ${
-              activeTab === 'sports' ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 select-none ${
+              activeTab === 'sports'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-md shadow-amber-500/20 font-extrabold'
+                : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Activity size={13} /> Live Sports TV
+            <Activity size={14} />
+            <span className="whitespace-nowrap">Live Sports</span>
           </button>
         </div>
       </div>
@@ -586,7 +693,7 @@ export default function CinemaHub() {
       {/* ── Live News Tab ── */}
       {activeTab === 'news' && (
         <div className="flex-1 overflow-auto">
-          <VideoNews />
+          <VideoNews isEmbedded={true} />
         </div>
       )}
 
@@ -720,33 +827,77 @@ export default function CinemaHub() {
                         {sportName}
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {items.map((match, idx) => (
-                          <div
-                            key={idx}
-                            className="bg-zinc-900/60 border border-zinc-850 hover:border-amber-500/20 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all hover:bg-zinc-900/90 group"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 text-[9px] text-zinc-500 font-extrabold uppercase tracking-wider mb-1.5">
-                                <span className="flex items-center gap-1 bg-red-950/40 text-red-400 px-2 py-0.5 rounded border border-red-900/20">
+                        {items.map((match, idx) => {
+                          const parseTeams = (event: string) => {
+                            const delimiters = [' vs ', ' VS ', ' - ', ' @ '];
+                            for (const d of delimiters) {
+                              if (event.includes(d)) {
+                                const parts = event.split(d);
+                                return { home: parts[0].trim(), away: parts[1].trim() };
+                              }
+                            }
+                            return { home: event, away: null };
+                          };
+                          const { home, away } = parseTeams(match.event);
+
+                          return (
+                            <div
+                              key={idx}
+                              className="bg-zinc-950/60 backdrop-blur-md border border-white/10 hover:border-amber-500/40 rounded-2xl p-4 flex flex-col justify-between gap-3.5 transition-all hover:bg-zinc-900/45 group relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.4)]"
+                            >
+                              {/* Upper banner row */}
+                              <div className="flex items-center justify-between text-[9px] text-zinc-500 font-extrabold uppercase tracking-wider">
+                                <span className="flex items-center gap-1 bg-red-950/40 text-red-400 px-2 py-0.5 rounded-full border border-red-900/20">
                                   <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                                   {match.time || 'LIVE'}
                                 </span>
-                                <span className="bg-zinc-805 text-zinc-500 px-2 py-0.5 rounded border border-white/5 font-bold">
-                                  {match.id ? 'Direct Embed' : 'Fallback Info'}
+                                <span className="bg-white/5 text-zinc-400 px-2 py-0.5 rounded border border-white/5 font-extrabold">
+                                  {match.sport || 'Sports'}
                                 </span>
                               </div>
-                              <h4 className="text-zinc-200 font-black text-xs leading-snug group-hover:text-white transition-colors truncate">
-                                {match.event}
-                              </h4>
+
+                              {/* Scoreboard body row */}
+                              <div className="flex-1 flex flex-col gap-2">
+                                {away ? (
+                                  <>
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-5 h-5 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-[10px] font-black text-amber-500 select-none">
+                                        {home.substring(0, 1)}
+                                      </div>
+                                      <span className="text-zinc-200 font-bold text-xs sm:text-[13px] group-hover:text-white transition-colors truncate">{home}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-5 h-5 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-[10px] font-black text-amber-500 select-none">
+                                        {away.substring(0, 1)}
+                                      </div>
+                                      <span className="text-zinc-200 font-bold text-xs sm:text-[13px] group-hover:text-white transition-colors truncate">{away}</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-5 h-5 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-[11px] font-bold text-amber-500">
+                                      ⚽
+                                    </div>
+                                    <span className="text-zinc-200 font-bold text-xs sm:text-[13px] group-hover:text-white transition-colors line-clamp-2 leading-snug">{match.event}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Button action row */}
+                              <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1.5">
+                                <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider">
+                                  {match.id ? 'Direct stream' : 'Redirect lookup'}
+                                </span>
+                                <button
+                                  onClick={() => setSelectedSportMatch(match)}
+                                  className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-[11px] font-black rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-amber-500/15 border border-amber-600"
+                                >
+                                  <Play size={10} className="fill-black" /> Watch Live
+                                </button>
+                              </div>
                             </div>
-                            <button
-                              onClick={() => setSelectedSportMatch(match)}
-                              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black rounded-xl flex items-center gap-1 transition-all border border-amber-600 active:scale-95 shrink-0"
-                            >
-                              <Play size={10} className="fill-black" /> Watch
-                            </button>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -950,46 +1101,88 @@ export default function CinemaHub() {
       {/* ── Movies & Shows Tab ── */}
       {activeTab === 'movies' && (
         <>
-          {/* Hero Banner */}
+          {/* Interactive Hero Carousel */}
           {!isSearching && featured && (
-            <section className="relative w-full h-[56vh] sm:h-[75vh] flex flex-col justify-end overflow-hidden">
-              <div className="absolute inset-0">
-                <img src={getBackdrop(featured)} alt="" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-black/50 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent" />
+            <section className="relative w-full h-[56vh] sm:h-[75vh] flex flex-col justify-end overflow-hidden group/hero">
+              {/* Slides background with transition */}
+              <div className="absolute inset-0 transition-all duration-700 ease-in-out">
+                <img src={getBackdrop(featured)} alt="" className="w-full h-full object-cover animate-fade-in" />
+                {/* Netflix-style vignette masks */}
+                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/45 to-transparent" />
               </div>
-              <div className="container mx-auto px-4 pb-8 sm:pb-14 relative z-10 max-w-3xl">
-                <span className="bg-amber-500 text-black text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 mb-3">
-                  <Film size={10} className="fill-current" /> Featured
-                </span>
-                <h1 className="text-3xl sm:text-5xl font-extrabold text-white leading-tight">
-                  {featured.title || featured.name}
-                </h1>
-                <div className="flex items-center gap-2 mt-2 text-xs text-zinc-300 font-semibold flex-wrap">
-                  {(featured.vote_average ?? 0) > 0 && (
-                    <span className="text-amber-400 flex items-center gap-0.5">
-                      <Star size={12} className="fill-current" />{getRating(featured)}
-                    </span>
-                  )}
-                  {getYear(featured) && <><span>·</span><span>{getYear(featured)}</span></>}
-                  <span>·</span>
-                  <span className="uppercase bg-zinc-800 px-2 py-0.5 rounded text-[9px] font-bold">{featured.media_type}</span>
-                </div>
-                <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-lg mt-3 line-clamp-3">{featured.overview}</p>
-                <div className="flex gap-3 mt-5">
+
+              {/* Chevrons - Left & Right manual controls */}
+              {heroPool.length > 1 && (
+                <>
                   <button
-                    onClick={() => handlePlayMedia(featured)}
-                    className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold px-6 py-2.5 text-xs sm:text-sm rounded-full flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/30"
+                    onClick={handlePrevHero}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/40 hover:bg-black/70 border border-white/10 text-white flex items-center justify-center backdrop-blur-md opacity-0 group-hover/hero:opacity-100 transition-all duration-300 shadow-xl"
                   >
-                    <Play size={15} className="fill-current" /> Watch Now
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
                   </button>
                   <button
-                    onClick={() => handleOpenDetails(featured)}
-                    className="bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold px-6 py-2.5 text-xs sm:text-sm rounded-full flex items-center gap-2 backdrop-blur-md"
+                    onClick={handleNextHero}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/40 hover:bg-black/70 border border-white/10 text-white flex items-center justify-center backdrop-blur-md opacity-0 group-hover/hero:opacity-100 transition-all duration-300 shadow-xl"
                   >
-                    <Info size={15} /> More Info
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
                   </button>
+                </>
+              )}
+
+              {/* Main text overlay content */}
+              <div className="container mx-auto px-4 pb-8 sm:pb-14 relative z-10 max-w-4xl flex items-end justify-between gap-6">
+                <div className="max-w-2xl">
+                  <span className="bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full inline-flex items-center gap-1.5 mb-3 shadow-md">
+                    <Film size={10} className="fill-current" /> Featured
+                  </span>
+                  <h1 className="text-3xl sm:text-5xl font-black text-white leading-tight drop-shadow-md">
+                    {featured.title || featured.name}
+                  </h1>
+                  <div className="flex items-center gap-2 mt-2 text-xs text-zinc-300 font-semibold flex-wrap">
+                    {(featured.vote_average ?? 0) > 0 && (
+                      <span className="text-amber-400 flex items-center gap-0.5 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                        <Star size={12} className="fill-current" />{getRating(featured)}
+                      </span>
+                    )}
+                    {getYear(featured) && <><span>·</span><span>{getYear(featured)}</span></>}
+                    <span>·</span>
+                    <span className="uppercase bg-zinc-800 px-2 py-0.5 rounded text-[9px] font-black border border-white/5">{featured.media_type}</span>
+                  </div>
+                  <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-lg mt-3 line-clamp-2 sm:line-clamp-3">{featured.overview}</p>
+                  <div className="flex gap-3 mt-5">
+                    <button
+                      onClick={() => handlePlayMedia(featured)}
+                      className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold px-6 py-2.5 text-xs sm:text-sm rounded-full flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/30"
+                    >
+                      <Play size={15} className="fill-current" /> Watch Now
+                    </button>
+                    <button
+                      onClick={() => handleOpenDetails(featured)}
+                      className="bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold px-6 py-2.5 text-xs sm:text-sm rounded-full flex items-center gap-2 backdrop-blur-md"
+                    >
+                      <Info size={15} /> More Info
+                    </button>
+                  </div>
                 </div>
+
+                {/* Indicators - Bottom right pagination dots */}
+                {heroPool.length > 1 && (
+                  <div className="hidden sm:flex gap-1.5 mb-1.5">
+                    {heroPool.slice(0, 6).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setHeroIdx(i);
+                          setFeatured(heroPool[i]);
+                        }}
+                        className={`h-1.5 rounded-full transition-all duration-350 ${
+                          i === heroIdx ? 'w-6 bg-amber-500 shadow-md shadow-amber-500/20' : 'w-1.5 bg-zinc-700 hover:bg-zinc-500'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -1078,11 +1271,11 @@ export default function CinemaHub() {
                   value={searchQuery}
                   onChange={e => handleSearchInput(e.target.value)}
                   onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-500 text-zinc-200 placeholder-zinc-500 rounded-full pl-5 pr-14 py-3 text-sm outline-none transition-colors"
+                  className="w-full bg-white/5 border border-white/10 hover:border-white/20 focus:border-amber-500 text-zinc-200 placeholder-zinc-500 rounded-full pl-6 pr-14 py-3.5 text-sm outline-none transition-all duration-300 backdrop-blur-md shadow-inner shadow-black/40 focus:bg-white/10"
                 />
                 <button
                   type="submit"
-                  className="absolute right-2 p-2.5 bg-amber-500 hover:bg-amber-400 text-black rounded-full transition-colors"
+                  className="absolute right-2.5 p-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black rounded-full transition-all duration-300 shadow-md shadow-amber-500/10 active:scale-90 flex items-center justify-center"
                 >
                   {searchLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
                 </button>
@@ -1190,26 +1383,76 @@ export default function CinemaHub() {
 
                 {!loading && (
                   <>
-                    {/* Popular Movies */}
+                    {/* Popular Movies Rail */}
                     {movies.length > 0 && (
-                      <div>
-                        <h3 className="text-base sm:text-lg font-extrabold text-white mb-4 flex items-center gap-2">
+                      <div className="relative group/rail">
+                        <h3 className="text-base sm:text-lg font-black text-white mb-4 flex items-center gap-2 tracking-wide">
                           🔥 Popular Movies
                         </h3>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
-                          {movies.map(item => <MediaCard key={item.id} item={item} />)}
+                        
+                        {/* Left scroll button */}
+                        <button
+                          onClick={() => scrollRail(movieRailRef, 'left')}
+                          className="absolute left-2 top-[55%] -translate-y-1/2 z-20 w-10 h-10 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover/rail:opacity-100 transition-opacity duration-300 shadow-2xl backdrop-blur-md"
+                        >
+                          &lsaquo;
+                        </button>
+
+                        {/* Right scroll button */}
+                        <button
+                          onClick={() => scrollRail(movieRailRef, 'right')}
+                          className="absolute right-2 top-[55%] -translate-y-1/2 z-20 w-10 h-10 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover/rail:opacity-100 transition-opacity duration-300 shadow-2xl backdrop-blur-md"
+                        >
+                          &rsaquo;
+                        </button>
+
+                        {/* Horizontal track container */}
+                        <div
+                          ref={movieRailRef}
+                          className="flex gap-3.5 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-none pb-4 pt-1 px-1 w-full overscroll-contain touch-pan-x"
+                        >
+                          {movies.map(item => (
+                            <div key={item.id} className="flex-shrink-0 w-[30%] sm:w-[22%] md:w-[16%] lg:w-[12.5%] snap-start">
+                              <MediaCard item={item} />
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Trending Series */}
+                    {/* Trending Series Rail */}
                     {shows.length > 0 && (
-                      <div>
-                        <h3 className="text-base sm:text-lg font-extrabold text-white mb-4 flex items-center gap-2">
+                      <div className="relative group/rail mt-8">
+                        <h3 className="text-base sm:text-lg font-black text-white mb-4 flex items-center gap-2 tracking-wide">
                           📺 Trending Series
                         </h3>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
-                          {shows.map(item => <MediaCard key={item.id} item={item} />)}
+                        
+                        {/* Left scroll button */}
+                        <button
+                          onClick={() => scrollRail(showRailRef, 'left')}
+                          className="absolute left-2 top-[55%] -translate-y-1/2 z-20 w-10 h-10 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover/rail:opacity-100 transition-opacity duration-300 shadow-2xl backdrop-blur-md"
+                        >
+                          &lsaquo;
+                        </button>
+
+                        {/* Right scroll button */}
+                        <button
+                          onClick={() => scrollRail(showRailRef, 'right')}
+                          className="absolute right-2 top-[55%] -translate-y-1/2 z-20 w-10 h-10 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover/rail:opacity-100 transition-opacity duration-300 shadow-2xl backdrop-blur-md"
+                        >
+                          &rsaquo;
+                        </button>
+
+                        {/* Horizontal track container */}
+                        <div
+                          ref={showRailRef}
+                          className="flex gap-3.5 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-none pb-4 pt-1 px-1 w-full overscroll-contain touch-pan-x"
+                        >
+                          {shows.map(item => (
+                            <div key={item.id} className="flex-shrink-0 w-[30%] sm:w-[22%] md:w-[16%] lg:w-[12.5%] snap-start">
+                              <MediaCard item={item} />
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -1224,8 +1467,26 @@ export default function CinemaHub() {
                       Loading more...
                     </div>
                   )}
-                  {!hasMore && !loading && (
-                    <p className="text-zinc-700 text-xs">You've seen everything — check back later for new releases.</p>
+                  {catalog.length === 0 && !loading ? (
+                    <div className="flex flex-col items-center justify-center text-center py-16 px-4 bg-zinc-900/30 border border-white/5 rounded-2xl max-w-md mx-auto my-8 space-y-4 backdrop-blur-sm animate-fade-in w-full">
+                      <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
+                        <Film size={24} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <h4 className="text-sm font-bold text-zinc-200">Cinema Catalog Offline</h4>
+                        <p className="text-xs text-zinc-500 leading-relaxed">Could not load streaming media list. Please check your network connection and try again.</p>
+                      </div>
+                      <button
+                        onClick={() => fetchPage(1, true)}
+                        className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-full transition-all active:scale-95 shadow-lg shadow-amber-500/10 flex items-center gap-1.5"
+                      >
+                        <span>Retry Connection</span>
+                      </button>
+                    </div>
+                  ) : (
+                    !hasMore && !loading && (
+                      <p className="text-zinc-700 text-xs">You've seen everything — check back later for new releases.</p>
+                    )
                   )}
                 </div>
 

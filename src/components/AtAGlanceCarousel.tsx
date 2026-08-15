@@ -321,7 +321,7 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
                 : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/60'
             }`}
           >
-            [Deep Dives Only]
+            Deep Dives
           </button>
           <button
             onClick={() => onFilterChange(activeFilter === 'facts' ? 'all' : 'facts')}
@@ -331,7 +331,7 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
                 : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/60'
             }`}
           >
-            [Just the Facts]
+            Just the Facts
           </button>
           <button
             onClick={() => onFilterChange(activeFilter === 'local' ? 'all' : 'local')}
@@ -341,7 +341,7 @@ export const AtAGlanceCarousel: React.FC<AtAGlanceCarouselProps> = ({
                 : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/60'
             }`}
           >
-            [Hyper-Local]
+            Hyper-Local
           </button>
         </div>
       </div>

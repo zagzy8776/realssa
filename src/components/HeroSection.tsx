@@ -209,7 +209,7 @@ const HeroSection = () => {
               <span>{liveEventTitle}</span>
             </div>
           )}
-          <div className="flex bg-black/50 backdrop-blur-md border border-white/15 p-1 rounded-full items-center max-w-full overflow-x-auto custom-scrollbar">
+          <div className="flex gap-1.5 bg-black/50 backdrop-blur-md border border-white/15 p-1 rounded-full items-center max-w-full overflow-x-auto scrollbar-hide">
             {CHANNELS.map((chan) => {
               const isSelected = !isLiveEventActive && activeChannel.id === chan.id;
               return (

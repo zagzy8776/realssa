@@ -86,28 +86,28 @@ export default function CinemaPlayer({
   const activeServer = servers[activeIdx];
 
   return (
-    // TRUE FULLSCREEN — covers entire phone/screen, no border-radius on mobile
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+    // TRUE FULLSCREEN — covers entire phone/screen, bg gradient for spatial feel
+    <div className="fixed inset-0 z-[9999] bg-gradient-to-b from-zinc-950 via-black to-zinc-950 flex flex-col">
 
       {/* ── TOP BAR ── */}
-      <div className="flex items-center justify-between px-3 py-2 bg-black/95 border-b border-white/5 shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 bg-zinc-950/80 backdrop-blur-md border-b border-white/10 shrink-0">
         <div className="flex flex-col min-w-0">
           {/* Brand */}
-          <span className="text-[9px] uppercase font-extrabold tracking-widest text-amber-500 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          <span className="text-[9px] uppercase font-black tracking-widest text-amber-500 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
             RealSSA Player · {activeServer.name}
           </span>
-          <h3 className="text-white text-xs sm:text-sm font-extrabold truncate max-w-[220px] sm:max-w-md leading-tight mt-0.5">
+          <h3 className="text-white text-xs sm:text-sm font-black truncate max-w-[200px] sm:max-w-md leading-tight mt-0.5 drop-shadow">
             {title}
           </h3>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Prev server */}
           <button
             onClick={goPrev}
             title="Previous server"
-            className="p-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors border border-white/5"
+            className="p-2 bg-zinc-900/60 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-all border border-white/5 active:scale-90"
           >
             <ChevronLeft size={14} />
           </button>
@@ -115,17 +115,21 @@ export default function CinemaPlayer({
           {/* Server toggle */}
           <button
             onClick={() => setShowServers(v => !v)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-zinc-300 text-[10px] font-bold transition-colors border border-white/5"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border ${
+              showServers
+                ? 'bg-amber-500 text-black border-amber-600 font-bold shadow-md shadow-amber-500/20'
+                : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 border-white/5'
+            }`}
           >
             <Server size={11} />
-            Servers
+            <span>Servers</span>
           </button>
 
           {/* Next server */}
           <button
             onClick={goNext}
             title="Next server"
-            className="p-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors border border-white/5"
+            className="p-2 bg-zinc-900/60 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-all border border-white/5 active:scale-90"
           >
             <ChevronRight size={14} />
           </button>
@@ -133,7 +137,7 @@ export default function CinemaPlayer({
           {/* Close */}
           <button
             onClick={onClose}
-            className="p-1.5 bg-zinc-900 hover:bg-red-600 rounded-lg text-zinc-400 hover:text-white transition-colors border border-white/5 ml-1"
+            className="p-2 bg-zinc-900/60 hover:bg-red-600 rounded-full text-zinc-400 hover:text-white transition-all border border-white/5 ml-1 active:scale-90"
           >
             <X size={14} />
           </button>
@@ -142,19 +146,19 @@ export default function CinemaPlayer({
 
       {/* ── SERVER PICKER DRAWER (hidden by default) ── */}
       {showServers && (
-        <div className="shrink-0 bg-zinc-950/98 border-b border-white/5 px-3 py-2.5 animate-in slide-in-from-top duration-200">
+        <div className="shrink-0 bg-zinc-950/90 backdrop-blur-xl border-b border-white/10 px-4 py-3 animate-in slide-in-from-top duration-300">
           <div
             ref={scrollRef}
-            className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1"
+            className="flex gap-2 overflow-x-auto no-scrollbar pb-1"
           >
             {servers.map((srv, i) => (
               <button
                 key={i}
                 onClick={() => { setActiveIdx(i); setShowServers(false); }}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all shrink-0 ${
+                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 active:scale-95 ${
                   i === activeIdx
-                    ? 'bg-amber-500 text-black shadow-md shadow-amber-500/30 scale-105'
-                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-md shadow-amber-500/25 scale-105 font-black'
+                    : 'bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800 border border-white/5'
                 }`}
               >
                 {srv.name}
@@ -164,13 +168,15 @@ export default function CinemaPlayer({
         </div>
       )}
 
-      {/* ── VIDEO — fills all remaining screen space ── */}
-      <div className="flex-1 relative bg-black">
-        <SandboxedIframe
-          key={`${tmdbId}-${mediaType}-${season}-${episode}-${activeIdx}`}
-          src={activeServer.url}
-          className="absolute inset-0 w-full h-full"
-        />
+      {/* ── VIDEO — fills all remaining screen space with ambient backlight glow ── */}
+      <div className="flex-1 relative bg-black flex items-center justify-center p-2 sm:p-6 md:p-10">
+        <div className="w-full h-full max-w-6xl max-h-[85vh] relative rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(245,158,11,0.15),0_20px_50px_rgba(0,0,0,0.9)] bg-zinc-950">
+          <SandboxedIframe
+            key={`${tmdbId}-${mediaType}-${season}-${episode}-${activeIdx}`}
+            src={activeServer.url}
+            className="absolute inset-0 w-full h-full"
+          />
+        </div>
       </div>
     </div>
   );

@@ -97,7 +97,7 @@
   <!-- Preload critical assets for fast LCP -->
   <link rel="preload" as="image" href="/logo.png" />
 
-  <!-- Startup loader styles — Hybrid 3+4 Gold Skeleton (strictly scoped) -->
+  <!-- Startup loader styles — Premium Brand Loader -->
   <style>
     #startup-loader {
       position: fixed;
@@ -106,137 +106,70 @@
       background: #050505;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      align-items: center;
+      justify-content: center;
       font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
       box-sizing: border-box;
+      overflow: hidden;
     }
 
     #startup-loader::before {
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(ellipse 80% 50% at 50% 20%, rgba(251,191,36,0.06) 0%, transparent 70%);
+      background: radial-gradient(circle 500px at 50% 50%, rgba(251,191,36,0.05) 0%, transparent 70%);
       pointer-events: none;
     }
 
-    #startup-loader .sk-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 20px;
-      border-bottom: 1px solid rgba(251,191,36,0.08);
-      flex-shrink: 0;
-      box-sizing: border-box;
-    }
-    #startup-loader .sk-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    #startup-loader .sk-star { width: 28px; height: 28px; flex-shrink: 0; }
-    #startup-loader .sk-brand-pill {
-      width: 100px; height: 14px; border-radius: 4px;
-      background: rgba(251,191,36,0.12);
-    }
-    #startup-loader .sk-nav-pills { display: flex; gap: 10px; }
-    #startup-loader .sk-nav-pill {
-      width: 56px; height: 10px; border-radius: 10px;
-      background: rgba(255,255,255,0.06);
-    }
-
-    #startup-loader .sk-tabs {
-      display: flex;
-      gap: 8px;
-      padding: 10px 20px;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      overflow: hidden;
-      flex-shrink: 0;
-      box-sizing: border-box;
-    }
-    #startup-loader .sk-tab {
-      height: 9px; border-radius: 10px;
-      background: rgba(255,255,255,0.05); flex-shrink: 0;
-    }
-
-    #startup-loader .sk-body {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-      padding: 14px 16px;
-      flex: 1;
-      overflow: hidden;
-      box-sizing: border-box;
-    }
-    @media (min-width: 768px) {
-      #startup-loader .sk-body { grid-template-columns: 1.6fr 1fr; }
-    }
-
-    #startup-loader .sk-hero {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(251,191,36,0.08);
-      border-radius: 12px;
-      overflow: hidden;
+    #startup-loader .loader-content {
       display: flex;
       flex-direction: column;
-    }
-    #startup-loader .sk-hero-img {
-      height: 200px;
-      background: rgba(255,255,255,0.04);
-      flex-shrink: 0;
-    }
-    @media (min-width: 768px) { #startup-loader .sk-hero-img { height: 260px; } }
-    #startup-loader .sk-hero-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-    #startup-loader .sk-badge { width: 60px; height: 9px; border-radius: 6px; background: rgba(251,191,36,0.18); }
-    #startup-loader .sk-line { height: 10px; border-radius: 4px; background: rgba(255,255,255,0.07); display: block; }
-    #startup-loader .sk-line.w-full { width: 100%; }
-    #startup-loader .sk-line.w-80  { width: 80%; }
-    #startup-loader .sk-line.w-60  { width: 60%; }
-    #startup-loader .sk-line.w-40  { width: 40%; }
-    #startup-loader .sk-line.thin  { height: 8px; background: rgba(255,255,255,0.04); }
-
-    #startup-loader .sk-side { display: flex; flex-direction: column; gap: 10px; }
-    #startup-loader .sk-card {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.05);
-      border-radius: 10px;
-      padding: 12px;
-      display: flex;
-      gap: 10px;
       align-items: center;
-      overflow: hidden;
-      box-sizing: border-box;
+      gap: 20px;
+      animation: logoFade 1.2s ease-out;
     }
-    #startup-loader .sk-thumb {
-      width: 62px; height: 52px; border-radius: 7px;
-      background: rgba(255,255,255,0.05); flex-shrink: 0;
-    }
-    #startup-loader .sk-card-body { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow: hidden; }
 
-    /* Gold laser shimmer — only inside #startup-loader */
-    @keyframes _skGoldShimmer {
-      0%   { transform: translateX(-100%); }
-      100% { transform: translateX(400%); }
+    #startup-loader .sk-star {
+      width: 72px;
+      height: 72px;
+      filter: drop-shadow(0 0 24px rgba(245,158,11,0.3));
+      animation: spinAndPulse 3s infinite linear;
     }
-    #startup-loader .sk-shimmer {
-      position: relative;
-      overflow: hidden;
+
+    #startup-loader .loader-text {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: linear-gradient(to right, #fef08a, #f59e0b, #b45309);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
-    #startup-loader .sk-shimmer::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(
-        105deg,
-        transparent 30%,
-        rgba(251,191,36,0.22) 50%,
-        rgba(255,255,255,0.10) 55%,
-        rgba(251,191,36,0.12) 60%,
-        transparent 70%
-      );
-      animation: _skGoldShimmer 1.8s cubic-bezier(0.4,0,0.2,1) infinite;
+
+    #startup-loader .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      box-shadow: 0 0 12px 3px rgba(251,191,36,0.5);
+      animation: dotPulse 1.2s ease-in-out infinite;
     }
-    @media (prefers-reduced-motion: reduce) {
-      #startup-loader .sk-shimmer::after { animation: none; }
+
+    @keyframes spinAndPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes logoFade {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
     }
   </style>
 
@@ -277,103 +210,30 @@
     </div>
   </noscript>
   <div id="root">
-    <!-- ── Hybrid 3+4 Gold Skeleton Loader ─────────────────────────────── -->
+    <!-- Premium Brand Startup Loader -->
     <div id="startup-loader" role="status" aria-live="polite" aria-label="RealSSA News is loading">
-
-      <!-- Header -->
-      <header class="sk-header">
-        <div class="sk-logo">
-          <!-- Inline SVG gold star — no image request needed -->
-          <svg class="sk-star" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#fef08a"/>
-                <stop offset="50%" stop-color="#f59e0b"/>
-                <stop offset="100%" stop-color="#b45309"/>
-              </linearGradient>
-            </defs>
-            <polygon points="12,12 12,2 14.5,9.5" fill="url(#sg)" opacity="0.95"/>
-            <polygon points="12,12 14.5,9.5 22,12" fill="url(#sg)" opacity="0.75"/>
-            <polygon points="12,12 22,12 14.5,14.5" fill="url(#sg)" opacity="0.60"/>
-            <polygon points="12,12 14.5,14.5 12,22" fill="url(#sg)" opacity="0.40"/>
-            <polygon points="12,12 12,22 9.5,14.5" fill="url(#sg)" opacity="0.80"/>
-            <polygon points="12,12 9.5,14.5 2,12"  fill="url(#sg)" opacity="0.70"/>
-            <polygon points="12,12 2,12 9.5,9.5"  fill="url(#sg)" opacity="0.55"/>
-            <polygon points="12,12 9.5,9.5 12,2"  fill="url(#sg)" opacity="0.90"/>
-          </svg>
-          <div class="sk-brand-pill sk-shimmer"></div>
-        </div>
-        <div class="sk-nav-pills">
-          <div class="sk-nav-pill sk-shimmer"></div>
-          <div class="sk-nav-pill sk-shimmer"></div>
-          <div class="sk-nav-pill sk-shimmer"></div>
-        </div>
-      </header>
-
-      <!-- Category tab rail -->
-      <div class="sk-tabs" aria-hidden="true">
-        <div class="sk-tab sk-shimmer" style="width:52px"></div>
-        <div class="sk-tab sk-shimmer" style="width:72px"></div>
-        <div class="sk-tab sk-shimmer" style="width:44px"></div>
-        <div class="sk-tab sk-shimmer" style="width:68px"></div>
-        <div class="sk-tab sk-shimmer" style="width:56px"></div>
-        <div class="sk-tab sk-shimmer" style="width:80px"></div>
+      <div class="loader-content">
+        <svg class="sk-star" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#fef08a"/>
+              <stop offset="50%" stop-color="#f59e0b"/>
+              <stop offset="100%" stop-color="#b45309"/>
+            </linearGradient>
+          </defs>
+          <polygon points="12,12 12,2 14.5,9.5" fill="url(#sg)" opacity="0.95"/>
+          <polygon points="12,12 14.5,9.5 22,12" fill="url(#sg)" opacity="0.75"/>
+          <polygon points="12,12 22,12 14.5,14.5" fill="url(#sg)" opacity="0.60"/>
+          <polygon points="12,12 14.5,14.5 12,22" fill="url(#sg)" opacity="0.40"/>
+          <polygon points="12,12 12,22 9.5,14.5" fill="url(#sg)" opacity="0.80"/>
+          <polygon points="12,12 9.5,14.5 2,12"  fill="url(#sg)" opacity="0.70"/>
+          <polygon points="12,12 2,12 9.5,9.5"  fill="url(#sg)" opacity="0.55"/>
+          <polygon points="12,12 9.5,9.5 12,2"  fill="url(#sg)" opacity="0.90"/>
+        </svg>
+        <div class="loader-text">RealSSA</div>
+        <div class="pulse-dot"></div>
       </div>
-
-      <!-- Main body -->
-      <div class="sk-body" aria-hidden="true">
-
-        <!-- Hero card -->
-        <div class="sk-hero">
-          <div class="sk-hero-img sk-shimmer"></div>
-          <div class="sk-hero-body">
-            <div class="sk-badge sk-shimmer"></div>
-            <div class="sk-line w-full sk-shimmer"></div>
-            <div class="sk-line w-80  sk-shimmer"></div>
-            <div class="sk-line w-60  sk-shimmer"></div>
-            <div class="sk-line w-40 thin sk-shimmer" style="margin-top:4px"></div>
-            <div class="sk-line w-60 thin sk-shimmer"></div>
-          </div>
-        </div>
-
-        <!-- Side cards -->
-        <div class="sk-side">
-          <div class="sk-card">
-            <div class="sk-thumb sk-shimmer"></div>
-            <div class="sk-card-body">
-              <div class="sk-line w-full sk-shimmer"></div>
-              <div class="sk-line w-80  sk-shimmer"></div>
-              <div class="sk-line w-40 thin sk-shimmer"></div>
-            </div>
-          </div>
-          <div class="sk-card">
-            <div class="sk-thumb sk-shimmer"></div>
-            <div class="sk-card-body">
-              <div class="sk-line w-full sk-shimmer"></div>
-              <div class="sk-line w-60  sk-shimmer"></div>
-              <div class="sk-line w-40 thin sk-shimmer"></div>
-            </div>
-          </div>
-          <div class="sk-card">
-            <div class="sk-thumb sk-shimmer"></div>
-            <div class="sk-card-body">
-              <div class="sk-line w-full sk-shimmer"></div>
-              <div class="sk-line w-80  sk-shimmer"></div>
-              <div class="sk-line w-40 thin sk-shimmer"></div>
-            </div>
-          </div>
-          <div class="sk-card">
-            <div class="sk-thumb sk-shimmer"></div>
-            <div class="sk-card-body">
-              <div class="sk-line w-full sk-shimmer"></div>
-              <div class="sk-line w-60  sk-shimmer"></div>
-              <div class="sk-line w-40 thin sk-shimmer"></div>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /sk-body -->
-    </div><!-- /startup-loader -->
+    </div>
   </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

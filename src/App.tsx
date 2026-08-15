@@ -16,8 +16,14 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 import FeedWatermark from "@/components/FeedWatermark";
 import OnboardingTopicSelector from "@/components/OnboardingTopicSelector";
 
+// ── Core statically-imported pages to eliminate loading delay ───────────
+import Index from "./pages/Index";
+import ForYou from "./pages/ForYou";
+import CinemaHub from "./pages/CinemaHub";
+import VideoNews from "./pages/VideoNews";
+import Sports from "./pages/Sports";
+
 // ── Lazy-loaded pages (code-split to prevent TDZ circular init crashes) ──────
-const Index               = lazy(() => import("./pages/Index"));
 const About               = lazy(() => import("./pages/About"));
 const Contact             = lazy(() => import("./pages/Contact"));
 const Terms               = lazy(() => import("./pages/Terms"));
@@ -36,11 +42,7 @@ const InternalDashboard   = lazy(() => import("./pages/InternalDashboard"));
 const EditNewsPage        = lazy(() => import("./pages/EditNewsPage"));
 const NigerianNews        = lazy(() => import("./pages/NigerianNews"));
 const WorldNews           = lazy(() => import("./pages/WorldNews"));
-const ForYou              = lazy(() => import("./pages/ForYou"));
 const CryptoNews          = lazy(() => import("./pages/CryptoNews"));
-const CinemaHub           = lazy(() => import("./pages/CinemaHub"));
-const VideoNews           = lazy(() => import("./pages/VideoNews"));
-const Sports              = lazy(() => import("./pages/Sports"));
 const Ghana               = lazy(() => import("./pages/Ghana"));
 const Kenya               = lazy(() => import("./pages/Kenya"));
 const SouthAfrica         = lazy(() => import("./pages/SouthAfrica"));
@@ -55,7 +57,8 @@ const PrivacyPolicy       = lazy(() => import("./pages/PrivacyPolicy"));
 const AppDownload         = lazy(() => import("./pages/AppDownload"));
 const Reels               = lazy(() => import("./pages/Reels"));
 const ReadingList         = lazy(() => import("./pages/ReadingList"));
-const Trending            = lazy(() => import("./pages/Trending"));
+import Trending from "./pages/Trending";
+
 const Downloads           = lazy(() => import("./pages/Downloads"));
 const Profile             = lazy(() => import("./pages/Profile"));
 const PublisherHub        = lazy(() => import("./pages/PublisherHub"));

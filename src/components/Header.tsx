@@ -307,7 +307,7 @@ const Header = () => {
     )} style={{ marginTop: isMenuOpen ? 'calc(-1 * env(safe-area-inset-top, 0px))' : undefined }}>
       {/* Safe-area fill strip — covers the status-bar zone with the header background */}
       <div
-        className={isMenuOpen ? "bg-background/95" : "glass-nav-fill"}
+        className={isMenuOpen ? "bg-background/95" : "glass-nav-fill bg-background dark:bg-[#16131A]/96"}
         style={{ height: 'env(safe-area-inset-top, 0px)' }}
         aria-hidden="true"
       />
