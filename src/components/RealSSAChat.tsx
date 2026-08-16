@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, Send, Sparkles, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Send, Sparkles, ExternalLink, ChevronDown } from 'lucide-react';
 import { API_BASE_URL } from '@/lib/api-base';
 import { useNavigate } from 'react-router-dom';
 
@@ -40,10 +40,34 @@ export default function RealSSAChat({
   const [greetingDone, setGreetingDone] = useState(false);
   const [visible, setVisible] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+  const [showJumpBtn, setShowJumpBtn] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sentInitial = useRef(false);
   const greetingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userScrolledUp = useRef(false);
+
+  // Track whether user is near the bottom
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUp.current = distFromBottom > 80;
+    setShowJumpBtn(distFromBottom > 80);
+  }, []);
+
+  const scrollToBottom = useCallback((force = false) => {
+    if (!userScrolledUp.current || force) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, []);
+
+  const jumpToLatest = () => {
+    userScrolledUp.current = false;
+    setShowJumpBtn(false);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   // Modal open/close animation
   useEffect(() => {
@@ -88,8 +112,8 @@ export default function RealSSAChat({
   }, [isOpen, messages.length]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+    scrollToBottom();
+  }, [messages, loading, scrollToBottom]);
 
   const send = async (text: string) => {
     const q = text.trim();
@@ -133,7 +157,7 @@ export default function RealSSAChat({
           return updated;
         });
 
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        scrollToBottom();
 
         if (currentWordIdx >= words.length) {
           clearInterval(interval);
@@ -306,7 +330,9 @@ export default function RealSSAChat({
 
         {/* ── Messages area ───────────────────────── */}
         <div
-          className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-4 py-4 space-y-3 relative"
           style={{ scrollbarWidth: 'none' }}
         >
           {/* Welcome state */}
@@ -393,6 +419,24 @@ export default function RealSSAChat({
 
           <div ref={bottomRef} />
         </div>
+
+        {/* ── Jump to Latest floating button ── */}
+        {showJumpBtn && (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+            <button
+              onClick={jumpToLatest}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-lg active:scale-95 transition-all duration-150 animate-in fade-in slide-in-from-bottom-2"
+              style={{
+                background: 'linear-gradient(135deg, #F59E0B, #FBBF24)',
+                color: '#000',
+                boxShadow: '0 4px 20px rgba(245,158,11,0.4)',
+              }}
+            >
+              <ChevronDown size={13} />
+              Jump to latest
+            </button>
+          </div>
+        )}
 
         <form
           onSubmit={handleSubmit}
