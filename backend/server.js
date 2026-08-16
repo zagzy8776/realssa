@@ -23,6 +23,7 @@ const { generateRateCardSvg } = require('./services/rateCard');
 const { getUserBalance, getUserHistory, recordLedgerTransaction, recordShareDwellTime } = require('./services/walletService');
 const { queryMultiDb, queryAllDbs, getPoolForCategory, getAllPools, pools: contentPools } = require('./config/multiDb');
 const { parseBeaconPayload, bufferTelemetry, initTelemetryFlusher } = require('./services/telemetryService');
+const redisService = require('./services/redisService');
 
 // SSRF protection helper
 const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;
@@ -4694,31 +4695,75 @@ app.post('/api/chat', async (req, res) => {
   const { message, history = [] } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
 
-  // 1. Fetch relevant articles based on user query + recent top headlines
+  const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
+
+  // ── 🔴 RATE LIMIT: 10 messages per IP per 60 seconds (Redis-backed) ──
+  try {
+    const rateLimitKey = `chat:ratelimit:${clientIp}`;
+    const currentCount = await redisService.getCached(rateLimitKey);
+    const count = parseInt(currentCount || '0', 10);
+    if (count >= 10) {
+      console.warn(`[Chat] Rate limit hit for IP: ${clientIp}`);
+      return res.status(429).json({
+        error: 'rate_limited',
+        reply: "Whoa, slow down bestie 😅 You\'re sending a lot of messages! Give it a minute and come back — I\'ll be right here 🔥"
+      });
+    }
+    // Increment and set 60s TTL only on first message in window
+    if (count === 0) {
+      await redisService.setCached(rateLimitKey, '1', 60);
+    } else {
+      await redisService.setCached(rateLimitKey, String(count + 1), 60);
+    }
+  } catch (_) { /* Redis down — allow request through */ }
+
+  // ── ⚡ DEDUPE: Return cached reply for identical question within 2 min ──
+  const msgKey = message.trim().toLowerCase().replace(/\s+/g, ' ');
+  const dedupeCacheKey = `chat:reply:${Buffer.from(msgKey).toString('base64').slice(0, 48)}`;
+  try {
+    const cachedReply = await redisService.getCached(dedupeCacheKey);
+    if (cachedReply) {
+      console.log(`[Chat] ⚡ Dedup cache hit for: "${msgKey.slice(0, 60)}"`);
+      return res.json({ ...cachedReply, cached: true });
+    }
+  } catch (_) { }
+
+  // ── 📰 NEWS CONTEXT: Cache top articles for 5 minutes (saves 2 DB queries per chat) ──
   let newsContext = '';
   let sources = [];
   try {
     const cleanMsg = message.trim().replace(/[^a-zA-Z0-9\s]/g, '');
     const keywords = cleanMsg.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
 
-    let searchRows = [];
-    if (keywords.length > 0) {
-      const searchPattern = `%${keywords.join('%')}%`;
-      const searchRes = await queryMultiDb(
-        `SELECT title, category, source_name, external_link, original_excerpt FROM rss_articles
-         WHERE title ILIKE $1 OR original_excerpt ILIKE $1
-         ORDER BY published_at DESC LIMIT 5`,
-        [searchPattern]
+    // Recent headlines — cached 5 minutes (shared across all users)
+    const recentCacheKey = 'chat:news:recent';
+    let recentRows = await redisService.getCached(recentCacheKey);
+    if (!recentRows) {
+      const recentRes = await queryMultiDb(
+        `SELECT title, category, source_name, external_link FROM rss_articles ORDER BY published_at DESC LIMIT 15`,
+        []
       );
-      searchRows = searchRes.rows || [];
+      recentRows = recentRes.rows || [];
+      redisService.setCached(recentCacheKey, recentRows, 300).catch(() => {}); // 5 min TTL
     }
 
-    const recentRes = await queryMultiDb(
-      `SELECT title, category, source_name, external_link FROM rss_articles
-       ORDER BY published_at DESC LIMIT 15`,
-      []
-    );
-    const recentRows = recentRes.rows || [];
+    // Keyword search — cached 3 minutes per unique keyword set
+    let searchRows = [];
+    if (keywords.length > 0) {
+      const searchCacheKey = `chat:news:search:${keywords.join('-')}`;
+      searchRows = await redisService.getCached(searchCacheKey);
+      if (!searchRows) {
+        const searchPattern = `%${keywords.join('%')}%`;
+        const searchRes = await queryMultiDb(
+          `SELECT title, category, source_name, external_link, original_excerpt FROM rss_articles
+           WHERE title ILIKE $1 OR original_excerpt ILIKE $1
+           ORDER BY published_at DESC LIMIT 5`,
+          [searchPattern]
+        );
+        searchRows = searchRes.rows || [];
+        redisService.setCached(searchCacheKey, searchRows, 180).catch(() => {}); // 3 min TTL
+      }
+    }
 
     const allArticles = [...searchRows, ...recentRows];
     const uniqueMap = new Map();
@@ -4785,6 +4830,15 @@ ${SITE_GUIDE}${humanInstruction}${newsContext}`;
     { role: 'user', content: message.trim() }
   ];
 
+  // Helper: persist successful reply to dedupe cache (2 min) then return it
+  const sendAndCache = (reply, provider) => {
+    if (reply) {
+      const payload = { reply, provider, sources };
+      redisService.setCached(dedupeCacheKey, payload, 120).catch(() => {});
+      return res.json(payload);
+    }
+  };
+
   // 1. Groq — Primary (Fastest & Active Keys Pool)
   const defaultGroqKeys = [
     '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',
@@ -4805,7 +4859,7 @@ ${SITE_GUIDE}${humanInstruction}${newsContext}`;
       if (r.ok) {
         const d = await r.json();
         const text = d.choices?.[0]?.message?.content?.trim();
-        if (text) return res.json({ reply: text, provider: 'groq' });
+        if (text) return sendAndCache(text, 'groq');
       } else {
         const errTxt = await r.text();
         console.warn('[Chat] Groq HTTP', r.status, errTxt.slice(0, 150));
@@ -4826,7 +4880,7 @@ ${SITE_GUIDE}${humanInstruction}${newsContext}`;
       if (r.ok) {
         const d = await r.json();
         const text = d.choices?.[0]?.message?.content?.trim();
-        if (text) return res.json({ reply: text, provider: 'openrouter' });
+        if (text) return sendAndCache(text, 'openrouter');
       }
     } catch (e) { console.warn('[Chat] OpenRouter:', e.message); }
   }
@@ -4845,7 +4899,7 @@ ${SITE_GUIDE}${humanInstruction}${newsContext}`;
       if (r.ok) {
         const d = await r.json();
         const text = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (text) return res.json({ reply: text, provider: 'gemini' });
+        if (text) return sendAndCache(text, 'gemini');
       }
     } catch (e) { console.warn('[Chat] Gemini:', e.message); }
   }
@@ -4863,7 +4917,7 @@ ${SITE_GUIDE}${humanInstruction}${newsContext}`;
       if (r.ok) {
         const d = await r.json();
         const text = d.choices?.[0]?.message?.content?.trim();
-        if (text) return res.json({ reply: text, provider: 'cerebras' });
+        if (text) return sendAndCache(text, 'cerebras');
       }
     } catch (e) { console.warn('[Chat] Cerebras:', e.message); }
   }
@@ -4873,7 +4927,7 @@ ${SITE_GUIDE}${humanInstruction}${newsContext}`;
     ? `Here are the latest RealSSA highlights:\n${newsContext}\n\nFeel free to ask me about any specific story!`
     : `Hello! I'm RealSSA AI. I'm currently keeping track of all major African & international news. Ask me anything or check out our trending articles!`;
 
-  return res.json({ reply: fallbackReply, provider: 'smart_fallback' });
+  return res.json({ reply: fallbackReply, provider: 'smart_fallback', sources });
 });
 
 // --- RealSSA Autocomplete Proxy (Bypasses CORS restrictions on mobile client) ---

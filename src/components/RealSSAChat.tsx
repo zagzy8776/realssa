@@ -133,6 +133,7 @@ export default function RealSSAChat({
         }),
       });
       const data = await res.json();
+      // Handle rate limit (429) — show server's friendly message as assistant bubble
       const fullReply = data.reply || "Hmm, something went quiet on my end. Try again in a moment!";
       
       setLoading(false);
