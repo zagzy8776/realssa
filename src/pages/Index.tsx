@@ -17,7 +17,6 @@ import BreakingNowRail from "@/components/BreakingNowRail";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { Capacitor } from "@capacitor/core";
 import LoadingOverlay from "@/components/LoadingOverlay";
-import TrendingHashtags from "@/components/TrendingHashtags";
 import StoryGroupCard from "@/components/StoryGroupCard";
 import LocalNewsRail from "@/components/LocalNewsRail";
 import { Search } from "lucide-react";
@@ -450,15 +449,11 @@ const Index = () => {
           </div>
         </div>
 
+        {/* RealSSA Search Modal for AI quick searching */}
         <RealSSASearchModal
           isOpen={isAiSearchOpen}
           onClose={() => setIsAiSearchOpen(false)}
         />
-
-        {/* ══ TRENDING HASHTAGS ══ */}
-        <div className="px-3 sm:px-4 pt-4 pb-0 max-w-screen-xl mx-auto">
-          <TrendingHashtags />
-        </div>
 
         {/* ══ EDITORIAL 2-COLUMN GRID (Full Coverage + Trending) ══ */}
         {!loading && (storyGroups.length > 0 || trendingArticles.length > 0) && (
