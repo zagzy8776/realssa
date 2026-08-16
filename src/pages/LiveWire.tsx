@@ -849,7 +849,7 @@ export default function LiveWire() {
               </div>
 
               {/* Social Channels Badge Scroller */}
-              <div className="flex gap-2.5 overflow-x-auto pb-2 shrink-0" style={{ scrollbarWidth: 'none' }}>
+              <div className="flex gap-2.5 overflow-x-auto scrollbar-hide pb-2 shrink-0" style={{ scrollbarWidth: 'none' }}>
                 {selectedProfilePublisher.socials.youtube && (
                   <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/[0.04] border border-white/8 shrink-0">
                     <Youtube className="w-4 h-4 text-red-500" />
@@ -910,7 +910,7 @@ export default function LiveWire() {
               <div className="space-y-4 pt-2 shrink-0">
                 <div className="flex flex-col gap-2">
                   <h3 className="text-lg font-black text-white">Latest posts</h3>
-                  <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none' }}>
                     {[
                       { id: 'all', name: 'All Updates' },
                       { id: 'social', name: 'X (Twitter)' },

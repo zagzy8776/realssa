@@ -1,8 +1,9 @@
 /**
  * HeroSection — RealSSA Newsroom Redesign
  * Full-bleed editorial breaking story hero.
- * Fetches the freshest article from /api/articles and renders it
- * as a dramatic, full-width card with dark gradient overlay.
+ * Renders a dramatic, full-width card with dark gradient overlay.
+ * Accepts a pre-fetched article object or falls back to retrieving
+ * the freshest article from the database.
  */
 import { ArrowRight, Clock, Wifi } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -13,12 +14,13 @@ interface HeroArticle {
   id: string;
   title: string;
   category: string;
-  source_name?: string;
-  published_at?: string;
+  date?: string; // API serializes published_at as 'date'
   image?: string;
-  external_link?: string;
-  ai_summary?: string;
-  original_excerpt?: string;
+  externalLink?: string; // API serializes external_link as 'externalLink'
+}
+
+interface HeroSectionProps {
+  article?: HeroArticle | null;
 }
 
 const FALLBACK_IMAGES = [
@@ -55,12 +57,19 @@ const isBreaking = (dateStr?: string) => {
   return Date.now() - new Date(dateStr).getTime() < 90 * 60 * 1000; // within 90 min
 };
 
-const HeroSection = () => {
-  const [article, setArticle] = useState<HeroArticle | null>(null);
+const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
+  const [fetchedArticle, setFetchedArticle] = useState<HeroArticle | null>(null);
   const [imgError, setImgError] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
+  const article = propArticle || fetchedArticle;
+
   useEffect(() => {
+    if (propArticle) {
+      setLoaded(true);
+      return;
+    }
+
     const fetchHero = async () => {
       try {
         const res = await fetch(apiUrl("/api/articles?limit=5&sort=latest"), {
@@ -76,36 +85,42 @@ const HeroSection = () => {
         const picked = articles.find(a => a.image && !/(logo|icon|brand|favicon)/i.test(a.image))
           || articles[0];
         if (picked) {
-          setArticle(picked);
+          setFetchedArticle(picked);
           setTimeout(() => setLoaded(true), 80);
         }
       } catch {
         // Use a placeholder so the hero still looks premium
-        setArticle({
+        setFetchedArticle({
           id: "hero-placeholder",
           title: "Your Real-Time Window Into Africa and the World",
           category: "news",
-          source_name: "RealSSA News Desk",
-          published_at: new Date().toISOString(),
+          date: new Date().toISOString(),
         });
         setTimeout(() => setLoaded(true), 80);
       }
     };
     fetchHero();
-  }, []);
+  }, [propArticle]);
+
+  // Set loaded state when propArticle changes dynamically
+  useEffect(() => {
+    if (propArticle) {
+      setLoaded(true);
+    }
+  }, [propArticle]);
 
   const resolveImage = () => {
     if (imgError || !article?.image) {
-      return FALLBACK_IMAGES[Math.floor(Math.random() * FALLBACK_IMAGES.length)];
+      return FALLBACK_IMAGES[0];
     }
     return article.image.startsWith("//") ? "https:" + article.image : article.image;
   };
 
-  const linkTo = article?.external_link
-    ? `/read?url=${encodeURIComponent(article.external_link)}&id=${encodeURIComponent(article.id || "")}`
+  const linkTo = article?.externalLink
+    ? `/read?url=${encodeURIComponent(article.externalLink)}&id=${encodeURIComponent(article.id || "")}`
     : article?.id ? `/article/${article.id}` : "#";
 
-  const breaking = isBreaking(article?.published_at);
+  const breaking = isBreaking(article?.date);
   const imgSrc = resolveImage();
 
   return (
@@ -178,20 +193,18 @@ const HeroSection = () => {
               <span className="nr-badge" style={{ fontSize: "0.58rem" }}>
                 {getCategoryLabel(article?.category || "news")}
               </span>
-              {article?.source_name && (
-                <>
-                  <span style={{ color: "rgba(255,255,255,0.25)" }}>·</span>
-                  <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem", fontWeight: 600 }}>
-                    {article.source_name.toUpperCase()}
-                  </span>
-                </>
-              )}
-              {article?.published_at && (
+              <>
+                <span style={{ color: "rgba(255,255,255,0.25)" }}>·</span>
+                <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem", fontWeight: 600 }}>
+                  REALSSA
+                </span>
+              </>
+              {article?.date && (
                 <>
                   <span style={{ color: "rgba(255,255,255,0.25)" }}>·</span>
                   <Clock size={10} style={{ color: "rgba(255,255,255,0.4)" }} />
                   <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.65rem" }}>
-                    {formatTimeAgo(article.published_at)}
+                    {formatTimeAgo(article.date)}
                   </span>
                 </>
               )}

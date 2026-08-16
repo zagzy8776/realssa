@@ -346,7 +346,7 @@ export default function Search() {
                         {aiData.sources && aiData.sources.length > 0 && (
                           <div className="pt-3 border-t border-muted/50">
                             <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Verified Citations</h5>
-                            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted">
+                            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
                               {aiData.sources.map((src, i) => {
                                 const targetUrl = src.url.startsWith('/read?url=')
                                   ? decodeURIComponent(src.url.replace('/read?url=', ''))

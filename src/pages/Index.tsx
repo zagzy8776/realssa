@@ -366,6 +366,7 @@ const Index = () => {
   };
 
   const filteredArticles = getFilteredArticles();
+  const heroArticle = allArticles.find((art: any) => art.image && !/(placeholder|logo|icon|favicon)/i.test(art.image)) || allArticles[0];
   const visibleArticles = filteredArticles.slice(0, visibleCount);
 
   // Infinite scroll via IntersectionObserver sentinel — avoids reading
@@ -418,7 +419,7 @@ const Index = () => {
       <main style={{ paddingTop: "0.5rem" }}>
 
         {/* ══ HERO — Full-bleed editorial breaking story ══ */}
-        <HeroSection />
+        <HeroSection article={heroArticle} />
 
         {/* ══ CATEGORY PILL BAR ══ */}
         <div
@@ -431,7 +432,7 @@ const Index = () => {
             borderBottom: "1px solid rgba(255,255,255,0.06)",
           }}
         >
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide max-w-screen-xl mx-auto">
+          <div className="flex gap-2 overflow-x-auto scroll-smooth overscroll-contain touch-pan-x scrollbar-hide max-w-screen-xl mx-auto">
             {[
               { key: "all", label: "All" },
               { key: "facts", label: "Nigeria" },
