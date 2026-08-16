@@ -1,284 +1,226 @@
-import { ArrowRight, PlayCircle, Radio, ShieldAlert } from "lucide-react";
+/**
+ * HeroSection — RealSSA Newsroom Redesign
+ * Full-bleed editorial breaking story hero.
+ * Fetches the freshest article from /api/articles and renders it
+ * as a dramatic, full-width card with dark gradient overlay.
+ */
+import { ArrowRight, Clock, Wifi } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
-import { HlsPlayer } from "./HlsPlayer";
-import { ErrorBoundary } from "./ErrorBoundary";
-import { Capacitor } from "@capacitor/core";
+import { useState, useEffect } from "react";
 import { apiUrl } from "@/lib/api-base";
-import { Network } from "@capacitor/network";
 
-interface LiveChannel {
+interface HeroArticle {
   id: string;
-  name: string;
-  source: string;
-  // Fallbacks: HLS stream (safest for mobile) and YouTube embeds
-  hlsUrl?: string;
-  embedUrl: string;
+  title: string;
+  category: string;
+  source_name?: string;
+  published_at?: string;
+  image?: string;
+  external_link?: string;
+  ai_summary?: string;
+  original_excerpt?: string;
 }
 
-const CHANNELS: LiveChannel[] = [
-  {
-    id: "channels-tv",
-    name: "Channels TV",
-    source: "Channels TV",
-    embedUrl: "https://www.youtube.com/embed/W8nThq62Vb4?autoplay=0"
-  },
-  {
-    id: "arise-news",
-    name: "Arise News",
-    source: "Arise News",
-    embedUrl: "https://www.youtube.com/embed/x4wL-fWyhI0?autoplay=0"
-  },
-  {
-    id: "tvc-news",
-    name: "TVC News",
-    source: "TVC News",
-    embedUrl: "https://www.youtube.com/embed/Mv14aabg4mA?autoplay=0"
-  },
-  {
-    id: "al-jazeera",
-    name: "Al Jazeera",
-    source: "Al Jazeera",
-    embedUrl: "https://www.youtube.com/embed/gCNeDWCI0vo?autoplay=0"
-  }
+const FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1600&q=80",
+  "https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=1600&q=80",
+  "https://images.unsplash.com/photo-1585776245991-cf89dd7fc73a?w=1600&q=80",
 ];
 
+const formatTimeAgo = (dateStr?: string) => {
+  if (!dateStr) return "";
+  try {
+    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+    if (diff < 1) return "Just now";
+    if (diff < 60) return `${diff}m ago`;
+    if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
+    return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  } catch { return ""; }
+};
+
+const getCategoryLabel = (cat: string) => {
+  const map: Record<string, string> = {
+    breaking: "Breaking", politics: "Politics", sports: "Sports",
+    tech: "Tech", crypto: "Crypto", business: "Business",
+    entertainment: "Entertainment", news: "News", general: "News",
+    "nigerian-news": "Nigeria", "nigerian-politics": "Politics",
+    "nigerian-sports": "Sports", "nigerian-tech": "Tech",
+    culture: "Culture", nollywood: "Nollywood",
+  };
+  return map[cat?.toLowerCase()] || "News";
+};
+
+const isBreaking = (dateStr?: string) => {
+  if (!dateStr) return false;
+  return Date.now() - new Date(dateStr).getTime() < 90 * 60 * 1000; // within 90 min
+};
+
 const HeroSection = () => {
-  const [activeChannel, setActiveChannel] = useState<LiveChannel>(CHANNELS[0]);
-  const [liveStreamUrl, setLiveStreamUrl] = useState<string | null>(null);
-  const [isLiveEventActive, setIsLiveEventActive] = useState(false);
-  const [liveEventTitle, setLiveEventTitle] = useState("");
-  const [videoLoaded, setVideoLoaded] = useState(false);
-  const [videoError, setVideoError] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [article, setArticle] = useState<HeroArticle | null>(null);
+  const [imgError, setImgError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  // Connection-aware autoplay states
-  const [isCellular, setIsCellular] = useState(true); // Default to cellular-safe (no autoplay)
-  const [userApprovedCellularPlay, setUserApprovedCellularPlay] = useState(false);
-
-  // 1. Monitor network connection status (WiFi vs Cellular) in real time
   useEffect(() => {
-    const initNetworkSensing = async () => {
+    const fetchHero = async () => {
       try {
-        const status = await Network.getStatus();
-        // If it reports 'wifi', treat as non-cellular (safely autoplay). Default to cellular-safe.
-        setIsCellular(status.connectionType !== 'wifi');
-      } catch (err) {
-        console.warn("Capacitor Network plugin query failed, defaulting to cellular-safe behavior:", err);
-        setIsCellular(true);
+        const res = await fetch(apiUrl("/api/articles?limit=5&sort=latest"), {
+          signal: AbortSignal.timeout(6000),
+        });
+        if (!res.ok) throw new Error("fetch failed");
+        const data = await res.json();
+        const articles: HeroArticle[] = Array.isArray(data)
+          ? data
+          : data.articles || data.data || [];
+
+        // Pick first article that has an image
+        const picked = articles.find(a => a.image && !/(logo|icon|brand|favicon)/i.test(a.image))
+          || articles[0];
+        if (picked) {
+          setArticle(picked);
+          setTimeout(() => setLoaded(true), 80);
+        }
+      } catch {
+        // Use a placeholder so the hero still looks premium
+        setArticle({
+          id: "hero-placeholder",
+          title: "Your Real-Time Window Into Africa and the World",
+          category: "news",
+          source_name: "RealSSA News Desk",
+          published_at: new Date().toISOString(),
+        });
+        setTimeout(() => setLoaded(true), 80);
       }
     };
-
-    initNetworkSensing();
-
-    // Listen for real-time network status changes (WiFi to cellular mid-stream)
-    let listenerPromise = Network.addListener('networkStatusChange', (status) => {
-      const cellularNow = status.connectionType !== 'wifi';
-      setIsCellular(cellularNow);
-      if (cellularNow) {
-        // Automatically stop autoplay when switched from WiFi to cellular mid-stream
-        setUserApprovedCellularPlay(false);
-      }
-    });
-
-    return () => {
-      listenerPromise.then(l => l.remove()).catch(() => { });
-    };
+    fetchHero();
   }, []);
 
-  // 2. Uptime/Live Event Detection: Query backend for active matches or high-priority events
-  useEffect(() => {
-    const checkLiveEvents = async () => {
-      try {
-        const res = await fetch(apiUrl('/api/streams/live'));
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const priorityStream = data[0]; // e.g. World Cup stream
-            if (priorityStream.stream_url) {
-              setLiveStreamUrl(priorityStream.stream_url);
-              setIsLiveEventActive(true);
-              setLiveEventTitle(priorityStream.match_title || "🔴 Live Broadcast");
-              return;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Live stream query failed, falling back to channels...", err);
-      }
-
-      // No active priority matches: recover last-selected channel or default
-      try {
-        const lastChannelId = localStorage.getItem("realssa_last_hero_channel");
-        const found = CHANNELS.find(c => c.id === lastChannelId);
-        if (found) {
-          setActiveChannel(found);
-        } else {
-          setActiveChannel(CHANNELS[0]); // Default back to Channels TV
-        }
-      } catch (e) { }
-    };
-
-    checkLiveEvents();
-  }, []);
-
-  // Set timeout fallback for loading state
-  useEffect(() => {
-    setVideoLoaded(false);
-    setVideoError(false);
-
-    timerRef.current = setTimeout(() => {
-      if (!videoLoaded) {
-        setVideoError(true);
-      }
-    }, 8000);
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [activeChannel, liveStreamUrl]);
-
-  const handleChannelSwitch = (channel: LiveChannel) => {
-    setActiveChannel(channel);
-    setIsLiveEventActive(false);
-    setLiveStreamUrl(null);
-    try {
-      localStorage.setItem("realssa_last_hero_channel", channel.id);
-    } catch (e) { }
+  const resolveImage = () => {
+    if (imgError || !article?.image) {
+      return FALLBACK_IMAGES[Math.floor(Math.random() * FALLBACK_IMAGES.length)];
+    }
+    return article.image.startsWith("//") ? "https:" + article.image : article.image;
   };
 
-  const isNative = Capacitor.isNativePlatform();
-  const shouldPlay = !isCellular || userApprovedCellularPlay;
+  const linkTo = article?.external_link
+    ? `/read?url=${encodeURIComponent(article.external_link)}&id=${encodeURIComponent(article.id || "")}`
+    : article?.id ? `/article/${article.id}` : "#";
+
+  const breaking = isBreaking(article?.published_at);
+  const imgSrc = resolveImage();
 
   return (
-    <section className="relative overflow-hidden w-full min-h-[640px] md:h-[90vh] flex flex-col items-center justify-center bg-black py-12 md:py-0">
-
-      {/* 1. Background Video / HLS Stream Player */}
-      <div className="absolute inset-0 w-full h-full pointer-events-none z-0">
-        <ErrorBoundary fallback={
-          <div
-            className="absolute inset-0 bg-cover bg-center opacity-85 transition-opacity duration-1000"
-            style={{ backgroundImage: `url('https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1600')` }}
-          />
-        }>
-          {videoError ? (
-            // Video failed/offline: fallback static premium background image
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-85 transition-opacity duration-1000"
-              style={{ backgroundImage: `url('https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1600')` }}
+    <section className="relative w-full px-3 sm:px-4 pt-2 pb-0">
+      <Link to={linkTo} className="block group">
+        <div
+          className="nr-hero-card overflow-hidden"
+          style={{
+            minHeight: "clamp(280px, 55vw, 520px)",
+            background: "#111118",
+          }}
+        >
+          {/* ── Background Image ── */}
+          <div className="absolute inset-0 z-0">
+            <img
+              src={imgSrc}
+              alt={article?.title || ""}
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+              style={{ opacity: loaded ? 0.72 : 0, transition: "opacity 0.5s ease, transform 0.7s ease" }}
             />
-          ) : !shouldPlay ? (
-            // Cellular-safe mode: Show static preview image with play prompt to save data
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-70 transition-opacity duration-500"
-              style={{ backgroundImage: `url('https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1600')` }}
-            />
-          ) : isNative || isLiveEventActive || activeChannel.hlsUrl ? (
-            // Mobile/WebView or HLS stream supported
-            <div className="absolute inset-0 w-full h-full opacity-80">
-              <HlsPlayer
-                src={liveStreamUrl || activeChannel.hlsUrl || ""}
-                autoPlay={true}
-                controls={false}
-                className="w-full h-full object-cover"
+            {/* Skeleton shimmer while loading */}
+            {!loaded && (
+              <div
+                className="absolute inset-0 animate-pulse"
+                style={{ background: "linear-gradient(135deg, #16161E 0%, #1C1C26 50%, #16161E 100%)" }}
               />
-            </div>
-          ) : (
-            // Fallback YouTube Iframe for desktop web
-            <iframe
-              src={`${activeChannel.embedUrl}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&loop=1&playsinline=1`}
-              title="Live News Background"
-              allow="autoplay; encrypted-media"
-              className="absolute top-1/2 left-1/2 w-[300vw] h-[300vh] md:w-[150vw] md:h-[150vh] -translate-x-1/2 -translate-y-1/2 object-cover opacity-85"
-              style={{ border: 'none' }}
-            />
-          )}
-        </ErrorBoundary>
-      </div>
-
-      {/* 2. Glass Overlay to darken the video and make text readable */}
-      <div className="absolute inset-0 bg-black/60 z-10" />
-      <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/25 z-10" />
-
-      {/* Channel Switcher Overlay */}
-      <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 z-30 flex flex-col gap-2 items-center px-4 max-w-lg w-full">
-        <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
-          {isLiveEventActive && (
-            <div className="px-3 py-1 bg-red-600/90 text-white rounded-full text-xs font-bold flex items-center gap-1 shadow-lg shadow-red-900/30 animate-pulse">
-              <Radio className="w-3 h-3" />
-              <span>{liveEventTitle}</span>
-            </div>
-          )}
-          <div className="flex gap-1.5 bg-black/50 backdrop-blur-md border border-white/15 p-1 rounded-full items-center max-w-full overflow-x-auto scrollbar-hide">
-            {CHANNELS.map((chan) => {
-              const isSelected = !isLiveEventActive && activeChannel.id === chan.id;
-              return (
-                <button
-                  key={chan.id}
-                  onClick={() => handleChannelSwitch(chan)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all whitespace-nowrap ${isSelected
-                    ? "bg-amber-500 text-black shadow-md font-bold scale-105"
-                    : "text-white/70 hover:text-white"
-                    }`}
-                >
-                  {chan.name}
-                </button>
-              );
-            })}
+            )}
           </div>
-        </div>
 
-        {/* Data Saver Mode Warning / Tap to Watch on Cellular */}
-        {isCellular && !userApprovedCellularPlay && !videoError && (
-          <button
-            onClick={() => setUserApprovedCellularPlay(true)}
-            className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/95 hover:bg-amber-500 text-black rounded-full text-[11px] font-bold transition-all scale-100 hover:scale-105 active:scale-95 shadow-lg pointer-events-auto"
+          {/* ── Gradient overlay (bottom-to-top) ── */}
+          <div
+            className="absolute inset-0 z-10 nr-hero-gradient"
+            style={{
+              background: "linear-gradient(to top, rgba(10,10,15,0.98) 0%, rgba(10,10,15,0.65) 45%, rgba(10,10,15,0.2) 80%, transparent 100%)",
+            }}
+          />
+
+          {/* ── BREAKING badge top-left ── */}
+          {breaking && (
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5">
+              <span
+                className="nr-badge nr-badge-red flex items-center gap-1"
+                style={{ animation: "pulse 2s ease-in-out infinite" }}
+              >
+                <span
+                  className="inline-block w-1.5 h-1.5 rounded-full bg-white"
+                  style={{ animation: "pulse 1.2s ease-in-out infinite" }}
+                />
+                BREAKING
+              </span>
+            </div>
+          )}
+
+          {/* ── Live indicator (Wi-Fi pulse) top-right ── */}
+          <div className="absolute top-3 right-3 z-20 flex items-center gap-1">
+            <Wifi size={11} className="text-amber-400" />
+            <span style={{ fontSize: "0.6rem", color: "rgba(245,158,11,0.8)", fontWeight: 700, letterSpacing: "0.08em" }}>
+              LIVE FEED
+            </span>
+          </div>
+
+          {/* ── Bottom text content ── */}
+          <div
+            className="absolute bottom-0 left-0 right-0 z-20 p-4 sm:p-5"
+            style={{ opacity: loaded ? 1 : 0, transition: "opacity 0.5s ease 0.2s" }}
           >
-            <PlayCircle className="w-3.5 h-3.5" />
-            <span>Tap to Stream Live (Cellular Data)</span>
-          </button>
-        )}
-      </div>
+            {/* Category + source + time */}
+            <div className="nr-meta mb-2 flex-wrap">
+              <span className="nr-badge" style={{ fontSize: "0.58rem" }}>
+                {getCategoryLabel(article?.category || "news")}
+              </span>
+              {article?.source_name && (
+                <>
+                  <span style={{ color: "rgba(255,255,255,0.25)" }}>·</span>
+                  <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem", fontWeight: 600 }}>
+                    {article.source_name.toUpperCase()}
+                  </span>
+                </>
+              )}
+              {article?.published_at && (
+                <>
+                  <span style={{ color: "rgba(255,255,255,0.25)" }}>·</span>
+                  <Clock size={10} style={{ color: "rgba(255,255,255,0.4)" }} />
+                  <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.65rem" }}>
+                    {formatTimeAgo(article.published_at)}
+                  </span>
+                </>
+              )}
+            </div>
 
-      {/* 3. The Glassmorphism Welcome Modal */}
-      <div className="relative z-20 container mx-auto px-4 flex flex-col items-center text-center mt-28 sm:mt-32">
-        <div className="animate-fade-in bg-black/50 backdrop-blur-lg border border-white/15 p-5 sm:p-8 md:p-10 rounded-3xl shadow-2xl max-w-3xl w-full">
+            {/* Main headline */}
+            <h1
+              className="nr-headline-xl mb-3 line-clamp-3 sm:line-clamp-2"
+              style={{ textShadow: "0 2px 12px rgba(0,0,0,0.7)" }}
+            >
+              {article?.title || "Loading latest news…"}
+            </h1>
 
-          <h1 className="font-display text-3xl sm:text-5xl md:text-6xl font-bold text-white leading-tight mb-2 md:mb-3 drop-shadow-lg">
-            Welcome to <span className="text-gradient-gold">RealSSA</span>
-          </h1>
-
-          <h2 className="text-base sm:text-xl md:text-2xl text-white/90 font-medium mb-3 md:mb-5 drop-shadow-md">
-            The Pulse of Africa & The World
-          </h2>
-
-          <p className="text-xs sm:text-sm md:text-base text-white/80 mb-6 max-w-xl mx-auto leading-relaxed">
-            Your premier, real-time news aggregator. Swipe through the latest breaking politics, trending sports highlights, tech startups, and viral culture straight from the source.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link to="/nigerian-news" className="w-full sm:w-auto">
-              <button className="w-full sm:w-auto px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-primary/30 group">
-                Start Reading
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-            </Link>
-            <Link to="/videos" className="w-full sm:w-auto">
-              <button className="w-full sm:w-auto px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-semibold transition-all duration-300 backdrop-blur-sm border border-white/20 flex items-center justify-center gap-2">
-                <PlayCircle className="w-4 h-4" />
-                Watch More Live TV
-              </button>
-            </Link>
+            {/* Read more CTA */}
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
+                style={{ color: "#F59E0B", letterSpacing: "0.08em" }}
+              >
+                Read Full Story
+                <ArrowRight
+                  size={13}
+                  className="transition-transform duration-200 group-hover:translate-x-1"
+                />
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* 4. Scroll Indicator */}
-      <div className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 z-20 animate-bounce text-white/40 flex-col items-center">
-        <span className="text-[10px] uppercase tracking-widest mb-1 font-medium">Scroll to explore</span>
-        <ArrowRight className="w-4 h-4 rotate-90" />
-      </div>
-
+      </Link>
     </section>
   );
 };

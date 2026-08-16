@@ -391,7 +391,7 @@ const Index = () => {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="nr-page min-h-screen">
       {initialLoading && <LoadingOverlay />}
       <SEO
         title="RealSSA | Breaking News, Politics, Tech & Culture in Africa"
@@ -405,17 +405,49 @@ const Index = () => {
       )}
       <ReadProgressBar />
       <Header />
+
+      {/* News ticker sits right below header */}
       <NewsTicker />
-      <BreakingNowRail excludeIds={stories.map((s: any) => s.id)} onLoaded={(ids) => setBreakingIds(ids)} />
-      <LocalNewsRail excludeIds={[...stories.map((s: any) => s.id), ...breakingIds]} />
+
+      {/* Breaking rail still runs but doesn't eat layout above the fold */}
+      <div className="hidden">
+        <BreakingNowRail excludeIds={stories.map((s: any) => s.id)} onLoaded={(ids) => setBreakingIds(ids)} />
+        <LocalNewsRail excludeIds={[...stories.map((s: any) => s.id), ...breakingIds]} />
+      </div>
       <SocialButtons />
 
-      <main>
+      <main style={{ paddingTop: "0.5rem" }}>
+
+        {/* ══ HERO — Full-bleed editorial breaking story ══ */}
         <HeroSection />
 
-        {/* Trending Hashtags — powered by real-time keyword extraction */}
-        <div className="container mx-auto px-4 -mt-4 mb-2">
-          <TrendingHashtags />
+        {/* ══ CATEGORY PILL BAR ══ */}
+        <div
+          className="sticky z-40 px-3 sm:px-4 py-2.5"
+          style={{
+            top: "56px",
+            background: "rgba(10,10,15,0.92)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+          }}
+        >
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide max-w-screen-xl mx-auto">
+            {[
+              { key: "all", label: "All" },
+              { key: "facts", label: "Nigeria" },
+              { key: "deep_dives", label: "In-Depth" },
+              { key: "local", label: "Local" },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setActiveFilter(key)}
+                className={`nr-pill flex-shrink-0 ${activeFilter === key ? "nr-pill-active" : "nr-pill-inactive"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <RealSSASearchModal
@@ -423,13 +455,62 @@ const Index = () => {
           onClose={() => setIsAiSearchOpen(false)}
         />
 
-        {/* Full Coverage / Story Groups */}
+        {/* ══ TRENDING HASHTAGS ══ */}
+        <div className="px-3 sm:px-4 pt-4 pb-0 max-w-screen-xl mx-auto">
+          <TrendingHashtags />
+        </div>
+
+        {/* ══ EDITORIAL 2-COLUMN GRID (Full Coverage + Trending) ══ */}
+        {!loading && (storyGroups.length > 0 || trendingArticles.length > 0) && (
+          <section className="px-3 sm:px-4 py-5 max-w-screen-xl mx-auto">
+            <h2 className="nr-section-title mb-4">Top Stories</h2>
+
+            {/* Desktop: left=big card, right=2 stacked | Mobile: stack all */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+
+              {/* Big featured card — first trending article */}
+              {trendingArticles[0] && (
+                <div className="lg:col-span-3">
+                  <NewsCard
+                    id={trendingArticles[0].id}
+                    title={trendingArticles[0].title}
+                    excerpt={trendingArticles[0].excerpt || trendingArticles[0].ai_summary || ""}
+                    category={trendingArticles[0].category || "news"}
+                    image={getImage(trendingArticles[0])}
+                    readTime={trendingArticles[0].read_time || "3 min read"}
+                    date={trendingArticles[0].published_at ? new Date(trendingArticles[0].published_at).toLocaleDateString() : ""}
+                    externalLink={trendingArticles[0].external_link}
+                    storyHash={trendingArticles[0].story_hash}
+                  />
+                </div>
+              )}
+
+              {/* Right column — 2 stacked smaller cards */}
+              <div className="lg:col-span-2 flex flex-col gap-3">
+                {trendingArticles.slice(1, 3).map((article: any) => (
+                  <NewsCard
+                    key={article.id}
+                    id={article.id}
+                    title={article.title}
+                    excerpt=""
+                    category={article.category || "news"}
+                    image={getImage(article)}
+                    readTime={article.read_time || "3 min read"}
+                    date={article.published_at ? new Date(article.published_at).toLocaleDateString() : ""}
+                    externalLink={article.external_link}
+                    storyHash={article.story_hash}
+                  />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ══ STORY GROUPS (Full Coverage) ══ */}
         {!loading && storyGroups.length > 0 && (
-          <section className="container mx-auto px-4 py-6 bg-muted/20 my-6 rounded-3xl">
-            <h2 className="text-2xl md:text-3xl font-display font-bold mb-4 border-b border-border pb-2 flex items-center gap-2">
-              <span className="text-blue-500">📡</span> Full Coverage
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <section className="px-3 sm:px-4 pb-5 max-w-screen-xl mx-auto">
+            <h2 className="nr-section-title mb-4">Full Coverage</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {storyGroups.slice(0, 3).map((group: any, idx) => (
                 <StoryGroupCard key={idx} group={group} />
               ))}
@@ -437,42 +518,24 @@ const Index = () => {
           </section>
         )}
 
-        {/* Trending in Nigeria */}
-        {!loading && trendingArticles.length > 0 && (
-          <section className="container mx-auto px-4 py-6">
-            <h2 className="text-2xl md:text-3xl font-display font-bold mb-4 border-b border-border pb-2">
-              Trending in Nigeria 🇳🇬
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {trendingArticles.map((article: any) => (
-                <NewsCard
-                  key={article.id}
-                  id={article.id}
-                  title={article.title}
-                  excerpt=""
-                  category={article.category || 'news'}
-                  image={getImage(article)}
-                  readTime={article.readTime || article.read_time || '3 min read'}
-                  date={article.date || (article.published_at ? new Date(article.published_at).toLocaleDateString() : new Date().toLocaleDateString())}
-                  externalLink={article.externalLink || article.external_link}
-                  storyHash={article.story_hash || article.storyHash}
-                  localVerifiedCount={article.local_verified_count || article.localVerifiedCount}
-                  rumorFlagCount={article.rumor_flag_count || article.rumorFlagCount}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Live TV Strip — desktop only, sits above Discover Feed */}
-        <section className="container mx-auto px-4 py-4 hidden md:block">
-          <h2 className="text-lg font-display font-bold mb-3 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded animate-pulse">🔴 LIVE TV</span>
-            <span className="text-muted-foreground font-normal text-sm">Watch live news channels</span>
+        {/* ══ LIVE TV STRIP — desktop only ══ */}
+        <section className="px-3 sm:px-4 py-4 hidden md:block max-w-screen-xl mx-auto">
+          <h2 className="nr-section-title mb-3">
+            <span
+              className="inline-flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded animate-pulse"
+              style={{ background: "#EF4444", color: "#fff", borderRadius: 4 }}
+            >
+              LIVE TV
+            </span>
+            <span style={{ color: "var(--nr-text-muted)", fontSize: "0.8rem", fontWeight: 400 }}>Watch live news channels</span>
           </h2>
-          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
             {LIVE_VIDEOS.map((video) => (
-              <div key={video.id} className="flex-shrink-0 w-64 bg-card rounded-xl border border-border overflow-hidden shadow-md snap-start">
+              <div
+                key={video.id}
+                className="flex-shrink-0 w-60 overflow-hidden snap-start nr-card"
+                style={{ borderRadius: 10 }}
+              >
                 <iframe
                   className="w-full aspect-video"
                   src={video.embedUrl}
@@ -480,59 +543,66 @@ const Index = () => {
                   allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
-                <p className="text-xs font-semibold text-center text-muted-foreground py-2 px-3">{video.title}</p>
+                <p
+                  className="text-center py-2 px-3"
+                  style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--nr-text-secondary)" }}
+                >
+                  {video.title}
+                </p>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Discover Feed + Most Read sidebar */}
-        <section className="container mx-auto px-4 py-8">
-          <h2 className="text-2xl md:text-3xl font-display font-bold mb-6 border-b border-border pb-4">
-            Your <span className="text-gradient-gold">Discover Feed</span>
+        {/* ══ DISCOVER FEED + MOST READ SIDEBAR ══ */}
+        <section className="px-3 sm:px-4 py-6 max-w-screen-xl mx-auto">
+          <h2 className="nr-section-title mb-5">
+            Discover Feed
           </h2>
-          <div className="flex flex-col lg:flex-row gap-8">
 
+          <div className="flex flex-col lg:flex-row gap-8">
             {/* Main feed */}
             <div className="flex-1 min-w-0">
               {loading && visibleCount <= 12 ? (
                 <SkeletonGrid count={6} columns={3} />
               ) : visibleArticles.length > 0 ? (
-                <div className="flex flex-col gap-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <div className="flex flex-col gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {visibleArticles.map((article: any) => (
-                      <div key={article.id}>
-                        <NewsCard
-                          id={article.id}
-                          title={article.title}
-                          excerpt={article.excerpt || article.ai_summary || article.original_excerpt || ''}
-                          category={article.category || 'general'}
-                          image={getImage(article)}
-                          readTime={article.readTime || article.read_time || '3 min read'}
-                          date={article.date || (article.published_at ? new Date(article.published_at).toLocaleDateString() : new Date().toLocaleDateString())}
-                          externalLink={article.externalLink || article.external_link}
-                          storyHash={article.story_hash || article.storyHash}
-                          localVerifiedCount={article.local_verified_count || article.localVerifiedCount}
-                          rumorFlagCount={article.rumor_flag_count || article.rumorFlagCount}
-                        />
-                      </div>
+                      <NewsCard
+                        key={article.id}
+                        id={article.id}
+                        title={article.title}
+                        excerpt={article.excerpt || article.ai_summary || article.original_excerpt || ""}
+                        category={article.category || "general"}
+                        image={getImage(article)}
+                        readTime={article.readTime || article.read_time || "3 min read"}
+                        date={article.date || (article.published_at ? new Date(article.published_at).toLocaleDateString() : new Date().toLocaleDateString())}
+                        externalLink={article.externalLink || article.external_link}
+                        storyHash={article.story_hash || article.storyHash}
+                        localVerifiedCount={article.local_verified_count || article.localVerifiedCount}
+                        rumorFlagCount={article.rumor_flag_count || article.rumorFlagCount}
+                      />
                     ))}
                   </div>
+
                   {visibleCount < allArticles.length && (
                     <div ref={loadMoreRef} className="py-8 text-center">
-                      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" role="status" />
+                      <div
+                        className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-r-transparent"
+                        style={{ borderColor: "var(--nr-amber) transparent var(--nr-amber) transparent" }}
+                        role="status"
+                      />
                     </div>
                   )}
-
                 </div>
               ) : (
-                <div className="text-center py-10 text-muted-foreground">
+                <div className="text-center py-12" style={{ color: "var(--nr-text-muted)" }}>
                   <p className="text-4xl mb-3">📰</p>
-                  {error ? (
-                    <p className="text-red-500 font-semibold">{error}</p>
-                  ) : (
-                    <p>No articles yet. Check back soon!</p>
-                  )}
+                  {error
+                    ? <p style={{ color: "#EF4444", fontWeight: 600 }}>{error}</p>
+                    : <p>No articles yet. Check back soon!</p>
+                  }
                 </div>
               )}
             </div>
@@ -547,56 +617,58 @@ const Index = () => {
         </section>
 
         <section className="py-4 md:py-8">
-          <div className="container mx-auto px-4"><LazyAd /></div>
+          <div className="px-3 sm:px-4 max-w-screen-xl mx-auto"><LazyAd /></div>
         </section>
       </main>
 
-      {/* Unified Floating Action Button — one tap reveals AI Search + Live Wire.
-          Consolidates what used to be two stacked FABs so they no longer
-          clutter the thumb-zone or overlap the last card's action row on
-          small phones. Anchored above the mobile bottom-nav via safe-area. */}
+      {/* ══ FLOATING ACTION BUTTON ══ */}
       <div
         className="fixed right-4 md:right-8 z-[999] flex flex-col items-end gap-3"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
+        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}
       >
-        {/* Expanded actions (mount only when open) */}
         <div
-          className={`flex flex-col items-end gap-3 transition-all duration-200 origin-bottom-right ${fabOpen ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto' : 'opacity-0 translate-y-2 scale-95 pointer-events-none'
-            }`}
+          className={`flex flex-col items-end gap-3 transition-all duration-200 origin-bottom-right ${
+            fabOpen ? "opacity-100 translate-y-0 scale-100 pointer-events-auto" : "opacity-0 translate-y-2 scale-95 pointer-events-none"
+          }`}
         >
           <button
             onClick={() => { setIsAiSearchOpen(true); setFabOpen(false); }}
             aria-label="Open AI search"
-            className="h-11 rounded-full bg-primary text-primary-foreground shadow-[0_6px_24px_rgba(245,158,11,0.4)] flex items-center gap-2 px-4 transition-transform duration-150 hover:scale-105 active:scale-95"
+            className="h-11 rounded-full text-black font-bold text-sm flex items-center gap-2 px-4 transition-transform duration-150 hover:scale-105 active:scale-95"
+            style={{ background: "var(--nr-amber)", boxShadow: "0 6px 24px rgba(245,158,11,0.4)" }}
           >
             <Search className="w-5 h-5 shrink-0" />
-            <span className="text-sm font-bold whitespace-nowrap">AI Search</span>
+            <span className="whitespace-nowrap">AI Search</span>
           </button>
           <button
-            onClick={() => { navigate('/wire'); setFabOpen(false); }}
+            onClick={() => { navigate("/wire"); setFabOpen(false); }}
             aria-label="Open Live Broadcast Wire"
-            className="h-11 rounded-full bg-black/90 backdrop-blur-md border border-[#3A3345] shadow-[0_6px_24px_rgba(0,0,0,0.6)] flex items-center gap-2 px-4 transition-transform duration-150 hover:scale-105 active:scale-95"
+            className="h-11 rounded-full flex items-center gap-2 px-4 transition-transform duration-150 hover:scale-105 active:scale-95"
+            style={{
+              background: "rgba(10,10,15,0.92)",
+              border: "1px solid rgba(58,51,69,0.8)",
+              backdropFilter: "blur(12px)",
+              boxShadow: "0 6px 24px rgba(0,0,0,0.6)",
+            }}
           >
-            <span className="text-amber-500 font-extrabold text-sm">📢</span>
-            <span className="text-white text-xs font-bold whitespace-nowrap">Live Wire</span>
-            <span className="w-[7px] h-[7px] rounded-full bg-[#f59e0b] animate-pulse shrink-0" />
+            <span style={{ color: "var(--nr-amber)", fontWeight: 800, fontSize: "0.8rem" }}>📢</span>
+            <span style={{ color: "#fff", fontSize: "0.72rem", fontWeight: 700 }} className="whitespace-nowrap">Live Wire</span>
+            <span className="w-[7px] h-[7px] rounded-full animate-pulse shrink-0" style={{ background: "var(--nr-amber)" }} />
           </button>
         </div>
 
-        {/* Main FAB toggle */}
         <button
           onClick={() => setFabOpen(o => !o)}
-          aria-label={fabOpen ? 'Close quick actions' : 'Open quick actions'}
+          aria-label={fabOpen ? "Close quick actions" : "Open quick actions"}
           aria-expanded={fabOpen}
-          className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-[0_6px_24px_rgba(245,158,11,0.5)] flex items-center justify-center transition-transform duration-200 hover:scale-105 active:scale-95"
+          className="h-14 w-14 rounded-full flex items-center justify-center transition-transform duration-200 hover:scale-105 active:scale-95"
+          style={{ background: "var(--nr-amber)", boxShadow: "0 6px 24px rgba(245,158,11,0.5)" }}
         >
-          <Search className={`w-6 h-6 transition-transform duration-300 ${fabOpen ? 'rotate-90 scale-90' : ''}`} />
+          <Search className={`w-6 h-6 transition-transform duration-300 text-black ${fabOpen ? "rotate-90 scale-90" : ""}`} />
         </button>
       </div>
 
-
       <Footer />
-
     </div>
   );
 };
