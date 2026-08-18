@@ -182,10 +182,10 @@ const Index = () => {
       // Fire-and-forget — wakes up the cold function before the real fetch hits
       fetch(apiUrl('/api/articles?limit=1')).catch(() => {});
 
-      // Stage 1: Load critical above-the-fold content immediately
+      // Stage 1: Load critical above-the-fold content immediately (reduced to 20 articles for speed)
       const [featuredRes, articlesRes, groupsRes] = await Promise.allSettled([
         fetch(apiUrl(`/api/articles/featured?t=${ts}`)),
-        fetch(apiUrl(`/api/articles?t=${ts}${deviceParam}`)),
+        fetch(apiUrl(`/api/articles?t=${ts}${deviceParam}&limit=20`)),
         fetch(apiUrl(`/api/stories/grouped?t=${ts}`))
       ]);
 
@@ -240,68 +240,10 @@ const Index = () => {
         }));
       } catch (cacheWriteErr) { }
 
-      // Stage 2: Lazy load secondary below-the-fold content in background after a 4-second delay to optimize initial paint
-      setTimeout(() => {
-        Promise.allSettled([
-          fetch(apiUrl(`/api/news/world?t=${ts}`)),
-          fetch(apiUrl(`/api/news/uk?t=${ts}`)),
-          fetch(apiUrl(`/api/articles/trending?category=nigerian-news&diverse=true&t=${ts}${deviceParam}`))
-        ]).then(async ([worldRes, ukRes, trendingRes]) => {
-          let loadedTrending = [];
-          if (trendingRes.status === 'fulfilled' && trendingRes.value.ok) {
-            loadedTrending = (await trendingRes.value.json()).filter(isNotPunch);
-            setTrendingArticles(loadedTrending.slice(0, 5));
-          }
-
-          let extraNews = [];
-          if (worldRes.status === 'fulfilled' && worldRes.value.ok) {
-            extraNews = [...extraNews, ...(await worldRes.value.json()).slice(0, 15)];
-          }
-          if (ukRes.status === 'fulfilled' && ukRes.value.ok) {
-            extraNews = [...extraNews, ...(await ukRes.value.json()).slice(0, 15)];
-          }
-
-          extraNews = extraNews.filter(isNotPunch);
-
-          // Merge initial news and lazy loaded news
-          let combinedNews = [...initialNews, ...extraNews].filter(isNotPunch);
-          const usedIds = new Set([
-            ...loadedStories.map(s => s.id),
-            ...loadedTrending.map(t => t.id)
-          ]);
-
-          combinedNews.sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
-          const finalUnique = combinedNews.filter((v, i, a) =>
-            !usedIds.has(v.id) && a.findIndex(t => t.title === v.title) === i
-          );
-
-          // Re-apply preferences sorting
-          try {
-            const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
-            if (prefs.topCategory) {
-              finalUnique.sort((a, b) => {
-                if (a.category === prefs.topCategory && b.category !== prefs.topCategory) return -1;
-                if (b.category === prefs.topCategory && a.category !== prefs.topCategory) return 1;
-                return 0;
-              });
-            }
-          } catch (e) { }
-
-          setAllArticles(finalUnique);
-
-          // Save visible article IDs to sessionStorage so Reels feed can exclude them
-          try {
-            const visibleIds = [
-              ...loadedStories.map(s => s.id),
-              ...loadedTrending.slice(0, 5).map(t => t.id),
-              ...finalUnique.map(n => n.id)
-            ].filter(Boolean);
-            const uniqueIds = Array.from(new Set(visibleIds));
-            sessionStorage.setItem('home_page_article_ids', JSON.stringify(uniqueIds));
-          } catch (cacheErr) { }
-
-        }).catch((lazyErr) => console.error('Lazy loading failed:', lazyErr));
-      }, 4000);
+      // Immediately trigger loadMore to get next batch of articles
+      if (initialUnique.length < 20 && feedHasMore) {
+        loadMoreFeed();
+      }
 
       // Offline digest caching (WiFi only)
       try {
@@ -597,15 +539,6 @@ const Index = () => {
         <section className="px-3 sm:px-4 py-6 max-w-screen-xl mx-auto">
           <div className="flex items-center justify-between mb-5">
             <h2 className="nr-section-title">Discover Feed</h2>
-            <button
-              onClick={() => fetchStories(true)}
-              disabled={refreshing}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-all"
-              style={{ background: 'var(--nr-amber-dim)', color: 'var(--nr-amber)', border: '1px solid var(--nr-border-amber)' }}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </button>
           </div>
 
           <div className="flex flex-col lg:flex-row gap-8">
@@ -643,13 +576,9 @@ const Index = () => {
                       />
                     )}
                     {!feedHasMore && !feedLoadingMore && allArticles.length > 0 && visibleCount >= allArticles.length && (
-                      <button
-                        onClick={() => fetchStories(true)}
-                        className="text-xs font-bold px-4 py-2 rounded-full"
-                        style={{ background: 'var(--nr-amber-dim)', color: 'var(--nr-amber)' }}
-                      >
-                        Refresh for more stories
-                      </button>
+                      <p className="text-sm text-muted" style={{ color: 'var(--nr-text-muted)' }}>
+                        You've reached the end. Fresh stories coming soon!
+                      </p>
                     )}
                   </div>
                 </div>

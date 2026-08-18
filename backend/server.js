@@ -1044,6 +1044,7 @@ async function enrichArticlesWithReactions(articles, deviceId) {
 app.get('/api/articles', async (req, res) => {
   try {
     const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
+    const limit = Math.min(100, Math.max(10, parseInt(req.query.limit) || 50));
 
     // Get articles from JSON files (admin-posted)
     const jsonArticles = readJsonFile(articlesFilePath);
@@ -1082,7 +1083,7 @@ app.get('/api/articles', async (req, res) => {
             content_type,
             '5 min read' as read_time
           FROM rss_articles 
-          ORDER BY published_at DESC LIMIT 500
+          ORDER BY published_at DESC LIMIT ${limit * 2}
         `;
 
 
@@ -1122,8 +1123,8 @@ app.get('/api/articles', async (req, res) => {
           articlesData.sort((a, b) => new Date(b.date) - new Date(a.date));
         }
 
-        // Apply LIMIT 300 — deeper feed so the infinite scroll has real depth
-        articlesData = articlesData.slice(0, 300);
+        // Apply requested limit
+        articlesData = articlesData.slice(0, limit);
 
 
         rssArticles = articlesData.map(row => ({

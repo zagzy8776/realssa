@@ -39,32 +39,28 @@ const Trending: React.FC = () => {
     setLoading(true);
     try {
       const qs = deviceId ? `&deviceId=${encodeURIComponent(deviceId)}` : "";
+      // Optimized: Fetch only key trending sources in parallel
       const endpoints = [
         `/api/articles/trending?diverse=true${qs}`,
-        `/api/news/breaking?diverse=true${qs}`,
-        `/api/articles?limit=100`,
+        `/api/articles?limit=50`,
         `/api/news/nigerian-news`,
-        `/api/news/ghana`,
-        `/api/news/kenya`,
-        `/api/news/south-africa`,
-        `/api/news/uk`,
-        `/api/news/usa`,
-        `/api/news/world`,
         `/api/news/sports`,
-        `/api/news/tech`,
-        `/api/news/crypto`,
+        `/api/news/world`,
       ];
 
-      const results = await Promise.allSettled(
-        endpoints.map((path) => fetch(apiUrl(path)).then((r) => (r.ok ? r.json() : [])))
+      const results = await Promise.all(
+        endpoints.map((path) => 
+          fetch(apiUrl(path))
+            .then((r) => (r.ok ? r.json() : []))
+            .catch(() => [])
+        )
       );
 
       const merged: Article[] = [];
       const seen = new Set<string>();
-      for (const result of results) {
-        if (result.status !== "fulfilled") continue;
-        const list = Array.isArray(result.value) ? result.value : [];
-        for (const item of list) {
+      for (const list of results) {
+        const items = Array.isArray(list) ? list : [];
+        for (const item of items) {
           const id = String(item.id || item.externalLink || item.title);
           if (!id || seen.has(id)) continue;
           seen.add(id);

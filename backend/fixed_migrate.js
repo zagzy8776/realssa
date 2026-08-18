@@ -1,8 +1,7 @@
 const { Client } = require('pg');
 
-// SOURCE: ep-sweet-field (OLD database - COMPUTE EXHAUSTED, using DIRECT connection)
-// CRITICAL: Must use DIRECT (non-pooler) endpoint to read from database with no compute quota
-// Neon allows READ-ONLY operations via direct connection even when compute is exhausted
+// SOURCE: ep-sweet-field (OLD database with 110 CU-hrs available)
+// Using UNPOOLED connection (direct connection, not pooler)
 const SOURCE = 'postgresql://neondb_owner:npg_LXS6rJEbRCl2@ep-sweet-field-azj0x1ei.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
 
 // TARGET: Use environment variable or fallback to ep-small-mouse
