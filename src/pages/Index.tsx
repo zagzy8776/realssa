@@ -361,7 +361,7 @@ const Index = () => {
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
         if (visibleCount < allArticles.length) {
-          setVisibleCount(prev => prev + 12);
+          setVisibleCount(prev => prev + 6);
         } else if (feedHasMore && !feedLoadingMore) {
           // exhausted local slice — fetch next page from server
           loadMoreFeed();

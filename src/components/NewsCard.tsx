@@ -385,7 +385,7 @@ const NewsCard = ({
   return (
     <article
       className="group nr-card overflow-hidden w-full relative"
-      style={{ borderRadius: 'var(--nr-radius-card)', touchAction: 'manipulation' }}
+      style={{ borderRadius: 'var(--nr-radius-card)', touchAction: 'manipulation', contentVisibility: 'auto', containIntrinsicSize: '420px' }}
     >
       <div className="flex flex-col w-full">
         {/* Image */}
