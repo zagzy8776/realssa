@@ -5,7 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, ScrollRestoration } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import MobileAppFeatures from "@/components/MobileAppFeatures";
@@ -85,16 +85,11 @@ const FeedWatermarkWrapper = () => {
   return null; // Disabled watermark background overlay to resolve UX/aesthetic issue
 };
 
-// Scroll to top on every route or search param change (fixes recommended articles opening from bottom)
-const ScrollToTop = () => {
-  const { pathname, search } = useLocation();
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-  }, [pathname, search]);
-  return null;
-};
+// Scroll handling: <ScrollRestoration /> (inside <BrowserRouter>) saves scroll
+// position per history-entry and restores it on Back/Forward, while scrolling to
+// top on normal (PUSH) navigations. Replaces the old ScrollToTop effect that
+// forced scrollTop=0 on every navigation — including Back — making users lose
+// their place in the feed.
 
 
 // Suspense fallback: dark screen with subtle gold pulse dot — skeleton already showed the layout
@@ -142,7 +137,7 @@ const App = () => {
         <PWAInstallPrompt />
         <KeepAlive />
         <BrowserRouter>
-          <ScrollToTop />
+          <ScrollRestoration />
           <GlobalHooks />
           <FeedWatermarkWrapper />
           <MobileBottomNav />

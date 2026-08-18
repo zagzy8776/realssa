@@ -385,7 +385,7 @@ const NewsCard = ({
   return (
     <article
       className="group nr-card overflow-hidden w-full relative"
-      style={{ borderRadius: 'var(--nr-radius-card)' }}
+      style={{ borderRadius: 'var(--nr-radius-card)', touchAction: 'manipulation' }}
     >
       <div className="flex flex-col w-full">
         {/* Image */}
@@ -500,7 +500,7 @@ const NewsCard = ({
             ))}
             <button
               onClick={(e) => handleReaction(e, 'fire')}
-              className={`flex items-center justify-center gap-0.5 min-w-[32px] min-h-[32px] transition-colors ${reacted === 'fire' ? 'text-amber-500' : 'hover:text-amber-500'}`}
+              className={`flex items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] transition-colors ${reacted === 'fire' ? 'text-amber-500' : 'hover:text-amber-500'}`}
               aria-label={`React with fire. ${reactions.fire} reactions`}
             >
               <Flame className="w-3.5 h-3.5" />
@@ -509,7 +509,7 @@ const NewsCard = ({
 
             <button
               onClick={(e) => handleReaction(e, 'heart')}
-              className={`flex items-center justify-center gap-0.5 min-w-[32px] min-h-[32px] transition-colors ${reacted === 'heart' ? 'text-red-500' : 'hover:text-red-500'}`}
+              className={`flex items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] transition-colors ${reacted === 'heart' ? 'text-red-500' : 'hover:text-red-500'}`}
               aria-label={`React with heart. ${reactions.heart} reactions`}
             >
               <Heart className="w-3.5 h-3.5" />
@@ -519,7 +519,7 @@ const NewsCard = ({
             {showBookmark && (
               <button
                 onClick={handleBookmark}
-                className="flex items-center justify-center min-w-[32px] min-h-[32px] hover:text-amber-500 transition-colors"
+                className="flex items-center justify-center min-w-[44px] min-h-[44px] hover:text-amber-500 transition-colors"
                 aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
               >
                 {isBookmarked ? (
@@ -536,7 +536,7 @@ const NewsCard = ({
               rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
               style={{ color: 'inherit' }}
-              className="hover:text-green-500 transition-colors flex items-center"
+              className="hover:text-green-500 transition-colors flex items-center justify-center min-w-[44px] min-h-[44px] p-2 -m-2"
               aria-label="Share on WhatsApp"
               title="Share on WhatsApp"
             >
