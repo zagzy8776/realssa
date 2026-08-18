@@ -286,7 +286,7 @@ const NewsCard = ({
   const imgSrc = imgError ? '' : currentImage;
 
   const linkTo = externalLink
-    ? `/read?url=${encodeURIComponent(externalLink)}&image=${encodeURIComponent(imgSrc || '')}&category=${encodeURIComponent(category)}&id=${encodeURIComponent(id || '')}`
+    ? `/read?url=${encodeURIComponent(externalLink)}&image=${encodeURIComponent(imgSrc || '')}&category=${encodeURIComponent(category)}&id=${encodeURIComponent(id || '')}&title=${encodeURIComponent(title || '')}`
     : (href || (id ? `/article/${id}` : "#"));
 
   const whatsappShareUrl = externalLink

@@ -134,14 +134,45 @@ const ReaderMode = () => {
   };
 
   if (loading) {
+    // Show instant skeleton using data already in the URL params — user sees
+    // title, image and category immediately, content fades in when ready
+    const skeletonTitle = searchParams.get('title') || '';
+    const skeletonImage = fallbackImage || '';
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-background pb-24">
         <Header />
-        <div className="flex-1 flex flex-col items-center justify-center p-4">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-xl font-medium animate-pulse text-center">Loading Clean Reader Mode...</p>
-          <p className="text-sm text-muted-foreground mt-2 text-center max-w-sm">Stripping away ads and popups for a perfect reading experience.</p>
+        <div className="sticky top-[60px] md:top-[80px] z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4 flex items-center justify-between">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/10 transition-colors flex items-center gap-2 text-sm font-medium">
+            <ArrowLeft className="w-5 h-5" /> Back
+          </button>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground animate-pulse">
+            <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            Loading article...
+          </div>
         </div>
+        <article className="max-w-3xl mx-auto px-4 py-8">
+          <div className="h-4 w-20 bg-muted rounded animate-pulse mb-4" />
+          {skeletonTitle ? (
+            <h1 className="text-3xl md:text-4xl font-bold font-display leading-tight mb-6 text-foreground">
+              {decodeHTMLEntities(skeletonTitle)}
+            </h1>
+          ) : (
+            <div className="space-y-3 mb-6">
+              <div className="h-8 bg-muted rounded animate-pulse w-full" />
+              <div className="h-8 bg-muted rounded animate-pulse w-4/5" />
+            </div>
+          )}
+          {skeletonImage && (
+            <div className="w-full aspect-video rounded-2xl overflow-hidden mb-10 shadow-2xl bg-muted">
+              <img src={skeletonImage} alt="" className="w-full h-full object-cover" onError={() => {}} />
+            </div>
+          )}
+          <div className="space-y-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className={`h-4 bg-muted rounded animate-pulse ${i % 3 === 2 ? 'w-3/4' : 'w-full'}`} />
+            ))}
+          </div>
+        </article>
       </div>
     );
   }

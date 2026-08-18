@@ -102,7 +102,7 @@ const ForYou: React.FC = () => {
 
   const handleRead = (article: Article) => {
     if (!article.externalLink) return;
-    navigate(`/read?url=${encodeURIComponent(article.externalLink)}&id=${article.id}&category=${encodeURIComponent(article.category || 'news')}&image=${encodeURIComponent(article.image || '')}`);
+    navigate(`/read?url=${encodeURIComponent(article.externalLink)}&id=${article.id}&category=${encodeURIComponent(article.category || 'news')}&image=${encodeURIComponent(article.image || '')}&title=${encodeURIComponent(article.title || '')}`);
   };
 
   return (

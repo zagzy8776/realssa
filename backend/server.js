@@ -10,6 +10,7 @@ const dns = require('dns').promises;
 const rateLimit = require('express-rate-limit');
 const { initRssBot } = require('./services/rssBot');
 const { initSportsBot } = require('./services/sportsBot');
+const { initWhatsAppBots } = require('./services/whatsappBots');
 const { getHumanContextForPrompt } = require('./services/brainStore');
 const { runLearningCycle } = require('./services/humanBrainBot');
 const { initIntelligenceAgent } = require('./services/aiIntelligenceAgent');
@@ -217,6 +218,8 @@ if (process.env.DATABASE_URL) {
         initIntelligenceAgent(pool);
         initTrendingSynthesizer(pool);
         initTelemetryFlusher(pool);
+        initWhatsAppBots(pool);
+        initWhatsAppBots(pool);
       } else {
         console.log('⚡ Vercel Serverless environment detected — background migrations & setInterval bots disabled for instant cold starts.');
       }
