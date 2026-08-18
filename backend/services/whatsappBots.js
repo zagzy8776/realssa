@@ -16,7 +16,9 @@
 
 const axios = require('axios');
 
-const GREENAPI_BASE = `https://api.green-api.com/waInstance${process.env.GREENAPI_INSTANCE_ID}`;
+const GREENAPI_BASE = process.env.GREENAPI_BASE_URL
+  ? `${process.env.GREENAPI_BASE_URL}/waInstance${process.env.GREENAPI_INSTANCE_ID}`
+  : `https://api.green-api.com/waInstance${process.env.GREENAPI_INSTANCE_ID}`;
 const GREENAPI_TOKEN = process.env.GREENAPI_TOKEN;
 const CHANNEL_ID = process.env.WHATSAPP_CHANNEL_ID; // e.g. 120363xxxxxxxxx@newsletter
 
