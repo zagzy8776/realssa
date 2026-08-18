@@ -357,6 +357,12 @@ struct ChatRequest { message: String }
 struct RlhfRequest { category: String, phrase: String, reward: f32 }
 
 #[derive(Deserialize)]
+struct ConvPairRequest {
+    question: String,
+    answer: String,
+}
+
+#[derive(Deserialize)]
 struct TeachRequest {
     category: String,
     phrase: String,
@@ -420,6 +426,22 @@ async fn human_brain_rlhf_handler(
     }))
 }
 
+/// POST /human-brain/conv-pair — Teach a question→answer conversation pair
+async fn human_brain_conv_pair_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ConvPairRequest>,
+) -> impl IntoResponse {
+    state.human_brain.record_conv_pair(&payload.question, &payload.answer).await;
+    let (total_insights, _) = state.human_brain.get_stats().await;
+    Json(serde_json::json!({
+        "success": true,
+        "message": "Conversation pair trained & saved",
+        "question": payload.question,
+        "answer": payload.answer,
+        "total_insights": total_insights
+    }))
+}
+
 /// POST /human-brain/teach — Directly feed knowledge into the bot's memory
 async fn human_brain_teach_handler(
     State(state): State<Arc<AppState>>,
@@ -471,6 +493,7 @@ async fn main() {
 
     let brain = Arc::new(HumanBrainEngine::new());
     brain.clone().start_silent_worker();
+    seed_conv_pairs(brain.clone());
 
     let state = Arc::new(AppState {
         render_cache: DashMap::new(),
@@ -500,6 +523,7 @@ async fn main() {
         .route("/human-brain/native-chat", post(human_brain_native_chat_handler))
         .route("/human-brain/rlhf", post(human_brain_rlhf_handler))
         .route("/human-brain/teach", post(human_brain_teach_handler))
+        .route("/human-brain/conv-pair", post(human_brain_conv_pair_handler))
         .layer(cors)
         .with_state(state);
 
@@ -511,6 +535,33 @@ async fn main() {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();
+}
+
+fn seed_conv_pairs(brain: Arc<HumanBrainEngine>) {
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+        let pairs: &[(&str, &str)] = &[
+            ("who are you", "I'm RealSSA — a self-learning Nigerian news AI built entirely in Rust. I cover politics, sports, and tech across Africa."),
+            ("what are you", "I'm RealSSA, a distributed Rust AI engine with 6 Neon vector databases. I learn silently from Nigerian and African news sources every few minutes."),
+            ("who built you", "I was built by the RealSSA team — a Nigerian news platform powered by a custom Rust neural engine with real-time web crawling."),
+            ("what can you do", "I can answer questions about Nigerian news, African politics, tech, and sports. I also learn continuously from live RSS feeds across Nigeria."),
+            ("how far bro", "I dey o! Everything is running smooth. Ask me anything about Nigeria, Africa, tech, or sports."),
+            ("wetin dey happen", "Plenty things dey happen! From Nigerian politics to African tech — just ask me anything specific and I go break am down for you."),
+            ("how are you", "I'm doing great! My Rust engine is fully active and learning. What can I help you with today?"),
+            ("what is happening in Nigeria", "Nigeria is always buzzing — from NASS debates to economic policy, AFCON qualifiers, and Lagos tech startups. Ask me about a specific topic for the latest."),
+            ("tell me about african tech", "African tech is booming! Lagos, Nairobi, Accra, and Johannesburg are leading fintech, agritech, and healthtech innovation. Nigeria alone has produced Flutterwave, Paystack, and Andela."),
+            ("latest nigeria news", "I crawl Nigerian news sources like Vanguard, Punch, Guardian, and Premium Times every 6 minutes. Ask me about a specific topic — politics, economy, sports, or tech."),
+            ("tell me about realssa", "RealSSA is a Nigerian news platform that delivers real-time news, live sports scores, and AI-powered summaries. I'm the Rust brain behind it."),
+            ("what is the economy like in nigeria", "Nigeria's economy faces inflation and FX pressure, but sectors like fintech, oil & gas, and agriculture remain strong drivers of growth."),
+            ("who is the president of nigeria", "Bola Ahmed Tinubu is the President of Nigeria, having taken office on May 29, 2023."),
+            ("tell me about nigerian football", "Nigerian football is passionate! The Super Eagles compete in AFCON and World Cup qualifiers. Domestically, the NPFL has clubs like Enyimba, Rivers United, and Remo Stars."),
+            ("what is afcon", "AFCON is the Africa Cup of Nations — the biggest football tournament on the continent, organised by CAF. Nigeria has won it three times."),
+        ];
+        for (q, a) in pairs {
+            brain.record_conv_pair(q, a).await;
+        }
+        info!("[Boot] Seeded {} core conversation pairs", pairs.len());
+    });
 }
 
 async fn shutdown_signal() {

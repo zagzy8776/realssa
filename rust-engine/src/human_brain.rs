@@ -553,9 +553,11 @@ impl HumanBrainEngine {
                             let cat: String = row.get("category");
                             
                             let category_boost = match cat.as_str() {
+                                "conv_pair" => 0.35,
                                 "domain_tech" | "domain_politics" | "domain_sports" => 0.15,
                                 "discovery" | "exa_discovery" | "site_article" | "site_headline" => 0.10,
-                                "ai_building" | "manual_teach" | "taught_knowledge" => 0.12,
+                                "ai_building" | "taught_knowledge" => 0.08,
+                                "manual_teach" => -0.20, // penalise poisoning entries
                                 "greeting" | "greeting_warm" => 0.05,
                                 _ => 0.0,
                             };
@@ -606,6 +608,53 @@ impl HumanBrainEngine {
                 ).await;
             }
         });
+
+        // 1b. Direct conv_pair lookup — check before anything else
+        {
+            let mut cp_tasks = Vec::new();
+            for db in &self.dbs {
+                let client_wrapper = NeonDbClient { url: db.url.clone(), client: db.client.clone() };
+                let q_vec = query_vector_str.clone();
+                cp_tasks.push(tokio::spawn(async move {
+                    if let Ok(client) = client_wrapper.get_client().await {
+                        if let Ok(rows) = client.query(
+                            "SELECT phrase, human_nuance,
+                                    (1.0 - (embedding <=> $1::text::vector)) as similarity
+                             FROM human_learning_vectors
+                             WHERE category = 'conv_pair' AND embedding IS NOT NULL
+                             ORDER BY similarity DESC
+                             LIMIT 1",
+                            &[&q_vec]
+                        ).await {
+                            if let Some(row) = rows.first() {
+                                let sim: f64 = row.get("similarity");
+                                if sim > 0.55 {
+                                    let phrase: String = row.get("phrase");
+                                    // Extract just the Bot: answer part
+                                    if let Some(bot_part) = phrase.split("Bot:").nth(1) {
+                                        return Some((sim as f32, bot_part.trim().to_string()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None
+                }));
+            }
+            let cp_results = futures::future::join_all(cp_tasks).await;
+            let mut best_cp: Option<(f32, String)> = None;
+            for res in cp_results {
+                if let Ok(Some(item)) = res {
+                    if best_cp.is_none() || item.0 > best_cp.as_ref().unwrap().0 {
+                        best_cp = Some(item);
+                    }
+                }
+            }
+            if let Some((score, answer)) = best_cp {
+                let reply = format!("{} (confidence: {:.0}%)", answer, score * 100.0);
+                return (reply, self.get_formatted_human_context(10).await);
+            }
+        }
 
         // 2. Greeting / status check
         let is_greeting = lower_msg.contains("hi") || lower_msg.contains("hello") || lower_msg.contains("hey")
@@ -770,6 +819,27 @@ impl HumanBrainEngine {
             total_insights
         );
         (reply, self.get_formatted_human_context(10).await)
+    }
+
+    /// Store a question→answer conversation pair and train the Transformer on it
+    pub async fn record_conv_pair(&self, question: &str, answer: &str) {
+        let pair = format!("User: {}\nBot: {}", question.trim(), answer.trim());
+        self.record_insight("conv_pair", &pair, question, answer).await;
+
+        // Train Transformer on every position in the full Q→A sequence
+        let tf_clone = self.transformer.clone();
+        let pair_clone = pair.clone();
+        tokio::spawn(async move {
+            let mut tf = tf_clone.lock().await;
+            tf.update_vocabulary(&[pair_clone.clone()]);
+            let tokens = tf.tokenize(&pair_clone);
+            if tokens.len() > 1 {
+                for i in 1..tokens.len() {
+                    let _loss = tf.train_step(&tokens[0..i], tokens[i], 0.005);
+                }
+                let _ = tf.save_to_file("brain_weights.bin");
+            }
+        });
     }
 
     /// Start silent background web discovery worker
