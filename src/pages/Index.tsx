@@ -8,7 +8,7 @@ import LazyAd from "@/components/LazyAd";
 import NewsCard from "@/components/NewsCard";
 import NewsTicker from "@/components/NewsTicker";
 import SEO from "@/components/SEO";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import ReadProgressBar from "@/components/ReadProgressBar";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { SkeletonGrid } from "@/components/SkeletonCard";
@@ -19,7 +19,7 @@ import { Capacitor } from "@capacitor/core";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import StoryGroupCard from "@/components/StoryGroupCard";
 import LocalNewsRail from "@/components/LocalNewsRail";
-import { Search } from "lucide-react";
+import { Search, RefreshCw } from "lucide-react";
 import RealSSASearchModal from "@/components/RealSSASearchModal";
 import { useNavigate } from "react-router-dom";
 
@@ -32,6 +32,7 @@ let initialLoadDone = true; // Always true — HTML skeleton replaces this
 const Index = () => {
   const navigate = useNavigate();
   const lastSyncTimeRef = useRef(0);
+  const seenFeedIds = useRef<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState('all');
   const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
@@ -43,8 +44,13 @@ const Index = () => {
   const [breakingIds, setBreakingIds] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
-  const [initialLoading] = useState(false); // HTML skeleton handles first load — never show BrandLoader
+  const [refreshing, setRefreshing] = useState(false);
+  const [initialLoading] = useState(false);
   const [error, setError] = useState(null);
+  // cursor-based infinite scroll for homepage feed
+  const [feedCursor, setFeedCursor] = useState<string | null>(null);
+  const [feedHasMore, setFeedHasMore] = useState(true);
+  const [feedLoadingMore, setFeedLoadingMore] = useState(false);
 
   const LIVE_VIDEOS = [
     { id: 'peller-jarvis-wedding', title: 'Peller & Jarvis Traditional Wedding', embedUrl: 'https://www.youtube.com/embed/MnG0Ldos2wU?mute=1' },
@@ -124,9 +130,17 @@ const Index = () => {
     };
   }, []);
 
-  const fetchStories = async () => {
+  const fetchStories = async (isRefresh = false) => {
     try {
       setError(null);
+      if (isRefresh) {
+        setRefreshing(true);
+        seenFeedIds.current.clear();
+        setFeedCursor(null);
+        setFeedHasMore(true);
+        setAllArticles([]);
+        setVisibleCount(12);
+      }
 
       // Generate or retrieve persistent device UUID
       let deviceId = '';
@@ -211,8 +225,11 @@ const Index = () => {
       );
 
       // Set fresh timestamp-sorted articles
+      // register seen IDs so cursor-based loadMore won't repeat them
+      initialUnique.forEach((a: any) => { if (a.id) seenFeedIds.current.add(a.id); });
       setAllArticles(initialUnique);
       setLoading(false);
+      if (isRefresh) setRefreshing(false);
 
       // ── Save to cache for next visit ─────────────────────────────────────
       try {
@@ -345,7 +362,36 @@ const Index = () => {
     }
   };
 
-  usePullToRefresh({ onRefresh: fetchStories, threshold: 100, disabled: loading });
+  // load more articles from the cursor-based /api/feed/foryou endpoint
+  const loadMoreFeed = useCallback(async () => {
+    if (feedLoadingMore || !feedHasMore) return;
+    setFeedLoadingMore(true);
+    try {
+      const deviceId = localStorage.getItem('realssa_device_uuid') || '';
+      const excludeList = Array.from(seenFeedIds.current).slice(-100).join(',');
+      const params = new URLSearchParams();
+      if (deviceId) params.set('deviceId', deviceId);
+      if (feedCursor) params.set('cursor', feedCursor);
+      if (excludeList) params.set('exclude', excludeList);
+      const res = await fetch(apiUrl(`/api/feed/foryou?${params.toString()}`));
+      if (!res.ok) throw new Error('feed failed');
+      const data = await res.json();
+      const incoming = (data.articles || []).filter((a: any) => {
+        if (!a.id || seenFeedIds.current.has(a.id)) return false;
+        seenFeedIds.current.add(a.id);
+        return true;
+      });
+      setAllArticles(prev => [...prev, ...incoming]);
+      setFeedCursor(data.nextCursor || null);
+      setFeedHasMore(!!data.nextCursor && incoming.length > 0);
+    } catch (_) {
+      setFeedHasMore(false);
+    } finally {
+      setFeedLoadingMore(false);
+    }
+  }, [feedLoadingMore, feedHasMore, feedCursor]);
+
+  usePullToRefresh({ onRefresh: () => fetchStories(true), threshold: 100, disabled: loading || refreshing });
 
   const getImage = (item) => {
     if (!item.image) return null;
@@ -353,15 +399,10 @@ const Index = () => {
   };
 
   const getFilteredArticles = () => {
-    if (activeFilter === 'deep_dives') {
-      return allArticles.filter((art: any) => (art.summary || art.excerpt || '').length > 150);
-    }
-    if (activeFilter === 'facts') {
-      return allArticles.filter((art: any) => ['general', 'news', 'sports', 'politics', 'business'].includes(art.category || ''));
-    }
-    if (activeFilter === 'local') {
-      return allArticles.filter((art: any) => art.category === 'local');
-    }
+    if (activeFilter === 'sports') return allArticles.filter((a: any) => a.category === 'sports');
+    if (activeFilter === 'nigeria') return allArticles.filter((a: any) => ['nigerian-news','nigeria','nigerian-politics','nigerian-business'].includes(a.category || ''));
+    if (activeFilter === 'world') return allArticles.filter((a: any) => ['world','uk','usa','africa'].includes(a.category || ''));
+    if (activeFilter === 'tech') return allArticles.filter((a: any) => ['tech','crypto','business'].includes(a.category || ''));
     return allArticles;
   };
 
@@ -369,25 +410,26 @@ const Index = () => {
   const heroArticle = allArticles.find((art: any) => art.image && !/(placeholder|logo|icon|favicon)/i.test(art.image)) || allArticles[0];
   const visibleArticles = filteredArticles.slice(0, visibleCount);
 
-  // Infinite scroll via IntersectionObserver sentinel — avoids reading
-  // document.body.offsetHeight on every scroll frame (which forces layout
-  // reflow and stutters on low-end phones).
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (loading || visibleCount >= allArticles.length) return;
+    if (loading) return;
     const sentinel = loadMoreRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
+        if (!entries[0]?.isIntersecting) return;
+        if (visibleCount < allArticles.length) {
           setVisibleCount(prev => prev + 12);
+        } else if (feedHasMore && !feedLoadingMore) {
+          // exhausted local slice — fetch next page from server
+          loadMoreFeed();
         }
       },
-      { rootMargin: '800px 0px' }
+      { rootMargin: '600px 0px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loading, visibleCount, allArticles.length]);
+  }, [loading, visibleCount, allArticles.length, feedHasMore, feedLoadingMore, loadMoreFeed]);
 
 
   return (
@@ -435,9 +477,10 @@ const Index = () => {
           <div className="flex gap-2 overflow-x-auto scroll-smooth overscroll-contain touch-pan-x scrollbar-hide max-w-screen-xl mx-auto">
             {[
               { key: "all", label: "All" },
-              { key: "facts", label: "Nigeria" },
-              { key: "deep_dives", label: "In-Depth" },
-              { key: "local", label: "Local" },
+              { key: "nigeria", label: "🇳🇬 Nigeria" },
+              { key: "sports", label: "⚽ Sports" },
+              { key: "world", label: "🌍 World" },
+              { key: "tech", label: "💻 Tech" },
             ].map(({ key, label }) => (
               <button
                 key={key}
@@ -552,9 +595,18 @@ const Index = () => {
 
         {/* ══ DISCOVER FEED + MOST READ SIDEBAR ══ */}
         <section className="px-3 sm:px-4 py-6 max-w-screen-xl mx-auto">
-          <h2 className="nr-section-title mb-5">
-            Discover Feed
-          </h2>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="nr-section-title">Discover Feed</h2>
+            <button
+              onClick={() => fetchStories(true)}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-all"
+              style={{ background: 'var(--nr-amber-dim)', color: 'var(--nr-amber)', border: '1px solid var(--nr-border-amber)' }}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
 
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Main feed */}
@@ -582,15 +634,24 @@ const Index = () => {
                     ))}
                   </div>
 
-                  {visibleCount < allArticles.length && (
-                    <div ref={loadMoreRef} className="py-8 text-center">
+                  <div ref={loadMoreRef} className="py-8 text-center">
+                    {(visibleCount < allArticles.length || feedLoadingMore) && (
                       <div
                         className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-r-transparent"
                         style={{ borderColor: "var(--nr-amber) transparent var(--nr-amber) transparent" }}
                         role="status"
                       />
-                    </div>
-                  )}
+                    )}
+                    {!feedHasMore && !feedLoadingMore && allArticles.length > 0 && visibleCount >= allArticles.length && (
+                      <button
+                        onClick={() => fetchStories(true)}
+                        className="text-xs font-bold px-4 py-2 rounded-full"
+                        style={{ background: 'var(--nr-amber-dim)', color: 'var(--nr-amber)' }}
+                      >
+                        Refresh for more stories
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-12" style={{ color: "var(--nr-text-muted)" }}>

@@ -108,7 +108,9 @@ const getSourceFromUrl = (urlStr?: string) => {
 const CARD_FALLBACK_IMAGE = "/logo.png";
 
 const getSourceLabel = (sName?: string, auth?: string, extLink?: string) => {
-  return "RealSSA";
+  if (sName && sName.trim() && sName.toLowerCase() !== 'unknown') return sName.trim();
+  if (auth && auth.trim() && auth.toLowerCase() !== 'unknown') return auth.trim();
+  return getSourceFromUrl(extLink);
 };
 
 const NewsCard = ({
