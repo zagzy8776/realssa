@@ -19,38 +19,14 @@ interface Article {
   source?: string;
 }
 
-const FEEDS = [
-  '/api/news/breaking?diverse=true',
-  '/api/articles/trending?diverse=true',
-  '/api/news/nigerian',
-  '/api/news/sports',
-  '/api/news/world',
-  '/api/news/culture',
-  '/api/news/entertainment',
-  '/api/news/tech',
-  '/api/news/business',
-  '/api/news/ghana',
-  '/api/news/kenya',
-  '/api/news/south-africa',
-  '/api/news/uk',
-  '/api/news/usa',
-  '/api/news/science',
-  '/api/news/lifestyle',
-  '/api/news/jobs',
-  '/api/news/crypto',
-  '/api/news/local',
-];
-
-const PAGE_SIZE = 20;
-
 const ForYou: React.FC = () => {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [allArticles, setAllArticles] = useState<Article[]>([]);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const seenIds = useRef<Set<string>>(new Set());
   const navigate = useNavigate();
 
   const deviceId = typeof window !== 'undefined'
@@ -60,69 +36,65 @@ const ForYou: React.FC = () => {
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? '☀️ Morning Brief' : currentHour < 18 ? '🌤️ Afternoon Digest' : '🌙 Evening Recap';
 
-  // Fetch all feeds in parallel and merge
-  const fetchAllFeeds = useCallback(async () => {
-    setLoading(true);
+  const fetchPage = useCallback(async (cursor: string | null, reset = false) => {
     try {
-      const results = await Promise.allSettled(
-        FEEDS.map(path =>
-          fetch(apiUrl(`${path}${path.includes('?') ? '&' : '?'}deviceId=${deviceId}&limit=50`))
-            .then(r => r.ok ? r.json() : [])
-            .then(d => Array.isArray(d) ? d : d.articles || [])
-            .catch(() => [])
-        )
-      );
+      // Build exclude list from already-seen IDs (cap at 100 to keep URL short)
+      const excludeList = Array.from(seenIds.current).slice(-100).join(',');
 
-      const merged: Article[] = [];
-      const seen = new Set<string>();
+      const params = new URLSearchParams();
+      if (deviceId) params.set('deviceId', deviceId);
+      if (cursor) params.set('cursor', cursor);
+      if (excludeList) params.set('exclude', excludeList);
 
-      results.forEach(result => {
-        if (result.status === 'fulfilled') {
-          result.value.forEach((a: Article) => {
-            const key = a.id || a.title;
-            if (key && !seen.has(key)) {
-              seen.add(key);
-              merged.push(a);
-            }
-          });
-        }
+      const res = await fetch(apiUrl(`/api/feed/foryou?${params.toString()}`));
+      if (!res.ok) throw new Error('Feed fetch failed');
+
+      const data = await res.json();
+      const incoming: Article[] = (data.articles || []).filter((a: Article) => {
+        if (!a.id || seenIds.current.has(a.id)) return false;
+        seenIds.current.add(a.id);
+        return true;
       });
 
-      // Sort by date descending
-      merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      setAllArticles(merged);
-      setArticles(merged.slice(0, PAGE_SIZE));
-      setPage(1);
-      setHasMore(merged.length > PAGE_SIZE);
+      setArticles(prev => reset ? incoming : [...prev, ...incoming]);
+      setNextCursor(data.nextCursor || null);
+      setHasMore(!!data.nextCursor && incoming.length > 0);
     } catch (err) {
-      console.error('ForYou fetch error:', err);
-    } finally {
-      setLoading(false);
+      console.error('[ForYou] fetch error:', err);
+      setHasMore(false);
     }
   }, [deviceId]);
 
+  // Initial load
   useEffect(() => {
-    fetchAllFeeds();
-  }, [fetchAllFeeds]);
+    setLoading(true);
+    seenIds.current.clear();
+    fetchPage(null, true).finally(() => setLoading(false));
+  }, [fetchPage]);
 
-  // Infinite scroll — load next page from already-fetched articles
-  const loadMore = useCallback(() => {
-    if (loadingMore || !hasMore) return;
+  // Refresh
+  const handleRefresh = useCallback(() => {
+    setLoading(true);
+    seenIds.current.clear();
+    setArticles([]);
+    setNextCursor(null);
+    setHasMore(true);
+    fetchPage(null, true).finally(() => setLoading(false));
+  }, [fetchPage]);
+
+  // Load next page
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !nextCursor) return;
     setLoadingMore(true);
-    const nextPage = page + 1;
-    const nextSlice = allArticles.slice(0, nextPage * PAGE_SIZE);
-    setArticles(nextSlice);
-    setPage(nextPage);
-    setHasMore(nextSlice.length < allArticles.length);
+    await fetchPage(nextCursor);
     setLoadingMore(false);
-  }, [loadingMore, hasMore, page, allArticles]);
+  }, [loadingMore, hasMore, nextCursor, fetchPage]);
 
-  // IntersectionObserver for infinite scroll
+  // IntersectionObserver — triggers loadMore when sentinel enters viewport
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => { if (entries[0].isIntersecting) loadMore(); },
-      { threshold: 0.1 }
+      { threshold: 0.1, rootMargin: '200px' }
     );
     if (loaderRef.current) observer.observe(loaderRef.current);
     return () => observer.disconnect();
@@ -146,11 +118,11 @@ const ForYou: React.FC = () => {
               {greeting}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {allArticles.length > 0 ? `${allArticles.length} stories from across Africa & the world` : 'Loading your personalized feed...'}
+              {articles.length > 0 ? `${articles.length} stories — your feed, your way` : 'Loading your personalized feed...'}
             </p>
           </div>
           <button
-            onClick={fetchAllFeeds}
+            onClick={handleRefresh}
             className="p-2 rounded-full hover:bg-muted transition-colors"
             title="Refresh feed"
           >
@@ -187,7 +159,7 @@ const ForYou: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {articles.map((article) => (
                 <div
-                  key={article.id || article.title}
+                  key={article.id}
                   onClick={() => handleRead(article)}
                   className="cursor-pointer"
                 >
@@ -205,13 +177,18 @@ const ForYou: React.FC = () => {
               ))}
             </div>
 
-            {/* Infinite scroll trigger */}
+            {/* Infinite scroll sentinel */}
             <div ref={loaderRef} className="py-8 flex justify-center">
               {loadingMore && (
                 <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
               )}
               {!hasMore && articles.length > 0 && (
-                <p className="text-sm text-muted-foreground">You've seen all {articles.length} stories. Refresh for more.</p>
+                <button
+                  onClick={handleRefresh}
+                  className="text-sm text-primary underline"
+                >
+                  Refresh for more stories
+                </button>
               )}
             </div>
           </>

@@ -3177,6 +3177,112 @@ app.get('/api/news/publisher/:handle/live', async (req, res) => {
   }
 });
 
+// ── FOR YOU FEED — Infinite, personalized, never-repeating per device ──────────
+app.get('/api/feed/foryou', async (req, res) => {
+  try {
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
+    const cursor = req.query.cursor ? String(req.query.cursor) : null; // ISO timestamp of last seen article
+    const limit = 20;
+
+    // Parse exclude list (article IDs already shown to this device in this session)
+    const excludeIds = req.query.exclude
+      ? String(req.query.exclude).split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    if (!process.env.DATABASE_URL) return res.json({ articles: [], nextCursor: null });
+
+    // Fetch this device's category affinity scores
+    let affinityMap = {};
+    if (deviceId) {
+      try {
+        const affRes = await usersPool.query(
+          'SELECT category, score FROM user_category_affinities WHERE device_id = $1',
+          [deviceId]
+        );
+        affRes.rows.forEach(r => { affinityMap[r.category] = parseInt(r.score, 10) || 0; });
+      } catch (_) {}
+    }
+
+    // Build exclude clause
+    let excludeClause = '';
+    let params = [];
+
+    if (cursor) {
+      params.push(cursor);
+      excludeClause += ` AND published_at < $${params.length}`;
+    }
+
+    if (excludeIds.length > 0) {
+      const placeholders = excludeIds.map((_, i) => `$${params.length + i + 1}`).join(', ');
+      excludeClause += ` AND 'rss-' || id NOT IN (${placeholders})`;
+      params.push(...excludeIds);
+    }
+
+    params.push(limit);
+    const limitParam = `$${params.length}`;
+
+    // Build ORDER BY: if device has affinities, boost preferred categories
+    // Otherwise fall back to pure recency
+    let orderBy = 'published_at DESC';
+    const topCategories = Object.entries(affinityMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([cat]) => cat);
+
+    if (topCategories.length > 0) {
+      // Weighted score: affinity boost + freshness decay
+      // Articles in preferred categories get a time bonus so they surface even if slightly older
+      const caseStr = topCategories
+        .map((cat, i) => `WHEN LOWER(category) = '${cat.replace(/'/g, "''")}' THEN ${(topCategories.length - i) * 2}`)
+        .join(' ');
+      orderBy = `(CASE ${caseStr} ELSE 0 END) + EXTRACT(EPOCH FROM published_at) / 3600 DESC`;
+    }
+
+    const rows = await pool.query(
+      `SELECT 'rss-' || id AS id,
+              title,
+              COALESCE(ai_summary, original_excerpt) AS excerpt,
+              category,
+              COALESCE(NULLIF(image, ''), 'https://realssanews.com.ng/logo.png') AS image,
+              source_name AS author,
+              external_link,
+              published_at AS date,
+              content_type,
+              '5 min read' AS read_time
+       FROM rss_articles
+       WHERE image IS NOT NULL AND image != '' ${excludeClause}
+       ORDER BY ${orderBy}
+       LIMIT ${limitParam}`,
+      params
+    );
+
+    const articles = rows.rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      excerpt: r.excerpt,
+      category: r.category,
+      image: r.image,
+      author: r.author,
+      externalLink: r.external_link,
+      date: r.date,
+      contentType: r.content_type,
+      readTime: r.read_time,
+      source: 'rss'
+    }));
+
+    // nextCursor = published_at of the last article returned
+    const nextCursor = articles.length === limit
+      ? articles[articles.length - 1].date
+      : null;
+
+    res.setHeader('Cache-Control', 'no-store'); // Never cache — feed must be unique per device
+    res.json({ articles, nextCursor });
+  } catch (err) {
+    console.error('[ForYou Feed] Error:', err.message);
+    res.status(500).json({ articles: [], nextCursor: null });
+  }
+});
+
 // Get Nigerian news — DB-first (instant)
 app.get('/api/news/nigerian', makeDbFirstRoute('nigerian', nigerianFeeds, ['nigerian-news', 'nigeria']));
 
