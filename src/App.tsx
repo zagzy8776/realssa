@@ -5,7 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, ScrollRestoration } from "react-router-dom";
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, ScrollRestoration, Outlet } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import MobileAppFeatures from "@/components/MobileAppFeatures";
@@ -85,13 +85,6 @@ const FeedWatermarkWrapper = () => {
   return null; // Disabled watermark background overlay to resolve UX/aesthetic issue
 };
 
-// Scroll handling: <ScrollRestoration /> (inside <BrowserRouter>) saves scroll
-// position per history-entry and restores it on Back/Forward, while scrolling to
-// top on normal (PUSH) navigations. Replaces the old ScrollToTop effect that
-// forced scrollTop=0 on every navigation — including Back — making users lose
-// their place in the feed.
-
-
 // Suspense fallback: dark screen with subtle gold pulse dot — skeleton already showed the layout
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#050505]">
@@ -112,6 +105,87 @@ const PageLoader = () => (
       }
     `}</style>
   </div>
+);
+
+const AppLayout = () => {
+  return (
+    <>
+      <ScrollRestoration />
+      <GlobalHooks />
+      <FeedWatermarkWrapper />
+      <MobileBottomNav />
+      <OnboardingTopicSelector />
+      <main className="pb-20 md:pb-0 overflow-x-hidden w-full max-w-[100vw]">
+        <Suspense fallback={<PageLoader />}>
+          <Outlet />
+        </Suspense>
+      </main>
+    </>
+  );
+};
+
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<AppLayout />}>
+      <Route path="/" element={<Index />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/nigeria" element={<Trending />} />
+      <Route path="/culture" element={<Culture />} />
+      <Route path="/library/media-decode" element={<MediaDecode />} />
+      <Route path="/library/nigerian-manual" element={<NigerianManual />} />
+      <Route path="/library/policy-brief" element={<PolicyBrief />} />
+      <Route path="/library/societal-architecture" element={<SocietalArchitecture />} />
+      <Route path="/admin-login" element={<AdminLogin />} />
+      <Route path="/admin-dashboard" element={<AdminDashboard />} />
+      <Route path="/internal/dashboard" element={<InternalDashboard />} />
+      <Route path="/edit-news/:id" element={<EditNewsPage />} />
+      <Route path="/post-news" element={<NewsPost />} />
+      <Route path="/article/:id" element={<ArticlePage />} />
+      <Route path="/nigerian-news" element={<Trending />} />
+      <Route path="/world-news" element={<Trending />} />
+      <Route path="/for-you" element={<ForYou />} />
+      <Route path="/crypto" element={<CryptoNews />} />
+      <Route path="/videos" element={<CinemaHub />} />
+      <Route path="/video-news" element={<VideoNews />} />
+      <Route path="/sports" element={<Sports />} />
+      <Route path="/ghana" element={<Trending />} />
+      <Route path="/kenya" element={<Trending />} />
+      <Route path="/south-africa" element={<Trending />} />
+      <Route path="/uk" element={<Trending />} />
+      <Route path="/usa" element={<Trending />} />
+      <Route path="/news" element={<ForYou />} />
+      <Route path="/news-section" element={<ForYou />} />
+      <Route path="/entertainment" element={<Newssection categoryFilter="entertainment" />} />
+      <Route path="/jobs" element={<Jobs />} />
+      <Route path="/read" element={<ReaderMode />} />
+      <Route path="/world-directory" element={<Trending />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/country/:countryId" element={<Trending />} />
+      <Route path="/download" element={<AppDownload />} />
+      <Route path="/ads" element={<AdPortal />} />
+      <Route path="/reels" element={<Reels />} />
+      <Route path="/trending" element={<Trending />} />
+      <Route path="/bookmarks" element={<ReadingList />} />
+      <Route path="/downloads" element={<Downloads />} />
+      <Route path="/profile" element={<Profile />} />
+      <Route path="/reading-list" element={<ReadingList />} />
+      <Route path="/reading-history" element={<ReadingHistory />} />
+      <Route path="/publisher/:slug" element={<PublisherHub />} />
+      <Route path="/sports/league/:leagueSlug" element={<LeagueHub />} />
+      <Route path="/entity/:name" element={<EntityHub />} />
+      <Route path="/market" element={<LocalMarketHub />} />
+      <Route path="/events" element={<EventsCalendar />} />
+      <Route path="/wire" element={<LiveWire />} />
+      <Route path="/widget/:type" element={<Widgets />} />
+      <Route path="/search" element={<Search />} />
+      <Route path="/browser" element={<InAppBrowser />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
+      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="*" element={<NotFound />} />
+    </Route>
+  )
 );
 
 const App = () => {
@@ -136,76 +210,7 @@ const App = () => {
         <Sonner />
         <PWAInstallPrompt />
         <KeepAlive />
-        <BrowserRouter>
-          <ScrollRestoration />
-          <GlobalHooks />
-          <FeedWatermarkWrapper />
-          <MobileBottomNav />
-          <OnboardingTopicSelector />
-          <main className="pb-20 md:pb-0 overflow-x-hidden w-full max-w-[100vw]">
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/terms" element={<Terms />} />
-                <Route path="/nigeria" element={<Trending />} />
-                <Route path="/culture" element={<Culture />} />
-                <Route path="/library/media-decode" element={<MediaDecode />} />
-                <Route path="/library/nigerian-manual" element={<NigerianManual />} />
-                <Route path="/library/policy-brief" element={<PolicyBrief />} />
-                <Route path="/library/societal-architecture" element={<SocietalArchitecture />} />
-                <Route path="/admin-login" element={<AdminLogin />} />
-                <Route path="/admin-dashboard" element={<AdminDashboard />} />
-                <Route path="/internal/dashboard" element={<InternalDashboard />} />
-                <Route path="/edit-news/:id" element={<EditNewsPage />} />
-                <Route path="/post-news" element={<NewsPost />} />
-                <Route path="/article/:id" element={<ArticlePage />} />
-                <Route path="/nigerian-news" element={<Trending />} />
-                <Route path="/world-news" element={<Trending />} />
-                <Route path="/for-you" element={<ForYou />} />
-                <Route path="/crypto" element={<CryptoNews />} />
-                <Route path="/videos" element={<CinemaHub />} />
-                <Route path="/video-news" element={<VideoNews />} />
-                <Route path="/sports" element={<Sports />} />
-                <Route path="/ghana" element={<Trending />} />
-                <Route path="/kenya" element={<Trending />} />
-                <Route path="/south-africa" element={<Trending />} />
-                <Route path="/uk" element={<Trending />} />
-                <Route path="/usa" element={<Trending />} />
-                <Route path="/news" element={<ForYou />} />
-                <Route path="/news-section" element={<ForYou />} />
-                <Route path="/entertainment" element={<Newssection categoryFilter="entertainment" />} />
-                <Route path="/jobs" element={<Jobs />} />
-                <Route path="/read" element={<ReaderMode />} />
-                <Route path="/world-directory" element={<Trending />} />
-                <Route path="/privacy" element={<PrivacyPolicy />} />
-                <Route path="/country/:countryId" element={<Trending />} />
-                <Route path="/download" element={<AppDownload />} />
-                <Route path="/ads" element={<AdPortal />} />
-                <Route path="/reels" element={<Reels />} />
-                <Route path="/trending" element={<Trending />} />
-                <Route path="/bookmarks" element={<ReadingList />} />
-                <Route path="/downloads" element={<Downloads />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/reading-list" element={<ReadingList />} />
-                <Route path="/reading-history" element={<ReadingHistory />} />
-                <Route path="/publisher/:slug" element={<PublisherHub />} />
-                <Route path="/sports/league/:leagueSlug" element={<LeagueHub />} />
-                <Route path="/entity/:name" element={<EntityHub />} />
-                <Route path="/market" element={<LocalMarketHub />} />
-                <Route path="/events" element={<EventsCalendar />} />
-                <Route path="/wire" element={<LiveWire />} />
-                <Route path="/widget/:type" element={<Widgets />} />
-                <Route path="/search" element={<Search />} />
-                <Route path="/browser" element={<InAppBrowser />} />
-                <Route path="/verify-email" element={<VerifyEmail />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </main>
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </TooltipProvider>
     </QueryClientProvider>
   </HelmetProvider>
