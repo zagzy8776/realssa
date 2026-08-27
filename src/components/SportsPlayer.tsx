@@ -156,7 +156,6 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
             referrerPolicy="no-referrer"
             title="RealSSA Sports Stream"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-pointer-lock"
           />
         </div>
       </div>
