@@ -99,9 +99,6 @@ Module._load = function patchedModuleLoad(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-// server.js still contains a legacy startup setInterval for stream health.
-// Suppress timers only during app construction. Request-time timers remain
-// available after initialization.
 global.setInterval = function vercelNoStartupIntervals() {
   return { __realssaVercelStartupTimer: true };
 };
@@ -114,6 +111,22 @@ try {
   Module._load = originalLoad;
 }
 
+// server.js initializes the pool connection asynchronously. A Vercel cold
+// start can receive the first request before that callback has called
+// app.set('pool', pool). API handlers use the module-level pool directly, so a
+// missing app pool is otherwise capable of producing an immediate 500. Wait
+// briefly for the connection to become available instead of racing the boot.
+const waitForDatabasePool = async (timeoutMs = 10000) => {
+  if (!process.env.DATABASE_URL) return null;
+
+  const started = Date.now();
+  while (!app.get('pool') && Date.now() - started < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+
+  return app.get('pool') || null;
+};
+
 // External cron-job.org is the scheduler for ingestion. The old Express route
 // sent HTTP 200 and then used setImmediate(), which is not a durable background
 // execution mechanism on Vercel: the function can be frozen after the response.
@@ -123,12 +136,28 @@ const originalHandle = app.handle.bind(app);
 const Parser = require('rss-parser');
 const { ingestAllFeeds } = require('../backend/services/ingestion');
 
-app.handle = function realssaVercelHandle(req, res, out) {
+app.handle = async function realssaVercelHandle(req, res, out) {
   let parsed;
   try {
     parsed = new URL(req.url || '/', 'https://realssa.internal');
   } catch {
     return originalHandle(req, res, out);
+  }
+
+  // Make every DB-backed request wait for the cold-start connection. This is
+  // especially important for /api/articles, /api/articles/featured and the
+  // feed endpoints that users hit immediately after a deployment or wake-up.
+  if (process.env.DATABASE_URL) {
+    const readyPool = await waitForDatabasePool();
+    if (!readyPool) {
+      if (!res.headersSent) {
+        return res.status(503).json({
+          error: 'Database temporarily unavailable',
+          retryable: true
+        });
+      }
+      return;
+    }
   }
 
   if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/ingest') {
@@ -139,7 +168,6 @@ app.handle = function realssaVercelHandle(req, res, out) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const category = parsed.searchParams.get('category') || null;
     const pool = app.get('pool');
 
     (async () => {
@@ -156,12 +184,12 @@ app.handle = function realssaVercelHandle(req, res, out) {
           }
         });
 
-        const result = await ingestAllFeeds(pool, parser, category);
+        const result = await ingestAllFeeds(pool, parser, parsed.searchParams.get('category') || null);
         if (!res.headersSent) {
           return res.status(200).json({
             success: true,
             completed: true,
-            category: category || 'all',
+            category: parsed.searchParams.get('category') || 'all',
             newCount: result?.newCount || 0,
             summaryCount: result?.summaryCount || 0,
             timestamp: new Date().toISOString()
@@ -173,7 +201,7 @@ app.handle = function realssaVercelHandle(req, res, out) {
           return res.status(500).json({
             success: false,
             completed: false,
-            category: category || 'all',
+            category: parsed.searchParams.get('category') || 'all',
             error: 'Ingestion failed'
           });
         }
