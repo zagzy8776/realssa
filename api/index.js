@@ -116,15 +116,15 @@ const handleStableApi = async (parsed, req, res, pool) => {
       const result = await pool.query(`
         SELECT
           match_id AS provider_match_id,
-          competition AS competition_name,
-          home_team AS home_team_name,
+          COALESCE(competition, 'Other') AS competition_name,
+          COALESCE(home_team, 'Home Team') AS home_team_name,
           home_team_crest,
-          away_team AS away_team_name,
+          COALESCE(away_team, 'Away Team') AS away_team_name,
           away_team_crest,
-          status,
+          COALESCE(status, 'scheduled') AS status,
           COALESCE(match_minute::text, '') AS minute,
-          home_score,
-          away_score,
+          COALESCE(home_score, 0) AS home_score,
+          COALESCE(away_score, 0) AS away_score,
           kickoff_at,
           updated_at,
           match_url
