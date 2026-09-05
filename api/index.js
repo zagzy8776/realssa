@@ -13,28 +13,16 @@ const Module = require('module');
 const originalLoad = Module._load;
 const originalSetInterval = global.setInterval;
 
-// Reuse one pg pool per normalized DATABASE_URL inside a Vercel function
-// instance. Multiple backend modules previously created independent pools for
-// the same Neon endpoint, multiplying idle connections and cold-start work.
 const pg = require('pg');
 const NativePool = pg.Pool;
 const poolCache = new Map();
 
 class SharedVercelPool extends NativePool {
   constructor(config = {}) {
-    const rawConnectionString = typeof config === 'string'
-      ? config
-      : config.connectionString;
-    const cacheKey = rawConnectionString
-      ? String(rawConnectionString).split('?')[0]
-      : null;
-
-    if (cacheKey && poolCache.has(cacheKey)) {
-      return poolCache.get(cacheKey);
-    }
-
+    const rawConnectionString = typeof config === 'string' ? config : config.connectionString;
+    const cacheKey = rawConnectionString ? String(rawConnectionString).split('?')[0] : null;
+    if (cacheKey && poolCache.has(cacheKey)) return poolCache.get(cacheKey);
     super(config);
-
     if (cacheKey) poolCache.set(cacheKey, this);
   }
 }
@@ -63,9 +51,7 @@ const vercelWorker = {
 let realAuthService;
 let authParent = null;
 const loadRealAuthService = (request, parent) => {
-  if (!realAuthService) {
-    realAuthService = originalLoad.call(Module, request, parent, false);
-  }
+  if (!realAuthService) realAuthService = originalLoad.call(Module, request, parent, false);
   return realAuthService;
 };
 
@@ -79,15 +65,9 @@ const lazyAuthService = {
 };
 
 Module._load = function patchedModuleLoad(request, parent, isMain) {
-  if (request === './services/streamHealthMonitor' || request.endsWith('/services/streamHealthMonitor')) {
-    return persistentOnly.streamHealthMonitor;
-  }
-  if (request === './services/whatsappBots' || request.endsWith('/services/whatsappBots')) {
-    return persistentOnly.whatsappBots;
-  }
-  if (request === './worker' || request.endsWith('/worker')) {
-    return vercelWorker;
-  }
+  if (request === './services/streamHealthMonitor' || request.endsWith('/services/streamHealthMonitor')) return persistentOnly.streamHealthMonitor;
+  if (request === './services/whatsappBots' || request.endsWith('/services/whatsappBots')) return persistentOnly.whatsappBots;
+  if (request === './worker' || request.endsWith('/worker')) return vercelWorker;
   if (request === './services/authService' || request.endsWith('/services/authService')) {
     authParent = parent;
     return lazyAuthService;
@@ -107,22 +87,15 @@ try {
   Module._load = originalLoad;
 }
 
-// server.js initializes the pool connection asynchronously. Wait only for
-// DB-backed API requests; static pages/assets must never sit behind a database
-// connection during a cold start.
 const waitForDatabasePool = async (timeoutMs = 10000) => {
   if (!process.env.DATABASE_URL) return null;
-
   const started = Date.now();
   while (!app.get('pool') && Date.now() - started < timeoutMs) {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
-
   return app.get('pool') || null;
 };
 
-// The wrapper runs before Express decorates Node's raw ServerResponse with
-// res.status()/res.json(). Use the native response API for every early return.
 const sendJson = (res, statusCode, payload) => {
   if (res.headersSent) return;
   res.statusCode = statusCode;
@@ -132,6 +105,75 @@ const sendJson = (res, statusCode, payload) => {
 
 const originalHandle = app.handle.bind(app);
 const { ingestCronCategory } = require('../backend/services/cronIngestionFast');
+
+// Vercel-side compatibility routes. These keep the web app usable even when
+// legacy Express handlers expect columns/tables from an older schema.
+const handleStableApi = async (parsed, req, res, pool) => {
+  if (!pool || req.method !== 'GET') return false;
+
+  if (parsed.pathname === '/api/sports/matches') {
+    try {
+      const result = await pool.query(`
+        SELECT
+          match_id AS provider_match_id,
+          competition AS competition_name,
+          home_team AS home_team_name,
+          home_team_crest,
+          away_team AS away_team_name,
+          away_team_crest,
+          status,
+          COALESCE(match_minute::text, '') AS minute,
+          home_score,
+          away_score,
+          kickoff_at,
+          updated_at,
+          match_url
+        FROM live_matches
+        WHERE status IN ('live', 'scheduled', 'finished')
+          AND (status = 'live' OR kickoff_at > NOW() - INTERVAL '3 days')
+        ORDER BY
+          CASE status WHEN 'live' THEN 1 WHEN 'scheduled' THEN 2 ELSE 3 END,
+          kickoff_at ASC NULLS LAST
+        LIMIT 100
+      `);
+      return sendJson(res, 200, { matches: Array.isArray(result.rows) ? result.rows : [] }), true;
+    } catch (error) {
+      console.warn('[Vercel Sports] Stable match query failed:', error.message);
+      return sendJson(res, 200, { matches: [] }), true;
+    }
+  }
+
+  if (parsed.pathname === '/api/rates') {
+    try {
+      const result = await pool.query(`
+        SELECT currency, buy_rate, sell_rate, source, updated_at AS created_at
+        FROM parallel_rates
+        ORDER BY currency
+      `);
+      return sendJson(res, 200, Array.isArray(result.rows) ? result.rows : []), true;
+    } catch (error) {
+      console.warn('[Vercel Market] Rates query failed:', error.message);
+      return sendJson(res, 200, []), true;
+    }
+  }
+
+  if (parsed.pathname === '/api/prices') {
+    try {
+      const result = await pool.query(`
+        SELECT item_name, price, location, unit, updated_at AS created_at
+        FROM market_prices
+        ORDER BY updated_at DESC, item_name ASC
+        LIMIT 200
+      `);
+      return sendJson(res, 200, Array.isArray(result.rows) ? result.rows : []), true;
+    } catch (error) {
+      console.warn('[Vercel Market] Prices query failed:', error.message);
+      return sendJson(res, 200, []), true;
+    }
+  }
+
+  return false;
+};
 
 app.handle = async function realssaVercelHandle(req, res, out) {
   let parsed;
@@ -145,22 +187,13 @@ app.handle = async function realssaVercelHandle(req, res, out) {
   const isRssRequest = parsed.pathname === '/rss.xml' || parsed.pathname.startsWith('/rss/');
   const isCronIngest = parsed.pathname === '/api/cron/ingest';
 
-  // External cron services have a 30-second HTTP timeout. Do NOT put them
-  // behind the normal DB readiness wait or the full ingestion pipeline.
-  // The dedicated fast path opens the primary pool itself and is bounded to a
-  // few RSS requests plus lightweight inserts.
   if ((req.method === 'GET' || req.method === 'POST') && isCronIngest) {
     const configuredSecret = process.env.CRON_SECRET;
     const suppliedSecret = parsed.searchParams.get('secret') || req.headers['x-cron-secret'];
-
-    if (!configuredSecret || suppliedSecret !== configuredSecret) {
-      return sendJson(res, 401, { error: 'Unauthorized' });
-    }
+    if (!configuredSecret || suppliedSecret !== configuredSecret) return sendJson(res, 401, { error: 'Unauthorized' });
 
     const category = parsed.searchParams.get('category');
-    if (!category) {
-      return sendJson(res, 400, { error: 'category is required' });
-    }
+    if (!category) return sendJson(res, 400, { error: 'category is required' });
 
     try {
       const result = await ingestCronCategory(category);
@@ -181,16 +214,14 @@ app.handle = async function realssaVercelHandle(req, res, out) {
     }
   }
 
-  // Prevent normal DB-backed API requests from racing Neon on a cold start,
-  // while keeping static pages/assets fast.
   if (process.env.DATABASE_URL && (isApiRequest || isRssRequest)) {
     const readyPool = await waitForDatabasePool();
     if (!readyPool) {
-      return sendJson(res, 503, {
-        error: 'Database temporarily unavailable',
-        retryable: true
-      });
+      return sendJson(res, 503, { error: 'Database temporarily unavailable', retryable: true });
     }
+
+    const stableHandled = await handleStableApi(parsed, req, res, readyPool);
+    if (stableHandled) return;
   }
 
   return originalHandle(req, res, out);
