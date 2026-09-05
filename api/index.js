@@ -125,6 +125,236 @@ const sendJson = (res, statusCode, payload) => {
 const originalHandle = app.handle.bind(app);
 const { ingestCronCategory } = require('../backend/services/cronIngestionFast');
 
+const EXTERNAL_ARTICLE_ID_RE = /^(?:https?:\/\/|www\.)/i;
+const SPARSE_CATEGORY_MIN = 18;
+const SPARSE_CATEGORY_COOLDOWN_MS = 2 * 60 * 1000;
+const sparseCategoryRefresh = new Map();
+const externalCommentsTableReady = new WeakMap();
+
+const isExternalArticleId = (value) => {
+  const id = String(value || '').trim();
+  if (!id) return false;
+  if (/^\d+$/.test(id)) return false;
+  if (/^rss-\d+$/.test(id)) return false;
+  return !EXTERNAL_ARTICLE_ID_RE.test(id) || id.length > 40;
+};
+
+const escapeCommentText = (value, maxLength) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;')
+  .slice(0, maxLength);
+
+const ensureExternalCommentsTable = async (pool) => {
+  if (!pool) return false;
+  const existing = externalCommentsTableReady.get(pool);
+  if (existing) return existing;
+
+  const promise = pool.query(`
+    CREATE TABLE IF NOT EXISTS external_comments (
+      id BIGSERIAL PRIMARY KEY,
+      article_id TEXT NOT NULL,
+      author_name VARCHAR(100) NOT NULL,
+      content TEXT NOT NULL,
+      parent_id BIGINT NULL,
+      likes INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_external_comments_article
+      ON external_comments (article_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_external_comments_parent
+      ON external_comments (parent_id);
+  `).then(() => true).catch((error) => {
+    externalCommentsTableReady.delete(pool);
+    console.warn('[Vercel Comments] Table initialization failed:', error.message);
+    return false;
+  });
+
+  externalCommentsTableReady.set(pool, promise);
+  return promise;
+};
+
+const mapExternalComments = (rows) => {
+  const comments = new Map();
+  for (const row of rows) {
+    comments.set(String(row.id), {
+      id: String(row.id),
+      articleId: row.article_id,
+      parentId: row.parent_id ? String(row.parent_id) : null,
+      author: row.author_name,
+      content: row.content,
+      date: new Date(row.created_at).toISOString(),
+      likes: Number(row.likes || 0),
+      replies: []
+    });
+  }
+
+  const roots = [];
+  for (const comment of comments.values()) {
+    if (comment.parentId && comments.has(comment.parentId)) {
+      comments.get(comment.parentId).replies.push(comment);
+    } else {
+      roots.push(comment);
+    }
+  }
+  return roots;
+};
+
+const handleExternalComments = async (parsed, req, res, pool) => {
+  if (!pool || !parsed.pathname.startsWith('/api/comments')) return false;
+
+  const method = req.method.toUpperCase();
+  const pathMatch = parsed.pathname.match(/^\/api\/comments(?:\/([^/]+)\/like)?\/?$/);
+  if (!pathMatch) return false;
+
+  if (method === 'GET' && !pathMatch[1]) {
+    const articleId = parsed.searchParams.get('articleId');
+    if (!articleId || !isExternalArticleId(articleId)) return false;
+
+    if (!(await ensureExternalCommentsTable(pool))) {
+      return sendJson(res, 200, []), true;
+    }
+
+    try {
+      const result = await pool.query(
+        'SELECT id, article_id, author_name, content, parent_id, likes, created_at FROM external_comments WHERE article_id = $1 ORDER BY created_at ASC, id ASC',
+        [String(articleId)]
+      );
+      return sendJson(res, 200, mapExternalComments(result.rows)), true;
+    } catch (error) {
+      console.warn('[Vercel Comments] External comment read failed:', error.message);
+      return sendJson(res, 200, []), true;
+    }
+  }
+
+  if (method === 'POST' && !pathMatch[1]) {
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch { body = {}; }
+    }
+    body = body || {};
+
+    const articleId = String(body.articleId || '').trim();
+    const author = String(body.author || '').trim();
+    const content = String(body.content || '').trim();
+    const parentId = body.parentId ? String(body.parentId).trim() : null;
+
+    if (!articleId || !author || !content) return sendJson(res, 400, { error: 'Missing required fields' }), true;
+    if (!isExternalArticleId(articleId)) return false;
+    if (author.length > 100 || content.length > 1000) return sendJson(res, 400, { error: 'Comment is too long' }), true;
+    if (parentId && !/^\d+$/.test(parentId)) return sendJson(res, 400, { error: 'Invalid parent comment' }), true;
+
+    if (!(await ensureExternalCommentsTable(pool))) {
+      return sendJson(res, 503, { error: 'Comments temporarily unavailable', retryable: true }), true;
+    }
+
+    try {
+      const safeAuthor = escapeCommentText(author, 100);
+      const safeContent = escapeCommentText(content, 1000);
+      const pId = parentId ? Number(parentId) : null;
+
+      if (pId) {
+        const parent = await pool.query(
+          'SELECT id FROM external_comments WHERE id = $1 AND article_id = $2',
+          [pId, articleId]
+        );
+        if (parent.rows.length === 0) return sendJson(res, 400, { error: 'Parent comment not found' }), true;
+      }
+
+      const result = await pool.query(
+        `INSERT INTO external_comments (article_id, author_name, content, parent_id)
+         VALUES ($1, $2, $3, $4) RETURNING id, article_id, author_name, content, parent_id, likes, created_at`,
+        [articleId, safeAuthor, safeContent, pId]
+      );
+      const created = result.rows[0];
+      return sendJson(res, 201, {
+        id: String(created.id),
+        articleId: created.article_id,
+        parentId: created.parent_id ? String(created.parent_id) : null,
+        author: created.author_name,
+        content: created.content,
+        date: new Date(created.created_at).toISOString(),
+        likes: Number(created.likes || 0),
+        replies: []
+      }), true;
+    } catch (error) {
+      console.error('[Vercel Comments] External comment write failed:', error.message);
+      return sendJson(res, 500, { error: 'Failed to save comment' }), true;
+    }
+  }
+
+  if (method === 'POST' && pathMatch[1]) {
+    const commentId = pathMatch[1];
+    if (!/^\d+$/.test(commentId)) return false;
+    if (!(await ensureExternalCommentsTable(pool))) return false;
+
+    try {
+      const result = await pool.query(
+        `UPDATE external_comments
+         SET likes = likes + 1
+         WHERE id = $1
+         RETURNING id, article_id, author_name, content, parent_id, likes, created_at`,
+        [Number(commentId)]
+      );
+      if (result.rows.length === 0) return false;
+      const updated = result.rows[0];
+      return sendJson(res, 200, {
+        id: String(updated.id),
+        articleId: updated.article_id,
+        parentId: updated.parent_id ? String(updated.parent_id) : null,
+        author: updated.author_name,
+        content: updated.content,
+        date: new Date(updated.created_at).toISOString(),
+        likes: Number(updated.likes || 0)
+      }), true;
+    } catch (error) {
+      console.warn('[Vercel Comments] External like failed:', error.message);
+      return false;
+    }
+  }
+
+  return false;
+};
+
+const maybeRefreshSparseCategory = async (parsed, pool) => {
+  if (!pool || parsed.pathname.split('/').length !== 4 || !parsed.pathname.startsWith('/api/news/')) return;
+  const category = decodeURIComponent(parsed.pathname.slice('/api/news/'.length)).toLowerCase();
+  const allowedCategories = new Set([
+    'nigerian', 'nigerian-news', 'ghana', 'kenya', 'south-africa', 'uk', 'usa',
+    'crypto', 'culture', 'entertainment', 'jobs', 'tech', 'business', 'science',
+    'lifestyle', 'sports'
+  ]);
+  if (!allowedCategories.has(category)) return;
+
+  const last = sparseCategoryRefresh.get(category) || 0;
+  if (Date.now() - last < SPARSE_CATEGORY_COOLDOWN_MS) return;
+
+  try {
+    const dbCategory = category === 'nigerian' ? 'nigerian-news' : category;
+    const countResult = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM rss_articles WHERE LOWER(category) = LOWER($1)',
+      [dbCategory]
+    );
+    const count = Number(countResult.rows[0]?.count || 0);
+    if (count >= SPARSE_CATEGORY_MIN) return;
+
+    sparseCategoryRefresh.set(category, Date.now());
+    try {
+      const result = await Promise.race([
+        ingestCronCategory(dbCategory),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('sparse refresh timeout')), 5500))
+      ]);
+      console.log(`[Vercel Sparse Refresh] ${dbCategory}: ${count} stored ->`, result?.newCount || 0, 'new');
+    } catch (error) {
+      console.warn(`[Vercel Sparse Refresh] ${dbCategory} failed:`, error.message);
+    }
+  } catch (error) {
+    console.warn(`[Vercel Sparse Refresh] Count failed for ${category}:`, error.message);
+  }
+};
+
 // Vercel-side compatibility routes. These keep the web app usable even when
 // legacy Express handlers expect columns/tables from an older schema.
 const handleStableApi = async (parsed, req, res, pool) => {
@@ -256,6 +486,11 @@ app.handle = async function realssaVercelHandle(req, res, out) {
     if (!readyPool) {
       return sendJson(res, 503, { error: 'Database temporarily unavailable', retryable: true });
     }
+
+    const externalCommentsHandled = await handleExternalComments(parsed, req, res, readyPool);
+    if (externalCommentsHandled) return;
+
+    await maybeRefreshSparseCategory(parsed, readyPool);
 
     const stableHandled = await handleStableApi(parsed, req, res, readyPool);
     if (stableHandled) return;
