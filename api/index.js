@@ -122,8 +122,7 @@ const waitForDatabasePool = async (timeoutMs = 10000) => {
 };
 
 const originalHandle = app.handle.bind(app);
-const Parser = require('rss-parser');
-const { ingestAllFeeds } = require('../backend/services/ingestion');
+const { ingestCronCategory } = require('../backend/services/cronIngestionFast');
 
 app.handle = async function realssaVercelHandle(req, res, out) {
   let parsed;
@@ -137,8 +136,44 @@ app.handle = async function realssaVercelHandle(req, res, out) {
   const isRssRequest = parsed.pathname === '/rss.xml' || parsed.pathname.startsWith('/rss/');
   const isCronIngest = parsed.pathname === '/api/cron/ingest';
 
-  // Prevent the homepage from racing Neon on a cold start, while keeping all
-  // non-DB static requests fast.
+  // External cron services have a 30-second HTTP timeout. Do NOT put them
+  // behind the normal DB readiness wait or the full ingestion pipeline.
+  // The dedicated fast path opens the primary pool itself and is bounded to a
+  // few RSS requests plus lightweight inserts.
+  if ((req.method === 'GET' || req.method === 'POST') && isCronIngest) {
+    const configuredSecret = process.env.CRON_SECRET;
+    const suppliedSecret = parsed.searchParams.get('secret') || req.headers['x-cron-secret'];
+
+    if (!configuredSecret || suppliedSecret !== configuredSecret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const category = parsed.searchParams.get('category');
+    if (!category) {
+      return res.status(400).json({ error: 'category is required' });
+    }
+
+    try {
+      const result = await ingestCronCategory(category);
+      return res.status(200).json({
+        success: true,
+        completed: true,
+        ...result,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('[Vercel Fast Cron] Ingestion failed:', error.message);
+      return res.status(500).json({
+        success: false,
+        completed: false,
+        category,
+        error: 'Ingestion failed'
+      });
+    }
+  }
+
+  // Prevent normal DB-backed API requests from racing Neon on a cold start,
+  // while keeping static pages/assets fast.
   if (process.env.DATABASE_URL && (isApiRequest || isRssRequest)) {
     const readyPool = await waitForDatabasePool();
     if (!readyPool) {
@@ -149,51 +184,6 @@ app.handle = async function realssaVercelHandle(req, res, out) {
         });
       }
       return;
-    }
-  }
-
-  if ((req.method === 'GET' || req.method === 'POST') && isCronIngest) {
-    const configuredSecret = process.env.CRON_SECRET;
-    const suppliedSecret = parsed.searchParams.get('secret') || req.headers['x-cron-secret'];
-
-    if (!configuredSecret || suppliedSecret !== configuredSecret) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const pool = app.get('pool');
-
-    try {
-      const parser = new Parser({
-        customFields: {
-          item: [
-            ['media:content', 'media:content'],
-            ['media:thumbnail', 'media:thumbnail'],
-            ['enclosure', 'enclosure'],
-            ['content:encoded', 'content:encoded'],
-            ['description', 'description']
-          ]
-        }
-      });
-
-      const category = parsed.searchParams.get('category') || null;
-      const result = await ingestAllFeeds(pool, parser, category);
-
-      return res.status(200).json({
-        success: true,
-        completed: true,
-        category: category || 'all',
-        newCount: result?.newCount || 0,
-        summaryCount: result?.summaryCount || 0,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('[Vercel Cron] Ingestion failed:', error.message);
-      return res.status(500).json({
-        success: false,
-        completed: false,
-        category: parsed.searchParams.get('category') || 'all',
-        error: 'Ingestion failed'
-      });
     }
   }
 
