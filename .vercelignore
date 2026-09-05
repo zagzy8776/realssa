@@ -24,3 +24,4 @@ bundle.zip
 com.realssa.news_0.0.67.zip
 *.html
 !index.html
+package-lock.json
