@@ -13,6 +13,37 @@ const Module = require('module');
 const originalLoad = Module._load;
 const originalSetInterval = global.setInterval;
 
+// Reuse one pg pool per normalized DATABASE_URL inside a Vercel function
+// instance. server.js, multiDb.js and authService.js historically created
+// separate pools for the same Neon endpoint. That multiplies idle connections
+// and makes every cold start heavier than it needs to be.
+const pg = require('pg');
+const NativePool = pg.Pool;
+const poolCache = new Map();
+
+class SharedVercelPool extends NativePool {
+  constructor(config = {}) {
+    const rawConnectionString = typeof config === 'string'
+      ? config
+      : config.connectionString;
+    const cacheKey = rawConnectionString
+      ? String(rawConnectionString).split('?')[0]
+      : null;
+
+    if (cacheKey && poolCache.has(cacheKey)) {
+      return poolCache.get(cacheKey);
+    }
+
+    super(config);
+
+    if (cacheKey) {
+      poolCache.set(cacheKey, this);
+    }
+  }
+}
+
+pg.Pool = SharedVercelPool;
+
 const persistentOnly = {
   streamHealthMonitor: {
     runStreamHealthCheck: async () => ({}),
@@ -26,8 +57,8 @@ const persistentOnly = {
   }
 };
 
-// worker.js creates two PostgreSQL pools as soon as it is imported, even though
-// Vercel never runs its migration/worker path. Avoid those idle pools entirely.
+// worker.js creates PostgreSQL pools as soon as it is imported, even though
+// Vercel never runs its migration/worker path. Avoid loading those pools.
 const vercelWorker = {
   runMigrations: async () => {
     console.log('[Vercel] Worker migrations skipped; migrations belong to the external worker/cron path.');
@@ -35,10 +66,9 @@ const vercelWorker = {
 };
 
 // authService historically initialized its database tables at module import.
-// Lazy-load it only when an auth request actually needs it. This removes an
-// unnecessary DB connection/workload from every Vercel cold start while keeping
-// all existing auth functions available to server.js.
+// Lazy-load it only when an auth request actually needs it.
 let realAuthService;
+let authParent = null;
 const loadRealAuthService = (request, parent) => {
   if (!realAuthService) {
     realAuthService = originalLoad.call(Module, request, parent, false);
@@ -54,7 +84,6 @@ const lazyAuthService = {
   loginWithEmail: (...args) => loadRealAuthService('./services/authService', authParent).loginWithEmail(...args),
   getAllUsersAdmin: (...args) => loadRealAuthService('./services/authService', authParent).getAllUsersAdmin(...args)
 };
-let authParent = null;
 
 Module._load = function patchedModuleLoad(request, parent, isMain) {
   if (request === './services/streamHealthMonitor' || request.endsWith('/services/streamHealthMonitor')) {
@@ -75,7 +104,7 @@ Module._load = function patchedModuleLoad(request, parent, isMain) {
 
 // server.js still contains a legacy startup setInterval for stream health.
 // Suppress timers only during app construction. Request-time timers remain
-// available after initialization, so this does not affect API behavior.
+// available after initialization.
 global.setInterval = function vercelNoStartupIntervals() {
   return { __realssaVercelStartupTimer: true };
 };
