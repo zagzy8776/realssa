@@ -54,16 +54,12 @@ const persistentOnly = {
   }
 };
 
-// worker.js creates PostgreSQL pools as soon as it is imported, even though
-// Vercel never runs its migration/worker path. Avoid loading those pools.
 const vercelWorker = {
   runMigrations: async () => {
     console.log('[Vercel] Worker migrations skipped; migrations belong to the external worker/cron path.');
   }
 };
 
-// authService historically initialized its database tables at module import.
-// Lazy-load it only when an auth request actually needs it.
 let realAuthService;
 let authParent = null;
 const loadRealAuthService = (request, parent) => {
@@ -111,11 +107,9 @@ try {
   Module._load = originalLoad;
 }
 
-// server.js initializes the pool connection asynchronously. A Vercel cold
-// start can receive the first request before that callback has called
-// app.set('pool', pool). API handlers use the module-level pool directly, so a
-// missing app pool is otherwise capable of producing an immediate 500. Wait
-// briefly for the connection to become available instead of racing the boot.
+// server.js initializes the pool connection asynchronously. Wait only for
+// DB-backed API requests; static pages/assets must never sit behind a database
+// connection during a cold start.
 const waitForDatabasePool = async (timeoutMs = 10000) => {
   if (!process.env.DATABASE_URL) return null;
 
@@ -127,11 +121,6 @@ const waitForDatabasePool = async (timeoutMs = 10000) => {
   return app.get('pool') || null;
 };
 
-// External cron-job.org is the scheduler for ingestion. The old Express route
-// sent HTTP 200 and then used setImmediate(), which is not a durable background
-// execution mechanism on Vercel: the function can be frozen after the response.
-// Handle ingestion synchronously here so a green cron event means the job really
-// completed, rather than merely being accepted.
 const originalHandle = app.handle.bind(app);
 const Parser = require('rss-parser');
 const { ingestAllFeeds } = require('../backend/services/ingestion');
@@ -144,10 +133,13 @@ app.handle = async function realssaVercelHandle(req, res, out) {
     return originalHandle(req, res, out);
   }
 
-  // Make every DB-backed request wait for the cold-start connection. This is
-  // especially important for /api/articles, /api/articles/featured and the
-  // feed endpoints that users hit immediately after a deployment or wake-up.
-  if (process.env.DATABASE_URL) {
+  const isApiRequest = parsed.pathname.startsWith('/api/');
+  const isRssRequest = parsed.pathname === '/rss.xml' || parsed.pathname.startsWith('/rss/');
+  const isCronIngest = parsed.pathname === '/api/cron/ingest';
+
+  // Prevent the homepage from racing Neon on a cold start, while keeping all
+  // non-DB static requests fast.
+  if (process.env.DATABASE_URL && (isApiRequest || isRssRequest)) {
     const readyPool = await waitForDatabasePool();
     if (!readyPool) {
       if (!res.headersSent) {
@@ -160,7 +152,7 @@ app.handle = async function realssaVercelHandle(req, res, out) {
     }
   }
 
-  if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/ingest') {
+  if ((req.method === 'GET' || req.method === 'POST') && isCronIngest) {
     const configuredSecret = process.env.CRON_SECRET;
     const suppliedSecret = parsed.searchParams.get('secret') || req.headers['x-cron-secret'];
 
@@ -170,45 +162,39 @@ app.handle = async function realssaVercelHandle(req, res, out) {
 
     const pool = app.get('pool');
 
-    (async () => {
-      try {
-        const parser = new Parser({
-          customFields: {
-            item: [
-              ['media:content', 'media:content'],
-              ['media:thumbnail', 'media:thumbnail'],
-              ['enclosure', 'enclosure'],
-              ['content:encoded', 'content:encoded'],
-              ['description', 'description']
-            ]
-          }
-        });
-
-        const result = await ingestAllFeeds(pool, parser, parsed.searchParams.get('category') || null);
-        if (!res.headersSent) {
-          return res.status(200).json({
-            success: true,
-            completed: true,
-            category: parsed.searchParams.get('category') || 'all',
-            newCount: result?.newCount || 0,
-            summaryCount: result?.summaryCount || 0,
-            timestamp: new Date().toISOString()
-          });
+    try {
+      const parser = new Parser({
+        customFields: {
+          item: [
+            ['media:content', 'media:content'],
+            ['media:thumbnail', 'media:thumbnail'],
+            ['enclosure', 'enclosure'],
+            ['content:encoded', 'content:encoded'],
+            ['description', 'description']
+          ]
         }
-      } catch (error) {
-        console.error('[Vercel Cron] Ingestion failed:', error.message);
-        if (!res.headersSent) {
-          return res.status(500).json({
-            success: false,
-            completed: false,
-            category: parsed.searchParams.get('category') || 'all',
-            error: 'Ingestion failed'
-          });
-        }
-      }
-    })();
+      });
 
-    return;
+      const category = parsed.searchParams.get('category') || null;
+      const result = await ingestAllFeeds(pool, parser, category);
+
+      return res.status(200).json({
+        success: true,
+        completed: true,
+        category: category || 'all',
+        newCount: result?.newCount || 0,
+        summaryCount: result?.summaryCount || 0,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('[Vercel Cron] Ingestion failed:', error.message);
+      return res.status(500).json({
+        success: false,
+        completed: false,
+        category: parsed.searchParams.get('category') || 'all',
+        error: 'Ingestion failed'
+      });
+    }
   }
 
   return originalHandle(req, res, out);
