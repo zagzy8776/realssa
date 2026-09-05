@@ -1,10 +1,10 @@
 import { apiUrl } from '@/lib/api-base';
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Send, Heart, User, Reply, X } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { MessageCircle, Send, Heart, User, Reply, X, BadgeCheck } from 'lucide-react';
 
 interface Comment {
   id: string;
@@ -14,6 +14,8 @@ interface Comment {
   content: string;
   date: string;
   likes: number;
+  isBot?: boolean;
+  botKey?: string | null;
   replies?: Comment[];
 }
 
@@ -23,33 +25,31 @@ interface ExternalArticleCommentsProps {
   onCommentPosted?: () => void;
 }
 
-const ExternalArticleComments = ({ 
-  articleId, 
-  articleTitle, 
-  onCommentPosted 
-}: ExternalArticleCommentsProps) => {
+const COMMENTS_API = '/api/external-comments';
+
+const ExternalArticleComments = ({ articleId, articleTitle, onCommentPosted }: ExternalArticleCommentsProps) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  // Threaded reply states
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [replyAuthor, setReplyAuthor] = useState('');
 
-  // Fetch comments for this article
   const fetchComments = async () => {
     try {
       setLoading(true);
-      const response = await fetch(apiUrl(`/api/comments?articleId=${articleId}`));
-      if (response.ok) {
-        const commentsData = await response.json();
-        setComments(commentsData);
-      }
+      const response = await fetch(apiUrl(`${COMMENTS_API}?articleId=${encodeURIComponent(articleId)}`), {
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error(`Comments request failed: ${response.status}`);
+      const commentsData = await response.json();
+      setComments(Array.isArray(commentsData) ? commentsData : []);
     } catch (err) {
-      console.warn("Failed to fetch comments:", err);
+      console.warn('Failed to fetch comments:', err);
+      // A comment outage must never make the article itself look broken.
+      setComments([]);
     } finally {
       setLoading(false);
     }
@@ -63,73 +63,62 @@ const ExternalArticleComments = ({
     e.preventDefault();
     const author = parentId ? replyAuthor : commentAuthor;
     const content = parentId ? replyContent : newComment;
-
-    if (!content.trim() || !author.trim()) return;
+    if (!content.trim() || !author.trim() || submittingComment) return;
 
     setSubmittingComment(true);
     try {
-      const response = await fetch(apiUrl('/api/comments'), {
+      const response = await fetch(apiUrl(COMMENTS_API), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          articleId: articleId,
-          author: author.trim(),
-          content: content.trim(),
-          parentId: parentId,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ articleId, author: author.trim(), content: content.trim(), parentId }),
       });
 
-      if (response.ok) {
-        // Reload all comments from database to fetch updated tree layout
-        await fetchComments();
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Comment failed: ${response.status}`);
+      }
 
-        // Check if user tagged @RealSSA_Bot for live AI response
-        if (content.includes('@RealSSA_Bot')) {
-          try {
-            const botRes = await fetch(apiUrl('/api/bot/comment-reply'), {
+      await fetchComments();
+
+      // The mention bot is intentionally opt-in: it only answers when a reader
+      // explicitly mentions @RealSSA_Bot.
+      if (content.includes('@RealSSA_Bot')) {
+        try {
+          const botRes = await fetch(apiUrl('/api/bot/comment-reply'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commentText: content, articleTitle: articleTitle || 'Breaking Story' }),
+          });
+          const botData = await botRes.json().catch(() => ({}));
+          if (botRes.ok && botData?.reply) {
+            await fetch(apiUrl(COMMENTS_API), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                commentText: content,
-                articleTitle: articleTitle || 'Breaking Story'
-              })
+                articleId,
+                author: '@RealSSA_Bot',
+                content: botData.reply,
+                parentId,
+                isBot: true,
+                botKey: 'mention-reply',
+              }),
             });
-            const botData = await botRes.json();
-            if (botData && botData.reply) {
-              await fetch(apiUrl('/api/comments'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  articleId: articleId,
-                  author: '@RealSSA_Bot (Verified AI)',
-                  content: botData.reply,
-                  parentId: parentId
-                })
-              });
-              await fetchComments();
-            }
-          } catch (botErr) {
-            console.warn('@RealSSA_Bot reply notice:', botErr);
+            await fetchComments();
           }
+        } catch (botErr) {
+          console.warn('@RealSSA_Bot reply notice:', botErr);
         }
-        
-        if (parentId) {
-          setReplyContent('');
-          setReplyAuthor('');
-          setReplyingToId(null);
-        } else {
-          setNewComment('');
-          setCommentAuthor('');
-        }
-        
-        if (onCommentPosted) {
-          onCommentPosted();
-        }
-      } else {
-        console.error('Failed to submit comment');
       }
+
+      if (parentId) {
+        setReplyContent('');
+        setReplyAuthor('');
+        setReplyingToId(null);
+      } else {
+        setNewComment('');
+        setCommentAuthor('');
+      }
+      onCommentPosted?.();
     } catch (err) {
       console.error('Error submitting comment:', err);
     } finally {
@@ -138,159 +127,98 @@ const ExternalArticleComments = ({
   };
 
   const handleLikeComment = async (commentId: string) => {
+    if (!commentId.startsWith('external-')) return;
+    const numericId = commentId.replace(/^external-/, '');
     try {
-      const response = await fetch(apiUrl(`/api/comments/${commentId}/like`), {
-        method: 'POST',
+      const response = await fetch(apiUrl(`${COMMENTS_API}/${numericId}/like`), { method: 'POST' });
+      if (!response.ok) return;
+      const updatedComment = await response.json();
+      const updateLikesInTree = (list: Comment[]): Comment[] => list.map(c => {
+        if (c.id === commentId) return { ...c, likes: updatedComment.likes };
+        return c.replies?.length ? { ...c, replies: updateLikesInTree(c.replies) } : c;
       });
-
-      if (response.ok) {
-        const updatedComment = await response.json();
-        
-        // Search and update comments tree locally
-        const updateLikesInTree = (list: Comment[]): Comment[] => {
-          return list.map(c => {
-            if (c.id === commentId) {
-              return { ...c, likes: updatedComment.likes };
-            }
-            if (c.replies && c.replies.length > 0) {
-              return { ...c, replies: updateLikesInTree(c.replies) };
-            }
-            return c;
-          });
-        };
-        
-        setComments(prev => updateLikesInTree(prev));
-      }
+      setComments(prev => updateLikesInTree(prev));
     } catch (err) {
       console.error('Error liking comment:', err);
     }
   };
 
-  // Helper to count total comments in tree
-  const getCommentsCount = (list: Comment[]): number => {
-    let count = list.length;
-    list.forEach(c => {
-      if (c.replies) {
-        count += getCommentsCount(c.replies);
-      }
-    });
-    return count;
-  };
+  const getCommentsCount = (list: Comment[]): number =>
+    list.reduce((count, comment) => count + 1 + (comment.replies ? getCommentsCount(comment.replies) : 0), 0);
 
-  const renderCommentNode = (comment: Comment, isReplyNode = false) => {
-    return (
-      <div key={comment.id} className="space-y-3">
-        <div className={`border border-border rounded-xl p-4 bg-card/50 hover:bg-card/70 transition-colors ${isReplyNode ? 'bg-muted/30 hover:bg-muted/50 border-dashed' : ''}`}>
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                <User className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <p className="font-semibold text-sm">{comment.author}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {new Date(comment.date).toLocaleDateString()} at {new Date(comment.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
+  const renderCommentNode = (comment: Comment, isReplyNode = false): JSX.Element => (
+    <div key={comment.id} className="space-y-3">
+      <div className={`border border-border rounded-xl p-4 bg-card/50 hover:bg-card/70 transition-colors ${isReplyNode ? 'bg-muted/30 hover:bg-muted/50 border-dashed' : ''}`}>
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+              <User className="h-4 w-4 text-primary" />
             </div>
-            
-            <div className="flex items-center gap-1">
-              {/* Like Button */}
+            <div>
+              <div className="flex items-center gap-1.5">
+                <p className="font-semibold text-sm">{comment.author}</p>
+                {comment.isBot && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary" title="Official RealSSA AI account">
+                    <BadgeCheck className="h-3 w-3" /> Official AI
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                {new Date(comment.date).toLocaleDateString()} at {new Date(comment.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleLikeComment(comment.id)}
+              disabled={comment.isBot}
+              className="h-8 flex items-center gap-1 text-muted-foreground hover:text-red-500 hover:bg-transparent"
+            >
+              <Heart className="h-4 w-4" />
+              <span className="text-xs">{comment.likes || 0}</span>
+            </Button>
+            {!isReplyNode && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => handleLikeComment(comment.id)}
-                className="h-8 flex items-center gap-1 text-muted-foreground hover:text-red-500 hover:bg-transparent"
+                onClick={() => { setReplyingToId(comment.id); setReplyContent(''); setReplyAuthor(''); }}
+                className="h-8 flex items-center gap-1 text-muted-foreground hover:text-primary hover:bg-transparent"
               >
-                <Heart className="h-4 w-4" />
-                <span className="text-xs">{comment.likes || 0}</span>
+                <Reply className="h-4 w-4" />
+                <span className="text-xs">Reply</span>
               </Button>
-
-              {/* Reply trigger (Only allow replying to parent threads, i.e., max 2 levels) */}
-              {!isReplyNode && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setReplyingToId(comment.id);
-                    setReplyContent('');
-                    setReplyAuthor('');
-                  }}
-                  className="h-8 flex items-center gap-1 text-muted-foreground hover:text-primary hover:bg-transparent"
-                >
-                  <Reply className="h-4 w-4" />
-                  <span className="text-xs">Reply</span>
-                </Button>
-              )}
-            </div>
+            )}
           </div>
-          <p className="text-sm leading-relaxed text-foreground/90 pl-1">{comment.content}</p>
-
-          {/* Inline Reply Form */}
-          {replyingToId === comment.id && (
-            <form onSubmit={(e) => handleSubmitComment(e, comment.id)} className="mt-4 border-t border-border/80 pt-3 space-y-3 animate-in slide-in-from-top-2 duration-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-muted-foreground flex items-center gap-1">
-                  <Reply className="w-3.5 h-3.5" /> Replying to {comment.author}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setReplyingToId(null)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <Input
-                  placeholder="Your Name"
-                  size={30}
-                  value={replyAuthor}
-                  onChange={(e) => setReplyAuthor(e.target.value)}
-                  className="h-9 text-xs"
-                  required
-                />
-              </div>
-              <Textarea
-                placeholder="Write your response..."
-                value={replyContent}
-                onChange={(e) => setReplyContent(e.target.value)}
-                rows={2}
-                className="text-xs"
-                required
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={submittingComment || !replyContent.trim() || !replyAuthor.trim()}
-                  className="text-xs h-8"
-                >
-                  Post Reply
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setReplyingToId(null)}
-                  className="text-xs h-8"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          )}
         </div>
 
-        {/* Render child comments recursively (indented) */}
-        {comment.replies && comment.replies.length > 0 && (
-          <div className="ml-8 md:ml-12 border-l border-border/60 pl-4 space-y-3">
-            {comment.replies.map(reply => renderCommentNode(reply, true))}
-          </div>
+        <p className="text-sm leading-relaxed text-foreground/90 pl-1">{comment.content}</p>
+
+        {replyingToId === comment.id && (
+          <form onSubmit={(e) => handleSubmitComment(e, comment.id)} className="mt-4 border-t border-border/80 pt-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-muted-foreground flex items-center gap-1"><Reply className="w-3.5 h-3.5" /> Replying to {comment.author}</span>
+              <button type="button" onClick={() => setReplyingToId(null)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+            </div>
+            <Input placeholder="Your Name" value={replyAuthor} onChange={(e) => setReplyAuthor(e.target.value)} className="h-9 text-xs" required />
+            <Textarea placeholder="Write your response..." value={replyContent} onChange={(e) => setReplyContent(e.target.value)} rows={2} className="text-xs" required />
+            <div className="flex gap-2">
+              <Button type="submit" size="sm" disabled={submittingComment || !replyContent.trim() || !replyAuthor.trim()} className="text-xs h-8">Post Reply</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setReplyingToId(null)} className="text-xs h-8">Cancel</Button>
+            </div>
+          </form>
         )}
       </div>
-    );
-  };
+
+      {comment.replies?.length ? (
+        <div className="ml-8 md:ml-12 border-l border-border/60 pl-4 space-y-3">
+          {comment.replies.map(reply => renderCommentNode(reply, true))}
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <Card className="w-full">
@@ -300,78 +228,39 @@ const ExternalArticleComments = ({
           <CardTitle className="text-lg">Community Discussion</CardTitle>
           <span className="text-sm text-muted-foreground">({getCommentsCount(comments)})</span>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Join the conversation about "{articleTitle}"
-        </p>
+        <p className="text-sm text-muted-foreground">Join the conversation about "{articleTitle}"</p>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Comment Form */}
         <form onSubmit={(e) => handleSubmitComment(e)} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              placeholder="Your name"
-              value={commentAuthor}
-              onChange={(e) => setCommentAuthor(e.target.value)}
-              required
-            />
-            <div className="text-xs text-muted-foreground flex items-center">
-              Your name will be displayed with your comment
-            </div>
+            <Input placeholder="Your name" value={commentAuthor} onChange={(e) => setCommentAuthor(e.target.value)} required />
+            <div className="text-xs text-muted-foreground flex items-center">Your name will be displayed with your comment</div>
           </div>
-          
-          <Textarea
-            placeholder="Share your thoughts about this article..."
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            rows={4}
-            required
-          />
-          
-          <Button
-            type="submit"
-            disabled={submittingComment || !newComment.trim() || !commentAuthor.trim()}
-            className="flex items-center gap-2"
-          >
-            {submittingComment ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Posting...
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4" />
-                Post Comment
-              </>
-            )}
+          <Textarea placeholder="Share your thoughts about this article..." value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={4} required />
+          <Button type="submit" disabled={submittingComment || !newComment.trim() || !commentAuthor.trim()} className="flex items-center gap-2">
+            {submittingComment ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />Posting...</> : <><Send className="h-4 w-4" />Post Comment</>}
           </Button>
         </form>
 
-        {/* Comments List */}
         <div className="space-y-4">
           {loading ? (
-            <div className="flex justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-            </div>
+            <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>
           ) : comments.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground border-2 border-dashed border-border rounded-lg">
               <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-sm">No comments yet. Be the first to share your thoughts!</p>
-              <p className="text-xs mt-2">Comments are moderated and may take a few minutes to appear.</p>
             </div>
-          ) : (
-            comments.map((comment) => renderCommentNode(comment))
-          )}
+          ) : comments.map(comment => renderCommentNode(comment))}
         </div>
 
-        {/* Community Guidelines */}
         <div className="border-t pt-4">
           <h4 className="font-semibold mb-2">Community Guidelines</h4>
           <ul className="text-xs text-muted-foreground space-y-1">
             <li>• Be respectful and constructive</li>
             <li>• No spam or promotional content</li>
             <li>• Keep discussions relevant to the article</li>
-            <li>• Report inappropriate content to moderators</li>
+            <li>• Official AI accounts are clearly labelled</li>
           </ul>
         </div>
       </CardContent>
