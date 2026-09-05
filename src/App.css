@@ -50,6 +50,42 @@ a {
   border-color: hsl(var(--primary) / 0.35);
 }
 
+/* New navigation/content primitives for the redesign. */
+.rssa-shell {
+  width: min(100%, 1440px);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
+}
+
+.rssa-section {
+  margin-block: clamp(1.5rem, 4vw, 3.5rem);
+}
+
+.rssa-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.rssa-section-title h2 {
+  margin: 0;
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.rssa-section-title a {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 /* Prevent long headlines and source names from breaking mobile layouts. */
 .rssa-break-safe {
   overflow-wrap: anywhere;
@@ -60,6 +96,20 @@ a {
 :focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .rssa-shell {
+    padding-inline: 0.875rem;
+  }
+
+  .rssa-section {
+    margin-block: 1.25rem;
+  }
+
+  .rssa-section-title {
+    margin-bottom: 0.75rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
