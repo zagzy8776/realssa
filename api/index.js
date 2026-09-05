@@ -1,13 +1,9 @@
 /*
  * Vercel entrypoint for RealSSA.
  *
- * The main backend is also used by the persistent Fly.io worker.  Vercel must
- * not start persistent/background processes such as WhatsApp Web, stream
- * monitors, or setInterval-based workers while loading the request handler.
- *
- * Keep the production API on the same Express application, but isolate the
- * persistent-only modules at the Vercel boundary.  The Fly worker continues
- * to load the real implementations.
+ * Vercel handles request/response traffic. External cron and the persistent
+ * worker handle scheduled/background work. Keep those concerns isolated so a
+ * background service cannot take the API down during a cold start.
  */
 
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -17,10 +13,6 @@ const Module = require('module');
 const originalLoad = Module._load;
 const originalSetInterval = global.setInterval;
 
-// These modules are persistent daemons on Fly/Docker, not request-time
-// dependencies for Vercel.  Returning inert implementations here prevents
-// Puppeteer/WhatsApp and external stream-health probes from being started by
-// every Vercel function instance.
 const persistentOnly = {
   streamHealthMonitor: {
     runStreamHealthCheck: async () => ({}),
@@ -29,10 +21,40 @@ const persistentOnly = {
   },
   whatsappBots: {
     initWhatsAppBots: () => {
-      console.log('[Vercel] WhatsApp background worker disabled; running on Fly.io worker.');
+      console.log('[Vercel] WhatsApp background worker disabled; external/Fly worker owns it.');
     }
   }
 };
+
+// worker.js creates two PostgreSQL pools as soon as it is imported, even though
+// Vercel never runs its migration/worker path. Avoid those idle pools entirely.
+const vercelWorker = {
+  runMigrations: async () => {
+    console.log('[Vercel] Worker migrations skipped; migrations belong to the external worker/cron path.');
+  }
+};
+
+// authService historically initialized its database tables at module import.
+// Lazy-load it only when an auth request actually needs it. This removes an
+// unnecessary DB connection/workload from every Vercel cold start while keeping
+// all existing auth functions available to server.js.
+let realAuthService;
+const loadRealAuthService = (request, parent) => {
+  if (!realAuthService) {
+    realAuthService = originalLoad.call(Module, request, parent, false);
+  }
+  return realAuthService;
+};
+
+const lazyAuthService = {
+  registerWithEmail: (...args) => loadRealAuthService('./services/authService', authParent).registerWithEmail(...args),
+  verifyEmailToken: (...args) => loadRealAuthService('./services/authService', authParent).verifyEmailToken(...args),
+  sendPhoneOtp: (...args) => loadRealAuthService('./services/authService', authParent).sendPhoneOtp(...args),
+  verifyPhoneOtp: (...args) => loadRealAuthService('./services/authService', authParent).verifyPhoneOtp(...args),
+  loginWithEmail: (...args) => loadRealAuthService('./services/authService', authParent).loginWithEmail(...args),
+  getAllUsersAdmin: (...args) => loadRealAuthService('./services/authService', authParent).getAllUsersAdmin(...args)
+};
+let authParent = null;
 
 Module._load = function patchedModuleLoad(request, parent, isMain) {
   if (request === './services/streamHealthMonitor' || request.endsWith('/services/streamHealthMonitor')) {
@@ -41,12 +63,19 @@ Module._load = function patchedModuleLoad(request, parent, isMain) {
   if (request === './services/whatsappBots' || request.endsWith('/services/whatsappBots')) {
     return persistentOnly.whatsappBots;
   }
+  if (request === './worker' || request.endsWith('/worker')) {
+    return vercelWorker;
+  }
+  if (request === './services/authService' || request.endsWith('/services/authService')) {
+    authParent = parent;
+    return lazyAuthService;
+  }
   return originalLoad.call(this, request, parent, isMain);
 };
 
-// server.js contains a few legacy timers outside its Fly-only startup block.
-// Suppress those timers only while the Express app is being constructed.
-// Normal request-time timers remain available after initialization.
+// server.js still contains a legacy startup setInterval for stream health.
+// Suppress timers only during app construction. Request-time timers remain
+// available after initialization, so this does not affect API behavior.
 global.setInterval = function vercelNoStartupIntervals() {
   return { __realssaVercelStartupTimer: true };
 };
