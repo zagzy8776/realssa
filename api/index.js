@@ -121,6 +121,15 @@ const waitForDatabasePool = async (timeoutMs = 10000) => {
   return app.get('pool') || null;
 };
 
+// The wrapper runs before Express decorates Node's raw ServerResponse with
+// res.status()/res.json(). Use the native response API for every early return.
+const sendJson = (res, statusCode, payload) => {
+  if (res.headersSent) return;
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(payload));
+};
+
 const originalHandle = app.handle.bind(app);
 const { ingestCronCategory } = require('../backend/services/cronIngestionFast');
 
@@ -145,17 +154,17 @@ app.handle = async function realssaVercelHandle(req, res, out) {
     const suppliedSecret = parsed.searchParams.get('secret') || req.headers['x-cron-secret'];
 
     if (!configuredSecret || suppliedSecret !== configuredSecret) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return sendJson(res, 401, { error: 'Unauthorized' });
     }
 
     const category = parsed.searchParams.get('category');
     if (!category) {
-      return res.status(400).json({ error: 'category is required' });
+      return sendJson(res, 400, { error: 'category is required' });
     }
 
     try {
       const result = await ingestCronCategory(category);
-      return res.status(200).json({
+      return sendJson(res, 200, {
         success: true,
         completed: true,
         ...result,
@@ -163,7 +172,7 @@ app.handle = async function realssaVercelHandle(req, res, out) {
       });
     } catch (error) {
       console.error('[Vercel Fast Cron] Ingestion failed:', error.message);
-      return res.status(500).json({
+      return sendJson(res, 500, {
         success: false,
         completed: false,
         category,
@@ -177,13 +186,10 @@ app.handle = async function realssaVercelHandle(req, res, out) {
   if (process.env.DATABASE_URL && (isApiRequest || isRssRequest)) {
     const readyPool = await waitForDatabasePool();
     if (!readyPool) {
-      if (!res.headersSent) {
-        return res.status(503).json({
-          error: 'Database temporarily unavailable',
-          retryable: true
-        });
-      }
-      return;
+      return sendJson(res, 503, {
+        error: 'Database temporarily unavailable',
+        retryable: true
+      });
     }
   }
 
