@@ -1,5 +1,6 @@
 {
   "installCommand": "npm install --no-package-lock",
+  "buildCommand": "npm exec -- vite build",
   "functions": {
     "api/index.js": { "maxDuration": 180 }
   },
