@@ -6,7 +6,6 @@
   text-align: left;
 }
 
-/* RealSSA product-wide interaction foundation */
 html {
   scroll-behavior: smooth;
 }
@@ -50,7 +49,7 @@ a {
   border-color: hsl(var(--primary) / 0.35);
 }
 
-/* New navigation/content primitives for the redesign. */
+/* Product shell */
 .rssa-shell {
   width: min(100%, 1440px);
   margin-inline: auto;
@@ -86,16 +85,86 @@ a {
   letter-spacing: 0.06em;
 }
 
-/* Prevent long headlines and source names from breaking mobile layouts. */
+/* Existing homepage primitives: progressively move them toward the new editorial system. */
+.nr-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 50% -12%, hsl(var(--primary) / 0.08), transparent 34rem),
+    hsl(var(--background));
+}
+
+.nr-page main > section {
+  width: min(100%, 1440px);
+  margin-inline: auto;
+}
+
+.nr-page .nr-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: clamp(1.35rem, 2.8vw, 2rem);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  color: hsl(var(--foreground));
+}
+
+.nr-page .nr-card {
+  border: 1px solid hsl(var(--border) / 0.68);
+  box-shadow: 0 10px 30px hsl(30 20% 5% / 0.07);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.nr-page .nr-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 38px hsl(30 20% 5% / 0.11);
+  border-color: hsl(var(--primary) / 0.3);
+}
+
+.nr-page .nr-pill {
+  min-height: 38px;
+  padding-inline: 0.9rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.nr-page .nr-pill:active {
+  transform: scale(0.97);
+}
+
+.nr-page .nr-pill-active {
+  border: 1px solid hsl(var(--primary) / 0.45);
+  box-shadow: 0 5px 18px hsl(var(--primary) / 0.1);
+}
+
+/* Keep the category rail readable under the sticky header without making it visually heavy. */
+.nr-page main > div.sticky {
+  box-shadow: 0 8px 24px hsl(30 20% 5% / 0.08);
+}
+
+/* Safer long-form headlines/source labels on small screens. */
 .rssa-break-safe {
   overflow-wrap: anywhere;
   word-break: normal;
 }
 
-/* Accessible focus treatment across the product. */
 :focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .nr-page main > section {
+    padding-inline: 0.875rem;
+  }
+
+  .nr-page .nr-section-title {
+    margin-bottom: 0.8rem;
+  }
 }
 
 @media (max-width: 640px) {
@@ -109,6 +178,10 @@ a {
 
   .rssa-section-title {
     margin-bottom: 0.75rem;
+  }
+
+  .nr-page .nr-card:hover {
+    transform: none;
   }
 }
 
