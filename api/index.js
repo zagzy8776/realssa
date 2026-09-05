@@ -87,6 +87,11 @@ try {
   Module._load = originalLoad;
 }
 
+// Vercel sits behind a trusted reverse proxy. Tell Express/rate-limit to use
+// the forwarded client address so X-Forwarded-For does not become a runtime
+// validation error on every API request.
+app.set('trust proxy', 1);
+
 // backend/config/multiDb is loaded by server.js with the same shared pg.Pool
 // constructor above. Its primary pool therefore exists immediately, even
 // before server.js finishes its asynchronous SELECT NOW() probe.
@@ -182,6 +187,24 @@ const handleStableApi = async (parsed, req, res, pool) => {
       return sendJson(res, 200, Array.isArray(result.rows) ? result.rows : []), true;
     } catch (error) {
       console.warn('[Vercel Market] Prices query failed:', error.message);
+      return sendJson(res, 200, []), true;
+    }
+  }
+
+  // ngx_stocks is not present in the production database. Do not allow that
+  // missing optional table to turn the entire Market Hub request into a 500.
+  // Return the empty shape the UI already understands until a real NGX feed is
+  // wired into the persistent ingestion worker.
+  if (parsed.pathname === '/api/stocks') {
+    try {
+      const result = await pool.query(`
+        SELECT to_regclass('public.ngx_stocks') AS table_name
+      `);
+      if (!result.rows[0]?.table_name) {
+        return sendJson(res, 200, []), true;
+      }
+    } catch (error) {
+      console.warn('[Vercel Market] Stock table check failed:', error.message);
       return sendJson(res, 200, []), true;
     }
   }
