@@ -8,6 +8,10 @@ description = "RealSSA Browser Engine — high-performance HTML parser, image co
 name = "realssa-engine"
 path = "src/main.rs"
 
+[[bin]]
+name = "storage-gc"
+path = "src/storage_gc.rs"
+
 [dependencies]
 # Web server
 axum = "0.8"
@@ -18,7 +22,7 @@ tower-http = { version = "0.6", features = ["cors", "compression-gzip", "timeout
 # HTTP client (rustls = no OpenSSL dependency needed)
 reqwest = { version = "0.12", features = ["stream", "rustls-tls", "cookies", "json"], default-features = false }
 
-# HTML parsing — Servo's html5ever under the hood (browser-grade)
+# HTML parsing — Servo's html5ever under the hood
 scraper = "0.21"
 
 # Serialization
