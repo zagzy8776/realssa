@@ -14,101 +14,81 @@ const usersPool = new Pool({
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
 const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
 
-// 50 realistic personas
-const BOT_PERSONAS = [
-  "Abiodun K.", "Chinedu_Dev", "Aisha_Abuja", "Tunde_Lagos", "Fatima_Mustapha",
-  "Ngozi_E", "Emeka_Crypto", "Bola_T", "Yusuf_M", "Kemi_O", "Olumide_A",
-  "Blessing_N", "Ibrahim_J", "Chioma_P", "Damilola_S", "Uche_UX", "Amara_G",
-  "Temitope_O", "Zainab_H", "Musa_K", "Seyi_A", "Grace_E", "Efe_Warri",
-  "Halima_D", "Chidi_O", "Funmi_L", "Kabir_U", "Nkechi_M", "Tosin_B",
-  "Jude_K", "Rukayat_A", "Eze_N", "Oluwaseun_P", "Bose_F", "Aminu_S",
-  "Linda_O", "Paul_E", "Joy_O", "Sadiq_M", "Toyin_S", "Umar_D",
-  "Nonso_A", "Funsho_K", "Anita_E", "Usman_G", "Rita_P", "Kelechi_J",
-  "Abubakar_Y", "Tari_PortHarcourt", "Gozie_O"
-];
+const BOT_NAME = 'RealSSA Community Bot 🤖';
+const BOT_DEVICE_ID = 'realssa-community-bot';
+const SCAN_WINDOW_MINUTES = 30;
+const MAX_ARTICLES_PER_CYCLE = 12;
+const CYCLE_MS = 5 * 60 * 1000;
 
-// Topic-specific fallback comments if APIs fail
-const CONTEXT_COMMENTS = {
-  sports: [
-    "What a match! Totally deserved outcome.",
-    "The coach needs to change tactics, this styling won't work.",
-    "Unbelievable performance. We move!",
-    "Is this squad ready for the next championship? I doubt it.",
-    "Pure class. This player is in top form right now."
-  ],
-  politics: [
-    "This policy needs serious debate, the timing is critical.",
-    "Let's hope they actually deliver on these promises.",
-    "We have heard similar promises before. Let's watch and see.",
-    "A very welcome development for national progress.",
-    "Interesting analysis. There are multiple sides to this issue."
-  ],
-  crypto: [
-    "Bullish on this update! 🚀",
-    "Regulations are slowing down local adoption, sad.",
-    "Time to buy the dip before the next pump.",
-    "Is this secure? Always double-check contract audits.",
-    "This project has a strong community behind it."
-  ],
-  tech: [
-    "Incredible innovation. Nigerian startups are really rising.",
-    "Fintech is leading, but we need more infrastructure projects.",
-    "Excellent tech stack choice. Scale is everything.",
-    "This will simplify workflow for local devs.",
-    "Great execution by the product team."
-  ],
-  general: [
-    "This is a very interesting development. Let's see how it plays out.",
-    "I disagree with this approach. We need better options.",
-    "Finally! Glad this is getting media coverage.",
-    "Are we sure this is fully verified? Seems a bit fast.",
-    "Thanks for sharing this update, keeping close tabs on this."
-  ]
+const FALLBACK_QUESTIONS = {
+  sports: 'What do you make of this result, and what should happen next?',
+  politics: 'What impact do you think this development could have, and what should readers watch next?',
+  crypto: 'What is the biggest thing readers should understand about this development?',
+  tech: 'How significant do you think this development is for users and businesses?',
+  business: 'What do you think this development means for businesses and consumers?',
+  general: 'What is your take on this development, and what should readers watch next?'
 };
 
-const REPLY_TEMPLATES = [
-  "Are you sure? I think you're missing the bigger picture here.",
-  "Exactly! Glad someone else pointed this out.",
-  "I don't think it's that simple. Let's look at the data.",
-  "True, but that is only one part of the problem.",
-  "Totally agree with your point."
-];
+const DISCUSSION_PROMPT = (title, excerpt, category) => [
+  'You are the RealSSA News Community Editor.',
+  'Write ONE short discussion question for a public news comment section.',
+  'This is an official AI-generated RealSSA community prompt. Never pretend to be a human reader.',
+  'Do not invent facts, names, quotes, statistics, events, or claims that are not supported by the supplied article context.',
+  'Do not give financial, medical, legal, or investment instructions.',
+  'Keep the question neutral, useful, and directly related to the article.',
+  'Use standard Nigerian English. No hashtags. Maximum 2 sentences. No emojis.',
+  '',
+  `Title: ${title}`,
+  `Excerpt: ${excerpt || ''}`,
+  `Category: ${category || 'news'}`,
+  '',
+  'Return ONLY the discussion question text.'
+].join('\n');
 
-/**
- * Call Gemini API using key rotation
- */
+function cleanGeneratedText(value) {
+  if (!value || typeof value !== 'string') return null;
+  const cleaned = value
+    .replace(/^\s*(discussion question|comment|response)\s*:\s*/i, '')
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned.length < 12 || cleaned.length > 500) return null;
+  return cleaned;
+}
+
 async function callGemini(promptText) {
-  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
-  const key = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
-  if (!key) return null;
+  const keys = (process.env.GEMINI_API_KEY || '')
+    .split(',')
+    .map(k => k.trim())
+    .filter(Boolean);
+
+  if (!keys.length) return null;
+  const key = keys[Math.floor(Math.random() * keys.length)];
 
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+    const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: promptText }] }],
         generationConfig: {
-          maxOutputTokens: 120,
-          temperature: 0.7
+          maxOutputTokens: 100,
+          temperature: 0.35
         }
       }),
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(6000)
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
-    }
+    if (!res.ok) return null;
+    const data = await res.json();
+    return cleanGeneratedText(data?.candidates?.[0]?.content?.parts?.[0]?.text);
   } catch (err) {
-    console.warn('[Discussion Bot] Gemini API request failed:', err.message);
+    console.warn('[Community Bot] Gemini request failed:', err.message);
+    return null;
   }
-  return null;
 }
 
-/**
- * Call Cerebras API (as backup or alternative)
- */
 async function callCerebras(promptText) {
   const key = process.env.CEREBRAS_API_KEY;
   if (!key) return null;
@@ -121,162 +101,182 @@ async function callCerebras(promptText) {
         'Authorization': `Bearer ${key}`
       },
       body: JSON.stringify({
-        model: 'gpt-oss-120b', // fallback models: zai-glm-4.7, gemma-4-31b
+        model: 'gpt-oss-120b',
         messages: [{ role: 'user', content: promptText }],
-        max_tokens: 120,
-        temperature: 0.7
+        max_tokens: 100,
+        temperature: 0.35
       }),
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(6000)
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      return data?.choices?.[0]?.message?.content?.trim() || null;
-    }
+    if (!res.ok) return null;
+    const data = await res.json();
+    return cleanGeneratedText(data?.choices?.[0]?.message?.content);
   } catch (err) {
-    console.warn('[Discussion Bot] Cerebras API request failed:', err.message);
-  }
-  return null;
-}
-
-/**
- * Orchestrates API call with fallback chain
- */
-async function generateAiContent(promptText) {
-  // 1. Try Gemini first (active and working)
-  let response = await callGemini(promptText);
-  if (response) return response;
-
-  // 2. Try Cerebras as backup
-  console.log('[Discussion Bot] Gemini failed/limit hit, falling back to Cerebras...');
-  response = await callCerebras(promptText);
-  return response;
-}
-
-/**
- * Inserts a single comment row safely
- */
-async function insertComment(articleId, authorName, content, parentId = null) {
-  const deviceId = 'simulated-bot-' + Math.floor(Math.random() * 100);
-  const likes = Math.floor(Math.random() * 8);
-  try {
-    const res = await usersPool.query(
-      `INSERT INTO comments (article_id, parent_id, author_name, device_id, content, likes, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       RETURNING *`,
-      [articleId, parentId, authorName, deviceId, content, likes]
-    );
-    return res.rows[0];
-  } catch (err) {
-    console.error(`[Discussion Bot] Insert failed for article ${articleId}:`, err.message);
+    console.warn('[Community Bot] Cerebras request failed:', err.message);
     return null;
   }
 }
 
-/**
- * Simulates a full AI-powered nested conversation on an article
- */
-async function buildDiscussionThread(articleId, title, excerpt, category) {
-  // Pick random participants
-  const participants = [...BOT_PERSONAS].sort(() => 0.5 - Math.random());
-  const catKey = category && CONTEXT_COMMENTS[category.toLowerCase()] ? category.toLowerCase() : 'general';
-
-  // 1. Generate First Comment
-  const delay1 = Math.floor(Math.random() * 5000) + 1000; // 1-6 seconds
-  setTimeout(async () => {
-    const mainPrompt = `You are a Nigerian reader commenting on a news article. Write a short, natural comment (1-2 sentences) expressing a realistic opinion on this article.
-    Title: "${title}"
-    Excerpt: "${excerpt || ''}"
-    Category: "${category || 'news'}"
-    Keep it informal and realistic, using standard Nigerian English or light slang if appropriate. Do not use hashtags or emojis. Return only the raw comment text.`;
-    
-    let commentText = await generateAiContent(mainPrompt);
-    if (!commentText) {
-      const templates = CONTEXT_COMMENTS[catKey];
-      commentText = templates[Math.floor(Math.random() * templates.length)];
-    }
-
-    const mainComment = await insertComment(articleId, participants[0], commentText);
-    if (!mainComment) return;
-
-    // 2. Generate Second Comment (Independent opinion)
-    const delay2 = Math.floor(Math.random() * 15000) + 10000; // 10-25 seconds
-    setTimeout(async () => {
-      const secondPrompt = `You are another Nigerian reader sharing a different perspective on this news article. Write a short, natural comment (1-2 sentences).
-      Title: "${title}"
-      Category: "${category || 'news'}"
-      Keep it informal and realistic, using standard Nigerian English. Do not use hashtags or emojis. Return only the raw comment text.`;
-
-      let secondCommentText = await generateAiContent(secondPrompt);
-      if (!secondCommentText) {
-        const templates = CONTEXT_COMMENTS[catKey];
-        secondCommentText = templates[Math.min(2, Math.floor(Math.random() * templates.length))];
-      }
-
-      await insertComment(articleId, participants[1], secondCommentText);
-    }, delay2);
-
-    // 3. Generate Reply/Debate (Replying to the first comment)
-    const delay3 = Math.floor(Math.random() * 30000) + 20000; // 20-50 seconds
-    setTimeout(async () => {
-      const replyPrompt = `You are a Nigerian reader replying to another user's comment in the comment section of a news article.
-      Article Title: "${title}"
-      Previous Comment by ${participants[0]}: "${commentText}"
-      Write a short, natural, conversational reply (1-2 sentences) either agreeing, disagreeing, or arguing. Keep it informal. Do not use hashtags or emojis. Return only the raw reply text.`;
-
-      let replyText = await generateAiContent(replyPrompt);
-      if (!replyText) {
-        replyText = REPLY_TEMPLATES[Math.floor(Math.random() * REPLY_TEMPLATES.length)];
-      }
-
-      await insertComment(articleId, participants[2], replyText, mainComment.id);
-    }, delay3);
-
-  }, delay1);
+async function generateDiscussionPrompt(title, excerpt, category) {
+  const prompt = DISCUSSION_PROMPT(title, excerpt, category);
+  return (await callGemini(prompt)) || (await callCerebras(prompt));
 }
 
-/**
- * Checks for recent articles and starts AI discussion threads
- */
-async function monitorAndSimulate() {
+async function ensureBotSchema() {
+  await usersPool.query(`
+    ALTER TABLE comments
+      ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS bot_key VARCHAR(80)
+  `);
+
+  await usersPool.query(`
+    CREATE INDEX IF NOT EXISTS idx_comments_bot_article
+    ON comments (article_id, bot_key)
+    WHERE is_bot = true
+  `);
+
+  // Prevent duplicate official bot prompts when multiple worker instances overlap.
+  await usersPool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_comments_bot_article
+    ON comments (article_id, bot_key)
+    WHERE is_bot = true AND bot_key IS NOT NULL
+  `);
+}
+
+async function articleAlreadyHasBotComment(articleId) {
+  const result = await usersPool.query(
+    `SELECT id FROM comments
+     WHERE article_id = $1 AND is_bot = true AND bot_key = $2
+     LIMIT 1`,
+    [articleId, BOT_DEVICE_ID]
+  );
+  return result.rows.length > 0;
+}
+
+async function insertBotComment(articleId, content) {
   try {
-    console.log('[Discussion Bot] Checking for new articles to stimulate...');
-    
-    // Fetch articles published in the last 15 minutes
-    const articlesRes = await pool.query(`
-      SELECT 'rss-' || id as id, title, original_excerpt as excerpt, category 
-      FROM rss_articles 
-      WHERE published_at >= NOW() - INTERVAL '15 minutes'
-      ORDER BY published_at DESC 
-      LIMIT 10
-    `);
+    const result = await usersPool.query(
+      `INSERT INTO comments (
+        article_id,
+        parent_id,
+        author_name,
+        device_id,
+        content,
+        likes,
+        created_at,
+        is_bot,
+        bot_key
+      ) VALUES ($1, NULL, $2, $3, $4, 0, NOW(), true, $5)
+      ON CONFLICT DO NOTHING
+      RETURNING *`,
+      [articleId, BOT_NAME, BOT_DEVICE_ID, content, BOT_DEVICE_ID]
+    );
 
-    for (const article of articlesRes.rows) {
-      // Check if this article already has comments
-      const commentCheck = await usersPool.query(
-        'SELECT 1 FROM comments WHERE article_id = $1 LIMIT 1',
-        [article.id]
-      );
-
-      if (commentCheck.rows.length === 0) {
-        console.log(`[Discussion Bot] Initiating AI debate on article: ${article.id} ("${article.title}")`);
-        await buildDiscussionThread(article.id, article.title, article.excerpt, article.category);
-      }
-    }
+    return result.rows[0] || null;
   } catch (err) {
-    console.error('[Discussion Bot] Monitoring cycle failed:', err.message);
+    console.error(`[Community Bot] Insert failed for article ${articleId}:`, err.message);
+    return null;
   }
 }
 
-/**
- * Starts the bot interval loop
- */
-function initDiscussionBot() {
-  console.log('📢 AI Discussion Bot initialized.');
-  monitorAndSimulate().catch(() => {});
-  setInterval(() => {
-    monitorAndSimulate().catch(() => {});
-  }, 5 * 60 * 1000);
+async function buildDiscussionThread(articleId, title, excerpt, category) {
+  if (!articleId || !title) return null;
+
+  // A transaction-scoped advisory lock stops duplicate generation across workers.
+  const client = await usersPool.connect();
+  try {
+    await client.query('BEGIN');
+    const lock = await client.query(
+      'SELECT pg_try_advisory_xact_lock(hashtext($1)) AS locked',
+      [`realssa-community-bot:${articleId}`]
+    );
+
+    if (!lock.rows[0]?.locked) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    const existing = await client.query(
+      `SELECT id FROM comments
+       WHERE article_id = $1 AND is_bot = true AND bot_key = $2
+       LIMIT 1`,
+      [articleId, BOT_DEVICE_ID]
+    );
+
+    if (existing.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    const generated = await generateDiscussionPrompt(title, excerpt, category);
+    const categoryKey = String(category || 'general').toLowerCase();
+    const content = generated || FALLBACK_QUESTIONS[categoryKey] || FALLBACK_QUESTIONS.general;
+
+    const result = await client.query(
+      `INSERT INTO comments (
+        article_id, parent_id, author_name, device_id, content, likes, created_at, is_bot, bot_key
+      ) VALUES ($1, NULL, $2, $3, $4, 0, NOW(), true, $5)
+      ON CONFLICT DO NOTHING
+      RETURNING id`,
+      [articleId, BOT_NAME, BOT_DEVICE_ID, content, BOT_DEVICE_ID]
+    );
+
+    await client.query('COMMIT');
+
+    if (result.rows[0]?.id) {
+      console.log(`💬 [Community Bot] Posted official discussion prompt for ${articleId}`);
+      return result.rows[0].id;
+    }
+    return null;
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error(`[Community Bot] Thread creation failed for ${articleId}:`, err.message);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
+async function monitorAndSimulate() {
+  try {
+    console.log('[Community Bot] Checking recent articles for discussion prompts...');
+
+    const articlesRes = await pool.query(`
+      SELECT 'rss-' || id AS id, title, original_excerpt AS excerpt, category
+      FROM rss_articles
+      WHERE published_at >= NOW() - INTERVAL '${SCAN_WINDOW_MINUTES} minutes'
+      ORDER BY published_at DESC
+      LIMIT $1
+    `, [MAX_ARTICLES_PER_CYCLE]);
+
+    let created = 0;
+    for (const article of articlesRes.rows) {
+      if (await articleAlreadyHasBotComment(article.id)) continue;
+      const id = await buildDiscussionThread(article.id, article.title, article.excerpt, article.category);
+      if (id) created += 1;
+    }
+
+    console.log(`[Community Bot] Cycle complete: ${created} official prompts created.`);
+  } catch (err) {
+    console.error('[Community Bot] Monitoring cycle failed:', err.message);
+  }
+}
+
+async function initDiscussionBot() {
+  try {
+    await ensureBotSchema();
+    console.log('📢 RealSSA Community Bot initialized (transparent, idempotent mode).');
+    await monitorAndSimulate();
+
+    setInterval(() => {
+      monitorAndSimulate().catch(err => {
+        console.error('[Community Bot] Scheduled cycle failed:', err.message);
+      });
+    }, CYCLE_MS);
+  } catch (err) {
+    console.error('[Community Bot] Initialization failed:', err.message);
+  }
 }
 
 module.exports = { initDiscussionBot };
