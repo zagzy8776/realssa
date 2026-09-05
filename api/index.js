@@ -14,9 +14,8 @@ const originalLoad = Module._load;
 const originalSetInterval = global.setInterval;
 
 // Reuse one pg pool per normalized DATABASE_URL inside a Vercel function
-// instance. server.js, multiDb.js and authService.js historically created
-// separate pools for the same Neon endpoint. That multiplies idle connections
-// and makes every cold start heavier than it needs to be.
+// instance. Multiple backend modules previously created independent pools for
+// the same Neon endpoint, multiplying idle connections and cold-start work.
 const pg = require('pg');
 const NativePool = pg.Pool;
 const poolCache = new Map();
@@ -36,9 +35,7 @@ class SharedVercelPool extends NativePool {
 
     super(config);
 
-    if (cacheKey) {
-      poolCache.set(cacheKey, this);
-    }
+    if (cacheKey) poolCache.set(cacheKey, this);
   }
 }
 
@@ -116,5 +113,77 @@ try {
   global.setInterval = originalSetInterval;
   Module._load = originalLoad;
 }
+
+// External cron-job.org is the scheduler for ingestion. The old Express route
+// sent HTTP 200 and then used setImmediate(), which is not a durable background
+// execution mechanism on Vercel: the function can be frozen after the response.
+// Handle ingestion synchronously here so a green cron event means the job really
+// completed, rather than merely being accepted.
+const originalHandle = app.handle.bind(app);
+const Parser = require('rss-parser');
+const { ingestAllFeeds } = require('../backend/services/ingestion');
+
+app.handle = function realssaVercelHandle(req, res, out) {
+  let parsed;
+  try {
+    parsed = new URL(req.url || '/', 'https://realssa.internal');
+  } catch {
+    return originalHandle(req, res, out);
+  }
+
+  if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/ingest') {
+    const configuredSecret = process.env.CRON_SECRET;
+    const suppliedSecret = parsed.searchParams.get('secret') || req.headers['x-cron-secret'];
+
+    if (!configuredSecret || suppliedSecret !== configuredSecret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const category = parsed.searchParams.get('category') || null;
+    const pool = app.get('pool');
+
+    (async () => {
+      try {
+        const parser = new Parser({
+          customFields: {
+            item: [
+              ['media:content', 'media:content'],
+              ['media:thumbnail', 'media:thumbnail'],
+              ['enclosure', 'enclosure'],
+              ['content:encoded', 'content:encoded'],
+              ['description', 'description']
+            ]
+          }
+        });
+
+        const result = await ingestAllFeeds(pool, parser, category);
+        if (!res.headersSent) {
+          return res.status(200).json({
+            success: true,
+            completed: true,
+            category: category || 'all',
+            newCount: result?.newCount || 0,
+            summaryCount: result?.summaryCount || 0,
+            timestamp: new Date().toISOString()
+          });
+        }
+      } catch (error) {
+        console.error('[Vercel Cron] Ingestion failed:', error.message);
+        if (!res.headersSent) {
+          return res.status(500).json({
+            success: false,
+            completed: false,
+            category: category || 'all',
+            error: 'Ingestion failed'
+          });
+        }
+      }
+    })();
+
+    return;
+  }
+
+  return originalHandle(req, res, out);
+};
 
 module.exports = app;
