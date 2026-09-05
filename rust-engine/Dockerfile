@@ -14,7 +14,9 @@ COPY Cargo.toml ./
 COPY Cargo.lock* ./
 
 # Pre-fetch and compile dependencies (cached unless Cargo.toml changes)
-RUN mkdir src && echo 'fn main(){}' > src/main.rs
+RUN mkdir src && \
+    echo 'fn main(){}' > src/main.rs && \
+    echo 'fn main(){}' > src/storage_gc.rs
 RUN cargo build --release --locked --bin realssa-engine --bin storage-gc
 RUN rm -rf src
 
