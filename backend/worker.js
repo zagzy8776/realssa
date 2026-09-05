@@ -32,7 +32,6 @@ async function runMigrations() {
       $$;
     `);
 
-    // Create notified_articles table to handle notification deduplication and rate limits
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notified_articles (
         story_hash VARCHAR(64) PRIMARY KEY,
@@ -40,7 +39,6 @@ async function runMigrations() {
       );
     `);
 
-    // Create user_category_affinities table for personalization engine on usersPool
     await usersPool.query(`
       CREATE TABLE IF NOT EXISTS user_category_affinities (
         device_id VARCHAR(64) NOT NULL,
@@ -51,7 +49,6 @@ async function runMigrations() {
       );
     `);
 
-    // Create user subscriptions and preferences on usersPool
     await usersPool.query(`
       CREATE TABLE IF NOT EXISTS user_subscriptions (
         id SERIAL PRIMARY KEY,
@@ -75,13 +72,9 @@ async function runMigrations() {
       );
     `);
 
-    // Create index to optimize personalization lookup queries
     await usersPool.query('CREATE INDEX IF NOT EXISTS idx_user_category_affinities_lookup ON user_category_affinities (device_id, category)');
-
-    // Create index for garbage collector optimization
     await pool.query('CREATE INDEX IF NOT EXISTS idx_rss_articles_published ON rss_articles (published_at)');
 
-    // Create live scores and competitions tables on articlesPool
     await pool.query(`
       CREATE TABLE IF NOT EXISTS live_matches (
         match_id TEXT PRIMARY KEY,
@@ -131,7 +124,6 @@ async function runMigrations() {
       );
     `);
 
-    // Create client_errors table for queryable logs on production crashes on usersPool
     await usersPool.query(`
       CREATE TABLE IF NOT EXISTS client_errors (
         id SERIAL PRIMARY KEY,
@@ -143,24 +135,18 @@ async function runMigrations() {
       );
     `);
 
-    // --- Added RealSSA Engagement & Hubs Migrations ---
-    console.log('🔄 Running RealSSA Engagement & Hubs Migrations...');
-    
-    // 1. Alter live_matches for Hype Meter
     await pool.query(`
-      ALTER TABLE live_matches 
+      ALTER TABLE live_matches
         ADD COLUMN IF NOT EXISTS home_hype_count INT DEFAULT 0,
         ADD COLUMN IF NOT EXISTS away_hype_count INT DEFAULT 0;
     `);
 
-    // 2. Alter rss_articles for Community Verification Counters
     await pool.query(`
-      ALTER TABLE rss_articles 
+      ALTER TABLE rss_articles
         ADD COLUMN IF NOT EXISTS local_verified_count INT DEFAULT 0,
         ADD COLUMN IF NOT EXISTS rumor_flag_count INT DEFAULT 0;
     `);
 
-    // 3. Create publishers table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS publishers (
         id SERIAL PRIMARY KEY,
@@ -174,7 +160,6 @@ async function runMigrations() {
       );
     `);
 
-    // 4. Create publisher_social_posts table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS publisher_social_posts (
         id SERIAL PRIMARY KEY,
@@ -189,7 +174,6 @@ async function runMigrations() {
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_publisher_posts_query ON publisher_social_posts (publisher_id, published_at DESC)');
 
-    // 5. Create user_streaks table on usersPool
     await usersPool.query(`
       CREATE TABLE IF NOT EXISTS user_streaks (
         device_id VARCHAR(255) PRIMARY KEY,
@@ -199,7 +183,7 @@ async function runMigrations() {
       );
     `);
 
-    // 6. Create comments table on usersPool
+    // Canonical community comments schema. Keep this migration additive so existing comments survive.
     await usersPool.query(`
       CREATE TABLE IF NOT EXISTS comments (
         id SERIAL PRIMARY KEY,
@@ -211,10 +195,19 @@ async function runMigrations() {
         likes INTEGER DEFAULT 0,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
+      ALTER TABLE comments ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT false;
+      ALTER TABLE comments ADD COLUMN IF NOT EXISTS bot_key VARCHAR(80);
+      CREATE INDEX IF NOT EXISTS idx_comments_article ON comments (article_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_comments_bot_article ON comments (article_id, bot_key) WHERE is_bot = true;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_comments_bot_article
+        ON comments (article_id, bot_key)
+        WHERE is_bot = true AND bot_key IS NOT NULL;
+      UPDATE comments
+      SET is_bot = true, bot_key = 'legacy-simulation'
+      WHERE COALESCE(is_bot, false) = false
+        AND device_id LIKE 'simulated-bot-%';
     `);
-    await usersPool.query('CREATE INDEX IF NOT EXISTS idx_comments_article ON comments (article_id, created_at DESC)');
 
-    // 7. Create source_credibility table and seed initial weights
     await pool.query(`
       CREATE TABLE IF NOT EXISTS source_credibility (
         source_name VARCHAR(255) PRIMARY KEY,
@@ -224,22 +217,14 @@ async function runMigrations() {
 
     await pool.query(`
       INSERT INTO source_credibility (source_name, credibility_score) VALUES
-        ('BBC Africa', 95),
-        ('BBC News', 95),
-        ('Premium Times', 95),
-        ('Al Jazeera English', 95),
-        ('The Guardian Nigeria', 95),
-        ('Channels TV', 85),
-        ('Vanguard', 85),
-        ('TheCable', 85),
-        ('Nairametrics', 85),
-        ('Daily Trust', 85),
-        ('BusinessDay', 85),
+        ('BBC Africa', 95), ('BBC News', 95), ('Premium Times', 95),
+        ('Al Jazeera English', 95), ('The Guardian Nigeria', 95),
+        ('Channels TV', 85), ('Vanguard', 85), ('TheCable', 85),
+        ('Nairametrics', 85), ('Daily Trust', 85), ('BusinessDay', 85),
         ('SuperSport', 85)
       ON CONFLICT (source_name) DO UPDATE SET credibility_score = EXCLUDED.credibility_score;
     `);
 
-    // 8. Create feed_health table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS feed_health (
         feed_url TEXT PRIMARY KEY,
@@ -252,7 +237,6 @@ async function runMigrations() {
       );
     `);
 
-    // 9. Create buffer_posts_log table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS buffer_posts_log (
         story_hash VARCHAR(64) PRIMARY KEY,
@@ -269,7 +253,6 @@ async function runMigrations() {
 async function start() {
   console.log('====================================');
   console.log('🤖 Unified Worker Started on Fly.io');
-
   await runMigrations();
 
   console.log('👉 Running Sports Livescore Bot');
@@ -289,18 +272,15 @@ async function start() {
   const { initPricesBot } = require('./services/pricesBot');
   initPricesBot(pool);
 
-  console.log('👉 Running Discussion Bot (Mock automated comments)');
+  console.log('👉 Running Discussion Bot (transparent official prompts)');
   const { initDiscussionBot } = require('./services/discussionBot');
   initDiscussionBot();
 
   console.log('====================================');
 }
 
-// Export runMigrations so server.js can reuse it (single-process deployments).
 module.exports = { runMigrations };
 
-// Only auto-start when run directly (e.g. as the `worker` process), not when
-// required by server.js.
 if (require.main === module) {
   start();
 }
