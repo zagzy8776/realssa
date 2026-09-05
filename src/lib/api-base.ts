@@ -1,7 +1,14 @@
 import { Capacitor } from '@capacitor/core';
 
-// Use canonical URL with 'www' to ensure consistency and avoid CORS/redirect issues
-export const API_BASE_URL = import.meta.env?.VITE_API_URL || 'https://www.realssanews.com.ng';
+// Web clients should call the same Vercel origin as the page. This avoids
+// depending on the separate Fly scraper service for browser reads and removes
+// a CORS failure point. Native Capacitor builds still use VITE_API_URL.
+const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
+const browserOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+
+export const API_BASE_URL = isNative
+  ? (import.meta.env?.VITE_API_URL || 'https://www.realssanews.com.ng')
+  : (browserOrigin || import.meta.env?.VITE_API_URL || 'https://www.realssanews.com.ng');
 
 export const RUST_ENGINE_URL = import.meta.env?.MODE === 'development'
   ? (import.meta.env?.VITE_RUST_ENGINE_URL || 'http://localhost:8080')
