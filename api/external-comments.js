@@ -27,9 +27,6 @@ const ensureTable = async () => {
     ALTER TABLE external_comments ADD COLUMN IF NOT EXISTS bot_key TEXT NULL;
     CREATE INDEX IF NOT EXISTS idx_external_comments_article
       ON external_comments (article_id, created_at ASC, id ASC);
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_external_comments_bot_article
-      ON external_comments (article_id, bot_key)
-      WHERE is_bot = TRUE AND bot_key IS NOT NULL;
   `);
   return true;
 };
@@ -124,11 +121,14 @@ module.exports = async function handler(req, res) {
         if (!parent.rows.length) return send(res, 400, { error: 'Parent comment not found' });
       }
 
+      const isBot = Boolean(body.isBot) || author === '@RealSSA_Bot' || author === '@RealSSA_Bot (Verified AI)';
+      const botKey = isBot ? String(body.botKey || 'mention-reply').slice(0, 100) : null;
+
       const result = await pool.query(
-        `INSERT INTO external_comments (article_id, author_name, content, parent_id)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO external_comments (article_id, author_name, content, parent_id, is_bot, bot_key)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id, article_id, author_name, content, parent_id, likes, is_bot, bot_key, created_at`,
-        [articleId, author, content, numericParent]
+        [articleId, author, content, numericParent, isBot, botKey]
       );
       return send(res, 201, normalize(result.rows[0], 'external'));
     }
