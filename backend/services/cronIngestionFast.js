@@ -7,9 +7,9 @@ const { getPoolForCategory } = require('../config/multiDb');
 // (AI, OG-image scraping, indexing, notifications, cleanup), so it must not
 // be used as the HTTP request handler for those jobs.
 //
-// This path is deliberately small and bounded: fetch a few trusted feeds,
-// insert the newest items, and return. The persistent worker can do the heavy
-// enrichment work separately.
+// This path is deliberately small and bounded: fetch trusted feeds in
+// parallel, insert a useful batch of recent items, and return. The persistent
+// worker can do the heavy enrichment work separately.
 const FEEDS = {
   'nigerian-news': [
     'https://www.premiumtimesng.com/rss.xml',
@@ -178,8 +178,9 @@ async function ingestCronCategory(category) {
     const feed = feeds[i];
     if (!feed?.items) continue;
 
-    // Keep the request bounded. The persistent worker handles deeper enrichment.
-    for (const item of feed.items.slice(0, 5)) {
+    // Ten recent items per feed restores useful catalogue depth without
+    // bringing back the old unbounded ingestion workload.
+    for (const item of feed.items.slice(0, 10)) {
       const externalLink = item.link || item.guid;
       const title = cleanText(item.title || 'Untitled');
       if (!externalLink || !title) continue;
@@ -196,7 +197,6 @@ async function ingestCronCategory(category) {
     }
   }
 
-  // Remove duplicate URLs before touching Neon.
   const unique = [];
   const seen = new Set();
   for (const candidate of candidates) {
