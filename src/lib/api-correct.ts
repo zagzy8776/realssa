@@ -1,12 +1,18 @@
 // lib/api.ts
 // API Integration for RealSSA
-// Connects to Vercel (frontend) and Fly.io (backend)
+// Connects to the same-origin Vercel API on web and the configured API on native.
 
-// Vite environment variables (use import.meta.env in Vite)
-// For production (and Capacitor native app), always use the absolute domain.
-// Relative paths like '/news-feed' break inside the Android native WebView
-// because they resolve to capacitor://localhost/news-feed instead of the real server.
-const NEWS_API_URL = import.meta.env.VITE_NEWS_API_URL || 'https://realssanews.com.ng';
+import { Capacitor } from '@capacitor/core';
+
+const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
+const browserOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+
+// Browser requests stay same-origin so production does not depend on the
+// separate Fly scraper service or its CORS configuration. Capacitor builds
+// still use the configured absolute API URL.
+const NEWS_API_URL = isNative
+  ? (import.meta.env.VITE_NEWS_API_URL || 'https://www.realssanews.com.ng')
+  : (browserOrigin || import.meta.env.VITE_NEWS_API_URL || 'https://www.realssanews.com.ng');
 
 const SPORTS_API_URL = import.meta.env.VITE_SPORTS_API || 'http://localhost:3001';
 const DB_API_URL = import.meta.env.VITE_DB_API || 'http://localhost:3002';
@@ -15,9 +21,6 @@ const DB_API_URL = import.meta.env.VITE_DB_API || 'http://localhost:3002';
 const apiCache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-/**
- * Get cached data or null if expired/not found
- */
 function getCachedData(key: string): any | null {
   const cached = apiCache[key];
   if (!cached) return null;
@@ -31,9 +34,6 @@ function getCachedData(key: string): any | null {
   return cached.data;
 }
 
-/**
- * Set data in cache
- */
 function setCachedData(key: string, data: any): void {
   apiCache[key] = {
     data,
@@ -41,10 +41,6 @@ function setCachedData(key: string, data: any): void {
   };
 }
 
-
-/**
- * API Error class for better error handling
- */
 class APIError extends Error {
   constructor(
     message: string,
@@ -56,9 +52,6 @@ class APIError extends Error {
   }
 }
 
-/**
- * Generic fetch wrapper with error handling
- */
 async function fetchAPI<T>(
   url: string,
   options: RequestInit = {}
@@ -96,18 +89,9 @@ async function fetchAPI<T>(
   }
 }
 
-/**
- * NEWS API - Node.js RSS News Backend
- * Your backend running on Fly.io
- */
 export const newsAPI = {
   baseURL: NEWS_API_URL,
 
-  /**
-   * Get all news from RSS feeds
-   * Endpoint: /news-feed
-   * Returns all aggregated news from 100+ RSS sources
-   */
   async getNewsFeed() {
     const cacheKey = 'news-feed';
     const cached = getCachedData(cacheKey);
@@ -121,28 +105,14 @@ export const newsAPI = {
     return data;
   },
 
-
-
-  /**
-   * Get health status of news backend
-   * Endpoint: /health
-   */
   async getHealth() {
     return fetchAPI(`${NEWS_API_URL}/health`);
   },
 
-  /**
-   * Get latest breaking news notifications (last 2 hours)
-   * Endpoint: /notifications
-   */
   async getNotifications() {
     return fetchAPI(`${NEWS_API_URL}/notifications`);
   },
 
-  /**
-   * Filter news by country
-   * Client-side filtering since C++ backend returns all news
-   */
   async getNewsByCountry(country: string) {
     const allNews = await this.getNewsFeed();
     return Array.isArray(allNews) 
@@ -152,10 +122,6 @@ export const newsAPI = {
       : [];
   },
 
-  /**
-   * Filter news by category
-   * Client-side filtering since C++ backend returns all news
-   */
   async getNewsByCategory(category: string) {
     const allNews = await this.getNewsFeed();
     return Array.isArray(allNews)
@@ -165,111 +131,45 @@ export const newsAPI = {
       : [];
   },
 
-  /**
-   * Get news for specific African countries
-   */
-  async getGhanaNews() {
-    return this.getNewsByCountry('Ghana');
-  },
+  async getGhanaNews() { return this.getNewsByCountry('Ghana'); },
+  async getNigeriaNews() { return this.getNewsByCountry('Nigeria'); },
+  async getKenyaNews() { return this.getNewsByCountry('Kenya'); },
+  async getSouthAfricaNews() { return this.getNewsByCountry('South Africa'); },
+  async getEgyptNews() { return this.getNewsByCountry('Egypt'); },
+  async getMoroccoNews() { return this.getNewsByCountry('Morocco'); },
+  async getEthiopiaNews() { return this.getNewsByCountry('Ethiopia'); },
 
-  async getNigeriaNews() {
-    return this.getNewsByCountry('Nigeria');
-  },
-
-  async getKenyaNews() {
-    return this.getNewsByCountry('Kenya');
-  },
-
-  async getSouthAfricaNews() {
-    return this.getNewsByCountry('South Africa');
-  },
-
-  async getEgyptNews() {
-    return this.getNewsByCountry('Egypt');
-  },
-
-  async getMoroccoNews() {
-    return this.getNewsByCountry('Morocco');
-  },
-
-  async getEthiopiaNews() {
-    return this.getNewsByCountry('Ethiopia');
-  },
-
-  /**
-   * Get news by region
-   */
   async getAfricanNews() {
     const allNews = await this.getNewsFeed();
     const africanCountries = ['Ghana', 'Nigeria', 'Kenya', 'South Africa', 'Egypt', 'Morocco', 'Ethiopia', 'Africa'];
     return Array.isArray(allNews)
-      ? allNews.filter((item: any) => 
-          africanCountries.includes(item.country)
-        )
+      ? allNews.filter((item: any) => africanCountries.includes(item.country))
       : [];
   },
 
-  async getUSANews() {
-    return this.getNewsByCountry('USA');
-  },
-
-  async getUKNews() {
-    return this.getNewsByCountry('UK');
-  },
-
-  async getCanadaNews() {
-    return this.getNewsByCountry('Canada');
-  },
+  async getUSANews() { return this.getNewsByCountry('USA'); },
+  async getUKNews() { return this.getNewsByCountry('UK'); },
+  async getCanadaNews() { return this.getNewsByCountry('Canada'); },
 
   async getAsiaNews() {
     const allNews = await this.getNewsFeed();
     const asianCountries = ['China', 'Japan', 'Singapore', 'India'];
     return Array.isArray(allNews)
-      ? allNews.filter((item: any) => 
-          asianCountries.includes(item.country)
-        )
+      ? allNews.filter((item: any) => asianCountries.includes(item.country))
       : [];
   },
 
-  async getWorldNews() {
-    return this.getNewsByCountry('Global');
-  },
+  async getWorldNews() { return this.getNewsByCountry('Global'); },
+  async getTechnologyNews() { return this.getNewsByCategory('Technology'); },
+  async getBusinessNews() { return this.getNewsByCategory('Business'); },
+  async getSportsNews() { return this.getNewsByCategory('Sports'); },
+  async getScienceNews() { return this.getNewsByCategory('Science'); },
+  async getEntertainmentNews() { return this.getNewsByCategory('Entertainment'); },
+  async getPoliticsNews() { return this.getNewsByCategory('Politics'); },
 
-  /**
-   * Get news by category
-   */
-  async getTechnologyNews() {
-    return this.getNewsByCategory('Technology');
-  },
-
-  async getBusinessNews() {
-    return this.getNewsByCategory('Business');
-  },
-
-  async getSportsNews() {
-    return this.getNewsByCategory('Sports');
-  },
-
-  async getScienceNews() {
-    return this.getNewsByCategory('Science');
-  },
-
-  async getEntertainmentNews() {
-    return this.getNewsByCategory('Entertainment');
-  },
-
-  async getPoliticsNews() {
-    return this.getNewsByCategory('Politics');
-  },
-
-  /**
-   * Search news by keyword
-   * Client-side search
-   */
   async searchNews(query: string) {
     const allNews = await this.getNewsFeed();
     const lowercaseQuery = query.toLowerCase();
-    
     return Array.isArray(allNews)
       ? allNews.filter((item: any) => 
           item.title?.toLowerCase().includes(lowercaseQuery) ||
@@ -279,60 +179,25 @@ export const newsAPI = {
   },
 };
 
-/**
- * SPORTS API - If you have a separate sports backend on Fly.io
- * (Only include this if you actually have a sports API backend)
- */
 export const sportsAPI = {
   baseURL: SPORTS_API_URL,
-
-  // Add your sports endpoints here when you create the sports backend
-  // For now, this is a placeholder
-  
-  async getLiveMatches() {
-    return fetchAPI(`${SPORTS_API_URL}/api/matches/live`);
-  },
-
-  async getAllMatches() {
-    return fetchAPI(`${SPORTS_API_URL}/api/matches`);
-  },
-
-  async getLeagues() {
-    return fetchAPI(`${SPORTS_API_URL}/api/leagues`);
-  },
+  async getLiveMatches() { return fetchAPI(`${SPORTS_API_URL}/api/matches/live`); },
+  async getAllMatches() { return fetchAPI(`${SPORTS_API_URL}/api/matches`); },
+  async getLeagues() { return fetchAPI(`${SPORTS_API_URL}/api/leagues`); },
 };
 
-/**
- * DATABASE API - If you have a separate PostgreSQL backend on Fly.io / Neon
- */
 export const dbAPI = {
   baseURL: DB_API_URL,
-
-  // Add your database endpoints here
-  async getUsers() {
-    return fetchAPI(`${DB_API_URL}/api/users`);
-  },
-
-  async getUserProfile(userId: string) {
-    return fetchAPI(`${DB_API_URL}/api/users/${userId}`);
-  },
+  async getUsers() { return fetchAPI(`${DB_API_URL}/api/users`); },
+  async getUserProfile(userId: string) { return fetchAPI(`${DB_API_URL}/api/users/${userId}`); },
 };
 
-/**
- * Main API export - primarily for NEWS (your C++ backend)
- */
 export const api = newsAPI;
 
-/**
- * Export all APIs
- */
 export default {
   news: newsAPI,
   sports: sportsAPI,
   db: dbAPI,
 };
 
-/**
- * Export types
- */
 export { APIError };
