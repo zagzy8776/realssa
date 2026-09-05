@@ -87,13 +87,27 @@ try {
   Module._load = originalLoad;
 }
 
+// backend/config/multiDb is loaded by server.js with the same shared pg.Pool
+// constructor above. Its primary pool therefore exists immediately, even
+// before server.js finishes its asynchronous SELECT NOW() probe.
+let fallbackDatabasePool = null;
+try {
+  const multiDb = require('../backend/config/multiDb');
+  fallbackDatabasePool = multiDb.pools?.[0]?.pool || null;
+} catch (error) {
+  console.warn('[Vercel] Could not resolve shared database pool:', error.message);
+}
+
 const waitForDatabasePool = async (timeoutMs = 10000) => {
   if (!process.env.DATABASE_URL) return null;
+  if (app.get('pool')) return app.get('pool');
+  if (fallbackDatabasePool) return fallbackDatabasePool;
+
   const started = Date.now();
   while (!app.get('pool') && Date.now() - started < timeoutMs) {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
-  return app.get('pool') || null;
+  return app.get('pool') || fallbackDatabasePool || null;
 };
 
 const sendJson = (res, statusCode, payload) => {
