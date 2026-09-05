@@ -1,62 +1,77 @@
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
 // Service Worker for RealSSA News — offline caching & push notifications
-// Cache v4 invalidates the previous browser bundle after the production API routing fix.
-const CACHE_NAME = 'realssa-v4';
-const DATA_CACHE_NAME = 'realssa-data-v4';
+const CACHE_NAME = 'realssa-v5';
 const MAX_CACHE_SIZE = 20;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(['/', '/index.html']))
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(['/', '/index.html']))
       .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => Promise.all(
-      cacheNames
-        .filter((name) => name !== CACHE_NAME && name !== DATA_CACHE_NAME)
-        .map((name) => caches.delete(name))
-    )).then(() => self.clients.claim())
+    caches.keys()
+      .then((cacheNames) => Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
-  // API requests must never be served from an old service-worker cache.
-  if (event.request.url.includes('/api/')) return;
-
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Always prefer the newest HTML so deployments cannot leave users pinned to an old bundle.
-  if (event.request.headers.get('accept')?.includes('text/html')) {
+  // Never intercept API requests. They must always reach the live backend.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/rss/')) return;
+
+  // Navigation requests: network-first, then cached HTML.
+  if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
+          if (response.ok) {
+            event.waitUntil(
+              caches.open(CACHE_NAME)
+                .then((cache) => cache.put(event.request, response.clone()))
+                .catch((error) => console.warn('SW HTML cache update failed:', error))
+            );
+          }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
     );
     return;
   }
 
-  // Same-origin static assets use stale-while-revalidate.
+  // Same-origin static assets: stale-while-revalidate without consuming
+  // the network response body before returning it to the browser.
   event.respondWith(
-    caches.open(CACHE_NAME).then((cache) => cache.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (networkResponse?.status === 200 && networkResponse.type === 'basic') {
-          cache.put(event.request, networkResponse.clone());
-        }
-        return networkResponse;
-      }).catch(() => undefined);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cachedResponse = await cache.match(event.request);
 
-      return cachedResponse || fetchPromise;
-    }))
+      const refresh = fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse.ok && networkResponse.type === 'basic') {
+            event.waitUntil(
+              cache.put(event.request, networkResponse.clone())
+                .catch((error) => console.warn('SW asset cache update failed:', error))
+            );
+          }
+          return networkResponse;
+        })
+        .catch(() => undefined);
+
+      return cachedResponse || refresh || Response.error();
+    })
   );
 });
 
@@ -81,11 +96,14 @@ async function storeNewsData(data) {
     const store = tx.objectStore('news');
     const count = await store.count();
     if (count >= MAX_CACHE_SIZE) {
-      const firstKey = await store.openKeyCursor();
-      if (firstKey) store.delete(firstKey.key);
+      const firstKey = await new Promise((resolve, reject) => {
+        const request = store.openKeyCursor();
+        request.onsuccess = () => resolve(request.result?.key ?? null);
+        request.onerror = () => reject(request.error);
+      });
+      if (firstKey !== null) store.delete(firstKey);
     }
     store.put({ data, timestamp: Date.now() });
-    return tx.complete;
   } catch (error) {
     console.error('Failed to store news data:', error);
   }
@@ -102,6 +120,7 @@ async function getCachedNewsData() {
         const cursor = event.target.result;
         resolve(cursor ? cursor.value.data : null);
       };
+      request.onerror = () => resolve(null);
     });
   } catch (error) {
     console.error('Failed to get cached news data:', error);
@@ -123,4 +142,4 @@ function openDatabase() {
   });
 }
 
-console.log('Service Worker loaded - RealSSA News v4');
+console.log('Service Worker loaded - RealSSA News v5');
