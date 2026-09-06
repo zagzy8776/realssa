@@ -1,4 +1,4 @@
-/* RealSSA navigation surface: solid editorial UI, no glass/transparency. */
+/* RealSSA mobile navigation: serious newsroom drawer + solid bottom bar. */
 @media (max-width: 1023px) {
   header {
     background: hsl(var(--background)) !important;
@@ -6,22 +6,43 @@
     -webkit-backdrop-filter: none !important;
   }
 
+  /* Hamburger menu is a real side drawer. It overlays the page instead of
+     entering document flow or pushing the homepage downward. */
   header > div[class*="border-t"][class*="bg-background"] {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 9998;
-    max-height: calc(100dvh - 68px);
-    overflow-y: auto;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    width: min(88vw, 380px) !important;
+    max-height: 100dvh !important;
+    overflow-y: auto !important;
     overscroll-behavior: contain;
+    padding-top: max(68px, env(safe-area-inset-top, 0px)) !important;
     background: hsl(var(--background)) !important;
+    border-top: 0 !important;
+    border-left: 1px solid hsl(var(--border)) !important;
+    box-shadow: -18px 0 44px rgba(0, 0, 0, 0.24) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.16);
+    z-index: 10001 !important;
   }
 
-  /* Replace the stacked rounded-card treatment with a cleaner newsroom menu. */
+  /* Dim the story area behind the drawer without adding another interactive
+     layer that could swallow taps. */
+  header:has(> div[class*="border-t"][class*="bg-background"])::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.42);
+    pointer-events: none;
+  }
+
+  header > div[class*="border-t"][class*="bg-background"] .space-y-3 {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
   header > div[class*="border-t"][class*="bg-background"] a,
   header > div[class*="border-t"][class*="bg-background"] button,
   header > div[class*="border-t"][class*="bg-background"] input {
@@ -33,28 +54,32 @@
     box-shadow: none;
   }
 
-  header > div[class*="border-t"][class*="bg-background"] a:first-child {
-    border-radius: 12px;
-  }
-
-  /* Keep the fixed mobile navigation solid and restrained. */
+  /* Keep the fixed bottom navigation opaque and restrained. */
   nav[aria-label="Mobile navigation"] {
     background: hsl(var(--background)) !important;
+    border-top: 1px solid hsl(var(--border)) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12) !important;
+    box-shadow: 0 -8px 22px rgba(0, 0, 0, 0.12) !important;
   }
 
   nav[aria-label="Mobile navigation"] button {
     transition: color 160ms ease, transform 120ms ease;
   }
 
-  /* The assistant stays central, but loses the oversized neon/glowing look. */
+  /* Center assistant remains visible without the oversized glowing treatment. */
   nav[aria-label="Mobile navigation"] button[aria-label="Open RealSSA Assistant"] {
+    width: 44px !important;
+    height: 44px !important;
+    top: -14px !important;
     border: 2px solid hsl(var(--background));
-    border-radius: 14px;
+    border-radius: 12px !important;
     background: hsl(var(--primary)) !important;
-    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
+  }
+
+  nav[aria-label="Mobile navigation"] button[aria-label="Open RealSSA Assistant"] span:last-child {
+    font-size: 6px !important;
   }
 }
 
