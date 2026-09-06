@@ -172,6 +172,17 @@ async function ingestCronCategory(category) {
 
   const startedAt = Date.now();
   const feeds = await Promise.all(urls.map(fetchFeed));
+  const successfulFeeds = feeds.filter(Boolean);
+  const failedFeeds = urls.filter((_, index) => !feeds[index]);
+
+  // Never report a successful ingestion when every upstream feed failed.
+  // Previously this path returned 200 with zero candidates, which made the
+  // external cron look healthy while an entire category silently stopped
+  // receiving new articles.
+  if (successfulFeeds.length === 0) {
+    throw new Error(`All ${urls.length} feeds failed for ${category}`);
+  }
+
   const candidates = [];
 
   for (let i = 0; i < feeds.length; i += 1) {
@@ -230,14 +241,21 @@ async function ingestCronCategory(category) {
     if (result.rows.length) inserted += 1;
   }
 
-  return {
+  const result = {
     category,
     feedsAttempted: urls.length,
-    feedsSucceeded: feeds.filter(Boolean).length,
+    feedsSucceeded: successfulFeeds.length,
+    feedsFailed: failedFeeds.length,
     candidates: unique.length,
     inserted,
     durationMs: Date.now() - startedAt
   };
+
+  if (failedFeeds.length > 0) {
+    console.warn(`[Fast Cron] ${category}: ${failedFeeds.length}/${urls.length} feeds failed; continuing with ${successfulFeeds.length} healthy feed(s).`);
+  }
+
+  return result;
 }
 
 module.exports = { ingestCronCategory, cronCategories: Object.keys(FEEDS) };
