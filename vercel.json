@@ -2,7 +2,8 @@
   "installCommand": "npm install --include=dev --no-package-lock",
   "buildCommand": "npm run build",
   "functions": {
-    "api/index.js": { "maxDuration": 180 }
+    "api/index.js": { "maxDuration": 180 },
+    "api/chat.js": { "maxDuration": 30 }
   },
   "headers": [
     {
@@ -50,6 +51,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/chat", "destination": "/api/chat.js" },
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/rss/(.*)", "destination": "/api/index.js" },
     { "source": "/news-feed", "destination": "/api/index.js" },
