@@ -251,7 +251,6 @@ const Header: React.FC = () => {
               <form onSubmit={submitSearch} className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={17} />
                 <input
-                  autoFocus
                   value={searchQuery}
                   onChange={e => handleAutocomplete(e.target.value)}
                   placeholder="Search RealSSA or enter a URL"
