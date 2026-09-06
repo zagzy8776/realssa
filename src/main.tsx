@@ -15,16 +15,27 @@ const applySystemTheme = () => {
 };
 applySystemTheme();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySystemTheme);
-// Register service worker
+
+// The production service worker must never run on Vercel previews, localhost,
+// or other alternate hosts. Those environments are commonly used for testing
+// and can also expose Vercel's own SSO resources to the page.
+const PRODUCTION_HOST = 'www.realssanews.com.ng';
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker
-    .register('/sw.js')
-    .then((registration) => {
-      console.log('Service Worker registered:', registration);
-    })
-    .catch((error) => {
-      console.error('Service Worker registration failed:', error);
-    });
+  if (window.location.hostname === PRODUCTION_HOST) {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => {
+        console.log('Service Worker registered:', registration);
+      })
+      .catch((error) => {
+        console.error('Service Worker registration failed:', error);
+      });
+  } else {
+    // Remove any service worker left behind from an older preview build.
+    navigator.serviceWorker.getRegistrations()
+      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      .catch(() => undefined);
+  }
 }
 
 // Global fetch interceptor to completely eradicate Punch news from the frontend everywhere
