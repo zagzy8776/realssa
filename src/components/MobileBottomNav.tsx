@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Bookmark, TrendingUp, User, Sparkles } from 'lucide-react';
+import { Bookmark, Home, MonitorSmartphone, TrendingUp, User, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import RealSSAChat from './RealSSAChat';
 
 const tabs = [
-  { label: 'Home',      icon: Home,       path: '/' },
-  { label: 'Trending',  icon: TrendingUp,  path: '/trending' },
-  // center slot = RealSSA AI button
-  { label: 'Bookmarks', icon: Bookmark,    path: '/bookmarks' },
-  { label: 'Profile',   icon: User,        path: '/profile' },
+  { label: 'Home', icon: Home, path: '/' },
+  { label: 'Trending', icon: TrendingUp, path: '/trending' },
+  { label: 'Browser', icon: MonitorSmartphone, path: '/browser' },
+  { label: 'Bookmarks', icon: Bookmark, path: '/bookmarks' },
+  { label: 'Profile', icon: User, path: '/profile' },
 ];
 
 const MobileBottomNav = () => {
@@ -17,77 +17,42 @@ const MobileBottomNav = () => {
   const navigate = useNavigate();
   const [chatOpen, setChatOpen] = useState(false);
 
-  if (
-    location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/browser') ||
-    location.pathname.startsWith('/reels')
-  ) return null;
+  if (location.pathname.startsWith('/admin') || location.pathname.startsWith('/browser') || location.pathname.startsWith('/reels')) return null;
 
   return (
     <>
       <RealSSAChat isOpen={chatOpen} onClose={() => setChatOpen(false)} />
-
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 dark:bg-[#18141F]/95 backdrop-blur-xl border-t border-border md:hidden shadow-lg"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)' }}
+        className="fixed inset-x-0 bottom-0 z-[9998] border-t border-border/80 bg-background/96 backdrop-blur-2xl md:hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        aria-label="Mobile navigation"
       >
-        <div className="flex items-center justify-around h-16 px-1">
-          {/* Left two tabs */}
-          {tabs.slice(0, 2).map(({ label, icon: Icon, path }) => {
+        <div className="relative mx-auto grid h-[68px] max-w-[520px] grid-cols-5 px-1">
+          {tabs.map(({ label, icon: Icon, path }) => {
             const isActive = path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
+            const isBrowser = path === '/browser';
             return (
               <button
                 key={path}
                 onClick={() => navigate(path)}
                 className={cn(
-                  'relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full text-[10px] font-semibold tracking-wide uppercase transition-all duration-200 active:scale-95',
-                  isActive ? 'text-amber-500' : 'text-muted-foreground'
+                  'relative flex h-full min-w-0 flex-col items-center justify-center gap-1 text-[10px] font-black uppercase tracking-[0.08em] transition-transform active:scale-95',
+                  isActive ? 'text-primary' : 'text-muted-foreground'
                 )}
                 aria-label={label}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <Icon size={22} strokeWidth={isActive ? 2.4 : 1.8} className={cn('transition-transform duration-200', isActive && 'scale-110')} />
-                <span className={cn(isActive ? 'opacity-100' : 'opacity-75')}>{label}</span>
-                {isActive && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 h-0.5 w-5 rounded-full bg-amber-500" />}
-              </button>
-            );
-          })}
-
-          {/* Center — RealSSA AI floating button */}
-          <div className="relative flex-1 flex items-center justify-center">
-            <button
-              onClick={() => setChatOpen(true)}
-              className="absolute -top-6 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-90 hover:scale-105 border-2 border-background/80 glow-amber-ring"
-              style={{
-                width: 50,
-                height: 50,
-                background: 'linear-gradient(145deg, #FBBF24 0%, #F59E0B 45%, #D97706 100%)',
-                boxShadow: '0 0 0 2px rgba(245,158,11,0.35), 0 0 22px rgba(245,158,11,0.55), 0 0 48px rgba(245,158,11,0.18), inset 0 1px 0 rgba(255,255,255,0.35)',
-              }}
-              aria-label="RealSSA AI"
-            >
-              {/* Inner shine */}
-              <span className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.28) 0%, transparent 55%)', borderRadius: '9999px' }} />
-              <Sparkles className="w-4 h-4 text-black relative z-10" strokeWidth={2.5} />
-              <span className="text-[7px] font-black text-black uppercase tracking-wider leading-none relative z-10 mt-0.5">RealSSA</span>
-            </button>
-          </div>
-
-          {/* Right two tabs */}
-          {tabs.slice(2).map(({ label, icon: Icon, path }) => {
-            const isActive = location.pathname.startsWith(path);
-            return (
-              <button
-                key={path}
-                onClick={() => navigate(path)}
-                className={cn(
-                  'relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full text-[10px] font-semibold tracking-wide uppercase transition-all duration-200 active:scale-95',
-                  isActive ? 'text-amber-500' : 'text-muted-foreground'
-                )}
-                aria-label={label}
-              >
-                <Icon size={22} strokeWidth={isActive ? 2.4 : 1.8} className={cn('transition-transform duration-200', isActive && 'scale-110')} />
-                <span className={cn(isActive ? 'opacity-100' : 'opacity-75')}>{label}</span>
-                {isActive && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 h-0.5 w-5 rounded-full bg-amber-500" />}
+                <span className={cn(
+                  'grid h-9 w-9 place-items-center rounded-xl border transition-all',
+                  isBrowser && 'h-11 w-11 -translate-y-2 rounded-2xl border-primary/35 bg-primary text-primary-foreground shadow-[0_8px_26px_rgba(245,158,11,0.28)]',
+                  isBrowser && !isActive && 'bg-primary/10 text-primary',
+                  !isBrowser && isActive && 'border-primary/20 bg-primary/10',
+                  !isBrowser && !isActive && 'border-transparent'
+                )}>
+                  <Icon size={isBrowser ? 20 : 19} strokeWidth={isActive ? 2.5 : 1.9} />
+                </span>
+                <span className={cn(isBrowser && '-mt-2', !isActive && 'opacity-75')}>{label}</span>
+                {isActive && !isBrowser && <span className="absolute bottom-1.5 h-0.5 w-5 rounded-full bg-primary" />}
               </button>
             );
           })}
