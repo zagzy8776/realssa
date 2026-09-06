@@ -1,4 +1,4 @@
-/* RealSSA mobile navigation: serious newsroom drawer + solid bottom bar. */
+/* RealSSA mobile navigation: a clean, solid side drawer + restrained bottom bar. */
 @media (max-width: 1023px) {
   header {
     background: hsl(var(--background)) !important;
@@ -6,36 +6,46 @@
     -webkit-backdrop-filter: none !important;
   }
 
-  /* Hamburger menu is a real side drawer. It overlays the page instead of
-     entering document flow or pushing the homepage downward. */
+  /* The hamburger menu is a real drawer. It starts below the fixed header,
+     overlays the page, and never enters the homepage document flow. */
   header > div[class*="border-t"][class*="bg-background"] {
     position: fixed !important;
-    top: 0 !important;
-    right: 0 !important;
+    top: 68px !important;
+    right: auto !important;
     bottom: 0 !important;
-    left: auto !important;
-    width: min(88vw, 380px) !important;
-    max-height: 100dvh !important;
+    left: 0 !important;
+    width: min(86vw, 340px) !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
     overflow-y: auto !important;
     overscroll-behavior: contain;
-    padding-top: max(68px, env(safe-area-inset-top, 0px)) !important;
+    padding-top: 0 !important;
     background: hsl(var(--background)) !important;
-    border-top: 0 !important;
-    border-left: 1px solid hsl(var(--border)) !important;
-    box-shadow: -18px 0 44px rgba(0, 0, 0, 0.24) !important;
+    border-top: 1px solid hsl(var(--border)) !important;
+    border-right: 1px solid hsl(var(--border)) !important;
+    border-left: 0 !important;
+    box-shadow: 14px 0 36px rgba(0, 0, 0, 0.22) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     z-index: 10001 !important;
+    animation: realssa-mobile-drawer-in 160ms ease-out both;
   }
 
-  /* Dim the story area behind the drawer without adding another interactive
-     layer that could swallow taps. */
+  @keyframes realssa-mobile-drawer-in {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+
+  /* Keep the header visible and dim only the content below it. */
   header:has(> div[class*="border-t"][class*="bg-background"])::after {
     content: "";
     position: fixed;
-    inset: 0;
+    top: 68px;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 10000;
-    background: rgba(0, 0, 0, 0.42);
+    background: rgba(0, 0, 0, 0.38);
     pointer-events: none;
   }
 
@@ -43,18 +53,38 @@
     padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   }
 
+  /* The drawer itself should read like a navigation list, not a collection
+     of floating app cards. */
+  header > div[class*="border-t"][class*="bg-background"] .grid {
+    gap: 0.25rem;
+  }
+
   header > div[class*="border-t"][class*="bg-background"] a,
   header > div[class*="border-t"][class*="bg-background"] button,
   header > div[class*="border-t"][class*="bg-background"] input {
-    border-radius: 10px;
-  }
-
-  header > div[class*="border-t"][class*="bg-background"] a {
-    background: hsl(var(--card));
+    border-radius: 8px;
     box-shadow: none;
   }
 
-  /* Keep the fixed bottom navigation opaque and restrained. */
+  header > div[class*="border-t"][class*="bg-background"] a {
+    background: transparent;
+  }
+
+  header > div[class*="border-t"][class*="bg-background"] a:hover {
+    background: hsl(var(--muted));
+  }
+
+  header > div[class*="border-t"][class*="bg-background"] a.col-span-2 {
+    margin-bottom: 0.35rem;
+    background: hsl(var(--primary) / 0.09);
+    border: 1px solid hsl(var(--primary) / 0.28);
+  }
+
+  header > div[class*="border-t"][class*="bg-background"] input {
+    background: hsl(var(--card));
+  }
+
+  /* Keep the mobile bottom bar solid, slim and editorial. */
   nav[aria-label="Mobile navigation"] {
     background: hsl(var(--background)) !important;
     border-top: 1px solid hsl(var(--border)) !important;
@@ -67,13 +97,13 @@
     transition: color 160ms ease, transform 120ms ease;
   }
 
-  /* Center assistant remains visible without the oversized glowing treatment. */
+  /* Center assistant: recognizable but not a giant glowing toy. */
   nav[aria-label="Mobile navigation"] button[aria-label="Open RealSSA Assistant"] {
     width: 44px !important;
     height: 44px !important;
     top: -14px !important;
     border: 2px solid hsl(var(--background));
-    border-radius: 12px !important;
+    border-radius: 50% !important;
     background: hsl(var(--primary)) !important;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
   }
