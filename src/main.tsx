@@ -7,7 +7,11 @@ if (Capacitor.isNativePlatform()) {
   CapacitorUpdater.notifyAppReady();
 }
 import "./index.css";
+import "./ui-v2.css";
 import "./mobile-nav-fixes.css";
+import { applyUiVersion } from "./lib/uiFlag";
+
+applyUiVersion();
 
 // Sync dark mode with system preference
 const applySystemTheme = () => {
@@ -81,4 +85,3 @@ try {
 } catch (e) {
   console.warn("Failed to remove startup loader:", e);
 }
-
