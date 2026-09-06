@@ -22,14 +22,14 @@ const FEEDS = {
     'https://citinewsroom.com/feed'
   ],
   kenya: [
-    'https://www.nation.co.ke/rss.xml',
-    'https://www.tuko.co.ke/feed/',
-    'https://www.pulselive.co.ke/feed/'
+    'https://www.standardmedia.co.ke/rss/kenya.php',
+    'https://www.tuko.co.ke/?service=rss',
+    'https://kbc.co.ke/feed'
   ],
   'south-africa': [
-    'https://www.news24.com/rss.xml',
-    'https://www.timeslive.co.za/rss.xml',
-    'https://www.dailymaverick.co.za/rss.xml'
+    'http://feeds.news24.com/articles/news24/TopStories/rss',
+    'https://www.dailymaverick.co.za/dmrss',
+    'https://www.sowetanlive.co.za/rss/?publication=sowetan-live'
   ],
   uk: [
     'http://feeds.bbci.co.uk/news/uk/rss.xml',
@@ -127,7 +127,7 @@ function pickImage(item) {
   }
 
   const html = item.content || item['content:encoded'] || item.description || '';
-  const match = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
+  const match = String(html).match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);
   return match?.[1] || 'https://realssanews.com.ng/logo.png';
 }
 
@@ -164,11 +164,12 @@ async function fetchFeed(url) {
 }
 
 async function ingestCronCategory(category) {
-  const pool = getPoolForCategory(category)?.pool;
+  const normalizedCategory = String(category || '').trim().toLowerCase();
+  const pool = getPoolForCategory(normalizedCategory)?.pool;
   if (!pool) throw new Error('Primary news database is not configured');
 
-  const urls = FEEDS[category];
-  if (!urls) throw new Error(`Unsupported cron category: ${category}`);
+  const urls = FEEDS[normalizedCategory];
+  if (!urls) throw new Error(`Unsupported cron category: ${normalizedCategory}`);
 
   const startedAt = Date.now();
   const feeds = await Promise.all(urls.map(fetchFeed));
@@ -176,11 +177,8 @@ async function ingestCronCategory(category) {
   const failedFeeds = urls.filter((_, index) => !feeds[index]);
 
   // Never report a successful ingestion when every upstream feed failed.
-  // Previously this path returned 200 with zero candidates, which made the
-  // external cron look healthy while an entire category silently stopped
-  // receiving new articles.
   if (successfulFeeds.length === 0) {
-    throw new Error(`All ${urls.length} feeds failed for ${category}`);
+    throw new Error(`All ${urls.length} feeds failed for ${normalizedCategory}`);
   }
 
   const candidates = [];
@@ -229,7 +227,7 @@ async function ingestCronCategory(category) {
         article.urlHash,
         article.title,
         article.excerpt || article.title,
-        category,
+        normalizedCategory,
         article.image,
         article.sourceName,
         article.sourceName,
@@ -242,7 +240,7 @@ async function ingestCronCategory(category) {
   }
 
   const result = {
-    category,
+    category: normalizedCategory,
     feedsAttempted: urls.length,
     feedsSucceeded: successfulFeeds.length,
     feedsFailed: failedFeeds.length,
@@ -252,7 +250,7 @@ async function ingestCronCategory(category) {
   };
 
   if (failedFeeds.length > 0) {
-    console.warn(`[Fast Cron] ${category}: ${failedFeeds.length}/${urls.length} feeds failed; continuing with ${successfulFeeds.length} healthy feed(s).`);
+    console.warn(`[Fast Cron] ${normalizedCategory}: ${failedFeeds.length}/${urls.length} feeds failed; continuing with ${successfulFeeds.length} healthy feed(s).`);
   }
 
   return result;
