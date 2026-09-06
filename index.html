@@ -20,41 +20,45 @@
 
   <!-- Schema.org Article JSON-LD will be injected by React Helmet -->
 
-
-
-  <!-- OneSignal Web Push Notifications -->
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <!-- OneSignal Web Push Notifications: only initialize on the canonical production host. -->
   <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function (OneSignal) {
-      await OneSignal.init({
-        appId: "055b6596-a96c-48e2-8cda-ff4bb6d61009",
-        safari_web_id: "web.onesignal.auto.31ca14f2-9a64-44ce-b1fb-164017f55430",
-        serviceWorkerPath: "sw.js",
-        serviceWorkerParam: { scope: "/" },
-        allowLocalhostAsSecureOrigin: true,
-        notifyButton: { enable: false },
-        promptOptions: {
-          slidedown: {
-            prompts: [
-              {
-                type: "push",
-                autoPrompt: false,
-                text: {
-                  actionMessage: "\uD83D\uDCF0 Get breaking news alerts from RealSSA News!",
-                  acceptButton: "\u2705 Allow",
-                  cancelButton: "\u274C No Thanks"
-                },
-                delay: {
-                  pageViews: 1,
-                  timeDelay: 3
+    if (window.location.hostname === "www.realssanews.com.ng") {
+      var onesignalScript = document.createElement("script");
+      onesignalScript.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+      onesignalScript.defer = true;
+      document.head.appendChild(onesignalScript);
+
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function (OneSignal) {
+        await OneSignal.init({
+          appId: "055b6596-a96c-48e2-8cda-ff4bb6d61009",
+          safari_web_id: "web.onesignal.auto.31ca14f2-9a64-44ce-b1fb-164017f55430",
+          serviceWorkerPath: "sw.js",
+          serviceWorkerParam: { scope: "/" },
+          allowLocalhostAsSecureOrigin: true,
+          notifyButton: { enable: false },
+          promptOptions: {
+            slidedown: {
+              prompts: [
+                {
+                  type: "push",
+                  autoPrompt: false,
+                  text: {
+                    actionMessage: "\uD83D\uDCF0 Get breaking news alerts from RealSSA News!",
+                    acceptButton: "\u2705 Allow",
+                    cancelButton: "\u274C No Thanks"
+                  },
+                  delay: {
+                    pageViews: 1,
+                    timeDelay: 3
+                  }
                 }
-              }
-            ]
+              ]
+            }
           }
-        }
+        });
       });
-    });
+    }
   </script>
 
   <!-- Google Search Console Verification -->
@@ -173,7 +177,6 @@
     }
   </style>
 
-
   <!-- Preconnect for performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -195,7 +198,6 @@
     })();
   </script>
 </head>
-
 
 <body>
   <noscript>
