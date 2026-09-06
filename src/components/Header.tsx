@@ -76,6 +76,24 @@ const Header: React.FC = () => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
   }, []);
 
+  const toggleMobileNavigation = () => {
+    const nextOpen = !mobileOpen;
+
+    if (nextOpen) {
+      // Opening the drawer must never inherit focus from a page/browser input.
+      // This is especially important on iOS, where retained focus keeps the
+      // software keyboard open and makes the drawer jump over the viewport.
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement) {
+        activeElement.blur();
+      }
+      setSearchFocused(false);
+      setSuggestions([]);
+    }
+
+    setMobileOpen(nextOpen);
+  };
+
   const goSearch = (query: string) => {
     const q = query.trim();
     if (!q) return;
@@ -136,7 +154,7 @@ const Header: React.FC = () => {
         <div className="mx-auto max-w-[1500px] px-3 sm:px-5 lg:px-7">
           <div className="flex min-h-[68px] items-center gap-3 lg:min-h-[76px]">
             <button
-              onClick={() => setMobileOpen(v => !v)}
+              onClick={toggleMobileNavigation}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-sm lg:hidden"
               aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'}
             >
