@@ -1,7 +1,15 @@
+// Register the message listener during initial worker evaluation.
+// This also gives the app a safe way to activate an updated worker.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
 // Service Worker for RealSSA News — offline caching & push notifications
-const CACHE_NAME = 'realssa-v5';
+const CACHE_NAME = 'realssa-v6';
 const MAX_CACHE_SIZE = 20;
 
 self.addEventListener('install', (event) => {
@@ -28,12 +36,15 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
+
+  // A service worker should never proxy cross-origin traffic. This is
+  // especially important for Vercel preview/SSO resources and third-party SDKs.
   if (url.origin !== self.location.origin) return;
 
   // Never intercept API requests. They must always reach the live backend.
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/rss/')) return;
 
-  // Navigation requests: network-first, then cached HTML.
+  // Navigation requests: network-first, then cached HTML, then a valid offline response.
   if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       fetch(event.request)
@@ -47,31 +58,37 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+        .catch(async () => {
+          const cached = await caches.match(event.request) || await caches.match('/index.html');
+          return cached || new Response(
+            '<!doctype html><html><body><h1>RealSSA News</h1><p>You are offline. Please try again.</p></body></html>',
+            { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+          );
+        })
     );
     return;
   }
 
-  // Same-origin static assets: stale-while-revalidate without consuming
-  // the network response body before returning it to the browser.
+  // Same-origin static assets: stale-while-revalidate. Never return an
+  // unresolved/rejected promise as the FetchEvent response.
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
       const cachedResponse = await cache.match(event.request);
 
-      const refresh = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse.ok && networkResponse.type === 'basic') {
+      const networkResponse = await fetch(event.request)
+        .then((response) => {
+          if (response.ok && response.type === 'basic') {
             event.waitUntil(
-              cache.put(event.request, networkResponse.clone())
+              cache.put(event.request, response.clone())
                 .catch((error) => console.warn('SW asset cache update failed:', error))
             );
           }
-          return networkResponse;
+          return response;
         })
-        .catch(() => undefined);
+        .catch(() => null);
 
-      return cachedResponse || refresh || Response.error();
-    })
+      return cachedResponse || networkResponse || Response.error();
+    }).catch(() => Response.error())
   );
 });
 
@@ -142,4 +159,4 @@ function openDatabase() {
   });
 }
 
-console.log('Service Worker loaded - RealSSA News v5');
+console.log('Service Worker loaded - RealSSA News v6');
