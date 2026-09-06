@@ -1,0 +1,78 @@
+/* RealSSA mobile navigation: drawer + solid bottom bar. */
+@media (max-width: 1023px) {
+  header {
+    background: hsl(var(--background)) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  header > div[class*="border-t"][class*="bg-background"] {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    width: min(88vw, 380px) !important;
+    max-height: 100dvh !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding-top: max(68px, env(safe-area-inset-top, 0px)) !important;
+    background: hsl(var(--background)) !important;
+    border-top: 0 !important;
+    border-left: 1px solid hsl(var(--border)) !important;
+    box-shadow: -18px 0 44px rgba(0, 0, 0, 0.22) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    z-index: 10001 !important;
+  }
+
+  header:has(> div[class*="border-t"][class*="bg-background"])::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.42);
+    pointer-events: none;
+  }
+
+  header > div[class*="border-t"][class*="bg-background"] .space-y-3 {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  header > div[class*="border-t"][class*="bg-background"] a,
+  header > div[class*="border-t"][class*="bg-background"] button,
+  header > div[class*="border-t"][class*="bg-background"] input {
+    border-radius: 10px;
+  }
+
+  header > div[class*="border-t"][class*="bg-background"] a {
+    background: hsl(var(--card));
+    box-shadow: none;
+  }
+
+  nav[aria-label="Mobile navigation"] {
+    background: hsl(var(--background)) !important;
+    border-top: 1px solid hsl(var(--border)) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  nav[aria-label="Mobile navigation"] button {
+    transition: color 160ms ease, transform 120ms ease;
+  }
+
+  nav[aria-label="Mobile navigation"] button[aria-label="Open RealSSA Assistant"] {
+    width: 44px !important;
+    height: 44px !important;
+    top: -14px !important;
+    border: 2px solid hsl(var(--background));
+    border-radius: 12px !important;
+    background: hsl(var(--primary)) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
+  }
+
+  nav[aria-label="Mobile navigation"] button[aria-label="Open RealSSA Assistant"] span:last-child {
+    font-size: 6px !important;
+  }
+}
