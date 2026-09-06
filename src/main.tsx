@@ -7,6 +7,7 @@ if (Capacitor.isNativePlatform()) {
   CapacitorUpdater.notifyAppReady();
 }
 import "./index.css";
+import "./mobile-nav-fixes.css";
 
 // Sync dark mode with system preference
 const applySystemTheme = () => {
