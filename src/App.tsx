@@ -15,6 +15,7 @@ import GlobalHooks from "@/components/GlobalHooks";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import FeedWatermark from "@/components/FeedWatermark";
 import OnboardingTopicSelector from "@/components/OnboardingTopicSelector";
+import { GlobalAudioProvider } from "@/contexts/GlobalAudioContext";
 
 // ── Core statically-imported pages to eliminate loading delay ───────────
 import Index from "./pages/Index";
@@ -47,7 +48,7 @@ const Ghana               = lazy(() => import("./pages/Ghana"));
 const Kenya               = lazy(() => import("./pages/Kenya"));
 const SouthAfrica         = lazy(() => import("./pages/SouthAfrica"));
 const UK                  = lazy(() => import("./pages/UK"));
-const USA                 = lazy(() => import("./pages/USA"));
+const USA                  = lazy(() => import("./pages/USA"));
 const Newssection         = lazy(() => import("./pages/Newssection"));
 const Jobs                = lazy(() => import("./pages/Jobs"));
 const ReaderMode          = lazy(() => import("./pages/ReaderMode"));
@@ -68,7 +69,7 @@ const EntityHub           = lazy(() => import("./pages/EntityHub"));
 const LocalMarketHub      = lazy(() => import("./pages/LocalMarketHub"));
 const EventsCalendar      = lazy(() => import("./pages/EventsCalendar"));
 const AdPortal            = lazy(() => import("./pages/AdPortal"));
-const LiveWire            = lazy(() => import("./pages/LiveWire"));
+const LiveWire             = lazy(() => import("./pages/LiveWire"));
 const Widgets             = lazy(() => import("./pages/Widgets"));
 const Search              = lazy(() => import("./pages/Search"));
 const InAppBrowser        = lazy(() => import("./pages/InAppBrowser"));
@@ -204,16 +205,18 @@ const App = () => {
 
   return (
     <HelmetProvider>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <PWAInstallPrompt />
-        <KeepAlive />
-        <RouterProvider router={router} />
-      </TooltipProvider>
-    </QueryClientProvider>
-  </HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <GlobalAudioProvider>
+            <Toaster />
+            <Sonner />
+            <PWAInstallPrompt />
+            <KeepAlive />
+            <RouterProvider router={router} />
+          </GlobalAudioProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
   );
 };
 
