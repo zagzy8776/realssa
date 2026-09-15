@@ -1,25 +1,108 @@
-const Parser = require('rss-parser');
+// Public news read path. It is intentionally independent of PostgreSQL.
+// The parser below is dependency-light and tolerant of publisher RSS quirks.
 
-// Public news read path. It does not require PostgreSQL, so a database outage
-// cannot turn the homepage into an empty feed.
 const FEEDS = {
-  'nigerian-news': ['https://www.premiumtimesng.com/rss.xml','https://www.vanguardngr.com/feed/','https://guardian.ng/feed/'],
-  politics: ['https://rss.punchng.com/v1/category/politics','https://www.vanguardngr.com/feed/','https://guardian.ng/feed/'],
-  world: ['https://feeds.bbci.co.uk/news/world/rss.xml','https://www.aljazeera.com/xml/rss/all.xml','https://www.france24.com/en/rss'],
-  sports: ['https://www.completesports.com/feed','https://soccernet.ng/feed','https://www.bbc.co.uk/sport/rss.xml'],
-  business: ['https://www.cnbc.com/id/10001147/device/rss/rss.html','https://feeds.bbci.co.uk/news/business/rss.xml','https://howwemadeitinafrica.com/feed'],
-  tech: ['https://techcabal.com/feed','https://techpoint.africa/feed','https://techcrunch.com/feed/'],
-  crypto: ['https://cointelegraph.com/rss','https://decrypt.co/feed'],
-  entertainment: ['https://variety.com/feed/','https://deadline.com/feed/','https://www.pulse.ng/entertainment/rss'],
-  culture: ['https://www.bellanaija.com/feed','https://okayafrica.com/feed/','https://musicinafrica.net/feed'],
-  lifestyle: ['https://wwd.com/fashion-news/feed/','https://www.theguardian.com/fashion/rss','https://skift.com/feed/'],
-  science: ['https://www.nature.com/nature.rss','https://www.sciencenews.org/feed','https://scitechdaily.com/feed/'],
-  jobs: ['https://weworkremotely.com/remote-jobs.rss','https://reliefweb.int/jobs/rss.xml','https://remoteok.com/remote-jobs.rss'],
-  ghana: ['https://www.graphic.com.gh/rss.xml','https://www.myjoyonline.com/feed/','https://citinewsroom.com/feed'],
-  kenya: ['https://www.standardmedia.co.ke/rss/kenya.php','https://www.tuko.co.ke/?service=rss','https://kbc.co.ke/feed'],
-  'south-africa': ['https://www.news24.com/news24/rss','https://www.dailymaverick.co.za/dmrss','https://www.sowetanlive.co.za/rss/?publication=sowetan-live'],
-  uk: ['https://feeds.bbci.co.uk/news/uk/rss.xml','https://www.theguardian.com/uk/rss','https://feeds.skynews.com/feeds/rss/home.xml'],
-  usa: ['http://rss.cnn.com/rss/edition.rss','https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml','https://www.pbs.org/newshour/feeds/rss/headlines']
+  'nigerian-news': [
+    'https://www.premiumtimesng.com/feed',
+    'https://www.vanguardngr.com/feed/',
+    'https://guardian.ng/feed/',
+    'https://news.google.com/rss/search?q=Nigeria%20news&hl=en-NG&gl=NG&ceid=NG%3Aen'
+  ],
+  politics: [
+    'https://rss.punchng.com/v1/category/politics',
+    'https://www.vanguardngr.com/feed/',
+    'https://guardian.ng/feed/',
+    'https://news.google.com/rss/search?q=Nigeria%20politics&hl=en-NG&gl=NG&ceid=NG%3Aen'
+  ],
+  world: [
+    'https://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://www.aljazeera.com/xml/rss/all.xml',
+    'https://www.france24.com/en/rss',
+    'https://news.google.com/rss/search?q=world%20news&hl=en&gl=US&ceid=US%3Aen'
+  ],
+  sports: [
+    'https://www.completesports.com/feed',
+    'https://soccernet.ng/feed',
+    'https://www.espn.com/espn/rss/news',
+    'https://news.google.com/rss/search?q=Nigeria%20sports&hl=en-NG&gl=NG&ceid=NG%3Aen'
+  ],
+  business: [
+    'https://www.cnbc.com/id/10001147/device/rss/rss.html',
+    'https://feeds.bbci.co.uk/news/business/rss.xml',
+    'https://howwemadeitinafrica.com/feed',
+    'https://news.google.com/rss/search?q=business%20Nigeria&hl=en-NG&gl=NG&ceid=NG%3Aen'
+  ],
+  tech: [
+    'https://techcabal.com/feed',
+    'https://techpoint.africa/feed',
+    'https://techcrunch.com/feed/',
+    'https://news.google.com/rss/search?q=technology%20Nigeria&hl=en-NG&gl=NG&ceid=NG%3Aen'
+  ],
+  crypto: [
+    'https://cointelegraph.com/rss',
+    'https://decrypt.co/feed',
+    'https://news.google.com/rss/search?q=crypto%20bitcoin&hl=en&gl=US&ceid=US%3Aen'
+  ],
+  entertainment: [
+    'https://variety.com/feed/',
+    'https://deadline.com/feed/',
+    'https://www.pulse.ng/entertainment/rss',
+    'https://news.google.com/rss/search?q=Nigeria%20entertainment&hl=en-NG&gl=NG&ceid=NG%3Aen'
+  ],
+  culture: [
+    'https://www.bellanaija.com/feed',
+    'https://okayafrica.com/feed/',
+    'https://musicinafrica.net/feed',
+    'https://news.google.com/rss/search?q=Africa%20culture&hl=en&gl=US&ceid=US%3Aen'
+  ],
+  lifestyle: [
+    'https://wwd.com/fashion-news/feed/',
+    'https://www.theguardian.com/fashion/rss',
+    'https://skift.com/feed/',
+    'https://news.google.com/rss/search?q=lifestyle%20Nigeria&hl=en-NG&gl=NG&ceid=NG%3Aen'
+  ],
+  science: [
+    'https://www.nature.com/nature.rss',
+    'https://www.sciencenews.org/feed',
+    'https://scitechdaily.com/feed/',
+    'https://news.google.com/rss/search?q=science%20news&hl=en&gl=US&ceid=US%3Aen'
+  ],
+  jobs: [
+    'https://weworkremotely.com/remote-jobs.rss',
+    'https://reliefweb.int/jobs/rss.xml',
+    'https://remoteok.com/remote-jobs.rss',
+    'https://news.google.com/rss/search?q=jobs%20Nigeria&hl=en-NG&gl=NG&ceid=NG%3Aen'
+  ],
+  ghana: [
+    'https://www.graphic.com.gh/rss.xml',
+    'https://www.myjoyonline.com/feed/',
+    'https://citinewsroom.com/feed',
+    'https://news.google.com/rss/search?q=Ghana%20news&hl=en&gl=GH&ceid=GH%3Aen'
+  ],
+  kenya: [
+    'https://www.standardmedia.co.ke/rss/kenya.php',
+    'https://www.tuko.co.ke/?service=rss',
+    'https://kbc.co.ke/feed',
+    'https://news.google.com/rss/search?q=Kenya%20news&hl=en&gl=KE&ceid=KE%3Aen'
+  ],
+  'south-africa': [
+    'https://www.news24.com/news24/rss',
+    'https://www.dailymaverick.co.za/dmrss',
+    'https://www.sowetanlive.co.za/rss/?publication=sowetan-live',
+    'https://news.google.com/rss/search?q=South%20Africa%20news&hl=en&gl=ZA&ceid=ZA%3Aen'
+  ],
+  uk: [
+    'https://feeds.bbci.co.uk/news/uk/rss.xml',
+    'https://www.theguardian.com/uk/rss',
+    'https://feeds.skynews.com/feeds/rss/home.xml',
+    'https://news.google.com/rss/search?q=UK%20news&hl=en-GB&gl=GB&ceid=GB%3Aen'
+  ],
+  usa: [
+    'https://rss.cnn.com/rss/edition.rss',
+    'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
+    'https://www.pbs.org/newshour/feeds/rss/headlines',
+    'https://news.google.com/rss/search?q=US%20news&hl=en-US&gl=US&ceid=US%3Aen'
+  ]
 };
 
 const aliases = { nigerian: 'nigerian-news', nigeria: 'nigerian-news', latest: 'nigerian-news' };
@@ -33,38 +116,93 @@ const countryByCategory = {
   uk:'UK', usa:'USA', world:'Global', sports:'Global', business:'Global', tech:'Global', crypto:'Global',
   entertainment:'Global', culture:'Africa', lifestyle:'Global', science:'Global', jobs:'Global'
 };
-const cleanText = (value, max = 4000) => String(value || '').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
-const parser = new Parser({ timeout: 4500, customFields: { item: [['media:content','media:content'],['media:thumbnail','media:thumbnail'],['enclosure','enclosure']] } });
 
-function getImage(item) {
-  const values = [item['media:content'], item['media:thumbnail']].flatMap(v => Array.isArray(v) ? v : v ? [v] : []);
-  for (const entry of values) {
-    const url = entry?.$?.url || entry?.url;
-    if (/^https?:\/\//i.test(String(url || ''))) return url;
+const cleanText = (value, max = 4000) => String(value || '')
+  .replace(/<!\[CDATA\[/gi,'')
+  .replace(/\]\]>/g,'')
+  .replace(/<[^>]*>/g,' ')
+  .replace(/&nbsp;/gi,' ')
+  .replace(/&amp;/gi,'&')
+  .replace(/&quot;/gi,'"')
+  .replace(/&#39;|&apos;/gi,"'")
+  .replace(/&lt;/gi,'<')
+  .replace(/&gt;/gi,'>')
+  .replace(/\s+/g,' ')
+  .trim()
+  .slice(0,max);
+
+const decodeXml = value => cleanText(value, 12000);
+
+function firstTag(block, tagNames) {
+  for (const tag of tagNames) {
+    const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i');
+    const match = block.match(re);
+    if (match?.[1]) return match[1];
   }
-  if (/^https?:\/\//i.test(String(item.enclosure?.url || ''))) return item.enclosure.url;
-  const html = item.content || item['content:encoded'] || item.description || '';
-  return String(html).match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || 'https://realssanews.com.ng/logo.png';
+  return '';
 }
 
-function publishedDate(item) {
-  const date = new Date(item.isoDate || item.pubDate || Date.now());
-  return Number.isNaN(date.getTime()) ? new Date() : date;
+function firstAttr(block, tagNames, attr) {
+  for (const tag of tagNames) {
+    const re = new RegExp(`<${tag}\\b[^>]*\\b${attr}=["']([^"']+)["'][^>]*>`, 'i');
+    const match = block.match(re);
+    if (match?.[1]) return decodeXml(match[1]);
+  }
+  return '';
+}
+
+function parseXmlFeed(xml) {
+  const items = [];
+  const itemMatches = [...String(xml || '').matchAll(/<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/gi)];
+
+  for (const match of itemMatches) {
+    const block = match[2];
+    const title = decodeXml(firstTag(block, ['title']));
+    const link = decodeXml(firstTag(block, ['link'])) || firstAttr(block, ['link'], 'href');
+    const guid = decodeXml(firstTag(block, ['guid','id']));
+    const description = firstTag(block, ['content:encoded','content','description','summary']);
+    const pubDate = decodeXml(firstTag(block, ['pubDate','published','updated','dc:date']));
+    const author = decodeXml(firstTag(block, ['dc:creator','author','creator']));
+    const source = decodeXml(firstTag(block, ['source']));
+    const enclosure = firstAttr(block, ['enclosure','media:content','media:thumbnail'], 'url');
+    const image = enclosure || decodeXml(String(description || '').match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || '');
+
+    if (title && (link || guid)) items.push({ title, link: link || guid, guid, description, pubDate, author, source, image });
+  }
+
+  const channelTitle = decodeXml(firstTag(String(xml || ''), ['title']));
+  return { title: channelTitle, items };
 }
 
 async function readFeed(url) {
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent':'RealSSA-News/1.0 (+https://realssanews.com.ng)', Accept:'application/rss+xml, application/xml, text/xml, */*' },
-      signal: AbortSignal.timeout(5000)
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; RealSSA-News/2.0; +https://realssanews.com.ng)',
+        Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/plain, */*'
+      },
+      signal: AbortSignal.timeout(7000)
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const xml = await response.text();
-    return parser.parseString(xml.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g,'&amp;'));
+    const feed = parseXmlFeed(xml);
+    if (!feed.items.length) throw new Error('Feed parsed but contained no items');
+    return feed;
   } catch (error) {
-    console.warn(`[Vercel News] ${url}: ${error.message}`);
+    console.warn(`[Vercel News] ${url}: ${error?.message || error}`);
     return null;
   }
+}
+
+function publishedDate(item) {
+  const date = new Date(item.pubDate || Date.now());
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function getImage(item) {
+  if (/^https?:\/\//i.test(String(item.image || ''))) return item.image;
+  const html = String(item.description || '');
+  return html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || 'https://realssanews.com.ng/logo.png';
 }
 
 async function collect(category) {
@@ -75,14 +213,15 @@ async function collect(category) {
   const seen = new Set();
 
   feeds.forEach((feed, feedIndex) => {
-    if (!feed?.items) return;
-    for (const item of feed.items.slice(0,15)) {
+    if (!feed || !Array.isArray(feed.items)) return;
+    for (const item of feed.items.slice(0,20)) {
       const link = String(item.link || item.guid || '').trim();
       const title = cleanText(item.title,500);
       if (!link || !title || seen.has(link)) continue;
       seen.add(link);
       const date = publishedDate(item);
-      const excerpt = cleanText(item.contentSnippet || item.summary || item.description || title,1000);
+      const excerpt = cleanText(item.description || title,1000);
+      const sourceFallback = urls[feedIndex] ? new URL(urls[feedIndex]).hostname.replace(/^www\./,'') : 'RSS';
       articles.push({
         id: link,
         title,
@@ -90,8 +229,8 @@ async function collect(category) {
         description: excerpt,
         original_excerpt: cleanText(excerpt,4000),
         image: getImage(item),
-        author: cleanText(item.creator || item.author || '',200),
-        source_name: cleanText(feed.title || new URL(urls[feedIndex]).hostname,200),
+        author: cleanText(item.author,200),
+        source_name: cleanText(item.source || feed.title || sourceFallback,200),
         external_link: link,
         published_at: date.toISOString(),
         date: date.toISOString(),
@@ -109,7 +248,12 @@ async function collect(category) {
 }
 
 async function collectCombined(categories) {
-  const batches = await Promise.all(categories.map(collect));
+  const batches = await Promise.all(categories.map(async category => {
+    try { return await collect(category); } catch (error) {
+      console.error(`[Vercel News] category ${category} failed:`, error?.message || error);
+      return [];
+    }
+  }));
   const seen = new Set();
   return batches.flat().filter(article => {
     if (seen.has(article.external_link)) return false;
