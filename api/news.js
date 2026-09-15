@@ -4,6 +4,7 @@ const Parser = require('rss-parser');
 // cannot turn the homepage into an empty feed.
 const FEEDS = {
   'nigerian-news': ['https://www.premiumtimesng.com/rss.xml','https://www.vanguardngr.com/feed/','https://guardian.ng/feed/'],
+  politics: ['https://rss.punchng.com/v1/category/politics','https://www.vanguardngr.com/feed/','https://guardian.ng/feed/'],
   world: ['https://feeds.bbci.co.uk/news/world/rss.xml','https://www.aljazeera.com/xml/rss/all.xml','https://www.france24.com/en/rss'],
   sports: ['https://www.completesports.com/feed','https://soccernet.ng/feed','https://www.bbc.co.uk/sport/rss.xml'],
   business: ['https://www.cnbc.com/id/10001147/device/rss/rss.html','https://feeds.bbci.co.uk/news/business/rss.xml','https://howwemadeitinafrica.com/feed'],
@@ -22,10 +23,15 @@ const FEEDS = {
 };
 
 const aliases = { nigerian: 'nigerian-news', nigeria: 'nigerian-news', latest: 'nigerian-news' };
+const labels = {
+  'nigerian-news':'Nigeria', politics:'Politics', world:'World', sports:'Sports', business:'Business',
+  tech:'Technology', crypto:'Crypto', entertainment:'Entertainment', culture:'Culture', lifestyle:'Lifestyle',
+  science:'Science', jobs:'Jobs', ghana:'Ghana', kenya:'Kenya', 'south-africa':'South Africa', uk:'UK', usa:'USA'
+};
 const countryByCategory = {
-  'nigerian-news': 'Nigeria', ghana: 'Ghana', kenya: 'Kenya', 'south-africa': 'South Africa',
-  uk: 'UK', usa: 'USA', world: 'Global', sports: 'Global', business: 'Global', tech: 'Global',
-  crypto: 'Global', entertainment: 'Global', culture: 'Africa', lifestyle: 'Global', science: 'Global', jobs: 'Global'
+  'nigerian-news':'Nigeria', politics:'Nigeria', ghana:'Ghana', kenya:'Kenya', 'south-africa':'South Africa',
+  uk:'UK', usa:'USA', world:'Global', sports:'Global', business:'Global', tech:'Global', crypto:'Global',
+  entertainment:'Global', culture:'Africa', lifestyle:'Global', science:'Global', jobs:'Global'
 };
 const cleanText = (value, max = 4000) => String(value || '').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
 const parser = new Parser({ timeout: 4500, customFields: { item: [['media:content','media:content'],['media:thumbnail','media:thumbnail'],['enclosure','enclosure']] } });
@@ -89,7 +95,8 @@ async function collect(category) {
         external_link: link,
         published_at: date.toISOString(),
         date: date.toISOString(),
-        category: normalized,
+        category: labels[normalized] || normalized,
+        feed_category: normalized,
         country: countryByCategory[normalized] || 'Global',
         content_type:'article',
         featured:false,
@@ -123,7 +130,7 @@ module.exports = async function handler(req,res) {
 
     let articles;
     if (isLegacyFeed || isForYou || category === 'breaking' || category === 'latest' || !category) {
-      articles = await collectCombined(['nigerian-news','world','sports','business','tech']);
+      articles = await collectCombined(['nigerian-news','politics','world','sports','business','tech']);
     } else {
       articles = await collect(category);
     }
@@ -133,17 +140,8 @@ module.exports = async function handler(req,res) {
     const result = articles.slice(0,limit);
 
     res.setHeader('Cache-Control','public, s-maxage=60, stale-while-revalidate=300');
-
-    // Preserve the legacy /news-feed contract: the existing frontend expects an array.
     if (isLegacyFeed) return res.status(200).json(result);
-
-    return res.status(200).json({
-      articles: result,
-      nextCursor:null,
-      hasMore:false,
-      source:'rss-live-fallback',
-      category:category || (isForYou ? 'foryou' : 'latest')
-    });
+    return res.status(200).json({articles:result,nextCursor:null,hasMore:false,source:'rss-live-fallback',category:category || (isForYou ? 'foryou' : 'latest')});
   } catch (error) {
     console.error('[Vercel News] handler failed:',error);
     const isLegacyFeed = /^\/news-feed\/?$/i.test(String(req.url || '').split('?')[0]);
