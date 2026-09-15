@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const Parser = require('rss-parser');
 const { getPoolForCategory } = require('../config/multiDb');
+const { enforceNewsRetention } = require('./newsRetention');
 
 // External cron providers such as cron-job.org have a hard 30-second request
 // timeout. The full ingestion pipeline intentionally does much more work
@@ -167,6 +168,15 @@ async function ingestCronCategory(category) {
   const normalizedCategory = String(category || '').trim().toLowerCase();
   const pool = getPoolForCategory(normalizedCategory)?.pool;
   if (!pool) throw new Error('Primary news database is not configured');
+
+  // Hard storage guard. It is deliberately run before ingestion so a sudden
+  // RSS burst cannot fill the database before the cleanup job gets a chance.
+  try {
+    await enforceNewsRetention(pool);
+  } catch (error) {
+    // Retention must never take the news pipeline down.
+    console.warn(`[Fast Cron] Retention guard failed: ${error.message}`);
+  }
 
   const urls = FEEDS[normalizedCategory];
   if (!urls) throw new Error(`Unsupported cron category: ${normalizedCategory}`);
