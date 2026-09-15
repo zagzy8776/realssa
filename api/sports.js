@@ -21,17 +21,17 @@ const json = (res, status, body) => {
 
 function normalizeMatch(row) {
   return {
-    provider_match_id: String(row.provider_match_id || row.id || ''),
-    competition_name: row.competition_name || row.competition || 'Other',
-    home_team_name: row.home_team_name || row.home_team || 'Home',
+    provider_match_id: String(row.match_id || row.provider_match_id || row.id || ''),
+    competition_name: row.competition || row.competition_name || 'Other',
+    home_team_name: row.home_team || row.home_team_name || 'Home',
     home_team_crest: row.home_team_crest || row.home_crest || '',
-    away_team_name: row.away_team_name || row.away_team || 'Away',
+    away_team_name: row.away_team || row.away_team_name || 'Away',
     away_team_crest: row.away_team_crest || row.away_crest || '',
-    status: row.status || 'scheduled',
-    minute: row.minute || '',
+    status: String(row.status || 'scheduled').toLowerCase(),
+    minute: row.match_minute ?? row.minute ?? '',
     home_score: Number(row.home_score || 0),
     away_score: Number(row.away_score || 0),
-    kickoff_at: row.kickoff_at || row.start_time || row.match_time || new Date().toISOString(),
+    kickoff_at: row.kickoff_at || new Date().toISOString(),
     updated_at: row.updated_at || new Date().toISOString(),
     match_url: row.match_url || row.url || '',
     source: row.source || 'RealSSA Sports',
@@ -45,13 +45,12 @@ async function queryMatches(mode) {
   if (!db) return [];
 
   const conditions = [];
-  const params = [];
-  if (mode === 'live') conditions.push("status = 'live'");
+  if (mode === 'live') conditions.push("LOWER(status) = 'live'");
   if (mode === 'upcoming') {
-    conditions.push("status = 'scheduled'");
+    conditions.push("LOWER(status) = 'scheduled'");
     conditions.push('kickoff_at >= NOW()');
   }
-  if (mode === 'results') conditions.push("status = 'finished'");
+  if (mode === 'results') conditions.push("LOWER(status) = 'finished'");
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const result = await db.query(`
@@ -59,7 +58,7 @@ async function queryMatches(mode) {
     FROM live_matches
     ${where}
     ORDER BY
-      CASE WHEN status = 'live' THEN 0 WHEN status = 'scheduled' THEN 1 ELSE 2 END,
+      CASE WHEN LOWER(status) = 'live' THEN 0 WHEN LOWER(status) = 'scheduled' THEN 1 ELSE 2 END,
       kickoff_at ASC NULLS LAST,
       updated_at DESC NULLS LAST
     LIMIT 300
@@ -99,11 +98,11 @@ module.exports = async function handler(req, res) {
       const db = getPool();
       if (!db) return json(res, 200, []);
       const result = await db.query(`
-        SELECT competition_name AS name, COUNT(*)::int AS match_count
+        SELECT competition AS name, COUNT(*)::int AS match_count
         FROM live_matches
-        WHERE competition_name IS NOT NULL AND competition_name <> ''
-        GROUP BY competition_name
-        ORDER BY match_count DESC, competition_name ASC
+        WHERE competition IS NOT NULL AND competition <> ''
+        GROUP BY competition
+        ORDER BY match_count DESC, competition ASC
         LIMIT 100
       `);
       return json(res, 200, result.rows);
