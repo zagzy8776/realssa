@@ -20,6 +20,19 @@ interface Article {
 
 const PAGE_SIZE = 20;
 
+const normalize = (item: any): Article => ({
+  id: String(item.id || item.external_link || item.externalLink || item.title),
+  title: String(item.title || "Trending story"),
+  excerpt: String(item.excerpt || item.description || `Trending now in ${item.country || "the world"}.`),
+  category: String(item.category || "Trending"),
+  image: String(item.image || "https://realssanews.com.ng/logo.png"),
+  readTime: String(item.readTime || "1 min read"),
+  date: String(item.date || item.published_at || new Date().toISOString()),
+  author: item.author || item.source_name || "RealSSA Trends",
+  externalLink: item.externalLink || item.external_link,
+  source: item.source || item.source_name,
+});
+
 const Trending: React.FC = () => {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,43 +43,23 @@ const Trending: React.FC = () => {
   const loaderRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const deviceId =
-    typeof window !== "undefined"
-      ? localStorage.getItem("realssa_device_uuid") || ""
-      : "";
-
   const loadPool = useCallback(async () => {
     setLoading(true);
     try {
-      const qs = deviceId ? `&deviceId=${encodeURIComponent(deviceId)}` : "";
-      // Optimized: Fetch only key trending sources in parallel
-      const endpoints = [
-        `/api/articles/trending?diverse=true${qs}`,
-        `/api/articles?limit=50`,
-        `/api/news/nigerian-news`,
-        `/api/news/sports`,
-        `/api/news/world`,
-      ];
-
-      const results = await Promise.all(
-        endpoints.map((path) => 
-          fetch(apiUrl(path))
-            .then((r) => (r.ok ? r.json() : []))
-            .catch(() => [])
-        )
-      );
-
-      const merged: Article[] = [];
+      const response = await fetch(apiUrl(`/api/trending?limit=100`), {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`Trending API ${response.status}`);
+      const payload = await response.json();
+      const raw = Array.isArray(payload) ? payload : payload?.articles || payload?.data || [];
       const seen = new Set<string>();
-      for (const list of results) {
-        const items = Array.isArray(list) ? list : [];
-        for (const item of items) {
-          const id = String(item.id || item.externalLink || item.title);
-          if (!id || seen.has(id)) continue;
-          seen.add(id);
-          merged.push(item);
-        }
-      }
+      const merged = raw.map(normalize).filter((item: Article) => {
+        const key = item.id || item.title;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
       setPool(merged);
       setArticles(merged.slice(0, PAGE_SIZE));
@@ -80,27 +73,22 @@ const Trending: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [deviceId]);
+  }, []);
 
-  useEffect(() => {
-    loadPool();
-  }, [loadPool]);
+  useEffect(() => { loadPool(); }, [loadPool]);
 
   useEffect(() => {
     if (!loaderRef.current || !hasMore || loading) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting || loadingMore) return;
-        setLoadingMore(true);
-        const next = page + 1;
-        const slice = pool.slice(0, (next + 1) * PAGE_SIZE);
-        setArticles(slice);
-        setPage(next);
-        setHasMore(slice.length < pool.length);
-        setLoadingMore(false);
-      },
-      { rootMargin: "200px" }
-    );
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries[0]?.isIntersecting || loadingMore) return;
+      setLoadingMore(true);
+      const next = page + 1;
+      const slice = pool.slice(0, (next + 1) * PAGE_SIZE);
+      setArticles(slice);
+      setPage(next);
+      setHasMore(slice.length < pool.length);
+      setLoadingMore(false);
+    }, { rootMargin: "200px" });
     observer.observe(loaderRef.current);
     return () => observer.disconnect();
   }, [hasMore, loading, loadingMore, page, pool]);
@@ -116,9 +104,7 @@ const Trending: React.FC = () => {
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-display font-bold">Trending</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                What’s rising across Africa and the world
-              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">What’s rising across Africa and the world</p>
             </div>
           </div>
           <button
@@ -132,21 +118,14 @@ const Trending: React.FC = () => {
 
         {loading ? (
           <div className="grid gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-28 rounded-2xl bg-muted/40 animate-pulse" />
-            ))}
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-28 rounded-2xl bg-muted/40 animate-pulse" />)}
           </div>
         ) : articles.length === 0 ? (
           <div className="text-center py-20 border border-dashed border-border rounded-2xl">
             <TrendingUp className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No trending stories yet</h3>
             <p className="text-muted-foreground text-sm mb-6">Check back soon or browse Home.</p>
-            <button
-              onClick={() => navigate("/")}
-              className="px-6 py-2 bg-amber-500 text-black rounded-full font-bold text-sm"
-            >
-              Back to Home
-            </button>
+            <button onClick={() => navigate("/")} className="px-6 py-2 bg-amber-500 text-black rounded-full font-bold text-sm">Back to Home</button>
           </div>
         ) : (
           <div className="grid gap-4">
@@ -158,16 +137,14 @@ const Trending: React.FC = () => {
                 excerpt={article.excerpt}
                 category={article.category as any}
                 image={article.image}
-                readTime={article.readTime || "5 min read"}
+                readTime={article.readTime}
                 date={article.date}
                 externalLink={article.externalLink}
                 showBookmark
               />
             ))}
             <div ref={loaderRef} className="h-8" />
-            {loadingMore && (
-              <div className="text-center text-xs text-muted-foreground py-3">Loading more…</div>
-            )}
+            {loadingMore && <div className="text-center text-xs text-muted-foreground py-3">Loading more…</div>}
           </div>
         )}
       </main>
