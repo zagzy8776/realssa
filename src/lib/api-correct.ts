@@ -1,7 +1,7 @@
 // lib/api.ts
 // API Integration for RealSSA
-// Browser requests use the same-origin resilient news API so production news
-// does not depend on the database being populated before the first request.
+// Browser requests use same-origin production endpoints so feature APIs do not
+// accidentally point at localhost when the site is deployed.
 
 import { Capacitor } from '@capacitor/core';
 
@@ -10,7 +10,9 @@ const browserOrigin = typeof window !== 'undefined' ? window.location.origin : '
 const NEWS_API_URL = isNative
   ? (import.meta.env.VITE_NEWS_API_URL || 'https://www.realssanews.com.ng')
   : (browserOrigin || import.meta.env.VITE_NEWS_API_URL || 'https://www.realssanews.com.ng');
-const SPORTS_API_URL = import.meta.env.VITE_SPORTS_API || 'http://localhost:3001';
+const SPORTS_API_URL = isNative
+  ? (import.meta.env.VITE_SPORTS_API || NEWS_API_URL)
+  : (browserOrigin || import.meta.env.VITE_SPORTS_API || NEWS_API_URL);
 const DB_API_URL = import.meta.env.VITE_DB_API || 'http://localhost:3002';
 
 const apiCache: Record<string, { data: any; timestamp: number }> = {};
@@ -131,9 +133,9 @@ export const newsAPI = {
 
 export const sportsAPI = {
   baseURL: SPORTS_API_URL,
-  async getLiveMatches() { return fetchAPI(`${SPORTS_API_URL}/api/matches/live`); },
-  async getAllMatches() { return fetchAPI(`${SPORTS_API_URL}/api/matches`); },
-  async getLeagues() { return fetchAPI(`${SPORTS_API_URL}/api/leagues`); },
+  async getLiveMatches() { return fetchAPI(`${SPORTS_API_URL}/api/sports/matches/live`); },
+  async getAllMatches() { return fetchAPI(`${SPORTS_API_URL}/api/sports/matches`); },
+  async getLeagues() { return fetchAPI(`${SPORTS_API_URL}/api/sports/leagues`); },
 };
 
 export const dbAPI = {
