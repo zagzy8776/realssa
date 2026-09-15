@@ -3,7 +3,7 @@
 // Browser requests use the same-origin resilient news API so production news
 // does not depend on the database being populated before the first request.
 
-import { Capacitor } from 'capacitor';
+import { Capacitor } from '@capacitor/core';
 
 const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
 const browserOrigin = typeof window !== 'undefined' ? window.location.origin : '';
