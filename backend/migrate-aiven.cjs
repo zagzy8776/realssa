@@ -1,8 +1,9 @@
-require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 
+// The script intentionally reads DATABASE_URL directly from the process.
+// This keeps credentials out of source control and works in CI/Fly/Vercel shells.
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
@@ -11,18 +12,14 @@ if (!DATABASE_URL) {
 }
 
 const root = __dirname;
-const files = [
-  'rss_articles_schema.sql',
-  'db_schema.sql',
-  'aiven_migration.sql'
-];
+const files = ['rss_articles_schema.sql', 'db_schema.sql', 'aiven_migration.sql'];
 
 async function main() {
   const pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false },
     max: 2,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 15000,
     idleTimeoutMillis: 10000,
   });
 
@@ -53,10 +50,16 @@ async function main() {
           to_regclass('public.rss_articles') AS rss_articles,
           to_regclass('public.users') AS users,
           to_regclass('public.live_matches') AS live_matches,
+          to_regclass('public.feed_health') AS feed_health,
           (SELECT COUNT(*)::int FROM rss_articles) AS article_count
       `);
 
-      console.log('Database verification:', verification.rows[0]);
+      const row = verification.rows[0];
+      if (!row.rss_articles || !row.users || !row.live_matches || !row.feed_health) {
+        throw new Error(`Schema verification failed: ${JSON.stringify(row)}`);
+      }
+
+      console.log('Database verification:', row);
       console.log('Aiven PostgreSQL migration completed successfully.');
     } finally {
       client.release();
