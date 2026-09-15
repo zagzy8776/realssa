@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "functions": {
     "api/index.js": { "maxDuration": 180 },
+    "api/news.js": { "maxDuration": 30 },
     "api/chat.js": { "maxDuration": 30 }
   },
   "headers": [
@@ -52,6 +53,7 @@
   ],
   "rewrites": [
     { "source": "/api/chat", "destination": "/api/chat.js" },
+    { "source": "/api/news/:path*", "destination": "/api/news.js" },
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/rss/(.*)", "destination": "/api/index.js" },
     { "source": "/news-feed", "destination": "/api/index.js" },
