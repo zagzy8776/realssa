@@ -78,6 +78,66 @@ CREATE INDEX IF NOT EXISTS idx_rss_articles_published ON rss_articles (published
 CREATE INDEX IF NOT EXISTS idx_rss_articles_cat_pub ON rss_articles (category, published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rss_articles_image_status ON rss_articles (image_status, published_at DESC);
 
+-- Storage guard: keep only a rolling working set of news.
+-- RSS remains the long-tail source; PostgreSQL does not need to retain every
+-- historical article forever. This prevents the news table from growing
+-- without bound while preserving recent stories for the application.
+CREATE OR REPLACE FUNCTION realssa_cleanup_news() RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  DELETE FROM rss_articles
+  WHERE published_at < NOW() - INTERVAL '7 days';
+
+  DELETE FROM rss_articles
+  WHERE id NOT IN (
+    SELECT id
+    FROM rss_articles
+    ORDER BY published_at DESC NULLS LAST, id DESC
+    LIMIT 20000
+  );
+
+  -- Large enrichment fields are unnecessary on older live stories.
+  UPDATE rss_articles
+  SET full_content = NULL,
+      title_translations = NULL,
+      summary_translations = NULL,
+      embedding = NULL
+  WHERE published_at < NOW() - INTERVAL '2 days'
+    AND (full_content IS NOT NULL OR title_translations IS NOT NULL
+      OR summary_translations IS NOT NULL OR embedding IS NOT NULL);
+
+  ANALYZE rss_articles;
+END;
+$$;
+
+-- If pg_cron has been installed on this database, automatically run the
+-- storage guard every 15 minutes. On Aiven, pg_cron is supported; if it is
+-- not installed yet, the application-side retention guard remains available.
+DO $$
+DECLARE
+  existing_job BIGINT;
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'cron') THEN
+    SELECT jobid INTO existing_job
+    FROM cron.job
+    WHERE jobname = 'realssa-news-retention'
+    LIMIT 1;
+
+    IF existing_job IS NOT NULL THEN
+      PERFORM cron.unschedule(existing_job);
+    END IF;
+
+    PERFORM cron.schedule(
+      'realssa-news-retention',
+      '*/15 * * * *',
+      'SELECT realssa_cleanup_news();'
+    );
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'RealSSA pg_cron retention schedule not installed: %', SQLERRM;
+END $$;
+
 CREATE TABLE IF NOT EXISTS cinema_movies (
   id INT PRIMARY KEY,
   title TEXT NOT NULL,
