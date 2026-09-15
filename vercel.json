@@ -1,7 +1,13 @@
 {
   "installCommand": "npm install --include=dev --no-package-lock",
   "buildCommand": "npm run build",
-  "functions": {"api/index.js":{"maxDuration":180},"api/news.js":{"maxDuration":30},"api/chat.js":{"maxDuration":30}},
+  "functions": {
+    "api/index.js": {"maxDuration":180},
+    "api/news.js": {"maxDuration":30},
+    "api/sports.js": {"maxDuration":20},
+    "api/trending.js": {"maxDuration":20},
+    "api/chat.js": {"maxDuration":30}
+  },
   "headers": [
     {"source":"/api/articles/:path*","headers":[{"key":"Cache-Control","value":"public, s-maxage=300, stale-while-revalidate=600"}]},
     {"source":"/assets/(.*)","headers":[{"key":"Cache-Control","value":"public, max-age=31536000, immutable"}]},
@@ -14,12 +20,14 @@
     {"source":"/api/chat","destination":"/api/chat.js"},
     {"source":"/api/feed/foryou","destination":"/api/news.js"},
     {"source":"/api/news/:path*","destination":"/api/news.js"},
+    {"source":"/api/sports/:path*","destination":"/api/sports.js"},
+    {"source":"/api/trending","destination":"/api/trending.js"},
     {"source":"/news-feed","destination":"/api/news.js"},
     {"source":"/api/(.*)","destination":"/api/index.js"},
     {"source":"/rss/(.*)","destination":"/api/index.js"},
     {"source":"/yandex_33692219fb12f076.html","destination":"/yandex_33692219fb12f076.html"},
     {"source":"/yandex_17cef8d8832f5eec.html","destination":"/yandex_17cef8d8832f5eec.html"},
-    {"source":"/googled0088a19dd0f4c40.html","destination":"/googled0088a19dd0f4c40.html"},
+    {"source":"/googled0088a19dd0f4c40.html","destination":"/googled008a19dd0f4c40.html"},
     {"source":"/sitemap.xml","destination":"/api/index.js"},
     {"source":"/news-sitemap.xml","destination":"/api/index.js"},
     {"source":"/pages-sitemap.xml","destination":"/api/index.js"},
