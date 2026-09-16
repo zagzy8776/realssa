@@ -14,10 +14,14 @@ const json = (res, status, body) => {
 };
 
 function normalizeMatch(row) {
-  const raw = String(row.status || row.strStatus || '').toLowerCase();
+  const raw = String(row.status || row.strStatus || '').trim().toLowerCase();
+  const liveStatuses = new Set(['1h', '2h', 'ht', 'et', 'bt', 'p', 'pen', 'in progress', 'in-progress', 'inplay', 'in-play', 'playing', 'live']);
+  const finishedStatuses = new Set(['ft', 'finished', 'complete', 'completed', 'after penalties', 'aet', 'full time', 'final']);
+  const cancelledStatuses = new Set(['pst', 'post', 'postponed', 'canc', 'cancelled', 'canceled', 'abd', 'abandoned', 'susp', 'suspended']);
   let status = raw;
-  if (['in progress', 'in-progress', 'inplay', 'in-play', 'playing', 'live'].includes(raw)) status = 'live';
-  else if (['ft', 'finished', 'complete', 'completed', 'after penalties'].includes(raw)) status = 'finished';
+  if (liveStatuses.has(raw)) status = 'live';
+  else if (finishedStatuses.has(raw)) status = 'finished';
+  else if (cancelledStatuses.has(raw)) status = 'cancelled';
   else if (!['scheduled', 'live', 'finished', 'cancelled'].includes(status)) status = 'scheduled';
 
   return {
@@ -44,13 +48,13 @@ async function queryDbMatches(mode) {
   const db = getPool();
   if (!db) return [];
   const conditions = [];
-  if (mode === 'live') conditions.push("LOWER(status) IN ('live','in_progress','inplay','in-play','playing')");
+  if (mode === 'live') conditions.push("LOWER(status) IN ('live','in_progress','inplay','in-play','playing','1h','2h','ht','et','bt','p','pen')");
   if (mode === 'upcoming') conditions.push("LOWER(status) = 'scheduled'");
-  if (mode === 'results') conditions.push("LOWER(status) = 'finished'");
+  if (mode === 'results') conditions.push("LOWER(status) IN ('finished','ft','complete','completed','aet','final')");
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const result = await db.query(`
     SELECT * FROM live_matches ${where}
-    ORDER BY CASE WHEN LOWER(status) IN ('live','in_progress','inplay','in-play','playing') THEN 0 WHEN LOWER(status) = 'scheduled' THEN 1 ELSE 2 END,
+    ORDER BY CASE WHEN LOWER(status) IN ('live','in_progress','inplay','in-play','playing','1h','2h','ht','et','bt','p','pen') THEN 0 WHEN LOWER(status) = 'scheduled' THEN 1 ELSE 2 END,
       kickoff_at ASC NULLS LAST, updated_at DESC NULLS LAST, match_id ASC LIMIT 500
   `);
   return result.rows.map(normalizeMatch).filter(m => m.provider_match_id);
@@ -71,7 +75,7 @@ async function fetchJson(url, timeoutMs = 6500) {
 
 async function fetchSportsDbMatches(mode) {
   const today = new Date();
-  const offsets = mode === 'results' ? [-2, -1, 0] : mode === 'live' ? [0] : [0, 1, 2];
+  const offsets = mode === 'results' ? [-2, -1, 0] : mode === 'live' ? [0] : mode === 'upcoming' ? [0, 1, 2] : [-2, -1, 0, 1, 2];
   const dates = offsets.map(offset => {
     const d = new Date(today);
     d.setUTCDate(d.getUTCDate() + offset);
@@ -79,8 +83,9 @@ async function fetchSportsDbMatches(mode) {
   });
 
   // TheSportsDB V1 exposes events by day using the free public key. Three
-  // day requests stay within the documented free request limit and give us
-  // broad football coverage instead of depending on one league/scraper.
+  // day requests stay within the documented free request limit for the
+  // upcoming/results/live views; the all view intentionally spans both sides
+  // of today so the page is useful instead of showing only future fixtures.
   const results = await Promise.all(dates.map(async date => {
     const data = await fetchJson(`https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=${date}&s=Soccer`);
     return (data?.events || []).map(event => normalizeMatch({ ...event, source: 'TheSportsDB' }));
