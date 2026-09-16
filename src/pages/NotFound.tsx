@@ -10,8 +10,28 @@ const NotFound = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Some older/generated article links incorrectly embedded the publisher URL
+    // inside the internal /article/ route. React Router cannot match the slashes
+    // in that URL, so the request falls through to 404. Recover it here and send
+    // it through Reader Mode instead of showing a dead page.
+    const rawPath = location.pathname;
+    const articlePrefix = "/article/";
+
+    if (rawPath.startsWith(articlePrefix)) {
+      const candidate = rawPath.slice(articlePrefix.length);
+      const decoded = decodeURIComponent(candidate);
+
+      if (/^https?:\/\//i.test(decoded)) {
+        const url = new URL(decoded);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+          navigate(`/read?url=${encodeURIComponent(url.toString())}`, { replace: true });
+          return;
+        }
+      }
+    }
+
     console.error("404 Error: User attempted to access non-existent route:", location.pathname);
-  }, [location.pathname]);
+  }, [location.pathname, navigate]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
