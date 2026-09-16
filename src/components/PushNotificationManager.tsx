@@ -9,26 +9,58 @@ interface PushNotificationManagerProps {
   iconOnly?: boolean;
 }
 
-const ONESIGNAL_APP_ID = "055b6596-a96c-48e2-8cda-ff4bb6d61009";
+const ONESIGNAL_APP_ID = '055b6596-a96c-48e2-8cda-ff4bb6d61009';
 
 function syncCategoryTags(OneSignal: any) {
   try {
     const raw = localStorage.getItem('realssa_category_prefs');
     const prefs: string[] = raw ? JSON.parse(raw) : [];
-    const ALL_CATS = ['sports','nigeria','ghana','kenya','south-africa','crypto','tech','business','culture','entertainment'];
+    const allCategories = ['sports', 'nigeria', 'ghana', 'kenya', 'south-africa', 'crypto', 'tech', 'business', 'culture', 'entertainment'];
     const tags: Record<string, string> = { has_prefs: prefs.length > 0 ? '1' : '0' };
-    ALL_CATS.forEach(cat => { tags[`cat_${cat}`] = prefs.includes(cat) ? '1' : '0'; });
+    allCategories.forEach(category => {
+      tags[`cat_${category}`] = prefs.includes(category) ? '1' : '0';
+    });
     OneSignal.User.addTags(tags);
-  } catch (e) {
-    console.warn('Failed to sync category tags', e);
+  } catch (error) {
+    console.warn('[OneSignal] Failed to sync category tags:', error);
   }
 }
 
-// Check if browser supports push at all
 const browserSupportsPush = () =>
   typeof window !== 'undefined' &&
   'Notification' in window &&
   'serviceWorker' in navigator;
+
+function waitForWebOneSignal(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const existing = (window as any).OneSignal;
+    if (existing?.User?.PushSubscription) {
+      resolve(existing);
+      return;
+    }
+
+    const deferred = (window as any).OneSignalDeferred;
+    if (!deferred) {
+      reject(new Error('OneSignal web SDK is not initialized'));
+      return;
+    }
+
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error('OneSignal web SDK timed out'));
+      }
+    }, 10000);
+
+    deferred.push((OneSignal: any) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(OneSignal);
+    });
+  });
+}
 
 const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerProps) => {
   const [isSupported, setIsSupported] = useState(false);
@@ -45,40 +77,45 @@ const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerPr
       return;
     }
 
-    // Web: mark supported immediately if browser supports Notification API
-    // so the bell icon always shows — don't wait for OneSignal SDK
-    if (browserSupportsPush()) {
-      setIsSupported(true);
-      // Reflect current native permission state right away
-      if (Notification.permission === 'granted') setIsSubscribed(true);
-    }
+    if (!browserSupportsPush()) return;
+    setIsSupported(true);
 
-    // Then try to sync with OneSignal if it loads
-    let retries = 0;
-    const tryOneSignal = () => {
-      const OS = (window as any).OneSignal;
-      if (OS?.User?.PushSubscription) {
-        const optedIn = OS.User.PushSubscription.optedIn || false;
+    let cleanup: (() => void) | undefined;
+    let disposed = false;
+
+    waitForWebOneSignal()
+      .then((OneSignal: any) => {
+        if (disposed) return;
+        const subscription = OneSignal.User?.PushSubscription;
+        const optedIn = Boolean(subscription?.optedIn);
         setIsSubscribed(optedIn);
-        if (optedIn) syncCategoryTags(OS);
+        if (optedIn) syncCategoryTags(OneSignal);
 
-        const onChange = (e: any) => {
-          if (e?.current) setIsSubscribed(e.current.optedIn);
+        const onChange = (event: any) => {
+          if (typeof event?.current?.optedIn === 'boolean') {
+            setIsSubscribed(event.current.optedIn);
+          }
         };
-        OS.User.PushSubscription.addEventListener('change', onChange);
-        return () => OS.User.PushSubscription.removeEventListener('change', onChange);
-      }
-      retries++;
-      if (retries < 20) setTimeout(tryOneSignal, 500);
+
+        subscription?.addEventListener?.('change', onChange);
+        cleanup = () => subscription?.removeEventListener?.('change', onChange);
+      })
+      .catch(() => {
+        // The button remains available because browser support was detected.
+        if (Notification.permission === 'granted') setIsSubscribed(true);
+      });
+
+    return () => {
+      disposed = true;
+      cleanup?.();
     };
-    const cleanup = tryOneSignal();
-    return () => { if (typeof cleanup === 'function') cleanup(); };
   }, []);
 
   const subscribeToPush = async () => {
     setIsLoading(true);
     try {
       if (Capacitor.isNativePlatform()) {
+        OneSignalNative.initialize(ONESIGNAL_APP_ID);
         const ok = await OneSignalNative.Notifications.requestPermission(true);
         if (ok) {
           setIsSubscribed(true);
@@ -89,27 +126,28 @@ const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerPr
         return;
       }
 
-      // Try OneSignal first
-      const OS = (window as any).OneSignal;
-      if (OS?.User?.PushSubscription) {
-        await OS.User.PushSubscription.optIn();
-        syncCategoryTags(OS);
-        setIsSubscribed(true);
-        toast({ title: 'Notifications Enabled', description: 'You will receive breaking news alerts!' });
+      const OneSignal = await waitForWebOneSignal();
+
+      // Ask through OneSignal first so the browser permission and the
+      // OneSignal subscription are both updated. This avoids the old false
+      // positive where Notification.requestPermission() succeeded but the
+      // device never became a OneSignal subscriber.
+      if (Notification.permission !== 'granted') {
+        await OneSignal.Notifications.requestPermission();
+      }
+
+      if (Notification.permission !== 'granted') {
+        toast({ title: 'Permission Denied', description: 'Allow notifications for RealSSA News in your browser settings.', variant: 'destructive' });
         return;
       }
 
-      // Fallback: native browser Notification API
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        setIsSubscribed(true);
-        toast({ title: 'Notifications Enabled', description: 'You will receive breaking news alerts!' });
-      } else {
-        toast({ title: 'Permission Denied', description: 'Allow notifications in your browser settings.', variant: 'destructive' });
-      }
-    } catch (err) {
-      console.error('Subscribe error:', err);
-      toast({ title: 'Failed', description: 'Could not enable notifications.', variant: 'destructive' });
+      await OneSignal.User.PushSubscription.optIn();
+      syncCategoryTags(OneSignal);
+      setIsSubscribed(true);
+      toast({ title: 'Notifications Enabled', description: 'You will receive breaking news alerts!' });
+    } catch (error) {
+      console.error('[OneSignal] Subscribe error:', error);
+      toast({ title: 'Failed', description: 'Could not enable notifications. Please try again.', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -119,20 +157,17 @@ const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerPr
     setIsLoading(true);
     try {
       if (Capacitor.isNativePlatform()) {
-        toast({ title: 'Manage in Settings', description: 'Turn off notifications in Android Settings.', variant: 'destructive' });
+        toast({ title: 'Manage in Settings', description: 'Turn off notifications in your phone settings.' });
         return;
       }
-      const OS = (window as any).OneSignal;
-      if (OS?.User?.PushSubscription) {
-        await OS.User.PushSubscription.optOut();
-        setIsSubscribed(false);
-        toast({ title: 'Notifications Disabled', description: 'You will no longer receive alerts.' });
-      } else {
-        // Can't programmatically revoke native permission — guide user
-        toast({ title: 'To disable', description: 'Click the lock icon in your browser address bar and turn off notifications.' });
-      }
-    } catch (err) {
-      console.error('Unsubscribe error:', err);
+
+      const OneSignal = await waitForWebOneSignal();
+      await OneSignal.User.PushSubscription.optOut();
+      setIsSubscribed(false);
+      toast({ title: 'Notifications Disabled', description: 'You will no longer receive alerts.' });
+    } catch (error) {
+      console.error('[OneSignal] Unsubscribe error:', error);
+      toast({ title: 'Failed', description: 'Could not disable notifications right now.', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -143,7 +178,7 @@ const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerPr
       <Button
         variant="ghost"
         size={iconOnly ? 'icon' : 'sm'}
-        onClick={() => toast({ title: 'Not Supported', description: 'Install this site as a PWA (Add to Home Screen) to enable alerts.' })}
+        onClick={() => toast({ title: 'Not Supported', description: 'This browser does not support web notifications.' })}
         className={iconOnly ? 'text-muted-foreground/50 rounded-full w-9 h-9' : 'text-muted-foreground/50'}
         title="Notifications not supported"
       >
@@ -164,8 +199,8 @@ const PushNotificationManager = ({ iconOnly = false }: PushNotificationManagerPr
           title="Disable Notifications"
         >
           {iconOnly
-            ? <BellRing className="w-5 h-5 animate-pulse" />
-            : <><BellRing className="w-4 h-4 mr-2 animate-pulse" />{isLoading ? 'Disabling...' : 'Notifications On'}</>}
+            ? <BellRing className="w-5 h-5" />
+            : <><BellRing className="w-4 h-4 mr-2" />{isLoading ? 'Disabling...' : 'Notifications On'}</>}
         </Button>
       ) : (
         <Button
