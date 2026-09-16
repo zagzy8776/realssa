@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Parser = require('rss-parser');
 const { getPoolForCategory } = require('../config/multiDb');
 const { enforceNewsRetention } = require('./newsRetention');
+const notificationService = require('./notificationService');
 
 // External cron providers such as cron-job.org have a hard 30-second request
 // timeout. The full ingestion pipeline intentionally does much more work
@@ -129,7 +130,7 @@ function pickImage(item) {
 
   const html = item.content || item['content:encoded'] || item.description || '';
   const match = String(html).match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);
-  return match?.[1] || 'https://realssanews.com.ng/logo.png';
+  return match?.[1] || 'https://www.realssanews.com.ng/logo.png';
 }
 
 function cleanText(value) {
@@ -150,7 +151,7 @@ async function fetchFeed(url) {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'RealSSA-Cron/2.0 (+https://realssanews.com.ng)',
+        'User-Agent': 'RealSSA-Cron/2.0 (+https://www.realssanews.com.ng)',
         Accept: 'application/rss+xml, application/xml, text/xml, */*'
       },
       signal: AbortSignal.timeout(4500)
@@ -164,17 +165,113 @@ async function fetchFeed(url) {
   }
 }
 
+function notificationScore(article) {
+  const text = `${article.title} ${article.excerpt}`.toLowerCase();
+  const urgent = /breaking|urgent|alert|just in|dies|died|killed|attack|explosion|crash|earthquake|war|coup|election|president|minister|terror|kidnap|missing|evacuat|market crash|bitcoin|scam/.test(text);
+  const important = /government|court|police|military|economy|bank|oil|fuel|naira|security|transfer|injury|final|championship/.test(text);
+  return urgent ? 3 : important ? 2 : 1;
+}
+
+async function ensureNotificationTable(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notified_articles (
+      id BIGSERIAL PRIMARY KEY,
+      story_hash TEXT UNIQUE,
+      notified_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+}
+
+async function notifyNewArticles(pool, insertedArticles) {
+  if (!pool || !insertedArticles.length) return { attempted: 0, sent: 0 };
+  if (!process.env.ONESIGNAL_API_KEY) {
+    console.warn('[Fast Cron] OneSignal API key missing; new-article notifications skipped.');
+    return { attempted: 0, sent: 0 };
+  }
+
+  try {
+    await ensureNotificationTable(pool);
+
+    // Keep the notification budget global across all category cron calls.
+    // Eight notifications/hour matches the previous ingestion safety limit.
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS count
+       FROM notified_articles
+       WHERE notified_at > NOW() - INTERVAL '1 hour'`
+    );
+    let remaining = Math.max(0, 8 - Number(countResult.rows[0]?.count || 0));
+    if (!remaining) return { attempted: 0, sent: 0, limited: true };
+
+    const candidates = [...insertedArticles]
+      .sort((a, b) => {
+        const scoreDiff = notificationScore(b) - notificationScore(a);
+        if (scoreDiff) return scoreDiff;
+        return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+      })
+      .slice(0, remaining);
+
+    let attempted = 0;
+    let sent = 0;
+
+    for (const article of candidates) {
+      const storyHash = hash(`${article.externalLink}|${article.title}`);
+      const seen = await pool.query(
+        'SELECT 1 FROM notified_articles WHERE story_hash = $1 LIMIT 1',
+        [storyHash]
+      );
+      if (seen.rows.length) continue;
+
+      attempted += 1;
+      const score = notificationScore(article);
+      try {
+        const result = await notificationService.sendBreakingNews({
+          id: `rss-${storyHash.slice(0, 16)}`,
+          title: article.title,
+          excerpt: article.excerpt,
+          category: article.category,
+          image: article.image,
+          externalLink: article.externalLink,
+          score,
+          source_name: article.sourceName,
+        });
+
+        if (result?.success) {
+          sent += 1;
+          await pool.query(
+            `INSERT INTO notified_articles (story_hash, notified_at)
+             VALUES ($1, NOW()) ON CONFLICT (story_hash) DO NOTHING`,
+            [storyHash]
+          );
+        } else {
+          console.warn(`[Fast Cron] Notification not accepted for "${article.title.slice(0, 70)}": ${result?.error || result?.message || 'unknown error'}`);
+        }
+      } catch (error) {
+        console.warn(`[Fast Cron] Notification failed: ${error.message}`);
+      }
+
+      remaining -= 1;
+      if (remaining <= 0) break;
+    }
+
+    await pool.query(
+      `DELETE FROM notified_articles WHERE notified_at < NOW() - INTERVAL '48 hours'`
+    ).catch(() => {});
+
+    return { attempted, sent };
+  } catch (error) {
+    console.warn(`[Fast Cron] Notification subsystem unavailable: ${error.message}`);
+    return { attempted: 0, sent: 0, error: error.message };
+  }
+}
+
 async function ingestCronCategory(category) {
   const normalizedCategory = String(category || '').trim().toLowerCase();
   const pool = getPoolForCategory(normalizedCategory)?.pool;
   if (!pool) throw new Error('Primary news database is not configured');
 
-  // Hard storage guard. It is deliberately run before ingestion so a sudden
-  // RSS burst cannot fill the database before the cleanup job gets a chance.
   try {
     await enforceNewsRetention(pool);
   } catch (error) {
-    // Retention must never take the news pipeline down.
     console.warn(`[Fast Cron] Retention guard failed: ${error.message}`);
   }
 
@@ -186,19 +283,15 @@ async function ingestCronCategory(category) {
   const successfulFeeds = feeds.filter(Boolean);
   const failedFeeds = urls.filter((_, index) => !feeds[index]);
 
-  // Never report a successful ingestion when every upstream feed failed.
   if (successfulFeeds.length === 0) {
     throw new Error(`All ${urls.length} feeds failed for ${normalizedCategory}`);
   }
 
   const candidates = [];
-
   for (let i = 0; i < feeds.length; i += 1) {
     const feed = feeds[i];
     if (!feed?.items) continue;
 
-    // Ten recent items per feed restores useful catalogue depth without
-    // bringing back the old unbounded ingestion workload.
     for (const item of feed.items.slice(0, 10)) {
       const externalLink = item.link || item.guid;
       const title = cleanText(item.title || 'Untitled');
@@ -211,7 +304,8 @@ async function ingestCronCategory(category) {
         image: pickImage(item),
         sourceName: cleanText(feed.title || new URL(urls[i]).hostname).slice(0, 255),
         externalLink: String(externalLink).slice(0, 2000),
-        publishedAt: publishedDate(item)
+        publishedAt: publishedDate(item),
+        category: normalizedCategory,
       });
     }
   }
@@ -225,6 +319,7 @@ async function ingestCronCategory(category) {
   }
 
   let inserted = 0;
+  const insertedArticles = [];
   for (const article of unique) {
     const result = await pool.query(
       `INSERT INTO rss_articles
@@ -246,8 +341,16 @@ async function ingestCronCategory(category) {
       ]
     );
 
-    if (result.rows.length) inserted += 1;
+    if (result.rows.length) {
+      inserted += 1;
+      insertedArticles.push(article);
+    }
   }
+
+  // The old full ingestion path handled notifications, but the new bounded
+  // Aiven/Vercel ingestion path did not. Restore that missing side effect
+  // without making push delivery capable of breaking news ingestion.
+  const notificationResult = await notifyNewArticles(pool, insertedArticles);
 
   const result = {
     category: normalizedCategory,
@@ -256,6 +359,8 @@ async function ingestCronCategory(category) {
     feedsFailed: failedFeeds.length,
     candidates: unique.length,
     inserted,
+    notificationsAttempted: notificationResult.attempted,
+    notificationsSent: notificationResult.sent,
     durationMs: Date.now() - startedAt
   };
 
