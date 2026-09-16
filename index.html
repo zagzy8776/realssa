@@ -18,47 +18,52 @@
   <meta name="author" content="RealSSA News" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 
-  <!-- Schema.org Article JSON-LD will be injected by React Helmet -->
-
-  <!-- OneSignal Web Push Notifications: only initialize on the canonical production host. -->
+  <!-- OneSignal Web Push Notifications -->
   <script>
-    if (window.location.hostname === "www.realssanews.com.ng") {
+    (function () {
+      var hostname = window.location.hostname;
+      var isProductionHost = hostname === "www.realssanews.com.ng" || hostname === "realssanews.com.ng";
+      if (!isProductionHost) return;
+
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
       var onesignalScript = document.createElement("script");
       onesignalScript.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
       onesignalScript.defer = true;
       document.head.appendChild(onesignalScript);
 
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function (OneSignal) {
-        await OneSignal.init({
-          appId: "055b6596-a96c-48e2-8cda-ff4bb6d61009",
-          safari_web_id: "web.onesignal.auto.31ca14f2-9a64-44ce-b1fb-164017f55430",
-          serviceWorkerPath: "sw.js",
-          serviceWorkerParam: { scope: "/" },
-          allowLocalhostAsSecureOrigin: true,
-          notifyButton: { enable: false },
-          promptOptions: {
-            slidedown: {
-              prompts: [
-                {
-                  type: "push",
-                  autoPrompt: false,
-                  text: {
-                    actionMessage: "\uD83D\uDCF0 Get breaking news alerts from RealSSA News!",
-                    acceptButton: "\u2705 Allow",
-                    cancelButton: "\u274C No Thanks"
-                  },
-                  delay: {
-                    pageViews: 1,
-                    timeDelay: 3
+        try {
+          await OneSignal.init({
+            appId: "055b6596-a96c-48e2-8cda-ff4bb6d61009",
+            safari_web_id: "web.onesignal.auto.31ca14f2-9a64-44ce-b1fb-164017f55430",
+            serviceWorkerPath: "sw.js",
+            serviceWorkerParam: { scope: "/" },
+            allowLocalhostAsSecureOrigin: true,
+            autoResubscribe: true,
+            notifyButton: { enable: false },
+            promptOptions: {
+              slidedown: {
+                prompts: [
+                  {
+                    type: "push",
+                    autoPrompt: false,
+                    text: {
+                      actionMessage: "\uD83D\uDCF0 Get breaking news alerts from RealSSA News!",
+                      acceptButton: "\u2705 Allow",
+                      cancelButton: "\u274C No Thanks"
+                    },
+                    delay: { pageViews: 1, timeDelay: 3 }
                   }
-                }
-              ]
+                ]
+              }
             }
-          }
-        });
+          });
+          console.log('[OneSignal] Web SDK initialized on', hostname);
+        } catch (error) {
+          console.warn('[OneSignal] Web SDK initialization failed:', error);
+        }
       });
-    }
+    })();
   </script>
 
   <!-- Google Search Console Verification -->
@@ -90,7 +95,6 @@
   <meta name="background-color" content="#0f0f0f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
   <meta name="apple-mobile-web-app-title" content="RealSSA News" />
   <meta name="mobile-web-app-capable" content="yes" />
 
@@ -103,85 +107,20 @@
 
   <!-- Startup loader styles — Premium Brand Loader -->
   <style>
-    #startup-loader {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      background: #050505;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
-      box-sizing: border-box;
-      overflow: hidden;
-    }
-
-    #startup-loader::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle 500px at 50% 50%, rgba(251,191,36,0.05) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    #startup-loader .loader-content {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-      animation: logoFade 1.2s ease-out;
-    }
-
-    #startup-loader .sk-star {
-      width: 72px;
-      height: 72px;
-      filter: drop-shadow(0 0 24px rgba(245,158,11,0.3));
-      animation: spinAndPulse 3s infinite linear;
-    }
-
-    #startup-loader .loader-text {
-      font-size: 1.5rem;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      background: linear-gradient(to right, #fef08a, #f59e0b, #b45309);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    #startup-loader .pulse-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #f59e0b;
-      box-shadow: 0 0 12px 3px rgba(251,191,36,0.5);
-      animation: dotPulse 1.2s ease-in-out infinite;
-    }
-
-    @keyframes spinAndPulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-      100% { transform: scale(1); }
-    }
-
-    @keyframes logoFade {
-      0% { opacity: 0; transform: translateY(10px); }
-      100% { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes dotPulse {
-      0%, 100% { opacity: 0.3; transform: scale(0.8); }
-      50% { opacity: 1; transform: scale(1.2); }
-    }
+    #startup-loader { position: fixed; inset: 0; z-index: 9999; background: #050505; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; box-sizing: border-box; overflow: hidden; }
+    #startup-loader::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle 500px at 50% 50%, rgba(251,191,36,0.05) 0%, transparent 70%); pointer-events: none; }
+    #startup-loader .loader-content { display: flex; flex-direction: column; align-items: center; gap: 20px; animation: logoFade 1.2s ease-out; }
+    #startup-loader .sk-star { width: 72px; height: 72px; filter: drop-shadow(0 0 24px rgba(245,158,11,0.3)); animation: spinAndPulse 3s infinite linear; }
+    #startup-loader .loader-text { font-size: 1.5rem; font-weight: 800; color: #ffffff; letter-spacing: 0.12em; text-transform: uppercase; background: linear-gradient(to right, #fef08a, #f59e0b, #b45309); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    #startup-loader .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 12px 3px rgba(251,191,36,0.5); animation: dotPulse 1.2s ease-in-out infinite; }
+    @keyframes spinAndPulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    @keyframes logoFade { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+    @keyframes dotPulse { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
   </style>
 
-  <!-- Preconnect for performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-  <!-- Synchronous script to prevent dark mode flash on load -->
   <script>
     (function () {
       try {
@@ -201,36 +140,20 @@
 
 <body>
   <noscript>
-    <div
-      style="text-align:center;padding:60px 20px;font-family:'Georgia',serif;background:#0f0f0f;color:#f1f1f1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center">
+    <div style="text-align:center;padding:60px 20px;font-family:'Georgia',serif;background:#0f0f0f;color:#f1f1f1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center">
       <h1 style="font-size:2rem;color:#f59e0b;margin-bottom:12px">RealSSA News</h1>
-      <p style="font-size:1rem;color:#aaa;max-width:400px;margin-bottom:24px">Breaking News, Sub-Saharan Africa, Sports
-        &amp; Entertainment</p>
+      <p style="font-size:1rem;color:#aaa;max-width:400px;margin-bottom:24px">Breaking News, Sub-Saharan Africa, Sports &amp; Entertainment</p>
       <p style="color:#888">Please enable JavaScript to use this site.</p>
       <a href="https://whatsapp.com/channel/0029VbDetsPGufIx3Totk938" style="margin-top:20px;color:#25D366;font-weight:bold;text-decoration:underline">Join our WhatsApp Channel</a>
       <a href="https://realssanews.com.ng/rss/all.xml" style="margin-top:8px;color:#f59e0b;text-decoration:underline">Browse our RSS feed instead</a>
     </div>
   </noscript>
   <div id="root">
-    <!-- Premium Brand Startup Loader -->
     <div id="startup-loader" role="status" aria-live="polite" aria-label="RealSSA News is loading">
       <div class="loader-content">
         <svg class="sk-star" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#fef08a"/>
-              <stop offset="50%" stop-color="#f59e0b"/>
-              <stop offset="100%" stop-color="#b45309"/>
-            </linearGradient>
-          </defs>
-          <polygon points="12,12 12,2 14.5,9.5" fill="url(#sg)" opacity="0.95"/>
-          <polygon points="12,12 14.5,9.5 22,12" fill="url(#sg)" opacity="0.75"/>
-          <polygon points="12,12 22,12 14.5,14.5" fill="url(#sg)" opacity="0.60"/>
-          <polygon points="12,12 14.5,14.5 12,22" fill="url(#sg)" opacity="0.40"/>
-          <polygon points="12,12 12,22 9.5,14.5" fill="url(#sg)" opacity="0.80"/>
-          <polygon points="12,12 9.5,14.5 2,12"  fill="url(#sg)" opacity="0.70"/>
-          <polygon points="12,12 2,12 9.5,9.5"  fill="url(#sg)" opacity="0.55"/>
-          <polygon points="12,12 9.5,9.5 12,2"  fill="url(#sg)" opacity="0.90"/>
+          <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fef08a"/><stop offset="50%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient></defs>
+          <polygon points="12,12 12,2 14.5,9.5" fill="url(#sg)" opacity="0.95"/><polygon points="12,12 14.5,9.5 22,12" fill="url(#sg)" opacity="0.75"/><polygon points="12,12 22,12 14.5,14.5" fill="url(#sg)" opacity="0.60"/><polygon points="12,12 14.5,14.5 12,22" fill="url(#sg)" opacity="0.40"/><polygon points="12,12 12,22 9.5,14.5" fill="url(#sg)" opacity="0.80"/><polygon points="12,12 9.5,14.5 2,12" fill="url(#sg)" opacity="0.70"/><polygon points="12,12 2,12 9.5,9.5" fill="url(#sg)" opacity="0.55"/><polygon points="12,12 9.5,9.5 12,2" fill="url(#sg)" opacity="0.90"/>
         </svg>
         <div class="loader-text">RealSSA</div>
         <div class="pulse-dot"></div>
