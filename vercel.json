@@ -4,6 +4,8 @@
   "functions": {
     "api/index.js": {"maxDuration":180},
     "api/news.js": {"maxDuration":30},
+    "api/news-sports.js": {"maxDuration":30},
+    "api/news-sports-featured.js": {"maxDuration":15},
     "api/sports.js": {"maxDuration":20},
     "api/trending.js": {"maxDuration":20},
     "api/chat.js": {"maxDuration":30},
@@ -21,6 +23,8 @@
   "rewrites": [
     {"source":"/api/chat","destination":"/api/chat-current.js"},
     {"source":"/api/feed/foryou","destination":"/api/news.js"},
+    {"source":"/api/news/sports/featured","destination":"/api/news-sports-featured.js"},
+    {"source":"/api/news/sports","destination":"/api/news-sports.js"},
     {"source":"/api/news/:path*","destination":"/api/news.js"},
     {"source":"/api/sports/:path*","destination":"/api/sports.js"},
     {"source":"/api/trending","destination":"/api/trending.js"},
