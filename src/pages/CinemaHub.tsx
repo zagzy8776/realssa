@@ -1541,6 +1541,12 @@ export default function CinemaHub() {
                     </div>
                   )}
 
+                  {!isSearching && hasMore && page < 20 && (
+                    <nav aria-label="Cinema pagination" className="sr-only">
+                      <a href={`/videos?page=${page + 1}`}>Next cinema page</a>
+                    </nav>
+                  )}
+
                   {catalog.length === 0 && !loading ? (
                     <div className="flex flex-col items-center justify-center text-center py-16 px-4 bg-zinc-900/30 border border-white/5 rounded-2xl max-w-md mx-auto my-8 space-y-4 backdrop-blur-sm animate-fade-in w-full">
                       <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
