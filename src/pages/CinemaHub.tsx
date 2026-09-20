@@ -159,7 +159,22 @@ export default function CinemaHub() {
   const [heroTrailerKey, setHeroTrailerKey] = useState<string | null>(null);
 
   // ── Initial Load ──
-  useEffect(() => { fetchPage(1, true); }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedPage = Math.min(20, Math.max(1, parseInt(params.get('page') || '1', 10) || 1));
+    let cancelled = false;
+
+    (async () => {
+      for (let pageNum = 1; pageNum <= requestedPage; pageNum += 1) {
+        if (cancelled) return;
+        await fetchPage(pageNum, pageNum === 1);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ── Load Sports Matches when activeTab === 'sports' ──
   useEffect(() => {
@@ -288,23 +303,24 @@ export default function CinemaHub() {
     }
   }, []);
 
-  // ── IntersectionObserver for infinite scroll ──
+  // ── IntersectionObserver for true automatic infinite scroll ──
   useEffect(() => {
-    if (isSearching) return;
+    if (isSearching || loading) return;
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !loadingMore && hasMore && !isSearching) {
+        if (entries[0]?.isIntersecting && !loadingMore && hasMore && !isSearching) {
           loadNextPage();
         }
       },
-      { rootMargin: '300px' }
+      { rootMargin: '600px 0px' }
     );
+
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadingMore, hasMore, isSearching]);
+  }, [loading, loadingMore, hasMore, isSearching, loadNextPage]);
 
   // ── Close suggestions on outside click ──
   useEffect(() => {
@@ -358,6 +374,14 @@ export default function CinemaHub() {
 
       setHasMore(fresh.length > 0 && pageNum < 20);
       setPage(pageNum);
+
+      // Keep the currently loaded page addressable and reloadable.
+      if (!isSearching && typeof window !== 'undefined') {
+        const nextUrl = new URL(window.location.href);
+        if (pageNum > 1) nextUrl.searchParams.set('page', String(pageNum));
+        else nextUrl.searchParams.delete('page');
+        window.history.replaceState(null, '', nextUrl.pathname + nextUrl.search + nextUrl.hash);
+      }
     } catch (err) {
       console.error('Failed to fetch catalog:', err);
       if (isFirst) {
