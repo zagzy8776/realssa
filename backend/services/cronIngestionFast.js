@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Parser = require('rss-parser');
 const { getPoolForCategory } = require('../config/multiDb');
 const { enforceNewsRetention } = require('./newsRetention');
+const { ensureRssSchema } = require('./ensureRssSchema');
 const notificationService = require('./notificationService');
 
 // External cron providers such as cron-job.org have a hard 30-second request
@@ -158,7 +159,7 @@ async function fetchFeed(url) {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const xml = await response.text();
-    return await parser.parseString(xml.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&amp;'));
+    return await parser.parseString(xml.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&'));
   } catch (error) {
     console.warn(`[Fast Cron] Feed failed ${url}: ${error.message}`);
     return null;
@@ -268,6 +269,11 @@ async function ingestCronCategory(category) {
   const normalizedCategory = String(category || '').trim().toLowerCase();
   const pool = getPoolForCategory(normalizedCategory)?.pool;
   if (!pool) throw new Error('Primary news database is not configured');
+
+  // Auto-create rss_articles (+ indexes / notified_articles) on first write path.
+  // Production was 500ing every cron because the relation did not exist and
+  // Vercel never runs the persistent-worker migrations.
+  await ensureRssSchema(pool);
 
   try {
     await enforceNewsRetention(pool);
