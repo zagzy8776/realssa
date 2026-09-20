@@ -87,14 +87,8 @@ try {
   Module._load = originalLoad;
 }
 
-// Vercel sits behind a trusted reverse proxy. Tell Express/rate-limit to use
-// the forwarded client address so X-Forwarded-For does not become a runtime
-// validation error on every API request.
 app.set('trust proxy', 1);
 
-// backend/config/multiDb is loaded by server.js with the same shared pg.Pool
-// constructor above. Its primary pool therefore exists immediately, even
-// before server.js finishes its asynchronous SELECT NOW() probe.
 let fallbackDatabasePool = null;
 try {
   const multiDb = require('../backend/config/multiDb');
@@ -107,7 +101,6 @@ const waitForDatabasePool = async (timeoutMs = 10000) => {
   if (!process.env.DATABASE_URL) return null;
   if (app.get('pool')) return app.get('pool');
   if (fallbackDatabasePool) return fallbackDatabasePool;
-
   const started = Date.now();
   while (!app.get('pool') && Date.now() - started < timeoutMs) {
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -124,6 +117,21 @@ const sendJson = (res, statusCode, payload) => {
 
 const originalHandle = app.handle.bind(app);
 const { ingestCronCategory } = require('../backend/services/cronIngestionFast');
+const { ensureRssSchema } = require('../backend/services/ensureRssSchema');
+
+const resolveCronSecret = () => process.env.CRON_SECRET || process.env.CRON_JOB_SECRET || '';
+
+const isAuthorizedCron = (req, parsed) => {
+  const configured = resolveCronSecret();
+  const supplied =
+    parsed.searchParams.get('secret') ||
+    req.headers['x-cron-secret'] ||
+    (req.headers.authorization?.startsWith('Bearer ')
+      ? req.headers.authorization.slice('Bearer '.length)
+      : undefined);
+  if (!configured || !supplied) return false;
+  return supplied === configured;
+};
 
 const EXTERNAL_ARTICLE_ID_RE = /^(?:https?:\/\/|www\.)/i;
 const SPARSE_CATEGORY_MIN = 18;
@@ -140,10 +148,10 @@ const isExternalArticleId = (value) => {
 };
 
 const escapeCommentText = (value, maxLength) => String(value || '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
+  .replace(/&/g, '&')
+  .replace(/</g, '<')
+  .replace(/>/g, '>')
+  .replace(/\"/g, '"')
   .replace(/'/g, '&#039;')
   .slice(0, maxLength);
 
@@ -151,7 +159,6 @@ const ensureExternalCommentsTable = async (pool) => {
   if (!pool) return false;
   const existing = externalCommentsTableReady.get(pool);
   if (existing) return existing;
-
   const promise = pool.query(`
     CREATE TABLE IF NOT EXISTS external_comments (
       id BIGSERIAL PRIMARY KEY,
@@ -162,16 +169,13 @@ const ensureExternalCommentsTable = async (pool) => {
       likes INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_external_comments_article
-      ON external_comments (article_id, created_at ASC);
-    CREATE INDEX IF NOT EXISTS idx_external_comments_parent
-      ON external_comments (parent_id);
+    CREATE INDEX IF NOT EXISTS idx_external_comments_article ON external_comments (article_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_external_comments_parent ON external_comments (parent_id);
   `).then(() => true).catch((error) => {
     externalCommentsTableReady.delete(pool);
     console.warn('[Vercel Comments] Table initialization failed:', error.message);
     return false;
   });
-
   externalCommentsTableReady.set(pool, promise);
   return promise;
 };
@@ -190,7 +194,6 @@ const mapExternalComments = (rows) => {
       replies: []
     });
   }
-
   const roots = [];
   for (const comment of comments.values()) {
     if (comment.parentId && comments.has(comment.parentId)) {
@@ -204,19 +207,13 @@ const mapExternalComments = (rows) => {
 
 const handleExternalComments = async (parsed, req, res, pool) => {
   if (!pool || !parsed.pathname.startsWith('/api/comments')) return false;
-
   const method = req.method.toUpperCase();
   const pathMatch = parsed.pathname.match(/^\/api\/comments(?:\/([^/]+)\/like)?\/?$/);
   if (!pathMatch) return false;
-
   if (method === 'GET' && !pathMatch[1]) {
     const articleId = parsed.searchParams.get('articleId');
     if (!articleId || !isExternalArticleId(articleId)) return false;
-
-    if (!(await ensureExternalCommentsTable(pool))) {
-      return sendJson(res, 200, []), true;
-    }
-
+    if (!(await ensureExternalCommentsTable(pool))) return sendJson(res, 200, []), true;
     try {
       const result = await pool.query(
         'SELECT id, article_id, author_name, content, parent_id, likes, created_at FROM external_comments WHERE article_id = $1 ORDER BY created_at ASC, id ASC',
@@ -228,44 +225,29 @@ const handleExternalComments = async (parsed, req, res, pool) => {
       return sendJson(res, 200, []), true;
     }
   }
-
   if (method === 'POST' && !pathMatch[1]) {
     let body = req.body;
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch { body = {}; }
-    }
+    if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
     body = body || {};
-
     const articleId = String(body.articleId || '').trim();
     const author = String(body.author || '').trim();
     const content = String(body.content || '').trim();
     const parentId = body.parentId ? String(body.parentId).trim() : null;
-
     if (!articleId || !author || !content) return sendJson(res, 400, { error: 'Missing required fields' }), true;
     if (!isExternalArticleId(articleId)) return false;
     if (author.length > 100 || content.length > 1000) return sendJson(res, 400, { error: 'Comment is too long' }), true;
     if (parentId && !/^\d+$/.test(parentId)) return sendJson(res, 400, { error: 'Invalid parent comment' }), true;
-
-    if (!(await ensureExternalCommentsTable(pool))) {
-      return sendJson(res, 503, { error: 'Comments temporarily unavailable', retryable: true }), true;
-    }
-
+    if (!(await ensureExternalCommentsTable(pool))) return sendJson(res, 503, { error: 'Comments temporarily unavailable', retryable: true }), true;
     try {
       const safeAuthor = escapeCommentText(author, 100);
       const safeContent = escapeCommentText(content, 1000);
       const pId = parentId ? Number(parentId) : null;
-
       if (pId) {
-        const parent = await pool.query(
-          'SELECT id FROM external_comments WHERE id = $1 AND article_id = $2',
-          [pId, articleId]
-        );
+        const parent = await pool.query('SELECT id FROM external_comments WHERE id = $1 AND article_id = $2', [pId, articleId]);
         if (parent.rows.length === 0) return sendJson(res, 400, { error: 'Parent comment not found' }), true;
       }
-
       const result = await pool.query(
-        `INSERT INTO external_comments (article_id, author_name, content, parent_id)
-         VALUES ($1, $2, $3, $4) RETURNING id, article_id, author_name, content, parent_id, likes, created_at`,
+        `INSERT INTO external_comments (article_id, author_name, content, parent_id) VALUES ($1, $2, $3, $4) RETURNING id, article_id, author_name, content, parent_id, likes, created_at`,
         [articleId, safeAuthor, safeContent, pId]
       );
       const created = result.rows[0];
@@ -284,18 +266,13 @@ const handleExternalComments = async (parsed, req, res, pool) => {
       return sendJson(res, 500, { error: 'Failed to save comment' }), true;
     }
   }
-
   if (method === 'POST' && pathMatch[1]) {
     const commentId = pathMatch[1];
     if (!/^\d+$/.test(commentId)) return false;
     if (!(await ensureExternalCommentsTable(pool))) return false;
-
     try {
       const result = await pool.query(
-        `UPDATE external_comments
-         SET likes = likes + 1
-         WHERE id = $1
-         RETURNING id, article_id, author_name, content, parent_id, likes, created_at`,
+        `UPDATE external_comments SET likes = likes + 1 WHERE id = $1 RETURNING id, article_id, author_name, content, parent_id, likes, created_at`,
         [Number(commentId)]
       );
       if (result.rows.length === 0) return false;
@@ -314,7 +291,6 @@ const handleExternalComments = async (parsed, req, res, pool) => {
       return false;
     }
   }
-
   return false;
 };
 
@@ -327,19 +303,20 @@ const maybeRefreshSparseCategory = async (parsed, pool) => {
     'lifestyle', 'sports'
   ]);
   if (!allowedCategories.has(category)) return;
-
   const last = sparseCategoryRefresh.get(category) || 0;
   if (Date.now() - last < SPARSE_CATEGORY_COOLDOWN_MS) return;
-
   try {
     const dbCategory = category === 'nigerian' ? 'nigerian-news' : category;
+    try { await ensureRssSchema(pool); } catch (schemaErr) {
+      console.warn('[Vercel Sparse Refresh] schema bootstrap failed:', schemaErr.message);
+      return;
+    }
     const countResult = await pool.query(
       'SELECT COUNT(*)::int AS count FROM rss_articles WHERE LOWER(category) = LOWER($1)',
       [dbCategory]
     );
     const count = Number(countResult.rows[0]?.count || 0);
     if (count >= SPARSE_CATEGORY_MIN) return;
-
     sparseCategoryRefresh.set(category, Date.now());
     try {
       const result = await Promise.race([
@@ -355,90 +332,55 @@ const maybeRefreshSparseCategory = async (parsed, pool) => {
   }
 };
 
-// Vercel-side compatibility routes. These keep the web app usable even when
-// legacy Express handlers expect columns/tables from an older schema.
 const handleStableApi = async (parsed, req, res, pool) => {
   if (!pool || req.method !== 'GET') return false;
-
   if (parsed.pathname === '/api/sports/matches') {
     try {
       const result = await pool.query(`
-        SELECT
-          match_id AS provider_match_id,
-          COALESCE(competition, 'Other') AS competition_name,
-          COALESCE(home_team, 'Home Team') AS home_team_name,
-          home_team_crest,
-          COALESCE(away_team, 'Away Team') AS away_team_name,
-          away_team_crest,
-          COALESCE(status, 'scheduled') AS status,
-          COALESCE(match_minute::text, '') AS minute,
-          COALESCE(home_score, 0) AS home_score,
-          COALESCE(away_score, 0) AS away_score,
-          kickoff_at,
-          updated_at,
-          match_url
+        SELECT match_id AS provider_match_id, COALESCE(competition, 'Other') AS competition_name,
+          COALESCE(home_team, 'Home Team') AS home_team_name, home_team_crest,
+          COALESCE(away_team, 'Away Team') AS away_team_name, away_team_crest,
+          COALESCE(status, 'scheduled') AS status, COALESCE(match_minute::text, '') AS minute,
+          COALESCE(home_score, 0) AS home_score, COALESCE(away_score, 0) AS away_score,
+          kickoff_at, updated_at, match_url
         FROM live_matches
         WHERE status IN ('live', 'scheduled', 'finished')
           AND (status = 'live' OR kickoff_at > NOW() - INTERVAL '3 days')
-        ORDER BY
-          CASE status WHEN 'live' THEN 1 WHEN 'scheduled' THEN 2 ELSE 3 END,
-          kickoff_at ASC NULLS LAST
-        LIMIT 100
-      `);
+        ORDER BY CASE status WHEN 'live' THEN 1 WHEN 'scheduled' THEN 2 ELSE 3 END, kickoff_at ASC NULLS LAST
+        LIMIT 100`);
       return sendJson(res, 200, { matches: Array.isArray(result.rows) ? result.rows : [] }), true;
     } catch (error) {
       console.warn('[Vercel Sports] Stable match query failed:', error.message);
       return sendJson(res, 200, { matches: [] }), true;
     }
   }
-
   if (parsed.pathname === '/api/rates') {
     try {
-      const result = await pool.query(`
-        SELECT currency, buy_rate, sell_rate, source, updated_at AS created_at
-        FROM parallel_rates
-        ORDER BY currency
-      `);
+      const result = await pool.query(`SELECT currency, buy_rate, sell_rate, source, updated_at AS created_at FROM parallel_rates ORDER BY currency`);
       return sendJson(res, 200, Array.isArray(result.rows) ? result.rows : []), true;
     } catch (error) {
       console.warn('[Vercel Market] Rates query failed:', error.message);
       return sendJson(res, 200, []), true;
     }
   }
-
   if (parsed.pathname === '/api/prices') {
     try {
-      const result = await pool.query(`
-        SELECT item_name, price, location, unit, updated_at AS created_at
-        FROM market_prices
-        ORDER BY updated_at DESC, item_name ASC
-        LIMIT 200
-      `);
+      const result = await pool.query(`SELECT item_name, price, location, unit, updated_at AS created_at FROM market_prices ORDER BY updated_at DESC, item_name ASC LIMIT 200`);
       return sendJson(res, 200, Array.isArray(result.rows) ? result.rows : []), true;
     } catch (error) {
       console.warn('[Vercel Market] Prices query failed:', error.message);
       return sendJson(res, 200, []), true;
     }
   }
-
-  // ngx_stocks is not present in the production database. Do not allow that
-  // missing optional table to turn the entire Market Hub request into a 500.
-  // Return the empty shape the UI already understands until a real NGX feed is
-  // wired into the persistent ingestion worker.
   if (parsed.pathname === '/api/stocks') {
     try {
-      const result = await pool.query(`
-        SELECT to_regclass('public.ngx_stocks') AS table_name
-      `);
-      if (!result.rows[0]?.table_name) {
-        return sendJson(res, 200, []), true;
-      }
+      const result = await pool.query(`SELECT to_regclass('public.ngx_stocks') AS table_name`);
+      if (!result.rows[0]?.table_name) return sendJson(res, 200, []), true;
     } catch (error) {
       console.warn('[Vercel Market] Stock table check failed:', error.message);
       return sendJson(res, 200, []), true;
     }
   }
-
   return false;
 };
 
@@ -454,30 +396,52 @@ app.handle = async function realssaVercelHandle(req, res, out) {
   const isRssRequest = parsed.pathname === '/rss.xml' || parsed.pathname.startsWith('/rss/');
   const isCronIngest = parsed.pathname === '/api/cron/ingest';
 
-  if ((req.method === 'GET' || req.method === 'POST') && isCronIngest) {
-    const configuredSecret = process.env.CRON_SECRET;
-    const suppliedSecret = parsed.searchParams.get('secret') || req.headers['x-cron-secret'];
-    if (!configuredSecret || suppliedSecret !== configuredSecret) return sendJson(res, 401, { error: 'Unauthorized' });
-
-    const category = parsed.searchParams.get('category');
-    if (!category) return sendJson(res, 400, { error: 'category is required' });
-
+  if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/migrate') {
+    if (!isAuthorizedCron(req, parsed)) return sendJson(res, 401, { error: 'Unauthorized' });
     try {
-      const result = await ingestCronCategory(category);
+      const pool = await waitForDatabasePool(8000);
+      if (!pool) return sendJson(res, 503, { error: 'Database temporarily unavailable', retryable: true });
+      const schema = await ensureRssSchema(pool);
+      const count = await pool.query('SELECT COUNT(*)::int AS count FROM rss_articles');
       return sendJson(res, 200, {
         success: true,
-        completed: true,
-        ...result,
+        schema,
+        rssArticles: count.rows[0]?.count ?? 0,
         timestamp: new Date().toISOString()
       });
+    } catch (error) {
+      console.error('[Vercel Cron Migrate] failed:', error.message);
+      return sendJson(res, 500, { success: false, error: error.message, timestamp: new Date().toISOString() });
+    }
+  }
+
+  if ((req.method === 'GET' || req.method === 'POST') && isCronIngest) {
+    if (!isAuthorizedCron(req, parsed)) return sendJson(res, 401, { error: 'Unauthorized' });
+    const category = parsed.searchParams.get('category');
+    if (!category) return sendJson(res, 400, { error: 'category is required' });
+    try {
+      const result = await ingestCronCategory(category);
+      return sendJson(res, 200, { success: true, completed: true, ...result, timestamp: new Date().toISOString() });
     } catch (error) {
       console.error('[Vercel Fast Cron] Ingestion failed:', error.message);
       return sendJson(res, 500, {
         success: false,
         completed: false,
         category,
-        error: 'Ingestion failed'
+        error: error.message || 'Ingestion failed',
+        timestamp: new Date().toISOString()
       });
+    }
+  }
+
+  if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/summarize') {
+    if (!isAuthorizedCron(req, parsed)) return sendJson(res, 401, { error: 'Unauthorized' });
+    try {
+      const pool = await waitForDatabasePool(8000);
+      if (pool) await ensureRssSchema(pool);
+    } catch (error) {
+      console.error('[Vercel Cron Summarize] schema bootstrap failed:', error.message);
+      return sendJson(res, 500, { success: false, error: error.message, timestamp: new Date().toISOString() });
     }
   }
 
@@ -486,12 +450,9 @@ app.handle = async function realssaVercelHandle(req, res, out) {
     if (!readyPool) {
       return sendJson(res, 503, { error: 'Database temporarily unavailable', retryable: true });
     }
-
     const externalCommentsHandled = await handleExternalComments(parsed, req, res, readyPool);
     if (externalCommentsHandled) return;
-
     await maybeRefreshSparseCategory(parsed, readyPool);
-
     const stableHandled = await handleStableApi(parsed, req, res, readyPool);
     if (stableHandled) return;
   }
