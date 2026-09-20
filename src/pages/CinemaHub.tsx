@@ -8,6 +8,7 @@ import CinemaPlayer from "@/components/CinemaPlayer";
 import SportsPlayer from "@/components/SportsPlayer";
 import Header from "@/components/Header";
 import ReadProgressBar from "@/components/ReadProgressBar";
+import SEO from "@/components/SEO";
 
 interface MovieOrShow {
   id: number;
@@ -162,18 +163,7 @@ export default function CinemaHub() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedPage = Math.min(20, Math.max(1, parseInt(params.get('page') || '1', 10) || 1));
-    let cancelled = false;
-
-    (async () => {
-      for (let pageNum = 1; pageNum <= requestedPage; pageNum += 1) {
-        if (cancelled) return;
-        await fetchPage(pageNum, pageNum === 1);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    fetchPage(requestedPage, true);
   }, []);
 
   // ── Load Sports Matches when activeTab === 'sports' ──
@@ -375,13 +365,6 @@ export default function CinemaHub() {
       setHasMore(fresh.length > 0 && pageNum < 20);
       setPage(pageNum);
 
-      // Keep the currently loaded page addressable and reloadable.
-      if (!isSearching && typeof window !== 'undefined') {
-        const nextUrl = new URL(window.location.href);
-        if (pageNum > 1) nextUrl.searchParams.set('page', String(pageNum));
-        else nextUrl.searchParams.delete('page');
-        window.history.replaceState(null, '', nextUrl.pathname + nextUrl.search + nextUrl.hash);
-      }
     } catch (err) {
       console.error('Failed to fetch catalog:', err);
       if (isFirst) {
@@ -699,6 +682,12 @@ export default function CinemaHub() {
   };
 
   return (
+      <SEO
+        title={page > 1 ? `Cinema — Page ${page}` : 'Cinema'}
+        description="Browse movies, series and entertainment video content on RealSSA News."
+        url={page > 1 ? `/videos?page=${page}` : '/videos'}
+        section="Cinema"
+      />
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
       <ReadProgressBar />
       <Header />
