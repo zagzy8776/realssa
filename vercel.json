@@ -39,6 +39,7 @@
     {"source":"/sitemap.xml","destination":"/api/index.js"},
     {"source":"/news-sitemap.xml","destination":"/api/index.js"},
     {"source":"/pages-sitemap.xml","destination":"/api/index.js"},
+    {"source":"/locations-sitemap.xml","destination":"/api/index.js"},
     {"source":"/(.*)","destination":"/index.html"}
   ]
 }
