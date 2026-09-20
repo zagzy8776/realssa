@@ -91,7 +91,7 @@ function publishedDate(item){ const d=new Date(item.pubDate||Date.now()); return
 function getImage(item){ if(/^https?:\/\//i.test(String(item.image||''))) return item.image; return String(item.description||'').match(/<img[^>]+src=["']([^"']+)["']/i)?.[1]||'https://realssanews.com.ng/logo.png'; }
 const crypto = require('crypto');
 const BLOCKED_HOSTS = new Set([
-  'espn.com','skysports.com','dailymaverick.co.za','edition.cnn.com'
+  'espn.com','skysports.com','dailymaverick.co.za','edition.cnn.com','punchng.com'
 ]);
 function hostOf(link){
   try { return new URL(link).hostname.replace(/^www\./,'').toLowerCase(); }
