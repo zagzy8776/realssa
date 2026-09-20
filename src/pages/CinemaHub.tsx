@@ -322,9 +322,18 @@ export default function CinemaHub() {
     else setLoadingMore(true);
 
     try {
-      const res = await fetch(apiUrl(`/api/cinema/trending?page=${pageNum}&time_window=week`));
+      const res = await fetch(apiUrl(`/api/cinema/trending?page=${pageNum}&time_window=week`), {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store'
+      });
+      if (!res.ok) {
+        throw new Error(`Cinema API returned HTTP ${res.status}`);
+      }
       const data = await res.json();
-      const raw: MovieOrShow[] = data.results || [];
+      if (!data || !Array.isArray(data.results)) {
+        throw new Error('Cinema API returned an invalid catalog payload');
+      }
+      const raw: MovieOrShow[] = data.results;
 
       // Deduplicate by id — never show same card twice
       const fresh = raw.filter(item => {
@@ -602,7 +611,24 @@ export default function CinemaHub() {
             alt={item.title || item.name}
             className="w-full h-full object-cover"
             loading="lazy"
+            onError={(e) => {
+              const img = e.currentTarget;
+              img.style.display = 'none';
+              const fallback = img.nextElementSibling as HTMLElement | null;
+              if (fallback) fallback.style.display = 'flex';
+            }}
           />
+          <div
+            className="hidden absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black flex-col items-center justify-center p-3 text-center"
+            aria-hidden="true"
+          >
+            <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500">
+              {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
+            </div>
+            <p className="text-zinc-400 text-[10px] font-extrabold max-w-full truncate px-1 uppercase tracking-wider">
+              {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
+            </p>
+          </div>
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-3 text-center">
             <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500 group-hover:text-amber-400 group-hover:bg-amber-500/10 transition-colors">
