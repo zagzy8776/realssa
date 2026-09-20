@@ -3948,13 +3948,36 @@ app.get('/locations-sitemap.xml', async (req, res) => {
     const SITE = 'https://www.realssanews.com.ng';
     const { AFRICAN_COUNTRIES } = require('./data/africaCountries');
     const urls = [
-      { loc: `${SITE}/africa`, changefreq: 'daily', priority: 0.8 },
-      ...AFRICAN_COUNTRIES.map(country => ({
-        loc: `${SITE}/country/${country.slug}`,
-        changefreq: 'hourly',
-        priority: 0.7
-      }))
+      { loc: `${SITE}/africa`, changefreq: 'daily', priority: 0.8 }
     ];
+
+    // Only publish country URLs that currently have real coverage. Empty hubs
+    // stay accessible but use noindex until stories exist, preventing thin URLs
+    // from consuming crawl budget.
+    if (process.env.DATABASE_URL) {
+      const names = AFRICAN_COUNTRIES.map(country => country.name);
+      const coverage = await pool.query(
+        `SELECT name,
+                EXISTS (
+                  SELECT 1 FROM rss_articles a
+                  WHERE a.title ILIKE '%' || name || '%'
+                     OR a.original_excerpt ILIKE '%' || name || '%'
+                     OR COALESCE(a.ai_summary, '') ILIKE '%' || name || '%'
+                ) AS has_coverage
+         FROM unnest($1::text[]) AS name`,
+        [names]
+      );
+      for (const row of coverage.rows) {
+        if (row.has_coverage) {
+          const country = AFRICAN_COUNTRIES.find(item => item.name === row.name);
+          if (country) urls.push({
+            loc: `${SITE}/country/${country.slug}`,
+            changefreq: 'daily',
+            priority: 0.7
+          });
+        }
+      }
+    }
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
