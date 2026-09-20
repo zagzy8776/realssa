@@ -19,7 +19,7 @@
 
   <!-- Dynamic news sitemap (48-hour rolling, Google News compliant) -->
   <sitemap>
-    <loc>https://www.realssanews.com.ng/api/sitemap-news.xml</loc>
+    <loc>https://www.realssanews.com.ng/news-sitemap.xml</loc>
   </sitemap>
 
 </sitemapindex>
