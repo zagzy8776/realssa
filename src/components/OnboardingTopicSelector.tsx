@@ -86,9 +86,13 @@ export default function OnboardingTopicSelector() {
 
   useEffect(() => {
     const done = localStorage.getItem(ONBOARDED_KEY);
-    if (!done) {
-      setIsOpen(true);
-    }
+    if (done) return;
+
+    // Let the news shell and first meaningful content paint before opening the
+    // image-heavy personalization modal. This keeps first-load performance
+    // independent from onboarding on slower mobile connections.
+    const timer = window.setTimeout(() => setIsOpen(true), 4000);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Lock background page scroll when modal is active to isolate modal scrolling
