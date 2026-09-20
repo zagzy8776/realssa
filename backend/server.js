@@ -3912,12 +3912,49 @@ app.get('/sitemap.xml', async (req, res) => {
     <lastmod>${now}</lastmod>
   </sitemap>
   <sitemap>
+    <loc>${SITE}/locations-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
     <loc>${SITE}/news-sitemap.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
 </sitemapindex>`;
   res.header('Content-Type', 'application/xml');
   res.send(xml);
+});
+
+// --- African location sitemap --------------------------------------------
+app.get('/locations-sitemap.xml', async (req, res) => {
+  try {
+    const SITE = 'https://www.realssanews.com.ng';
+    const { AFRICAN_COUNTRIES } = require('./data/africaCountries');
+    const urls = [
+      { loc: `${SITE}/africa`, changefreq: 'daily', priority: 0.8 },
+      ...AFRICAN_COUNTRIES.map(country => ({
+        loc: `${SITE}/country/${country.slug}`,
+        changefreq: 'hourly',
+        priority: 0.7
+      }))
+    ];
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    for (const item of urls) {
+      xml += '  <url>\n';
+      xml += `    <loc>${item.loc}</loc>\n`;
+      xml += `    <changefreq>${item.changefreq}</changefreq>\n`;
+      xml += `    <priority>${item.priority.toFixed(1)}</priority>\n`;
+      xml += '  </url>\n';
+    }
+    xml += '</urlset>';
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+    res.send(xml);
+  } catch (err) {
+    console.error('Location sitemap generation failed:', err.message);
+    res.status(500).send('Location sitemap generation failed');
+  }
 });
 
 // --- Pages Sitemap (static routes + publishers + leagues) ---
