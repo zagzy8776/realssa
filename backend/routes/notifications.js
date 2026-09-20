@@ -10,6 +10,21 @@ const pool = new Pool({
   ssl: usersDbUrl ? { rejectUnauthorized: false } : undefined
 });
 
+router.get('/', async (req, res) => {
+  // The web client uses this as a lightweight notification bootstrap call.
+  // Keep it non-fatal when the notification tables/database are unavailable.
+  try {
+    if (!usersDbUrl) return res.json([]);
+    const result = await pool.query(
+      'SELECT id, user_id AS "userId", topics, is_active AS "isActive", created_at AS "createdAt" FROM user_subscriptions WHERE is_active = true ORDER BY created_at DESC LIMIT 50'
+    );
+    return res.json(result.rows || []);
+  } catch (error) {
+    console.warn('[Notifications] Bootstrap read unavailable:', error.message);
+    return res.json([]);
+  }
+});
+
 // Subscribe to notifications
 router.post('/subscribe', async (req, res) => {
   try {
