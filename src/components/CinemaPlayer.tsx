@@ -1,4 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import Hls from 'hls.js';
+import { apiUrl } from '@/lib/api-base';
 import { X, Server, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SandboxedIframe } from './SandboxedIframe';
 
@@ -53,7 +55,11 @@ export default function CinemaPlayer({
   const servers = buildServerList(tmdbId, mediaType, season, episode);
   const [activeIdx, setActiveIdx] = useState(0);
   const [showServers, setShowServers] = useState(false);
+  const [directStream, setDirectStream] = useState<string | null>(null);
+  const [streamLoading, setStreamLoading] = useState(true);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Close on Escape key
   useEffect(() => {
@@ -84,6 +90,41 @@ export default function CinemaPlayer({
   }, [servers.length]);
 
   const activeServer = servers[activeIdx];
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+    setDirectStream(null); setStreamLoading(true); setStreamError(null);
+    const params = new URLSearchParams({ id: String(tmdbId), type: mediaType, season: String(season), episode: String(episode) });
+    fetch(apiUrl('/api/cinema/resolve-stream?' + params.toString()), { headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Stream resolver failed');
+        if (data?.success && data?.stream_url) return data.stream_url as string;
+        throw new Error('No direct stream was returned');
+      })
+      .then((url) => { if (!cancelled) setDirectStream(url); })
+      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') setStreamError(err?.message || 'Direct stream unavailable'); })
+      .finally(() => { if (!cancelled) setStreamLoading(false); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [tmdbId, mediaType, season, episode]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !directStream) return;
+    let hls: Hls | null = null;
+    const isHls = /\.m3u8(?:$|[?#])/i.test(directStream);
+    if (!isHls) { video.src = directStream; return () => { video.removeAttribute('src'); video.load(); }; }
+    if (Hls.isSupported()) {
+      hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+      hls.loadSource(directStream); hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) { setStreamError('The direct stream could not be played.'); setDirectStream(null); }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) { video.src = directStream; }
+    else { setStreamError('This browser cannot play the direct stream.'); setDirectStream(null); }
+    return () => { if (hls) hls.destroy(); video.removeAttribute('src'); video.load(); };
+  }, [directStream]);
 
   return (
     // TRUE FULLSCREEN — covers entire phone/screen, bg gradient for spatial feel
@@ -168,16 +209,14 @@ export default function CinemaPlayer({
         </div>
       )}
 
-      {/* ── VIDEO — fills all remaining screen space with ambient backlight glow ── */}
+      {/* ── VIDEO — direct HLS/MP4 first, provider iframe only if direct fails ── */}
       <div className="flex-1 relative bg-black flex items-center justify-center p-2 sm:p-6 md:p-10">
-        <div className="w-full h-full max-w-6xl max-h-[85vh] relative rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(245,158,11,0.15),0_20px_50px_rgba(0,0,0,0.9)] bg-zinc-950">
-          <SandboxedIframe
-            key={`${tmdbId}-${mediaType}-${season}-${episode}-${activeIdx}`}
-            src={activeServer.url}
-            className="absolute inset-0 w-full h-full"
-          />
+        <div className="w-full h-full max-w-6xl max-h-[85vh] relative rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(245,158,11,0.15),0_20px_50px_rgba(0,0,0,0.9)] bg-black">
+          {directStream ? <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain bg-black" controls playsInline preload="metadata" autoPlay onError={() => { setStreamError('Direct playback failed.'); setDirectStream(null); }} /> : <SandboxedIframe key={String(tmdbId) + '-' + mediaType + '-' + season + '-' + episode + '-' + activeIdx} src={activeServer.url} className="absolute inset-0 w-full h-full" />}
+          {streamLoading && !directStream && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 pointer-events-none"><div className="text-center"><div className="w-8 h-8 mx-auto mb-3 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" /><p className="text-zinc-300 text-xs font-bold">Connecting to video server…</p></div></div>}
+          {!streamLoading && !directStream && streamError && <div className="absolute top-3 left-3 right-3 z-20 pointer-events-none"><div className="inline-flex max-w-full rounded-lg bg-black/75 border border-white/10 px-3 py-2 text-[11px] text-zinc-300 backdrop-blur-md">Direct playback unavailable · using {activeServer.name}</div></div>}
         </div>
-      </div>
+      </div>      </div>
     </div>
   );
 }
