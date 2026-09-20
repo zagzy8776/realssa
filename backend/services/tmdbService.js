@@ -2,8 +2,8 @@ const axios = require('axios');
 const redisService = require('./redisService');
 const r2Service = require('./r2Service');
 
-const TMDB_API_KEY = process.env.TMDB_API_KEY || 'c45fd7812c8980c108390153b0041416';
-const TMDB_READ_TOKEN = process.env.TMDB_READ_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjNDVmZDc4MTJjODk4MGMxMDgzOTAxNTNiMDA0MTQxNiIsIm5iZiI6MTc4NTM4NDk2Ny4zMDcwMDAyLCJzdWIiOiI2YTZhZDAwN2lyZjAyMDJjMTMwZTdiNzgiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.f9r903H07S-TMyG5LCIMNF4uJ-bZytYSWgIWZGJS6ik';
+const TMDB_API_KEY = process.env.TMDB_API_KEY || '';
+const TMDB_READ_TOKEN = process.env.TMDB_READ_TOKEN || '';
 const BASE_URL = 'https://api.themoviedb.org/3';
 
 // Set up Axios instance with defaults
@@ -11,14 +11,18 @@ const tmdbClient = axios.create({
   baseURL: BASE_URL,
   timeout: 10000,
   headers: {
-    Accept: 'application/json'
+    Accept: 'application/json',
+    ...(TMDB_READ_TOKEN ? { Authorization: `Bearer ${TMDB_READ_TOKEN}` } : {})
   }
 });
 
 // Always include the api_key query parameter
 const getParams = (extraParams = {}) => {
+  if (!TMDB_READ_TOKEN && !TMDB_API_KEY) {
+    throw new Error('TMDB authentication is not configured');
+  }
   const params = { ...extraParams };
-  params.api_key = TMDB_API_KEY;
+  if (!TMDB_READ_TOKEN) params.api_key = TMDB_API_KEY;
   return params;
 };
 
