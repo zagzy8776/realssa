@@ -1494,7 +1494,7 @@ export default function CinemaHub() {
                       <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-zinc-950/80 px-4 py-3.5 shadow-2xl shadow-black/20 backdrop-blur-md">
                         {/* Subtle animated loading sweep */}
                         <div className="pointer-events-none absolute inset-x-0 top-0 h-px overflow-hidden bg-white/[0.05]">
-                          <div className="h-full w-1/3 animate-[loading-sweep_1.4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+                          <div className="h-full w-1/3 animate-pulse bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
                         </div>
 
                         <div className="flex items-center gap-3">
