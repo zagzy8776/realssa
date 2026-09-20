@@ -3916,11 +3916,29 @@ app.get('/sitemap.xml', async (req, res) => {
     <lastmod>${now}</lastmod>
   </sitemap>
   <sitemap>
+    <loc>${SITE}/cinema-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
     <loc>${SITE}/news-sitemap.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
 </sitemapindex>`;
   res.header('Content-Type', 'application/xml');
+  res.send(xml);
+});
+
+// --- Cinema pagination sitemap ------------------------------------------
+app.get('/cinema-sitemap.xml', async (req, res) => {
+  const SITE = 'https://www.realssanews.com.ng';
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  xml += `  <url><loc>${SITE}/videos</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n`;
+  for (let page = 2; page <= 20; page += 1) {
+    xml += `  <url><loc>${SITE}/videos?page=${page}</loc><changefreq>daily</changefreq><priority>0.6</priority></url>\n`;
+  }
+  xml += '</urlset>';
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
   res.send(xml);
 });
 
