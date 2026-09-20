@@ -26,7 +26,7 @@ const ForYou               = lazy(() => import("./pages/ForYou"));
 const CinemaHub            = lazy(() => import("./pages/CinemaHub"));
 const VideoNews            = lazy(() => import("./pages/VideoNews"));
 const Sports               = lazy(() => import("./pages/Sports"));
-const About               = lazy(() => import("./pages/About"));
+const LocationHub         = lazy(() => import("./pages/LocationHub"));\nconst About               = lazy(() => import("./pages/About"));
 const Contact             = lazy(() => import("./pages/Contact"));
 const Terms               = lazy(() => import("./pages/Terms"));
 const NigerianManual      = lazy(() => import("./pages/NigerianManual"));
@@ -161,7 +161,11 @@ const router = createBrowserRouter(
       <Route path="/read" element={<ReaderMode />} />
       <Route path="/world-directory" element={<Trending />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
-      <Route path="/country/:countryId" element={<Trending />} />
+      <Route path="/africa" element={<LocationHub />} />
+      <Route path="/country/:countryId" element={<LocationHub />} />
+      <Route path="/state/:stateId" element={<LocationHub />} />
+      <Route path="/city/:cityId" element={<LocationHub />} />
+      <Route path="/local-government/:localGovernmentId" element={<LocationHub />} />
       <Route path="/download" element={<AppDownload />} />
       <Route path="/ads" element={<AdPortal />} />
       <Route path="/reels" element={<Reels />} />
