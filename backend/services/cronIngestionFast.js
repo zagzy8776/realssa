@@ -5,98 +5,121 @@ const { enforceNewsRetention } = require('./newsRetention');
 const { ensureRssSchema } = require('./ensureRssSchema');
 const notificationService = require('./notificationService');
 
-// External cron providers such as cron-job.org have a hard 30-second request
-// timeout. The full ingestion pipeline intentionally does much more work
-// (AI, OG-image scraping, indexing, notifications, cleanup), so it must not
-// be used as the HTTP request handler for those jobs.
-//
-// This path is deliberately small and bounded: fetch trusted feeds in
-// parallel, insert a useful batch of recent items, and return. The persistent
-// worker can do the heavy enrichment work separately.
+// External cron providers (cron-job.org) hard-timeout around 30s.
+// Keep this path bounded: parallel feed fetch → bulk insert → return.
+// Heavy AI enrichment stays on summarize / worker paths.
+
+const ITEMS_PER_FEED = 18;
+const MAX_FEEDS_PER_RUN = 6;
+const FEED_TIMEOUT_MS = 5000;
+
 const FEEDS = {
   'nigerian-news': [
-    'https://www.premiumtimesng.com/rss.xml',
+    'https://www.premiumtimesng.com/feed/',
     'https://www.vanguardngr.com/feed/',
-    'https://guardian.ng/feed/'
+    'https://guardian.ng/feed/',
+    'https://punchng.com/feed/',
+    'https://www.channelstv.com/feed/',
+    'https://www.thecable.ng/feed',
+    'https://saharareporters.com/rss.xml',
+    'https://news.google.com/rss/search?q=Nigeria+news&hl=en-NG&gl=NG&ceid=NG:en'
   ],
   ghana: [
-    'https://www.graphic.com.gh/rss.xml',
     'https://www.myjoyonline.com/feed/',
-    'https://citinewsroom.com/feed'
+    'https://citinewsroom.com/feed',
+    'https://www.graphic.com.gh/rss.xml',
+    'https://www.ghanaweb.com/GhanaHomePage/rss/news.xml',
+    'https://news.google.com/rss/search?q=Ghana+news&hl=en&gl=GH&ceid=GH:en'
   ],
   kenya: [
     'https://www.standardmedia.co.ke/rss/kenya.php',
     'https://www.tuko.co.ke/?service=rss',
-    'https://kbc.co.ke/feed'
+    'https://nation.africa/kenya/rss',
+    'https://www.the-star.co.ke/rss.xml',
+    'https://news.google.com/rss/search?q=Kenya+news&hl=en&gl=KE&ceid=KE:en'
   ],
   'south-africa': [
-    'http://feeds.news24.com/articles/news24/TopStories/rss',
+    'https://feeds.news24.com/articles/news24/TopStories/rss',
     'https://www.dailymaverick.co.za/dmrss',
-    'https://www.sowetanlive.co.za/rss/?publication=sowetan-live'
+    'https://www.sowetanlive.co.za/rss/?publication=sowetan-live',
+    'https://www.iol.co.za/cmlink/1.640',
+    'https://news.google.com/rss/search?q=South+Africa+news&hl=en&gl=ZA&ceid=ZA:en'
   ],
   uk: [
-    'http://feeds.bbci.co.uk/news/uk/rss.xml',
+    'https://feeds.bbci.co.uk/news/uk/rss.xml',
     'https://www.theguardian.com/uk/rss',
-    'https://feeds.skynews.com/feeds/rss/home.xml'
+    'https://feeds.skynews.com/feeds/rss/uknews.xml',
+    'https://www.independent.co.uk/news/uk/rss',
+    'https://news.google.com/rss/search?q=UK+news&hl=en-GB&gl=GB&ceid=GB:en'
   ],
   usa: [
-    'http://rss.cnn.com/rss/edition.rss',
+    'https://rss.cnn.com/rss/edition.rss',
     'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
-    'https://www.pbs.org/newshour/feeds/rss/headlines'
+    'https://www.pbs.org/newshour/feeds/rss/headlines',
+    'https://feeds.npr.org/1001/rss.xml',
+    'https://news.google.com/rss/search?q=US+news&hl=en-US&gl=US&ceid=US:en'
   ],
   world: [
-    'http://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://feeds.bbci.co.uk/news/world/rss.xml',
     'https://www.aljazeera.com/xml/rss/all.xml',
-    'https://www.france24.com/en/rss'
+    'https://www.france24.com/en/rss',
+    'https://www.theguardian.com/world/rss',
+    'https://news.google.com/rss/search?q=world+news&hl=en&gl=US&ceid=US:en'
   ],
   crypto: [
     'https://cointelegraph.com/rss',
-    'https://decrypt.co/feed'
+    'https://decrypt.co/feed',
+    'https://www.coindesk.com/arc/outboundfeeds/rss/',
+    'https://news.google.com/rss/search?q=cryptocurrency+bitcoin&hl=en&gl=US&ceid=US:en'
   ],
   culture: [
     'https://www.bellanaija.com/feed',
     'https://okayafrica.com/feed/',
-    'https://musicinafrica.net/feed'
+    'https://musicinafrica.net/feed',
+    'https://www.theguardian.com/culture/rss',
+    'https://news.google.com/rss/search?q=African+culture+entertainment&hl=en&gl=US&ceid=US:en'
   ],
   entertainment: [
     'https://variety.com/feed/',
     'https://deadline.com/feed/',
-    'https://www.pulse.ng/entertainment/rss'
+    'https://www.pulse.ng/entertainment/rss',
+    'https://news.google.com/rss/search?q=entertainment+Nollywood&hl=en&gl=NG&ceid=NG:en'
   ],
   sports: [
     'https://www.completesports.com/feed',
     'https://soccernet.ng/feed',
-    'https://www.bbc.co.uk/sport/rss.xml'
+    'https://feeds.bbci.co.uk/sport/rss.xml',
+    'https://news.google.com/rss/search?q=African+football+sports&hl=en&gl=NG&ceid=NG:en'
   ],
   business: [
-    'https://www.cnbc.com/id/10001147/device/rss/rss.html',
     'https://feeds.bbci.co.uk/news/business/rss.xml',
-    'https://howwemadeitinafrica.com/feed'
+    'https://howwemadeitinafrica.com/feed',
+    'https://news.google.com/rss/search?q=Africa+business+economy&hl=en&gl=US&ceid=US:en'
   ],
   tech: [
     'https://techcabal.com/feed',
     'https://techpoint.africa/feed',
-    'https://techcrunch.com/feed/'
+    'https://techcrunch.com/feed/',
+    'https://news.google.com/rss/search?q=Africa+tech+startup&hl=en&gl=US&ceid=US:en'
   ],
   jobs: [
     'https://weworkremotely.com/remote-jobs.rss',
+    'https://remoteok.com/remote-jobs.rss',
     'https://reliefweb.int/jobs/rss.xml',
-    'https://remoteok.com/remote-jobs.rss'
+    'https://news.google.com/rss/search?q=Nigeria+jobs+vacancies&hl=en-NG&gl=NG&ceid=NG:en'
   ],
   lifestyle: [
-    'https://wwd.com/fashion-news/feed/',
-    'https://www.theguardian.com/fashion/rss',
-    'https://skift.com/feed/'
+    'https://www.theguardian.com/lifeandstyle/rss',
+    'https://news.google.com/rss/search?q=lifestyle+fashion+Africa&hl=en&gl=US&ceid=US:en'
   ],
   science: [
-    'https://www.nature.com/nature.rss',
     'https://www.sciencenews.org/feed',
-    'https://scitechdaily.com/feed/'
+    'https://news.google.com/rss/search?q=science+technology+news&hl=en&gl=US&ceid=US:en'
   ]
 };
 
 const parser = new Parser({
-  timeout: 4500,
+  timeout: FEED_TIMEOUT_MS,
   customFields: {
     item: [
       ['media:content', 'media:content'],
@@ -130,12 +153,14 @@ function pickImage(item) {
   }
 
   const html = item.content || item['content:encoded'] || item.description || '';
-  const match = String(html).match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);
+  const match = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
   return match?.[1] || 'https://www.realssanews.com.ng/logo.png';
 }
 
 function cleanText(value) {
   return String(value || '')
+    .replace(/<!\[CDATA\[/gi, '')
+    .replace(/\]\]>/g, '')
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -148,18 +173,29 @@ function publishedDate(item) {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
+function shuffle(list) {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 async function fetchFeed(url) {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'RealSSA-Cron/2.0 (+https://www.realssanews.com.ng)',
+        'User-Agent': 'RealSSA-Cron/2.1 (+https://www.realssanews.com.ng)',
         Accept: 'application/rss+xml, application/xml, text/xml, */*'
       },
-      signal: AbortSignal.timeout(4500)
+      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+      redirect: 'follow'
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const xml = await response.text();
-    return await parser.parseString(xml.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&'));
+    if (!xml || xml.length < 40) throw new Error('empty feed body');
+    return await parser.parseString(xml.replace(/&(?!amp;|lt;|gt;|quot;|#39;|#\d+;)/g, '&'));
   } catch (error) {
     console.warn(`[Fast Cron] Feed failed ${url}: ${error.message}`);
     return null;
@@ -186,15 +222,12 @@ async function ensureNotificationTable(pool) {
 async function notifyNewArticles(pool, insertedArticles) {
   if (!pool || !insertedArticles.length) return { attempted: 0, sent: 0 };
   if (!process.env.ONESIGNAL_API_KEY) {
-    console.warn('[Fast Cron] OneSignal API key missing; new-article notifications skipped.');
-    return { attempted: 0, sent: 0 };
+    return { attempted: 0, sent: 0, skipped: 'no_onesignal' };
   }
 
   try {
     await ensureNotificationTable(pool);
 
-    // Keep the notification budget global across all category cron calls.
-    // Eight notifications/hour matches the previous ingestion safety limit.
     const countResult = await pool.query(
       `SELECT COUNT(*)::int AS count
        FROM notified_articles
@@ -243,8 +276,6 @@ async function notifyNewArticles(pool, insertedArticles) {
              VALUES ($1, NOW()) ON CONFLICT (story_hash) DO NOTHING`,
             [storyHash]
           );
-        } else {
-          console.warn(`[Fast Cron] Notification not accepted for "${article.title.slice(0, 70)}": ${result?.error || result?.message || 'unknown error'}`);
         }
       } catch (error) {
         console.warn(`[Fast Cron] Notification failed: ${error.message}`);
@@ -270,9 +301,6 @@ async function ingestCronCategory(category) {
   const pool = getPoolForCategory(normalizedCategory)?.pool;
   if (!pool) throw new Error('Primary news database is not configured');
 
-  // Auto-create rss_articles (+ indexes / notified_articles) on first write path.
-  // Production was 500ing every cron because the relation did not exist and
-  // Vercel never runs the persistent-worker migrations.
   await ensureRssSchema(pool);
 
   try {
@@ -281,9 +309,14 @@ async function ingestCronCategory(category) {
     console.warn(`[Fast Cron] Retention guard failed: ${error.message}`);
   }
 
-  const urls = FEEDS[normalizedCategory];
-  if (!urls) throw new Error(`Unsupported cron category: ${normalizedCategory}`);
+  const allUrls = FEEDS[normalizedCategory];
+  if (!allUrls || !allUrls.length) {
+    throw new Error(`Unsupported cron category: ${normalizedCategory}`);
+  }
 
+  // Rotate which feeds we hit so successive cron runs cover the full set
+  // without blowing the 30s external cron timeout.
+  const urls = shuffle(allUrls).slice(0, Math.min(MAX_FEEDS_PER_RUN, allUrls.length));
   const startedAt = Date.now();
   const feeds = await Promise.all(urls.map(fetchFeed));
   const successfulFeeds = feeds.filter(Boolean);
@@ -298,17 +331,24 @@ async function ingestCronCategory(category) {
     const feed = feeds[i];
     if (!feed?.items) continue;
 
-    for (const item of feed.items.slice(0, 10)) {
+    for (const item of feed.items.slice(0, ITEMS_PER_FEED)) {
       const externalLink = item.link || item.guid;
       const title = cleanText(item.title || 'Untitled');
-      if (!externalLink || !title) continue;
+      if (!externalLink || !title || title.length < 8) continue;
+
+      let sourceName;
+      try {
+        sourceName = cleanText(feed.title || new URL(urls[i]).hostname).slice(0, 255);
+      } catch {
+        sourceName = 'RealSSA';
+      }
 
       candidates.push({
-        urlHash: hash(externalLink),
+        urlHash: hash(String(externalLink)),
         title: title.slice(0, 1000),
         excerpt: cleanText(item.contentSnippet || item.summary || item.content || item.description).slice(0, 4000),
         image: pickImage(item),
-        sourceName: cleanText(feed.title || new URL(urls[i]).hostname).slice(0, 255),
+        sourceName,
         externalLink: String(externalLink).slice(0, 2000),
         publishedAt: publishedDate(item),
         category: normalizedCategory,
@@ -326,44 +366,60 @@ async function ingestCronCategory(category) {
 
   let inserted = 0;
   const insertedArticles = [];
-  for (const article of unique) {
-    const result = await pool.query(
-      `INSERT INTO rss_articles
-        (url_hash, title, original_excerpt, category, image, author, source_name,
-         external_link, published_at, content_type, is_featured)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'article', false)
-       ON CONFLICT (url_hash) DO NOTHING
-       RETURNING id`,
-      [
-        article.urlHash,
-        article.title,
-        article.excerpt || article.title,
-        normalizedCategory,
-        article.image,
-        article.sourceName,
-        article.sourceName,
-        article.externalLink,
-        article.publishedAt
-      ]
-    );
 
-    if (result.rows.length) {
-      inserted += 1;
-      insertedArticles.push(article);
+  const hashes = unique.map((a) => a.urlHash);
+  const existing = new Set();
+  if (hashes.length) {
+    const existingResult = await pool.query(
+      'SELECT url_hash FROM rss_articles WHERE url_hash = ANY($1::text[])',
+      [hashes]
+    );
+    for (const row of existingResult.rows) existing.add(row.url_hash);
+  }
+
+  const toInsert = unique.filter((a) => !existing.has(a.urlHash));
+
+  for (const article of toInsert) {
+    try {
+      const result = await pool.query(
+        `INSERT INTO rss_articles
+          (url_hash, title, original_excerpt, category, image, author, source_name,
+           external_link, published_at, content_type, is_featured)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'article', false)
+         ON CONFLICT (url_hash) DO NOTHING
+         RETURNING id`,
+        [
+          article.urlHash,
+          article.title,
+          article.excerpt || article.title,
+          normalizedCategory,
+          article.image,
+          article.sourceName,
+          article.sourceName,
+          article.externalLink,
+          article.publishedAt
+        ]
+      );
+
+      if (result.rows.length) {
+        inserted += 1;
+        insertedArticles.push(article);
+      }
+    } catch (error) {
+      console.warn(`[Fast Cron] Insert failed for ${article.title.slice(0, 40)}: ${error.message}`);
     }
   }
 
-  // The old full ingestion path handled notifications, but the new bounded
-  // Aiven/Vercel ingestion path did not. Restore that missing side effect
-  // without making push delivery capable of breaking news ingestion.
   const notificationResult = await notifyNewArticles(pool, insertedArticles);
 
   const result = {
     category: normalizedCategory,
+    feedsAvailable: allUrls.length,
     feedsAttempted: urls.length,
     feedsSucceeded: successfulFeeds.length,
     feedsFailed: failedFeeds.length,
     candidates: unique.length,
+    alreadyStored: existing.size,
     inserted,
     notificationsAttempted: notificationResult.attempted,
     notificationsSent: notificationResult.sent,
