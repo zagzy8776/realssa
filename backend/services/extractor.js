@@ -2,8 +2,8 @@ const { JSDOM } = require('jsdom');
 const { Readability } = require('@mozilla/readability');
 const dns = require('dns').promises;
 
-// SSRF protection helper
 const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;
+
 async function isSafeUrl(urlStr) {
   try {
     const u = new URL(urlStr);
@@ -15,162 +15,193 @@ async function isSafeUrl(urlStr) {
   }
 }
 
-// User-Agent Rotation Pool
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15',
+  'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+  'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+  'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
 ];
 
-/**
- * Spoofs headers using a rotating User-Agent.
- */
-function getStealthHeaders() {
-  const randomUserAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+function getStealthHeaders(url, uaIndex = 0) {
+  let host = 'www.google.com';
+  try { host = new URL(url).hostname; } catch { /* ignore */ }
+  const ua = USER_AGENTS[uaIndex % USER_AGENTS.length];
   return {
-    'User-Agent': randomUserAgent,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'User-Agent': ua,
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Cache-Control': 'max-age=0',
-    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-    'Sec-Ch-Ua-Mobile': '?0',
-    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+    'Upgrade-Insecure-Requests': '1',
+    Referer: `https://${host}/`,
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
     'Sec-Fetch-User': '?1',
-    'Upgrade-Insecure-Requests': '1'
   };
 }
 
-/**
- * Extracts full article content from a given URL using Mozilla Readability.
- * @param {string} url - The URL to scrape.
- * @returns {Promise<{textContent: string, htmlContent: string, title: string, excerpt: string, byline: string, siteName: string, image: string} | null>}
- */
-async function extractArticle(url) {
+function absoluteUrl(base, maybeRelative) {
+  if (!maybeRelative || typeof maybeRelative !== 'string') return null;
+  const cleaned = maybeRelative.trim().replace(/^\/\//, 'https://');
   try {
-    if (!(await isSafeUrl(url))) {
-      console.warn(`[Extractor] Blocked SSRF attempt to unsafe URL: ${url}`);
-      return null;
-    }
-
-    // Get randomized stealth headers
-    const headers = getStealthHeaders();
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: headers,
-      signal: AbortSignal.timeout(10000)
-    });
-
-    if (!response.ok) {
-      console.warn(`[Extractor] Failed to fetch ${url} - Status: ${response.status}`);
-      return null;
-    }
-
-    const html = await response.text();
-    
-    // Parse the HTML using JSDOM
-    const dom = new JSDOM(html, { url });
-    
-    // Readability heavily modifies the DOM, so clone it or use it once.
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
-
-    if (!article || !article.textContent) {
-      console.warn(`[Extractor] Readability failed to parse content from ${url}`);
-      return null;
-    }
-
-    // Try to extract an Open Graph image if Readability didn't capture a good one
-    let heroImage = null;
-    const ogImageMeta = dom.window.document.querySelector('meta[property="og:image"]');
-    if (ogImageMeta) {
-      heroImage = ogImageMeta.getAttribute('content');
-    }
-
-    // AI Fallback if Readability fails or extracts less than 200 characters
-    if (!article || !article.textContent || article.textContent.length < 200) {
-      console.warn(`[Extractor] Readability yielded poor results for ${url}, trying AI Fallback...`);
-      const aiResult = await aiFallbackExtractor(html, url);
-      if (aiResult) {
-        return {
-          title: aiResult.title || dom.window.document.title,
-          textContent: aiResult.textContent,
-          htmlContent: `<p>${aiResult.textContent.replace(/\n/g, '<br>')}</p>`,
-          excerpt: aiResult.textContent.substring(0, 200) + '...',
-          byline: 'AI Extracted',
-          siteName: new URL(url).hostname,
-          image: heroImage,
-          length: aiResult.textContent.length
-        };
-      }
-      
-      // Fallback to Firecrawl if AI extraction also yields poor results
-      const firecrawlResult = await scrapeWithFirecrawl(url);
-      if (firecrawlResult) return firecrawlResult;
-      return null;
-    }
-
-    return {
-      title: article.title,
-      textContent: article.textContent.trim(), // Raw text (good for AI/Reader Mode)
-      htmlContent: article.content, // HTML formatted (good for rich display)
-      excerpt: article.excerpt,
-      byline: article.byline,
-      siteName: article.siteName,
-      image: heroImage,
-      length: article.length
-    };
-  } catch (error) {
-    console.error(`[Extractor] Error fetching/parsing ${url}:`, error.message);
-    // Try Firecrawl as safety fallback when fetch fails (e.g. Cloudflare blocks)
-    const firecrawlResult = await scrapeWithFirecrawl(url);
-    if (firecrawlResult) return firecrawlResult;
+    return new URL(cleaned, base).toString();
+  } catch {
     return null;
   }
 }
 
-/**
- * Gemini AI Fallback Extractor
- */
-async function aiFallbackExtractor(rawHtml, url) {
-  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
-  const GEMINI_API_KEY = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
+function extractMetaImage(document, pageUrl) {
+  const selectors = [
+    'meta[property="og:image"]',
+    'meta[property="og:image:secure_url"]',
+    'meta[name="twitter:image"]',
+    'meta[name="twitter:image:src"]',
+    'meta[itemprop="image"]',
+    'link[rel="image_src"]',
+  ];
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    const raw = el?.getAttribute('content') || el?.getAttribute('href');
+    const abs = absoluteUrl(pageUrl, raw);
+    if (abs && /^https?:\/\//i.test(abs)) return abs;
+  }
+
+  const imgs = Array.from(document.querySelectorAll('article img, .post-content img, .entry-content img, main img, img'));
+  let best = null;
+  let bestScore = 0;
+  for (const img of imgs) {
+    const src = absoluteUrl(pageUrl, img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-lazy-src'));
+    if (!src || /logo|icon|sprite|avatar|pixel|1x1|spacer/i.test(src)) continue;
+    const w = Number(img.getAttribute('width') || 0);
+    const h = Number(img.getAttribute('height') || 0);
+    const score = w * h || (src.length > 40 ? 100 : 1);
+    if (score > bestScore) {
+      bestScore = score;
+      best = src;
+    }
+  }
+  return best;
+}
+
+function extractBySelectors(document) {
+  const selectors = [
+    'article [itemprop="articleBody"]',
+    'article .article-body',
+    'article .story-body',
+    'article .post-content',
+    'article .entry-content',
+    'article .content__article-body',
+    '[data-component="text-block"]',
+    '.article__body',
+    '.story-content',
+    '.post__content',
+    'main article',
+    'article',
+    'main',
+  ];
+  for (const sel of selectors) {
+    const node = document.querySelector(sel);
+    if (!node) continue;
+    const clone = node.cloneNode(true);
+    clone.querySelectorAll('script, style, noscript, iframe, aside, nav, .ad, .ads, .share, .social').forEach((n) => n.remove());
+    const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+    if (text.length >= 200) {
+      return {
+        textContent: text,
+        htmlContent: clone.innerHTML,
+        title: document.querySelector('h1')?.textContent?.trim() || document.title,
+      };
+    }
+  }
+  return null;
+}
+
+async function unwrapGoogleNewsUrl(url) {
+  try {
+    const u = new URL(url);
+    if (!/news\.google\.com/i.test(u.hostname)) return url;
+
+    const headers = getStealthHeaders(url, 0);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.url && !/news\.google\.com/i.test(new URL(res.url).hostname)) {
+      return res.url;
+    }
+
+    const html = await res.text();
+    const m =
+      html.match(/data-n-au="(https?:\/\/[^"]+)"/i) ||
+      html.match(/<a[^>]+href="(https?:\/\/(?!news\.google)[^"]+)"[^>]*>\s*<h/i) ||
+      html.match(/url=(https?:\/\/(?!news\.google)[^&\s"']+)/i);
+    if (m?.[1]) {
+      try {
+        return decodeURIComponent(m[1]);
+      } catch {
+        return m[1];
+      }
+    }
+  } catch (err) {
+    console.warn('[Extractor] Google News unwrap failed:', err.message);
+  }
+  return url;
+}
+
+async function fetchHtml(url, attempt = 0) {
+  const headers = getStealthHeaders(url, attempt);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+    redirect: 'follow',
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const html = await response.text();
+  if (!html || html.length < 200) throw new Error('empty html');
+  return { html, finalUrl: response.url || url };
+}
+
+async function aiFallbackExtractor(html, url) {
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!GEMINI_API_KEY) return null;
+  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
 
-  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
-  
-  // Strip out heavy junk to save tokens
-  const cleanHtml = rawHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                           .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-                           .replace(/<[^>]+>/g, ' ')
-                           .replace(/\s+/g, ' ')
-                           .slice(0, 15000);
+  const cleanHtml = String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 12000);
 
-  const prompt = `You are an expert web scraper. Extract the main article text from this messy HTML content from ${url}. Return ONLY the pure article text, nothing else. No introductions or formatting.\n\n${cleanHtml}`;
+  if (cleanHtml.length < 200) return null;
+
+  const prompt = `Extract the main news article body text from this page content for ${url}. Return ONLY the article text, no intro. If you cannot find an article, return EMPTY.\n\n${cleanHtml}`;
 
   try {
     const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 2000, temperature: 0.1 }
+        generationConfig: { maxOutputTokens: 2500, temperature: 0.1 },
       }),
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(15000),
     });
-    
     if (!response.ok) return null;
     const data = await response.json();
     const textContent = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (textContent && textContent.length > 100) {
-      return { textContent };
+    if (textContent && textContent.length > 120 && !/^EMPTY/i.test(textContent.trim())) {
+      return { textContent: textContent.trim() };
     }
   } catch (err) {
     console.warn(`[Extractor] AI Fallback error: ${err.message}`);
@@ -178,45 +209,39 @@ async function aiFallbackExtractor(rawHtml, url) {
   return null;
 }
 
-/**
- * Scrape full article text using Firecrawl API
- */
 async function scrapeWithFirecrawl(url) {
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey) return null;
 
-  console.log(`🔥 [Firecrawl] Scraping URL: ${url}`);
   try {
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: url,
-        formats: ['markdown', 'html']
+        url,
+        formats: ['markdown', 'html'],
+        onlyMainContent: true,
       }),
-      timeout: 15000
+      signal: AbortSignal.timeout(18000),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.warn(`[Firecrawl] API error (${response.status}):`, errorText);
-      return null;
-    }
-
+    if (!response.ok) return null;
     const data = await response.json();
-    if (data && data.success && data.data) {
+    if (data?.success && data.data) {
+      const markdown = (data.data.markdown || '').trim();
+      if (markdown.length < 100) return null;
       return {
         title: data.data.metadata?.title || new URL(url).hostname,
-        textContent: (data.data.markdown || '').trim(),
-        htmlContent: data.data.html || `<p>${(data.data.markdown || '').replace(/\n/g, '<br>')}</p>`,
-        excerpt: data.data.metadata?.description || (data.data.markdown || '').substring(0, 200) + '...',
-        byline: data.data.metadata?.author || 'Firecrawl Extracted',
+        textContent: markdown,
+        htmlContent: data.data.html || `<p>${markdown.replace(/\n/g, '<br>')}</p>`,
+        excerpt: data.data.metadata?.description || markdown.slice(0, 200),
+        byline: data.data.metadata?.author || '',
         siteName: data.data.metadata?.siteName || new URL(url).hostname,
-        image: data.data.metadata?.image || null,
-        length: (data.data.markdown || '').length
+        image: data.data.metadata?.ogImage || data.data.metadata?.image || null,
+        length: markdown.length,
       };
     }
   } catch (err) {
@@ -225,4 +250,167 @@ async function scrapeWithFirecrawl(url) {
   return null;
 }
 
-module.exports = { extractArticle };
+async function extractArticle(rawUrl, options = {}) {
+  const fallbackText = String(options.fallbackText || options.excerpt || '').trim();
+  const fallbackImage = options.fallbackImage || options.image || null;
+  const fallbackTitle = options.fallbackTitle || options.title || null;
+
+  let url = String(rawUrl || '').trim();
+  if (!url) return null;
+
+  if (!(await isSafeUrl(url))) {
+    console.warn(`[Extractor] Blocked SSRF attempt: ${url}`);
+    return null;
+  }
+
+  url = await unwrapGoogleNewsUrl(url);
+  if (!(await isSafeUrl(url))) return null;
+
+  let html = null;
+  let finalUrl = url;
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const fetched = await fetchHtml(url, attempt);
+      html = fetched.html;
+      finalUrl = fetched.finalUrl || url;
+      if (/captcha|access denied|just a moment|cf-browser-verification/i.test(html) && html.length < 5000) {
+        lastError = new Error('challenge page');
+        continue;
+      }
+      break;
+    } catch (err) {
+      lastError = err;
+      console.warn(`[Extractor] Fetch attempt ${attempt + 1} failed for ${url}: ${err.message}`);
+    }
+  }
+
+  if (!html) {
+    const firecrawlEarly = await scrapeWithFirecrawl(url);
+    if (firecrawlEarly) {
+      if (!firecrawlEarly.image && fallbackImage) firecrawlEarly.image = fallbackImage;
+      return firecrawlEarly;
+    }
+  }
+
+  let result = null;
+  let heroImage = fallbackImage;
+
+  if (html) {
+    try {
+      const dom = new JSDOM(html, { url: finalUrl });
+      const document = dom.window.document;
+      heroImage = extractMetaImage(document, finalUrl) || fallbackImage;
+
+      try {
+        const reader = new Readability(document.cloneNode(true));
+        const article = reader.parse();
+        if (article?.textContent && article.textContent.trim().length >= 150) {
+          result = {
+            title: article.title || fallbackTitle || document.title,
+            textContent: article.textContent.trim(),
+            htmlContent: article.content,
+            excerpt: article.excerpt || article.textContent.trim().slice(0, 240),
+            byline: article.byline || '',
+            siteName: article.siteName || new URL(finalUrl).hostname.replace(/^www\./, ''),
+            image: heroImage,
+            length: article.textContent.trim().length,
+            publishedTime: '',
+          };
+        }
+      } catch (err) {
+        console.warn('[Extractor] Readability error:', err.message);
+      }
+
+      if (!result || result.textContent.length < 200) {
+        const sel = extractBySelectors(document);
+        if (sel && sel.textContent.length >= 200) {
+          result = {
+            title: sel.title || fallbackTitle || document.title,
+            textContent: sel.textContent,
+            htmlContent: sel.htmlContent || `<p>${sel.textContent}</p>`,
+            excerpt: sel.textContent.slice(0, 240),
+            byline: '',
+            siteName: new URL(finalUrl).hostname.replace(/^www\./, ''),
+            image: heroImage,
+            length: sel.textContent.length,
+            publishedTime: '',
+          };
+        }
+      }
+
+      if (!result || result.textContent.length < 200) {
+        const aiResult = await aiFallbackExtractor(html, finalUrl);
+        if (aiResult?.textContent) {
+          result = {
+            title: fallbackTitle || document.title || new URL(finalUrl).hostname,
+            textContent: aiResult.textContent,
+            htmlContent: `<p>${aiResult.textContent.replace(/\n+/g, '</p><p>')}</p>`,
+            excerpt: aiResult.textContent.slice(0, 240),
+            byline: 'AI Extracted',
+            siteName: new URL(finalUrl).hostname.replace(/^www\./, ''),
+            image: heroImage,
+            length: aiResult.textContent.length,
+            publishedTime: '',
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[Extractor] DOM parse failed:', err.message);
+      lastError = err;
+    }
+  }
+
+  if (!result || result.textContent.length < 200) {
+    const firecrawlResult = await scrapeWithFirecrawl(url);
+    if (firecrawlResult) {
+      if (!firecrawlResult.image) firecrawlResult.image = heroImage || fallbackImage;
+      result = firecrawlResult;
+    }
+  }
+
+  if ((!result || result.textContent.length < 100) && fallbackText.length >= 40) {
+    const paragraphs = fallbackText
+      .split(/\n+|(?<=\.)\s+/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 20);
+    result = {
+      title: fallbackTitle || (result?.title) || new URL(url).hostname,
+      textContent: fallbackText,
+      htmlContent: paragraphs.length
+        ? paragraphs.map((p) => `<p>${p}</p>`).join('')
+        : `<p>${fallbackText}</p>`,
+      excerpt: fallbackText.slice(0, 240),
+      byline: '',
+      siteName: new URL(url).hostname.replace(/^www\./, ''),
+      image: heroImage || fallbackImage,
+      length: fallbackText.length,
+      publishedTime: '',
+      partial: true,
+    };
+  }
+
+  if (!result || !result.textContent || result.textContent.trim().length < 40) {
+    console.warn(`[Extractor] All strategies failed for ${url}`, lastError?.message || '');
+    return null;
+  }
+
+  if (!result.image) result.image = heroImage || fallbackImage || null;
+  result.sourceUrl = finalUrl;
+  return result;
+}
+
+async function fetchArticleImage(url) {
+  try {
+    if (!(await isSafeUrl(url))) return null;
+    const resolved = await unwrapGoogleNewsUrl(url);
+    const { html, finalUrl } = await fetchHtml(resolved, 0);
+    const dom = new JSDOM(html, { url: finalUrl });
+    return extractMetaImage(dom.window.document, finalUrl);
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { extractArticle, fetchArticleImage, unwrapGoogleNewsUrl };
