@@ -21,6 +21,7 @@ interface SEOProps {
   section?: string;
   tags?: string[];
   claimReview?: ClaimReviewData;
+  robots?: string;
 }
 
 const SITE_URL = 'https://www.realssanews.com.ng';
@@ -44,6 +45,7 @@ const SEO = ({
   section,
   tags = [],
   claimReview,
+  robots = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
 }: SEOProps) => {
   // Always prefix with brand for branded search
   const pageTitle = title.includes('RealSSA') ? title : `${title} | ${SITE_NAME}`;
@@ -234,7 +236,7 @@ const SEO = ({
       <title>{pageTitle}</title>
       <meta name="description" content={metaDescription} />
       <meta name="author" content={author} />
-      <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+      <meta name="robots" content={robots} />
       <link rel="canonical" href={canonicalUrl} />
 
       {/* ── Google site verification ── */}
