@@ -1488,13 +1488,45 @@ export default function CinemaHub() {
                 )}
 
                 {/* ── Infinite Scroll Sentinel ── */}
-                <div ref={sentinelRef} className="py-4 flex items-center justify-center">
+                <div ref={sentinelRef} className="relative min-h-[92px] py-6 flex items-center justify-center">
                   {loadingMore && (
-                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold">
-                      <Loader2 size={16} className="animate-spin text-amber-500" />
-                      Loading more...
+                    <div className="w-full max-w-xl px-4">
+                      <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-zinc-950/80 px-4 py-3.5 shadow-2xl shadow-black/20 backdrop-blur-md">
+                        {/* Subtle animated loading sweep */}
+                        <div className="pointer-events-none absolute inset-x-0 top-0 h-px overflow-hidden bg-white/[0.05]">
+                          <div className="h-full w-1/3 animate-[loading-sweep_1.4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-400/20 bg-amber-400/10">
+                            <Loader2 size={17} className="animate-spin text-amber-400" />
+                            <span className="absolute inset-0 rounded-xl ring-1 ring-amber-400/10 animate-pulse" />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-200">
+                                Loading more
+                              </p>
+                              <span className="flex items-center gap-0.5" aria-hidden="true">
+                                <span className="h-1 w-1 rounded-full bg-amber-400 animate-bounce [animation-delay:-0.3s]" />
+                                <span className="h-1 w-1 rounded-full bg-amber-400 animate-bounce [animation-delay:-0.15s]" />
+                                <span className="h-1 w-1 rounded-full bg-amber-400 animate-bounce" />
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-[10px] font-medium text-zinc-500">
+                              Fetching more movies &amp; series for you
+                            </p>
+                          </div>
+
+                          <span className="hidden shrink-0 text-[9px] font-bold uppercase tracking-widest text-zinc-600 sm:block">
+                            Cinema
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
+
                   {catalog.length === 0 && !loading ? (
                     <div className="flex flex-col items-center justify-center text-center py-16 px-4 bg-zinc-900/30 border border-white/5 rounded-2xl max-w-md mx-auto my-8 space-y-4 backdrop-blur-sm animate-fade-in w-full">
                       <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
