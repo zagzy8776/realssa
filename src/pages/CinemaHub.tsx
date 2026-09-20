@@ -682,6 +682,7 @@ export default function CinemaHub() {
   };
 
   return (
+    <>
       <SEO
         title={page > 1 ? `Cinema — Page ${page}` : 'Cinema'}
         description="Browse movies, series and entertainment video content on RealSSA News."
@@ -1765,5 +1766,6 @@ export default function CinemaHub() {
 
       <Footer />
     </div>
+    </>
   );
 }
