@@ -83,7 +83,8 @@ export default function LocationHub() {
 
   return (
     <>
-      <SEO title={title} description={description} url={`/${type}/${slug}`} section={locationName} />
+      <SEO title={title} description={description} url={`/${type}/${slug}`} section={locationName}
+        robots={loading || articles.length > 0 ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' : 'noindex, follow'} />
       <Header />
       <main className="min-h-screen bg-background px-4 py-8 md:px-8">
         <div className="mx-auto max-w-6xl">
