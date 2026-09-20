@@ -536,6 +536,26 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+app.get('/api/rss/articles', async (req, res) => {
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  try {
+    if (!pool) return res.json([]);
+    const result = await pool.query(
+      `SELECT 'rss-' || id AS id, title, COALESCE(ai_summary, original_excerpt) AS excerpt,
+              category, image, source_name AS author, external_link, published_at AS date,
+              content_type AS "contentType"
+       FROM rss_articles
+       ORDER BY published_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return res.json(result.rows || []);
+  } catch (error) {
+    console.warn('[RSS Articles] API unavailable:', error.message);
+    return res.json([]);
+  }
+});
+
 app.get('/api/debug-env', async (req, res) => {
   const { secret } = req.query;
   if (!secret || secret !== process.env.CRON_SECRET) {
