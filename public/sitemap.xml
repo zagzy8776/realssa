@@ -12,6 +12,11 @@
     <loc>https://www.realssanews.com.ng/locations-sitemap.xml</loc>
   </sitemap>
 
+  <!-- Cinema pagination -->
+  <sitemap>
+    <loc>https://www.realssanews.com.ng/cinema-sitemap.xml</loc>
+  </sitemap>
+
   <!-- Dynamic news sitemap (48-hour rolling, Google News compliant) -->
   <sitemap>
     <loc>https://www.realssanews.com.ng/api/sitemap-news.xml</loc>
