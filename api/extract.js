@@ -12,6 +12,15 @@ function normalizeBody(body) {
   try { return JSON.parse(body); } catch { return {}; }
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
+    .replace(/'/g, '&#039;');
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.status(204).end();
@@ -24,6 +33,9 @@ module.exports = async function handler(req, res) {
 
   const body = normalizeBody(req.body);
   const rawUrl = String(body.url || '').trim();
+  const fallbackText = String(body.fallbackText || body.excerpt || '').trim();
+  const fallbackImage = body.fallbackImage || body.image || null;
+  const fallbackTitle = body.fallbackTitle || body.title || null;
 
   if (!rawUrl) {
     return sendJson(res, 400, { error: 'url is required' });
@@ -38,45 +50,77 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const article = await extractArticle(target.toString());
+    const article = await extractArticle(target.toString(), {
+      fallbackText,
+      fallbackImage,
+      fallbackTitle,
+    });
 
-    if (!article || !article.textContent || article.textContent.trim().length < 100) {
+    if (!article || !article.textContent || article.textContent.trim().length < 40) {
+      if (fallbackText.length >= 40) {
+        return sendJson(res, 200, {
+          title: fallbackTitle || target.hostname,
+          content: `<p>${escapeHtml(fallbackText)}</p>`,
+          textContent: fallbackText,
+          length: fallbackText.length,
+          excerpt: fallbackText.slice(0, 240),
+          byline: '',
+          dir: 'ltr',
+          siteName: target.hostname.replace(/^www\./, ''),
+          lang: 'en',
+          publishedTime: '',
+          image: fallbackImage || null,
+          sourceUrl: target.toString(),
+          partial: true,
+        });
+      }
+
       return sendJson(res, 422, {
         error: 'Article content could not be extracted',
         url: target.toString(),
-        retryable: true
+        retryable: true,
       });
     }
 
+    const text = article.textContent.trim();
     return sendJson(res, 200, {
-      title: article.title || target.hostname,
-      content: article.htmlContent || `<p>${escapeHtml(article.textContent)}</p>`,
-      textContent: article.textContent,
-      length: Number(article.length || article.textContent.length),
-      excerpt: article.excerpt || article.textContent.slice(0, 240),
+      title: article.title || fallbackTitle || target.hostname,
+      content: article.htmlContent || `<p>${escapeHtml(text)}</p>`,
+      textContent: text,
+      length: Number(article.length || text.length),
+      excerpt: article.excerpt || text.slice(0, 240),
       byline: article.byline || '',
       dir: 'ltr',
       siteName: article.siteName || target.hostname.replace(/^www\./, ''),
       lang: 'en',
       publishedTime: article.publishedTime || '',
-      image: article.image || null,
-      sourceUrl: target.toString()
+      image: article.image || fallbackImage || null,
+      sourceUrl: article.sourceUrl || target.toString(),
+      partial: Boolean(article.partial),
     });
   } catch (error) {
     console.error('[Vercel Extract] Extraction failed:', error.message);
+    if (fallbackText.length >= 40) {
+      return sendJson(res, 200, {
+        title: fallbackTitle || target.hostname,
+        content: `<p>${escapeHtml(fallbackText)}</p>`,
+        textContent: fallbackText,
+        length: fallbackText.length,
+        excerpt: fallbackText.slice(0, 240),
+        byline: '',
+        dir: 'ltr',
+        siteName: target.hostname.replace(/^www\./, ''),
+        lang: 'en',
+        publishedTime: '',
+        image: fallbackImage || null,
+        sourceUrl: target.toString(),
+        partial: true,
+      });
+    }
     return sendJson(res, 502, {
       error: 'Publisher could not be read right now',
       url: target.toString(),
-      retryable: true
+      retryable: true,
     });
   }
 };
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
