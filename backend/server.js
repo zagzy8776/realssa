@@ -7145,6 +7145,42 @@ if (!process.env.VERCEL) {
   });
 }
 
+// --- Location-aware news feed ------------------------------------------------
+app.get('/api/location-feed', async (req, res) => {
+  const name = String(req.query.name || '').trim().slice(0, 120);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 24, 1), 50);
+  if (!name) return res.status(400).json({ articles: [], error: 'name is required' });
+
+  try {
+    if (!process.env.DATABASE_URL) return res.json({ articles: [], location: name, hasCoverage: false });
+    const result = await pool.query(
+      `SELECT 'rss-' || id AS id,
+              title,
+              COALESCE(ai_summary, original_excerpt, '') AS excerpt,
+              category,
+              image,
+              source_name AS author,
+              external_link AS "externalLink",
+              published_at AS date,
+              content_type AS "contentType"
+       FROM rss_articles
+       WHERE (
+         title ILIKE $1
+         OR original_excerpt ILIKE $1
+         OR COALESCE(ai_summary, '') ILIKE $1
+       )
+       ORDER BY published_at DESC
+       LIMIT $2`,
+      ['%' + name + '%', limit]
+    );
+    res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600');
+    res.json({ articles: result.rows, location: name, hasCoverage: result.rows.length > 0 });
+  } catch (err) {
+    console.error('Location feed error:', err.message);
+    res.status(200).json({ articles: [], location: name, hasCoverage: false });
+  }
+});
+
 // Global Express Error Handler
 app.use((err, req, res, next) => {
   console.error('❌ [Express Global Error]:', err.message, err.stack);
