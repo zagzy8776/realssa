@@ -7,6 +7,11 @@
     <lastmod>2025-01-01</lastmod>
   </sitemap>
 
+  <!-- African location hubs -->
+  <sitemap>
+    <loc>https://www.realssanews.com.ng/locations-sitemap.xml</loc>
+  </sitemap>
+
   <!-- Dynamic news sitemap (48-hour rolling, Google News compliant) -->
   <sitemap>
     <loc>https://www.realssanews.com.ng/api/sitemap-news.xml</loc>
