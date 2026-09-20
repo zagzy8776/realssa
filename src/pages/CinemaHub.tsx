@@ -606,6 +606,7 @@ export default function CinemaHub() {
         style={{ transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
       >
         {posterUrl ? (
+          <>
           <img
             src={posterUrl}
             alt={item.title || item.name}
@@ -629,6 +630,7 @@ export default function CinemaHub() {
               {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
             </p>
           </div>
+          </>
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-3 text-center">
             <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500 group-hover:text-amber-400 group-hover:bg-amber-500/10 transition-colors">
