@@ -17,14 +17,16 @@ import FeedWatermark from "@/components/FeedWatermark";
 import OnboardingTopicSelector from "@/components/OnboardingTopicSelector";
 import { GlobalAudioProvider } from "@/contexts/GlobalAudioContext";
 
-// ── Core statically-imported pages to eliminate loading delay ───────────
+// ── Keep only the landing page in the initial bundle.
+// Secondary sections are route-level chunks so the homepage does not download
+// cinema, sports, video, admin and directory code before the user asks for it.
 import Index from "./pages/Index";
-import ForYou from "./pages/ForYou";
-import CinemaHub from "./pages/CinemaHub";
-import VideoNews from "./pages/VideoNews";
-import Sports from "./pages/Sports";
 
 // ── Lazy-loaded pages (code-split to prevent TDZ circular init crashes) ──────
+const ForYou               = lazy(() => import("./pages/ForYou"));
+const CinemaHub            = lazy(() => import("./pages/CinemaHub"));
+const VideoNews            = lazy(() => import("./pages/VideoNews"));
+const Sports               = lazy(() => import("./pages/Sports"));
 const About               = lazy(() => import("./pages/About"));
 const Contact             = lazy(() => import("./pages/Contact"));
 const Terms               = lazy(() => import("./pages/Terms"));
@@ -74,9 +76,6 @@ const Widgets             = lazy(() => import("./pages/Widgets"));
 const Search              = lazy(() => import("./pages/Search"));
 const InAppBrowser        = lazy(() => import("./pages/InAppBrowser"));
 const VerifyEmail         = lazy(() => import("./pages/VerifyEmail"));
-
-import { CapacitorUpdater } from '@capgo/capacitor-updater';
-import OneSignalNative from 'onesignal-cordova-plugin';
 
 const queryClient = new QueryClient();
 
@@ -192,15 +191,19 @@ const router = createBrowserRouter(
 const App = () => {
   // Hide native splash screen immediately so our custom React loading animation shows
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
-      SplashScreen.hide().catch(err => console.warn('Splash screen hide failed:', err));
-      
-      // Initialize OneSignal Native SDK
-      OneSignalNative.initialize(ONESIGNAL_APP_ID);
-      
-      // Notify Capgo OTA updater that the app successfully booted
-      CapacitorUpdater.notifyAppReady().catch(err => console.warn('Capgo notify failed:', err));
-    }
+    if (!Capacitor.isNativePlatform()) return;
+
+    // Keep native-only SDKs out of the web bundle. They are loaded only inside
+    // the Capacitor runtime where they are actually needed.
+    Promise.all([
+      import('@capacitor/splash-screen'),
+      import('@capgo/capacitor-updater'),
+      import('onesignal-cordova-plugin')
+    ]).then(([splash, updater, oneSignal]) => {
+      splash.SplashScreen.hide().catch(err => console.warn('Splash screen hide failed:', err));
+      oneSignal.default.initialize(ONESIGNAL_APP_ID);
+      updater.CapacitorUpdater.notifyAppReady().catch(err => console.warn('Capgo notify failed:', err));
+    }).catch(err => console.warn('Native SDK initialization failed:', err));
   }, []);
 
   return (
