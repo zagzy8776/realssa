@@ -9,7 +9,7 @@ self.addEventListener('message', (event) => {
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
 // Service Worker for RealSSA News — offline caching & push notifications
-const CACHE_NAME = 'realssa-v6';
+const CACHE_NAME = 'realssa-v7';
 const MAX_CACHE_SIZE = 20;
 
 self.addEventListener('install', (event) => {
