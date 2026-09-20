@@ -42,11 +42,8 @@ User-agent: Baiduspider
 Allow: /
 Crawl-delay: 1
 
-# Sitemaps — Sitemap Index + News Sitemap + Legacy API path
+# Submit the single sitemap index; it references the child sitemaps.
 Sitemap: https://www.realssanews.com.ng/sitemap.xml
-Sitemap: https://www.realssanews.com.ng/news-sitemap.xml
-Sitemap: https://www.realssanews.com.ng/pages-sitemap.xml
-Sitemap: https://www.realssanews.com.ng/api/sitemap-news.xml
 
 # RSS / WebSub Feed (Google News subscriber discovery)
 # https://www.realssanews.com.ng/rss/all.xml
