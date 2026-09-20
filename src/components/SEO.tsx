@@ -266,7 +266,7 @@ const SEO = ({
       <link rel="canonical" href={canonicalUrl} />
 
       {/* ── Google site verification ── */}
-      <meta name="google-site-verification" content="d0088a19dd0f4c40" />
+      <meta name="google-site-verification" content="Xe8qt4m9V_R2A1CeUU8kluW1ZyqYtoWgFfZVmHsogYY" />
 
       {/* ── Open Graph (Facebook, WhatsApp, LinkedIn) ── */}
       <meta property="og:site_name" content={SITE_NAME} />
