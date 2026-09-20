@@ -36,7 +36,6 @@
     {"source":"/rss/(.*)","destination":"/api/index.js"},
     {"source":"/yandex_33692219fb12f076.html","destination":"/yandex_33692219fb12f076.html"},
     {"source":"/yandex_17cef8d8832f5eec.html","destination":"/yandex_17cef8d8832f5eec.html"},
-    {"source":"/googled0088a19dd0f4c40.html","destination":"/googled0088a19dd0f4c40.html"},
     {"source":"/sitemap.xml","destination":"/api/index.js"},
     {"source":"/news-sitemap.xml","destination":"/api/index.js"},
     {"source":"/pages-sitemap.xml","destination":"/api/index.js"},
