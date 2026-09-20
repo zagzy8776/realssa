@@ -510,8 +510,30 @@ app.get('/', (req, res) => {
   res.json({ message: 'RealSSA News API Server', status: 'running' });
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  const result = {
+    status: 'ok',
+    database: 'not_configured',
+    tmdb: process.env.TMDB_READ_TOKEN || process.env.TMDB_API_KEY ? 'configured' : 'missing',
+    redis: redisService.isAvailable() ? 'connected' : 'unavailable',
+    timestamp: new Date().toISOString()
+  };
+
+  if (!pool) return res.status(200).json({ ...result, status: 'degraded' });
+
+  try {
+    await Promise.race([
+      pool.query('SELECT 1'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('database health timeout')), 2500))
+    ]);
+    result.database = 'connected';
+    return res.status(200).json(result);
+  } catch (error) {
+    result.database = 'unavailable';
+    result.status = 'degraded';
+    console.warn('[Health] Database check failed:', error.message);
+    return res.status(200).json(result);
+  }
 });
 
 app.get('/api/debug-env', async (req, res) => {
