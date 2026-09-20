@@ -216,7 +216,7 @@ export default function CinemaPlayer({
           {streamLoading && !directStream && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 pointer-events-none"><div className="text-center"><div className="w-8 h-8 mx-auto mb-3 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" /><p className="text-zinc-300 text-xs font-bold">Connecting to video server…</p></div></div>}
           {!streamLoading && !directStream && streamError && <div className="absolute top-3 left-3 right-3 z-20 pointer-events-none"><div className="inline-flex max-w-full rounded-lg bg-black/75 border border-white/10 px-3 py-2 text-[11px] text-zinc-300 backdrop-blur-md">Direct playback unavailable · using {activeServer.name}</div></div>}
         </div>
-      </div>      </div>
+      </div>
     </div>
   );
 }
