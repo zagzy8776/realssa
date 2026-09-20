@@ -395,6 +395,7 @@ app.handle = async function realssaVercelHandle(req, res, out) {
   const isApiRequest = parsed.pathname.startsWith('/api/');
   const isRssRequest = parsed.pathname === '/rss.xml' || parsed.pathname.startsWith('/rss/');
   const isCinemaRequest = parsed.pathname.startsWith('/api/cinema/');
+  const isHealthRequest = parsed.pathname === '/api/health';
   const isCronIngest = parsed.pathname === '/api/cron/ingest';
 
   if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/migrate') {
@@ -446,10 +447,13 @@ app.handle = async function realssaVercelHandle(req, res, out) {
     }
   }
 
-  // Cinema is an external TMDB-backed service and must remain available even
-  // when the site's PostgreSQL pool is temporarily cold, unavailable, or unhealthy.
-  // Do not block /api/cinema/* behind the database readiness gate.
-  if (process.env.DATABASE_URL && (isApiRequest || isRssRequest) && !isCinemaRequest) {
+  // Health and Cinema do not require PostgreSQL. They must never be blocked by
+  // a cold/unhealthy database connection on Vercel.
+  if (isHealthRequest || isCinemaRequest) {
+    return originalHandle(req, res, out);
+  }
+
+  if (process.env.DATABASE_URL && (isApiRequest || isRssRequest)) {
     const readyPool = await waitForDatabasePool();
     if (!readyPool) {
       return sendJson(res, 503, { error: 'Database temporarily unavailable', retryable: true });
