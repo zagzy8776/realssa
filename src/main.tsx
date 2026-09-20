@@ -49,7 +49,7 @@ window.fetch = async (...args) => {
   const response = await originalFetch(...args);
   const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request).url;
   
-  if (url.includes('/api/articles') || url.includes('/api/news') || url.includes('/api/stories')) {
+  if (url.includes('/api/articles') || url.includes('/api/stories')) {
     const clone = response.clone();
     try {
       const data = await clone.json();
