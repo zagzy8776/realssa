@@ -396,6 +396,9 @@ app.handle = async function realssaVercelHandle(req, res, out) {
   const isRssRequest = parsed.pathname === '/rss.xml' || parsed.pathname.startsWith('/rss/');
   const isCinemaRequest = parsed.pathname.startsWith('/api/cinema/');
   const isHealthRequest = parsed.pathname === '/api/health';
+  const isNotificationsRequest = parsed.pathname === '/api/notifications' || parsed.pathname.startsWith('/api/notifications/');
+  const isStreakRequest = parsed.pathname === '/api/users/streak';
+  const isReactionRequest = parsed.pathname === '/api/reactions' || parsed.pathname.startsWith('/api/reactions/');
   const isCronIngest = parsed.pathname === '/api/cron/ingest';
 
   if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/migrate') {
@@ -449,7 +452,7 @@ app.handle = async function realssaVercelHandle(req, res, out) {
 
   // Health and Cinema do not require PostgreSQL. They must never be blocked by
   // a cold/unhealthy database connection on Vercel.
-  if (isHealthRequest || isCinemaRequest) {
+  if (isHealthRequest || isCinemaRequest || isNotificationsRequest || isStreakRequest || isReactionRequest) {
     return originalHandle(req, res, out);
   }
 
