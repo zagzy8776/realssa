@@ -144,6 +144,24 @@ router.get('/stream', async (req, res) => {
 });
 
 /**
+ * GET /api/cinema/health
+ * Lightweight dependency check used by the Cinema UI and deployment diagnostics.
+ */
+router.get('/health', async (req, res) => {
+  const tmdbConfigured = Boolean(process.env.TMDB_READ_TOKEN || process.env.TMDB_API_KEY);
+  let tmdb = tmdbConfigured ? 'configured' : 'missing';
+  if (tmdbConfigured) {
+    try {
+      await tmdbService.getTrending('all', 'day', 1);
+      tmdb = 'reachable';
+    } catch (error) {
+      tmdb = 'unreachable';
+    }
+  }
+  res.status(200).json({ status: tmdb === 'reachable' ? 'ok' : 'degraded', tmdb, redis: redisService.isAvailable() ? 'connected' : 'unavailable' });
+});
+
+/**
  * GET /api/cinema/trending
  * Returns cached trending movies and TV shows from TMDB.
  */
@@ -160,7 +178,7 @@ router.get('/trending', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('[Cinema API] Trending error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch trending movies/series' });
+    res.status(503).json({ error: 'Cinema catalog unavailable', code: 'TMDB_UNAVAILABLE', detail: err.message });
   }
 });
 /**
