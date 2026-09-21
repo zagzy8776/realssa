@@ -70,50 +70,30 @@ const InAppBrowser        = lazy(() => import("./pages/InAppBrowser"));
 const VerifyEmail         = lazy(() => import("./pages/VerifyEmail"));
 
 const queryClient = new QueryClient();
-
 const ONESIGNAL_APP_ID = "055b6596-a96c-48e2-8cda-ff4bb6d61009";
-
-const FeedWatermarkWrapper = () => {
-  return null;
-};
+const FeedWatermarkWrapper = () => null;
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#050505]">
-    <span
-      style={{
-        width: 10,
-        height: 10,
-        borderRadius: '50%',
-        background: '#f59e0b',
-        boxShadow: '0 0 18px 4px rgba(251,191,36,0.5)',
-        animation: 'pagePulse 1.2s ease-in-out infinite'
-      }}
-    />
-    <style>{`
-      @keyframes pagePulse {
-        0%, 100% { opacity: 0.25; transform: scale(0.8); }
-        50%       { opacity: 1;    transform: scale(1.2); }
-      }
-    `}</style>
+    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 18px 4px rgba(251,191,36,0.5)', animation: 'pagePulse 1.2s ease-in-out infinite' }} />
+    <style>{`@keyframes pagePulse { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }`}</style>
   </div>
 );
 
-const AppLayout = () => {
-  return (
-    <>
-      <ScrollRestoration />
-      <GlobalHooks />
-      <FeedWatermarkWrapper />
-      <MobileBottomNav />
-      <OnboardingTopicSelector />
-      <main className="pb-20 md:pb-0 overflow-x-hidden w-full max-w-[100vw]">
-        <Suspense fallback={<PageLoader />}>
-          <Outlet />
-        </Suspense>
-      </main>
-    </>
-  );
-};
+const AppLayout = () => (
+  <>
+    <ScrollRestoration />
+    <GlobalHooks />
+    <FeedWatermarkWrapper />
+    <MobileBottomNav />
+    <OnboardingTopicSelector />
+    <main className="pb-20 md:pb-0 overflow-x-hidden w-full max-w-[100vw]">
+      <Suspense fallback={<PageLoader />}>
+        <Outlet />
+      </Suspense>
+    </main>
+  </>
+);
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -138,9 +118,11 @@ const router = createBrowserRouter(
       <Route path="/world-news" element={<WorldNews />} />
       <Route path="/for-you" element={<ForYou />} />
       <Route path="/crypto" element={<CryptoNews />} />
-      <Route path="/videos" element={<VideoNews />} />
-      <Route path="/video-news" element={<VideoNews />} />
+      <Route path="/videos" element={<CinemaHub />} />
+      <Route path="/movies" element={<CinemaHub />} />
       <Route path="/cinema" element={<CinemaHub />} />
+      <Route path="/video-news" element={<VideoNews />} />
+      <Route path="/live-tv" element={<VideoNews />} />
       <Route path="/sports" element={<Sports />} />
       <Route path="/ghana" element={<Ghana />} />
       <Route path="/kenya" element={<Kenya />} />
@@ -186,7 +168,6 @@ const router = createBrowserRouter(
 const App = () => {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-
     Promise.all([
       import('@capacitor/splash-screen'),
       import('@capgo/capacitor-updater'),
