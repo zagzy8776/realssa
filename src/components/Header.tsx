@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bell, BookOpen, ChevronDown, Clock3, Globe2, Home, KeyRound, LogOut, Menu, MonitorSmartphone, Moon, Newspaper, Radio, Search, Sparkles, Sun, X } from 'lucide-react';
+import { Bell, BookOpen, ChevronDown, Clock3, Film, Globe2, Home, KeyRound, LogOut, Menu, MonitorSmartphone, Moon, Newspaper, Radio, Search, Sparkles, Sun, Tv, X } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,9 +18,10 @@ const primaryLinks = [
   { label: 'Home', href: '/', icon: Home },
   { label: 'News', href: '/nigeria', icon: Newspaper },
   { label: 'Sports', href: '/sports', icon: Radio },
+  { label: 'Cinema', href: '/videos', icon: Film },
+  { label: 'Live TV', href: '/video-news', icon: Tv },
   { label: 'Markets', href: '/market', icon: Globe2 },
   { label: 'Browser', href: '/browser', icon: MonitorSmartphone },
-  { label: 'Videos', href: '/videos', icon: Radio },
   { label: 'Crypto', href: '/crypto', icon: Sparkles },
 ];
 
@@ -29,6 +30,8 @@ const categoryLinks = [
   { label: 'Nigeria', href: '/nigeria' },
   { label: 'Politics', href: '/nigerian-news' },
   { label: 'Sports', href: '/sports' },
+  { label: 'Cinema', href: '/videos' },
+  { label: 'Live TV', href: '/video-news' },
   { label: 'Entertainment', href: '/entertainment' },
   { label: 'World', href: '/world-news' },
   { label: 'Crypto', href: '/crypto' },
@@ -78,19 +81,12 @@ const Header: React.FC = () => {
 
   const toggleMobileNavigation = () => {
     const nextOpen = !mobileOpen;
-
     if (nextOpen) {
-      // Opening the drawer must never inherit focus from a page/browser input.
-      // This is especially important on iOS, where retained focus keeps the
-      // software keyboard open and makes the drawer jump over the viewport.
       const activeElement = document.activeElement;
-      if (activeElement instanceof HTMLElement) {
-        activeElement.blur();
-      }
+      if (activeElement instanceof HTMLElement) activeElement.blur();
       setSearchFocused(false);
       setSuggestions([]);
     }
-
     setMobileOpen(nextOpen);
   };
 
@@ -209,7 +205,7 @@ const Header: React.FC = () => {
                       <button
                         key={`${item.title}-${index}`}
                         onMouseDown={e => e.preventDefault()}
-                        onClick={() => item.isSearch ? goSearch(item.title.replace(/^Search RealSSA for “|”$/g, '')) : navigate(`/browser?url=${encodeURIComponent(item.url)}`)}
+                        onClick={() => item.isSearch ? goSearch(item.title.replace(/^Search RealSSA for \u201c|\u201d$/g, '')) : navigate(`/browser?url=${encodeURIComponent(item.url)}`)}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-foreground hover:bg-muted"
                       >
                         <Search size={14} className="shrink-0 text-primary" />
@@ -262,7 +258,7 @@ const Header: React.FC = () => {
                   <span className="flex-1">Open RealSSA Browser</span>
                   <span className="text-primary">Open</span>
                 </Link>
-                <Link to="/for-you" onClick={() => setMobileOpen(false)} className="flex min-h-12 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-bold text-foreground"><BookOpen size={16} className="text-primary" />For You</Link>
+                <Link to="/videos" onClick={() => setMobileOpen(false)} className="flex min-h-12 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-bold text-foreground"><Film size={16} className="text-primary" />Cinema</Link>
                 <Link to="/trending" onClick={() => setMobileOpen(false)} className="flex min-h-12 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-bold text-foreground"><Sparkles size={16} className="text-primary" />Trending</Link>
               </div>
 

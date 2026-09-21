@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bookmark, Home, Sparkles, TrendingUp, User } from 'lucide-react';
+import { Film, Home, Sparkles, TrendingUp, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import RealSSAChat from './RealSSAChat';
 
 const tabs = [
   { label: 'Home', icon: Home, path: '/' },
+  { label: 'Cinema', icon: Film, path: '/videos' },
   { label: 'Trending', icon: TrendingUp, path: '/trending' },
-  { label: 'Bookmarks', icon: Bookmark, path: '/bookmarks' },
   { label: 'Profile', icon: User, path: '/profile' },
 ];
 
@@ -33,7 +33,7 @@ const MobileBottomNav = () => {
       >
         <div className="relative mx-auto grid h-[60px] max-w-[520px] grid-cols-5">
           {tabs.slice(0, 2).map(({ label, icon: Icon, path }) => {
-            const isActive = path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
+            const isActive = path === '/' ? location.pathname === '/' : location.pathname.startsWith(path) || location.pathname.startsWith('/cinema') || (path === '/videos' && (location.pathname.startsWith('/movies') || location.pathname.startsWith('/cinema')));
             return (
               <button
                 key={path}
