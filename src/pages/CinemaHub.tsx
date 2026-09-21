@@ -293,36 +293,6 @@ export default function CinemaHub() {
     }
   }, []);
 
-  // ── IntersectionObserver for true automatic infinite scroll ──
-  useEffect(() => {
-    if (isSearching || loading) return;
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && !loadingMore && hasMore && !isSearching) {
-          loadNextPage();
-        }
-      },
-      { rootMargin: '600px 0px' }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [loading, loadingMore, hasMore, isSearching, loadNextPage]);
-
-  // ── Close suggestions on outside click ──
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
   const fetchPage = async (pageNum: number, isFirst = false) => {
     if (isFirst) setLoading(true);
     else setLoadingMore(true);
@@ -385,6 +355,36 @@ export default function CinemaHub() {
     if (loadingMore || !hasMore) return;
     fetchPage(page + 1);
   }, [page, loadingMore, hasMore]);
+
+  // ── IntersectionObserver for true automatic infinite scroll ──
+  useEffect(() => {
+    if (isSearching || loading) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !loadingMore && hasMore && !isSearching) {
+          loadNextPage();
+        }
+      },
+      { rootMargin: '600px 0px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loading, loadingMore, hasMore, isSearching, loadNextPage]);
+
+  // ── Close suggestions on outside click ──
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
 
   // ── Hero auto-rotation every 6 seconds ──
   useEffect(() => {
