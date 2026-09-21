@@ -120,6 +120,18 @@ async function fetchSportsDbMatches(mode) {
 async function queryMatches(mode) {
   try {
     const dbMatches = await queryDbMatches(mode);
+
+    // For the main feed, merge the live external snapshot with the database.
+    // This prevents a stale scheduled fixture cache from hiding matches that
+    // are currently in play when the scraper has not refreshed yet.
+    if (mode === 'all') {
+      const externalMatches = await fetchSportsDbMatches('all');
+      const byId = new Map();
+      for (const match of externalMatches) byId.set(match.provider_match_id, match);
+      for (const match of dbMatches) byId.set(match.provider_match_id, match);
+      return Array.from(byId.values()).sort((a, b) => new Date(a.kickoff_at) - new Date(b.kickoff_at));
+    }
+
     if (dbMatches.length) return dbMatches;
   } catch (error) {
     console.warn('[Sports API] Database read failed:', error.message);
