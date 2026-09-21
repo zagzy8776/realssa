@@ -767,12 +767,40 @@ const VideoNews = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           : apiUrl(`/api/videos?category=${category}`);
         
         const response = await fetchWithRetry(url);
-        if (response) {
+        if (response && response.ok) {
           const data = await response.json();
-          setDynamicVideos(Array.isArray(data) ? data : (data.articles || []));
-        } else {
-          setError("Could not load videos.");
+          const remoteVideos = Array.isArray(data) ? data : (data.articles || []);
+          if (remoteVideos.length > 0) {
+            setDynamicVideos(remoteVideos);
+            return;
+          }
         }
+
+        // There is currently no /api/videos route in this repository. Use the
+        // curated live-channel catalog as a reliable fallback so the page never
+        // presents a misleading empty state.
+        const requestedCategory = category.toLowerCase();
+        const fallbackChannels = VIDEO_CHANNELS
+          .filter(channel =>
+            requestedCategory === "all" ||
+            channel.category.toLowerCase() === requestedCategory ||
+            channel.country.toLowerCase().includes(requestedCategory) ||
+            channel.title.toLowerCase().includes(requestedCategory)
+          )
+          .map((channel) => ({
+            id: channel.id,
+            title: channel.title,
+            excerpt: `Watch ${channel.source} live on RealSSA.`,
+            category: channel.category,
+            image: channel.thumbnail,
+            readTime: "Live",
+            author: channel.source,
+            date: new Date().toISOString(),
+            externalLink: channel.embedUrl,
+          }));
+
+        setDynamicVideos(fallbackChannels);
+        setError(null);
       } catch (err) {
         console.error("Error fetching videos:", err);
         setError("Network error.");
