@@ -7,21 +7,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, ScrollRestoration, Outlet } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
-import MobileAppFeatures from "@/components/MobileAppFeatures";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import KeepAlive from "@/components/KeepAlive";
 import GlobalHooks from "@/components/GlobalHooks";
-import LoadingOverlay from "@/components/LoadingOverlay";
-import FeedWatermark from "@/components/FeedWatermark";
 import OnboardingTopicSelector from "@/components/OnboardingTopicSelector";
 import { GlobalAudioProvider } from "@/contexts/GlobalAudioContext";
 
-// ── Keep only the landing page in the initial bundle.
-// Secondary sections are route-level chunks so the homepage does not download
-// cinema, sports, video, admin and directory code before the user asks for it.
 import Index from "./pages/Index";
 
-// ── Lazy-loaded pages (code-split to prevent TDZ circular init crashes) ──────
 const ForYou               = lazy(() => import("./pages/ForYou"));
 const CinemaHub            = lazy(() => import("./pages/CinemaHub"));
 const VideoNews            = lazy(() => import("./pages/VideoNews"));
@@ -60,8 +53,7 @@ const PrivacyPolicy       = lazy(() => import("./pages/PrivacyPolicy"));
 const AppDownload         = lazy(() => import("./pages/AppDownload"));
 const Reels               = lazy(() => import("./pages/Reels"));
 const ReadingList         = lazy(() => import("./pages/ReadingList"));
-import Trending from "./pages/Trending";
-
+const Trending            = lazy(() => import("./pages/Trending"));
 const Downloads           = lazy(() => import("./pages/Downloads"));
 const Profile             = lazy(() => import("./pages/Profile"));
 const PublisherHub        = lazy(() => import("./pages/PublisherHub"));
@@ -82,10 +74,9 @@ const queryClient = new QueryClient();
 const ONESIGNAL_APP_ID = "055b6596-a96c-48e2-8cda-ff4bb6d61009";
 
 const FeedWatermarkWrapper = () => {
-  return null; // Disabled watermark background overlay to resolve UX/aesthetic issue
+  return null;
 };
 
-// Suspense fallback: dark screen with subtle gold pulse dot — skeleton already showed the layout
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#050505]">
     <span
@@ -131,7 +122,7 @@ const router = createBrowserRouter(
       <Route path="/about" element={<About />} />
       <Route path="/contact" element={<Contact />} />
       <Route path="/terms" element={<Terms />} />
-      <Route path="/nigeria" element={<Trending />} />
+      <Route path="/nigeria" element={<Nigeria />} />
       <Route path="/culture" element={<Culture />} />
       <Route path="/library/media-decode" element={<MediaDecode />} />
       <Route path="/library/nigerian-manual" element={<NigerianManual />} />
@@ -143,24 +134,25 @@ const router = createBrowserRouter(
       <Route path="/edit-news/:id" element={<EditNewsPage />} />
       <Route path="/post-news" element={<NewsPost />} />
       <Route path="/article/:id" element={<ArticlePage />} />
-      <Route path="/nigerian-news" element={<Trending />} />
-      <Route path="/world-news" element={<Trending />} />
+      <Route path="/nigerian-news" element={<NigerianNews />} />
+      <Route path="/world-news" element={<WorldNews />} />
       <Route path="/for-you" element={<ForYou />} />
       <Route path="/crypto" element={<CryptoNews />} />
-      <Route path="/videos" element={<CinemaHub />} />
+      <Route path="/videos" element={<VideoNews />} />
       <Route path="/video-news" element={<VideoNews />} />
+      <Route path="/cinema" element={<CinemaHub />} />
       <Route path="/sports" element={<Sports />} />
-      <Route path="/ghana" element={<Trending />} />
-      <Route path="/kenya" element={<Trending />} />
-      <Route path="/south-africa" element={<Trending />} />
-      <Route path="/uk" element={<Trending />} />
-      <Route path="/usa" element={<Trending />} />
-      <Route path="/news" element={<ForYou />} />
-      <Route path="/news-section" element={<ForYou />} />
+      <Route path="/ghana" element={<Ghana />} />
+      <Route path="/kenya" element={<Kenya />} />
+      <Route path="/south-africa" element={<SouthAfrica />} />
+      <Route path="/uk" element={<UK />} />
+      <Route path="/usa" element={<USA />} />
+      <Route path="/news" element={<NigerianNews />} />
+      <Route path="/news-section" element={<Newssection />} />
       <Route path="/entertainment" element={<Newssection categoryFilter="entertainment" />} />
       <Route path="/jobs" element={<Jobs />} />
       <Route path="/read" element={<ReaderMode />} />
-      <Route path="/world-directory" element={<Trending />} />
+      <Route path="/world-directory" element={<WorldDirectory />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/africa" element={<LocationHub />} />
       <Route path="/country/:countryId" element={<LocationHub />} />
@@ -186,19 +178,15 @@ const router = createBrowserRouter(
       <Route path="/search" element={<Search />} />
       <Route path="/browser" element={<InAppBrowser />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
-      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
     </Route>
   )
 );
 
 const App = () => {
-  // Hide native splash screen immediately so our custom React loading animation shows
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
-    // Keep native-only SDKs out of the web bundle. They are loaded only inside
-    // the Capacitor runtime where they are actually needed.
     Promise.all([
       import('@capacitor/splash-screen'),
       import('@capgo/capacitor-updater'),

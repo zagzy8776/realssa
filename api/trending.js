@@ -1,8 +1,17 @@
 const TREND_FEEDS = [
-  { geo: 'NG', country: 'Nigeria', url: 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=NG' },
-  { geo: 'US', country: 'USA', url: 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=US' },
-  { geo: 'GB', country: 'UK', url: 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=GB' },
-  { geo: 'IN', country: 'India', url: 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=IN' },
+  { geo: 'NG', country: 'Nigeria', url: 'https://news.google.com/rss?hl=en-NG&gl=NG&ceid=NG:en' },
+  { geo: 'US', country: 'USA', url: 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en' },
+  { geo: 'GB', country: 'UK', url: 'https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en' },
+  { geo: 'ZA', country: 'South Africa', url: 'https://news.google.com/rss?hl=en-ZA&gl=ZA&ceid=ZA:en' },
+  { geo: 'GH', country: 'Ghana', url: 'https://news.google.com/rss?hl=en-GH&gl=GH&ceid=GH:en' },
+];
+
+const FALLBACK_NEWS_URLS = [
+  'https://www.vanguardngr.com/feed/',
+  'https://punchng.com/feed/',
+  'https://www.premiumtimesng.com/feed/',
+  'https://www.thecable.ng/feed/',
+  'https://www.myjoyonline.com/feed/',
 ];
 
 const clean = (value, max = 1000) => String(value || '')
@@ -14,14 +23,10 @@ const clean = (value, max = 1000) => String(value || '')
   .replace(/&#39;|&apos;/gi, "'")
   .replace(/&lt;/gi, '<')
   .replace(/&gt;/gi, '>')
+  .replace(/&#8211;/gi, '–')
   .replace(/\s+/g, ' ')
   .trim()
   .slice(0, max);
-
-function tags(xml, tag) {
-  return [...String(xml || '').matchAll(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'gi'))]
-    .map(m => clean(m[1], 2000));
-}
 
 function parse(xml, source) {
   const items = [];
@@ -29,28 +34,33 @@ function parse(xml, source) {
   for (const match of blocks) {
     const block = match[2];
     const title = clean(block.match(/<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i)?.[1], 300);
-    const traffic = clean(block.match(/<ht:approx_traffic[^>]*>([\s\S]*?)<\/ht:approx_traffic>/i)?.[1], 100);
+    const link = clean(block.match(/<link(?:\s[^>]*)?>([\s\S]*?)<\/link>/i)?.[1] || block.match(/<link[^>]+href=["']([^"']+)/i)?.[1], 500);
+    const desc = clean(block.match(/<(description|summary|content)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/i)?.[2], 400);
     const pub = clean(block.match(/<(pubDate|updated|published)[^>]*>([\s\S]*?)<\/\1>/i)?.[2], 100);
+    const img =
+      block.match(/<media:content[^>]+url=["']([^"']+)/i)?.[1] ||
+      block.match(/<media:thumbnail[^>]+url=["']([^"']+)/i)?.[1] ||
+      block.match(/<enclosure[^>]+url=["']([^"']+)/i)?.[1] ||
+      'https://realssanews.com.ng/logo.png';
     if (!title) continue;
     const date = new Date(pub || Date.now());
     items.push({
-      id: `trend-${source.geo}-${encodeURIComponent(title)}`,
+      id: `trend-${source.geo}-${encodeURIComponent(title).slice(0, 80)}`,
       title,
-      excerpt: traffic ? `${traffic} searches — trending now in ${source.country}.` : `Trending now in ${source.country}.`,
-      description: traffic ? `${traffic} searches — trending now in ${source.country}.` : `Trending now in ${source.country}.`,
+      excerpt: desc || `Trending now in ${source.country}.`,
+      description: desc || `Trending now in ${source.country}.`,
       category: 'Trending',
       feed_category: 'trending',
       country: source.country,
-      image: 'https://realssanews.com.ng/logo.png',
-      readTime: '1 min read',
-      author: 'RealSSA Trends',
-      source_name: `Google Trends · ${source.country}`,
-      source: `Google Trends · ${source.country}`,
+      image: img,
+      readTime: '2 min read',
+      author: source.country === 'fallback' ? 'RealSSA News' : `Trends · ${source.country}`,
+      source_name: source.label || `Google News · ${source.country}`,
+      source: source.label || `Google News · ${source.country}`,
       date: Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString(),
       published_at: Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString(),
-      externalLink: `https://www.google.com/search?q=${encodeURIComponent(title)}&tbm=nws`,
-      external_link: `https://www.google.com/search?q=${encodeURIComponent(title)}&tbm=nws`,
-      trendTraffic: traffic,
+      externalLink: link || `https://www.google.com/search?q=${encodeURIComponent(title)}&tbm=nws`,
+      external_link: link || `https://www.google.com/search?q=${encodeURIComponent(title)}&tbm=nws`,
     });
   }
   return items;
@@ -59,8 +69,11 @@ function parse(xml, source) {
 async function read(source) {
   try {
     const response = await fetch(source.url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RealSSA-Trends/1.0)' },
-      signal: AbortSignal.timeout(6000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; RealSSA-Trends/2.0; +https://www.realssanews.com.ng)',
+        Accept: 'application/rss+xml, application/xml, text/xml, */*',
+      },
+      signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return [];
     return parse(await response.text(), source);
@@ -76,9 +89,20 @@ module.exports = async function handler(req, res) {
   const limit = Math.min(Math.max(Number.isFinite(requested) ? requested : 50, 1), 100);
 
   try {
-    const batches = await Promise.all(TREND_FEEDS.map(read));
+    let batches = await Promise.all(TREND_FEEDS.map(read));
+    let articles = batches.flat();
+
+    if (articles.length < 8) {
+      const extra = await Promise.all(
+        FALLBACK_NEWS_URLS.map((url, i) =>
+          read({ geo: `FB${i}`, country: 'Nigeria', label: 'Top headlines', url })
+        )
+      );
+      articles = articles.concat(extra.flat());
+    }
+
     const seen = new Set();
-    const articles = batches.flat()
+    articles = articles
       .filter(item => {
         const key = item.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
         if (!key || seen.has(key)) return false;
@@ -92,13 +116,13 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       articles,
       nextCursor: null,
-      hasMore: false,
-      source: 'google-trends-multi-region',
+      hasMore: articles.length >= limit,
+      source: articles.length ? 'google-news-rss+fallback' : 'empty',
       totalAvailable: articles.length,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
     console.error('[Trending API] failed:', error.message);
-    return res.status(200).json({ articles: [], nextCursor: null, hasMore: false, source: 'google-trends-multi-region' });
+    return res.status(200).json({ articles: [], nextCursor: null, hasMore: false, source: 'error', error: error.message });
   }
 };
