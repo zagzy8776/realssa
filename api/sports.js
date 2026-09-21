@@ -52,12 +52,27 @@ async function queryDbMatches(mode) {
   if (mode === 'upcoming') conditions.push("LOWER(status) = 'scheduled'");
   if (mode === 'results') conditions.push("LOWER(status) IN ('finished','ft','complete','completed','aet','final')");
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const result = await db.query(`
-    SELECT * FROM live_matches ${where}
-    ORDER BY CASE WHEN LOWER(status) IN ('live','in_progress','inplay','in-play','playing','1h','2h','ht','et','bt','p','pen') THEN 0 WHEN LOWER(status) = 'scheduled' THEN 1 ELSE 2 END,
-      kickoff_at ASC NULLS LAST, updated_at DESC NULLS LAST, match_id ASC LIMIT 500
-  `);
-  return result.rows.map(normalizeMatch).filter(m => m.provider_match_id);
+  const orderSql = `ORDER BY CASE WHEN LOWER(status) IN ('live','in_progress','inplay','in-play','playing','1h','2h','ht','et','bt','p','pen') THEN 0 WHEN LOWER(status) = 'scheduled' THEN 1 ELSE 2 END,
+      kickoff_at ASC NULLS LAST, updated_at DESC NULLS LAST, match_id ASC LIMIT 500`;
+
+  try {
+    const result = await db.query(`SELECT * FROM live_matches ${where} ${orderSql}`);
+    const primary = result.rows.map(normalizeMatch).filter(m => m.provider_match_id);
+    if (primary.length) return primary;
+  } catch (error) {
+    console.warn('[Sports API] live_matches read failed:', error.message);
+  }
+
+  // The sports bot also maintains the canonical matches table. Use it when
+  // the scraper mirror is empty/stale so the public API does not depend on a
+  // single ingestion process being alive.
+  try {
+    const result = await db.query(`SELECT * FROM matches ${where} ${orderSql}`);
+    return result.rows.map(normalizeMatch).filter(m => m.provider_match_id);
+  } catch (error) {
+    console.warn('[Sports API] matches read failed:', error.message);
+    return [];
+  }
 }
 
 async function fetchJson(url, timeoutMs = 6500) {
