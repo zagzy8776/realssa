@@ -50,16 +50,47 @@ const Trending: React.FC = () => {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
-      if (!response.ok) throw new Error(`Trending API ${response.status}`);
-      const payload = await response.json();
-      const raw = Array.isArray(payload) ? payload : payload?.articles || payload?.data || [];
+
+      let raw: any[] = [];
+      if (response.ok) {
+        const payload = await response.json();
+        raw = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.articles)
+            ? payload.articles
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : [];
+      }
+
+      // /api/trending is RSS-backed and can legitimately return an empty set
+      // when a feed provider blocks the request. Never leave Trending blank:
+      // fall back to the same live article feed used by Home.
+      if (raw.length === 0) {
+        const fallback = await fetch(apiUrl(`/api/articles?limit=100`), {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (fallback.ok) {
+          const data = await fallback.json();
+          raw = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.articles)
+              ? data.articles
+              : [];
+        }
+      }
+
       const seen = new Set<string>();
-      const merged = raw.map(normalize).filter((item: Article) => {
-        const key = item.id || item.title;
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      const merged = raw
+        .map(normalize)
+        .filter((item: Article) => {
+          const key = item.id || item.title;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .sort((a: Article, b: Article) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       setPool(merged);
       setArticles(merged.slice(0, PAGE_SIZE));
