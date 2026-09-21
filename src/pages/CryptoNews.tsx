@@ -57,9 +57,9 @@ const CryptoNews = () => {
         const data = await response.json();
         
         // Transform backend data to match our interface
-        const rawItems = Array.isArray(data) ? data : [];
-        const cryptoItems = rawItems.filter((item: { title?: string; excerpt?: string; description?: string; author?: string }) => {
-            const text = `${item.title || ''} ${item.excerpt || ''} ${item.description || ''} ${item.author || ''}`.toLowerCase();
+        const rawItems = Array.isArray(data) ? data : (Array.isArray(data?.articles) ? data.articles : []);
+        const cryptoItems = rawItems.filter((item: { title?: string; excerpt?: string; description?: string; author?: string; feed_category?: string; category?: string }) => {
+            const text = `${item.title || ''} ${item.excerpt || ''} ${item.description || ''} ${item.author || ''} ${item.feed_category || ''} ${item.category || ''}`.toLowerCase();
             return text.includes('crypto') || text.includes('bitcoin') || text.includes('coin') || text.includes('blockchain');
           });
         const cryptoNewsItems: CryptoNewsItem[] = (cryptoItems.length ? cryptoItems : rawItems.slice(0, 12))
