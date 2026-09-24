@@ -2,7 +2,7 @@ import { Bookmark, BookmarkCheck, Flame, Heart, Image } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { apiUrl } from "@/lib/api-base";
+import { apiUrl, reactionKey } from "@/lib/api-base";
 import { useStreak } from "@/hooks/useStreak";
 import { logCategoryPreference } from "@/lib/preferences";
 import { decodeHTMLEntities } from "@/lib/utils";
@@ -140,7 +140,7 @@ const NewsCard = ({
       } catch { }
       return;
     }
-    fetch(apiUrl(`/api/reactions/${id}${deviceParam}`))
+    fetch(apiUrl(`/api/reactions/${reactionKey(id)}${deviceParam}`))
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && data.counts) {
@@ -181,7 +181,7 @@ const NewsCard = ({
       }, 800);
     }
     try {
-      const res = await fetch(apiUrl(`/api/reactions/${id}`), {
+      const res = await fetch(apiUrl(`/api/reactions/${reactionKey(id)}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, deviceId }),

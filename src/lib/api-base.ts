@@ -48,3 +48,13 @@ export const normalizeArticle = <T extends Record<string, any>>(article: T) => (
 
 export const normalizeArticles = <T extends Record<string, any>>(articles: T[]) =>
   articles.map(normalizeArticle);
+
+// Reaction ids must be a single URL-safe path segment. Some legacy items use the
+// full article URL as their id, which contains slashes and 404s on /api/reactions/:id.
+export const reactionKey = (id: string | number | undefined | null) => {
+  const raw = String(id ?? '');
+  if (!/^https?:\/\//i.test(raw)) return encodeURIComponent(raw);
+  let h = 5381;
+  for (let i = 0; i < raw.length; i++) h = ((h << 5) + h + raw.charCodeAt(i)) >>> 0;
+  return `url-${h.toString(16)}`;
+};

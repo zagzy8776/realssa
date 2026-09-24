@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const FEEDS = [
   'https://www.completesports.com/feed',
   'https://soccernet.ng/feed',
@@ -86,15 +87,16 @@ async function collect() {
     if (!externalLink || !title || seen.has(externalLink)) return;
     seen.add(externalLink);
 
-    const published = new Date(item.pub || Date.now());
-    const date = Number.isNaN(published.getTime()) ? new Date() : published;
+    const published = item.pub ? new Date(item.pub) : null;
+    if (!published || Number.isNaN(published.getTime()) || Date.now() - published.getTime() > 30 * 24 * 60 * 60 * 1000) return;
+    const date = published;
     const excerpt = clean(item.description || title, 900);
     const image = /^https?:\/\//i.test(String(item.image || ''))
       ? item.image
       : 'https://realssanews.com.ng/logo.png';
 
     articles.push({
-      id: externalLink,
+      id: 'rss-' + crypto.createHash('sha1').update(String(externalLink)).digest('hex').slice(0, 16),
       title,
       excerpt,
       category: 'sports',

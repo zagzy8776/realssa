@@ -53,7 +53,6 @@ const FEEDS = {
     'https://news.google.com/rss/search?q=UK+news&hl=en-GB&gl=GB&ceid=GB:en'
   ],
   usa: [
-    'https://rss.cnn.com/rss/edition.rss',
     'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
     'https://www.pbs.org/newshour/feeds/rss/headlines',
     'https://feeds.npr.org/1001/rss.xml',

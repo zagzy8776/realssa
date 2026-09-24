@@ -4,7 +4,7 @@ import { Share2, Bookmark, ShieldCheck, ChevronUp, ChevronDown, Loader2, Heart }
 import { useToast } from '@/hooks/use-toast';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
-import { apiUrl } from '@/lib/api-base';
+import { apiUrl, reactionKey } from '@/lib/api-base';
 import { shareContent } from '@/lib/share';
 import { saveOfflineArticle, deleteOfflineArticle, getOfflineArticle } from '@/lib/ReadingListStore';
 import { decodeHTMLEntities } from '@/lib/utils';
@@ -141,7 +141,7 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
         }
       }
       
-      fetch(apiUrl(`/api/reactions/${article.id}${deviceParam}`))
+      fetch(apiUrl(`/api/reactions/${reactionKey(article.id)}${deviceParam}`))
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data && data.counts) {
@@ -191,7 +191,7 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
     });
 
     try {
-      const res = await fetch(apiUrl(`/api/reactions/${article.id}`), {
+      const res = await fetch(apiUrl(`/api/reactions/${reactionKey(article.id)}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, deviceId }),

@@ -40,7 +40,6 @@ const FEEDS = {
     'https://www.theguardian.com/uk/rss'
   ],
   usa: [
-    'http://rss.cnn.com/rss/edition.rss',
     'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml'
   ],
   canada: [
@@ -115,6 +114,7 @@ const FEEDS = {
 const BLOCKED_HOSTS = new Set(['espn.com', 'skysports.com', 'dailymaverick.co.za', 'edition.cnn.com']);
 const cache = { articles: [], timestamp: 0, promise: null };
 const CACHE_TTL = 45 * 1000;
+const MAX_ARTICLE_AGE_MS = 30 * 24 * 60 * 60 * 1000; // drop stale/frozen-feed items
 const FEED_TIMEOUT = 5000;
 
 function cleanText(value, max = 1200) {
@@ -172,8 +172,9 @@ function parseFeed(xml) {
 
     if (title && (link || guid)) {
       const externalLink = link || guid;
-      const parsedDate = new Date(published || Date.now());
-      items.push({ title, externalLink, description, publishedAt: Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate, author, image });
+      const parsedDate = published ? new Date(published) : null;
+      // No valid date => null. Never fake "now": that pins undated/stale items to the top forever.
+      items.push({ title, externalLink, description, publishedAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null, author, image });
     }
   }
   return items;
@@ -211,6 +212,7 @@ async function refreshCache() {
       const { category, items } = result.value;
       for (const item of items.slice(0, 15)) {
         if (!item.externalLink || blocked(item.externalLink)) continue;
+        if (!item.publishedAt || Date.now() - item.publishedAt.getTime() > MAX_ARTICLE_AGE_MS || item.publishedAt.getTime() > Date.now() + 6 * 3600 * 1000) continue;
         const key = item.externalLink.split('#')[0];
         if (seen.has(key)) continue;
         seen.add(key);

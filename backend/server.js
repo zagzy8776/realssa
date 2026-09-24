@@ -2025,7 +2025,6 @@ const sportsFeeds = [
 
 // USA News RSS feeds
 const usaFeeds = [
-  'http://rss.cnn.com/rss/edition.rss',
   'https://feeds.nytimes.com/nyt/rss/HomePage',
   'https://www.washingtonpost.com/rss/',
   'https://www.usatoday.com/rss/',
