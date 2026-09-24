@@ -60,7 +60,7 @@ const Ghana = () => {
           const data = await response.json();
 
           // Map API response to component's expected format
-          const mappedData: GhanaNewsItem[] = (Array.isArray(data) ? data : []).map((item: ApiGhanaItem) => {
+          const mappedData: GhanaNewsItem[] = (Array.isArray(data) ? data : (data?.articles ?? [])).map((item: ApiGhanaItem) => {
             // Category inference based on content
             let category: CategoryType = "news";
             const title = item.title || "";

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/inappbrowser';
 import {
@@ -458,16 +458,7 @@ export default function InAppBrowser() {
 
   // ── No URL guard ──────────────────────────────────────────────────────────────
   if (!initialUrl) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 text-center">
-        <AlertTriangle className="w-12 h-12 text-amber-500 mb-3 animate-bounce" />
-        <h2 className="text-lg font-bold mb-1">No URL Specified</h2>
-        <p className="text-xs text-muted-foreground mb-4">Provide a valid web link to browse.</p>
-        <Button onClick={() => navigate('/search')} className="bg-amber-500 text-black font-bold">
-          Back to Search
-        </Button>
-      </div>
-    );
+    return <Navigate to="/search" replace />;
   }
 
   const canGoBack = stackIndex > 0;

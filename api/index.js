@@ -13,6 +13,19 @@ const Module = require('module');
 const originalLoad = Module._load;
 const originalSetInterval = global.setInterval;
 
+
+const marketTs = (r) => new Date(r.updated_at || r.created_at || 0).getTime() || 0;
+const latestBy = (rows, keyFn) => {
+  const best = new Map();
+  for (const r of rows) {
+    const k = keyFn(r);
+    if (!best.has(k) || marketTs(r) > marketTs(best.get(k))) best.set(k, r);
+  }
+  return [...best.values()];
+};
+const shapeRate = (r) => ({ currency: r.currency, buy_rate: r.buy_rate, sell_rate: r.sell_rate, source: r.source, created_at: r.updated_at || r.created_at });
+const shapePrice = (r) => ({ item_name: r.item_name, price: r.price, location: r.location, unit: r.unit, created_at: r.updated_at || r.created_at });
+
 const pg = require('pg');
 const NativePool = pg.Pool;
 const poolCache = new Map();
@@ -356,8 +369,9 @@ const handleStableApi = async (parsed, req, res, pool) => {
   }
   if (parsed.pathname === '/api/rates') {
     try {
-      const result = await pool.query(`SELECT currency, buy_rate, sell_rate, source, updated_at AS created_at FROM parallel_rates ORDER BY currency`);
-      return sendJson(res, 200, Array.isArray(result.rows) ? result.rows : []), true;
+      const result = await pool.query(`SELECT * FROM parallel_rates`);
+      const rows = latestBy(result.rows || [], (r) => r.currency).map(shapeRate).sort((a, b) => String(a.currency).localeCompare(String(b.currency)));
+      return sendJson(res, 200, rows), true;
     } catch (error) {
       console.warn('[Vercel Market] Rates query failed:', error.message);
       return sendJson(res, 200, []), true;
@@ -365,8 +379,9 @@ const handleStableApi = async (parsed, req, res, pool) => {
   }
   if (parsed.pathname === '/api/prices') {
     try {
-      const result = await pool.query(`SELECT item_name, price, location, unit, updated_at AS created_at FROM market_prices ORDER BY updated_at DESC, item_name ASC LIMIT 200`);
-      return sendJson(res, 200, Array.isArray(result.rows) ? result.rows : []), true;
+      const result = await pool.query(`SELECT * FROM market_prices LIMIT 2000`);
+      const rows = latestBy(result.rows || [], (r) => `${r.item_name}|${r.location}`).map(shapePrice).sort((a, b) => String(a.item_name).localeCompare(String(b.item_name))).slice(0, 200);
+      return sendJson(res, 200, rows), true;
     } catch (error) {
       console.warn('[Vercel Market] Prices query failed:', error.message);
       return sendJson(res, 200, []), true;

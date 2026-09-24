@@ -39,7 +39,7 @@ const Jobs = () => {
         if (response) {
           const data = await response.json();
           // The API returns rss articles mapped to standard format
-          setJobs(Array.isArray(data) ? data : []);
+          setJobs(Array.isArray(data) ? data : (data?.articles ?? []));
         } else {
           setError("Could not load jobs. Please tap Retry.");
         }

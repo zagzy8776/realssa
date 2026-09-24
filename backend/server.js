@@ -6914,15 +6914,26 @@ app.get('/api/news/by-source', async (req, res) => {
 });
 
 // --- Street Parallel Exchange Rates ---
+
+const marketTs = (r) => new Date(r.updated_at || r.created_at || 0).getTime() || 0;
+const latestBy = (rows, keyFn) => {
+  const best = new Map();
+  for (const r of rows) {
+    const k = keyFn(r);
+    if (!best.has(k) || marketTs(r) > marketTs(best.get(k))) best.set(k, r);
+  }
+  return [...best.values()];
+};
+const shapeRate = (r) => ({ currency: r.currency, buy_rate: r.buy_rate, sell_rate: r.sell_rate, source: r.source, created_at: r.updated_at || r.created_at });
+const shapePrice = (r) => ({ item_name: r.item_name, price: r.price, location: r.location, unit: r.unit, created_at: r.updated_at || r.created_at });
+
 app.get('/api/rates', async (req, res) => {
   try {
     if (!process.env.DATABASE_URL) return res.json([]);
     const result = await pool.query(
-      `SELECT DISTINCT ON (currency) currency, buy_rate, sell_rate, source, created_at
-       FROM parallel_rates
-       ORDER BY currency, created_at DESC`
+      `SELECT * FROM parallel_rates`
     );
-    res.json(result.rows);
+    res.json(latestBy(result.rows || [], (r) => r.currency).map(shapeRate));
   } catch (err) {
     console.error('Rates API error:', err.message);
     res.status(500).json({ error: 'Failed to fetch rates' });
@@ -6934,11 +6945,9 @@ app.get('/api/prices', async (req, res) => {
   try {
     if (!process.env.DATABASE_URL) return res.json([]);
     const result = await pool.query(
-      `SELECT DISTINCT ON (item_name) item_name, price, location, unit, created_at
-       FROM market_prices
-       ORDER BY item_name, created_at DESC`
+      `SELECT * FROM market_prices LIMIT 2000`
     );
-    res.json(result.rows);
+    res.json(latestBy(result.rows || [], (r) => `${r.item_name}|${r.location}`).map(shapePrice));
   } catch (err) {
     console.error('Prices API error:', err.message);
     res.status(500).json({ error: 'Failed to fetch prices' });

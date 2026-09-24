@@ -46,7 +46,7 @@ const SouthAfrica = () => {
         if (response) {
           const data = await response.json();
 
-          const mappedData: SouthAfricaNewsItem[] = (Array.isArray(data) ? data : []).map((item: any) => {
+          const mappedData: SouthAfricaNewsItem[] = (Array.isArray(data) ? data : (data?.articles ?? [])).map((item: any) => {
             let category: CategoryType = "news";
             const title = item.title || "";
             const excerpt = item.excerpt || "";

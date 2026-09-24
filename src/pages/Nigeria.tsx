@@ -38,7 +38,7 @@ const Nigeria = () => {
         const response = await fetchWithRetry(apiUrl("/api/news/nigerian"));
         if (response) {
           const data = await response.json();
-          setNews(Array.isArray(data) ? data : []);
+          setNews(Array.isArray(data) ? data : (data?.articles ?? []));
         } else {
           setError("Could not load news. Please tap Retry.");
         }

@@ -61,7 +61,7 @@ const CountryNews = () => {
         const response = await fetchWithRetry(apiUrl(`/api/news/search?category=${countryId}`));
         if (response) {
           const data = await response.json();
-          setArticles(Array.isArray(data) ? data : []);
+          setArticles(Array.isArray(data) ? data : (data?.articles ?? []));
         } else {
           setError("Could not load news. Please try again later.");
         }
