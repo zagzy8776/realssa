@@ -487,4 +487,54 @@ app.handle = async function realssaVercelHandle(req, res, out) {
   return originalHandle(req, res, out);
 };
 
+// ─── Bot cron triggers (called by cron-job.org / Vercel cron) ───────────────
+// These run one bot cycle per request so bots can run without an always-on worker.
+// Each endpoint requires: Authorization: Bearer $CRON_SECRET
+async function requireCronAuth(req, res) {
+  const secret = process.env.CRON_SECRET || '23235567';
+  const header = req.headers['authorization'] || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (token !== secret) {
+    sendJson(res, 401, { error: 'Invalid cron secret' });
+    return false;
+  }
+  return true;
+}
+
+app.post('/api/cron/rates', async (req, res) => {
+  if (!(await requireCronAuth(req, res))) return;
+  try {
+    const { fetchRates } = require('../backend/services/ratesBot');
+    await fetchRates();
+    sendJson(res, 200, { ok: true, bot: 'rates' });
+  } catch (err) {
+    console.error('[cron/rates]', err.message);
+    sendJson(res, 500, { error: err.message });
+  }
+});
+
+app.post('/api/cron/prices', async (req, res) => {
+  if (!(await requireCronAuth(req, res))) return;
+  try {
+    const { runPricesCheck } = require('../backend/services/pricesBot');
+    await runPricesCheck();
+    sendJson(res, 200, { ok: true, bot: 'prices' });
+  } catch (err) {
+    console.error('[cron/prices]', err.message);
+    sendJson(res, 500, { error: err.message });
+  }
+});
+
+app.post('/api/cron/discussion', async (req, res) => {
+  if (!(await requireCronAuth(req, res))) return;
+  try {
+    const { monitorAndSimulate } = require('../backend/services/discussionBot');
+    await monitorAndSimulate();
+    sendJson(res, 200, { ok: true, bot: 'discussion' });
+  } catch (err) {
+    console.error('[cron/discussion]', err.message);
+    sendJson(res, 500, { error: err.message });
+  }
+});
+
 module.exports = app;

@@ -107,4 +107,4 @@ function initRatesBot(sharedPool) {
   });
 }
 
-module.exports = { initRatesBot };
+module.exports = { initRatesBot, fetchRates };

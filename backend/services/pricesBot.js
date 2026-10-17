@@ -188,4 +188,4 @@ function initPricesBot(sharedPool) {
   });
 }
 
-module.exports = { initPricesBot };
+module.exports = { initPricesBot, runPricesCheck };

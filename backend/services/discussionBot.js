@@ -163,4 +163,4 @@ async function initDiscussionBot() {
   } catch (err) { console.error('[Community Bot] Initialization failed:', err.message); }
 }
 
-module.exports = { initDiscussionBot };
+module.exports = { initDiscussionBot, monitorAndSimulate };

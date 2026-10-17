@@ -17,4 +17,6 @@ COPY package*.json ./
 RUN npm install --omit=dev
 COPY . .
 EXPOSE 5000
+# Only the API server runs in this container.
+# Background bots run via cron-job.org -> Vercel cron endpoints (/api/cron/* in api/index.js).
 CMD ["node", "--max-old-space-size=450", "server.js"]
