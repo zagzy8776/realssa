@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Trophy, PlayCircle, Bell, BellOff, RefreshCw, Calendar,
   Flame, X, ChevronRight, Clock, Shield, Activity, Zap,
-  BarChart3, CheckCircle2, Users, Award
+  BarChart3, CheckCircle2, Users, Award, Clapperboard
 } from 'lucide-react';
+import HighlightsPanel from '../components/HighlightsPanel';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import NewsTicker from '@/components/NewsTicker';
@@ -31,6 +32,8 @@ interface Match {
   kickoff_at: string;
   updated_at: string;
   match_url?: string;
+  highlight_url?: string;
+  highlight_thumb?: string;
   source?: string;
   home_hype_count?: number;
   away_hype_count?: number;
@@ -320,10 +323,11 @@ interface MatchCardProps {
   match: Match;
   isFollowing: boolean;
   onFollowToggle: (id: string) => void;
+  onHighlights: (id: string) => void;
   onClick: () => void;
 }
 
-const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: MatchCardProps) => {
+const MatchCard = ({ match, isFollowing, onFollowToggle, onHighlights, onClick }: MatchCardProps) => {
   const isLive = match.status === 'live';
   const isFin = match.status === 'finished';
   const isSched = match.status === 'scheduled';
@@ -415,8 +419,21 @@ const MatchCard = ({ match, isFollowing, onFollowToggle, onClick }: MatchCardPro
           </div>
         </div>
 
-        {/* Right Column: Follow Button */}
-        {match.status !== 'finished' && (
+        {/* Right Column: Highlights (finished) / Follow bell (live + upcoming) */}
+        {match.status === 'finished' ? (
+          <button
+            onClick={e => { e.stopPropagation(); onHighlights(match.provider_match_id); }}
+            style={{
+              padding: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4,
+              background: 'rgba(234,179,8,0.12)',
+              color: '#eab308',
+              border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+            }}
+            title="Watch highlights"
+          >
+            <Clapperboard size={14} />
+          </button>
+        ) : (
           <button
             onClick={e => { e.stopPropagation(); onFollowToggle(match.provider_match_id); }}
             style={{
@@ -444,8 +461,9 @@ interface CompGroupProps {
   followedIds: string[];
   onFollowToggle: (id: string) => void;
   onMatchClick: (id: string) => void;
+  onHighlights: (id: string) => void;
 }
-const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, onMatchClick }: CompGroupProps) => (
+const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, onMatchClick, onHighlights }: CompGroupProps) => (
   <div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 2px' }}>
       <div style={{
@@ -474,6 +492,7 @@ const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, o
           match={m}
           isFollowing={followedIds.includes(m.provider_match_id)}
           onFollowToggle={onFollowToggle}
+          onHighlights={onHighlights}
           onClick={() => onMatchClick(m.provider_match_id)}
         />
       ))}
@@ -484,7 +503,7 @@ const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, o
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*  ScraperMatchPanel — Simplified Overview panel (no duplicate scoreboard) */
 /* ═══════════════════════════════════════════════════════════════════════ */
-const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }) => {
+const ScraperMatchPanel = ({ match, matchId, onOpenHighlights }: { match: Match; matchId: string; onOpenHighlights?: () => void }) => {
   const isLive = match.status === 'live';
   const isFin  = match.status === 'finished';
   const isSched = match.status === 'scheduled';
@@ -516,6 +535,28 @@ const ScraperMatchPanel = ({ match, matchId }: { match: Match; matchId: string }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* ── Finished match → Highlights CTA ── */}
+      {isFin && onOpenHighlights && (
+        <button
+          onClick={onOpenHighlights}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            padding: '14px 16px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+            background: 'linear-gradient(135deg, rgba(234,179,8,0.14) 0%, rgba(234,179,8,0.05) 100%)',
+            border: '1px solid rgba(234,179,8,0.4)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Clapperboard size={20} style={{ color: '#eab308' }} />
+            <div>
+              <p style={{ fontSize: 12.5, fontWeight: 900, color: '#f1f5f9' }}>This match has finished</p>
+              <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 1 }}>Watch the official highlights instead of a dead stream</p>
+            </div>
+          </div>
+          <span style={{ background: '#eab308', color: '#000', fontSize: 10, fontWeight: 900, borderRadius: 8, padding: '6px 12px', whiteSpace: 'nowrap' }}>WATCH</span>
+        </button>
+      )}
+
       {/* ── Minute Timeline Progress Bar ── */}
       {(isLive || isFin) && (
         <div style={{ padding: '14px 16px', background: '#131b2a', border: '1px solid rgba(51,65,85,0.5)', borderRadius: 14 }}>
@@ -787,7 +828,7 @@ const MatchStandingsTable = ({ competition, homeTeam = '', awayTeam = '' }: { co
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*  MatchModal — Tabbed modal: Overview, Statistics, Table, H2H             */
 /* ═══════════════════════════════════════════════════════════════════════ */
-const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIncidents, loading, onClose }: {
+const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIncidents, loading, initialTab, onClose }: {
   matchId: string;
   match: Match | null;
   matchDetails: any;
@@ -795,9 +836,14 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
   matchStats: any[] | null;
   matchIncidents: any[] | null;
   loading: boolean;
+  initialTab?: 'overview' | 'highlights';
   onClose: () => void;
 }) => {
-  const [modalTab, setModalTab] = useState<'overview' | 'stats' | 'table' | 'h2h'>('overview');
+  const [modalTab, setModalTab] = useState<'overview' | 'stats' | 'table' | 'h2h' | 'highlights'>(initialTab || 'overview');
+
+  // Re-opening the modal for a different match — or via the Highlights
+  // quick-action on a finished card — must land on the requested tab.
+  useEffect(() => { setModalTab(initialTab || 'overview'); }, [matchId, initialTab]);
 
   const isLive = match?.status === 'live' || matchDetails?.status === 'IN_PLAY';
   const isFin = match?.status === 'finished' || matchDetails?.status === 'FINISHED';
@@ -927,10 +973,12 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
         <div className="scrollbar-hide" style={{ display: 'flex', borderBottom: '1px solid rgba(51,65,85,0.5)', background: '#0f172a', overflowX: 'auto', scrollbarWidth: 'none' }}>
           {[
             { id: 'overview',   label: 'Overview',   icon: BarChart3 },
+            // Highlights tab only exists for finished matches
+            ...(isFin ? [{ id: 'highlights', label: 'Highlights', icon: Clapperboard }] : []),
             { id: 'stats',      label: 'Statistics', icon: Activity },
             { id: 'table',      label: 'Standings',  icon: Trophy },
             { id: 'h2h',        label: 'H2H',        icon: Users },
-          ].map(tb => {
+          ].map((tb: any) => {
             const Icon = tb.icon;
             const active = modalTab === tb.id;
             return (
@@ -963,6 +1011,26 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
             </div>
           ) : (
             <>
+              {/* ── TAB: HIGHLIGHTS (finished matches only) ── */}
+              {modalTab === 'highlights' && (
+                isFin && match ? (
+                  <HighlightsPanel
+                    source={{
+                      id: matchId,
+                      home: match.home_team_name,
+                      away: match.away_team_name,
+                      kickoff: match.kickoff_at,
+                      competition: match.competition_name,
+                      matchUrl: match.match_url,
+                    }}
+                  />
+                ) : (
+                  <div style={{ padding: '28px 12px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#64748b' }}>
+                    Highlights appear once the match has finished.
+                  </div>
+                )
+              )}
+
               {/* ── TAB 1: OVERVIEW ── */}
               {modalTab === 'overview' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -982,7 +1050,13 @@ const MatchModal = ({ matchId, match, matchDetails, h2hData, matchStats, matchIn
                   )}
 
                   {/* Scraper Hype meter or default panel */}
-                  {match && <ScraperMatchPanel match={match} matchId={matchId} />}
+                  {match && (
+                    <ScraperMatchPanel
+                      match={match}
+                      matchId={matchId}
+                      onOpenHighlights={isFin ? () => setModalTab('highlights') : undefined}
+                    />
+                  )}
 
                   {/* API Match info if available */}
                   {!match && matchDetails && (
@@ -1119,7 +1193,15 @@ const Sports = () => {
   const [lastRefreshed, setLastRefreshed]   = useState<Date | null>(null);
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [initialModalTab, setInitialModalTab] = useState<'overview' | 'highlights'>('overview');
   const [detailsLoading, setDetailsLoading]   = useState(false);
+
+  // openMatch('id') → Overview; openMatch('id', 'highlights') → finished
+  // matches land directly on the Highlights tab.
+  const openMatch = (id: string, tab: 'overview' | 'highlights' = 'overview') => {
+    setInitialModalTab(tab);
+    setSelectedMatchId(id);
+  };
   const [matchDetails, setMatchDetails]       = useState<any | null>(null);
   const [h2hData, setH2hData]                 = useState<any | null>(null);
   const [matchStats, setMatchStats]           = useState<any[] | null>(null);
@@ -1439,7 +1521,8 @@ const Sports = () => {
                     matches={compMatches}
                     followedIds={followedIds}
                     onFollowToggle={handleFollowToggle}
-                    onMatchClick={id => setSelectedMatchId(id)}
+                    onMatchClick={id => openMatch(id)}
+                    onHighlights={id => openMatch(id, 'highlights')}
                   />
                 ))}
               </div>
@@ -1492,6 +1575,7 @@ const Sports = () => {
           matchStats={matchStats}
           matchIncidents={matchIncidents}
           loading={detailsLoading}
+          initialTab={initialModalTab}
           onClose={() => setSelectedMatchId(null)}
         />
       )}

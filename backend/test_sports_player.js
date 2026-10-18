@@ -466,11 +466,15 @@ async function liveParts() {
     feed.matches.filter(m => /^(udinese|lecce|osasuna|cambuur|sirius)/i.test(m.home || '')).every(m => m.league && m.league !== 'football'));
   check('feed has generatedAt', !!feed.generatedAt);
   const withDir = feed.matches.filter(m => m.directSources?.length);
-  check('majority of feed carries directSources', withDir.length >= Math.floor(feed.matches.length * 0.8), `${withDir.length}/${feed.matches.length}`);
+  // NEW CONTRACT: finished matches intentionally carry NO stream ladder —
+  // they get the Highlights feature instead. Playability = live + upcoming.
+  const playable = feed.matches.filter(m => m.status !== 'finished');
+  const playableWithDir = playable.filter(m => m.directSources?.length);
+  check('majority of playable (live+upcoming) feed carries directSources', playableWithDir.length >= Math.floor(playable.length * 0.8), `${playableWithDir.length}/${playable.length} playable (finished excluded → Highlights)`);
   check('directSources well-formed', withDir.slice(0, 5).every(m => m.directSources.every(s => /^https?:\/\/.+\.m3u8/.test(s.url) && s.label)), JSON.stringify(withDir[0]?.directSources?.[0]).slice(0, 140));
   check('upcoming (non-live) matches also carry sources', withDir.some(m => !m.isLive), `${withDir.filter(m => !m.isLive).length} upcoming enriched`);
   check('EVERY source in feed is tier-tagged (no undefined)', feed.matches.every(m => (m.directSources || []).every(s => ['team', 'broadcaster', 'generic'].includes(s.sourceTier))), JSON.stringify(feed.matches.find(m => (m.directSources || []).some(s => !s.sourceTier))?.event));
-  check('no fixture is a dead end (all have ≥1 source)', feed.matches.every(m => m.directSources?.length > 0));
+  check('no playable fixture is a dead end (finished get Highlights instead)', playable.every(m => m.directSources?.length > 0), `${playable.filter(m => !m.directSources?.length).length} playable without sources`);
   const liveOnes = feed.matches.filter(m => m.isLive);
   if (liveOnes.length) {
     check('live matches have directSources (≥1)', liveOnes.some(m => m.directSources?.length), `${liveOnes.filter(m => m.directSources?.length).length}/${liveOnes.length} live have direct sources`);
@@ -478,6 +482,12 @@ async function liveParts() {
     console.log('        (no live matches right now)');
   }
   await apiPart();
+  await statusHighlightsPart();
+
+  console.log('\n══════════════════════════════════════');
+  console.log(`RESULT: ${pass} passed, ${fail} failed`);
+  if (fail) { console.log('Failures:'); failures.forEach(f => console.log('  ✗ ' + f)); }
+  process.exitCode = fail ? 1 : 0;
 }
 
 async function apiPart() {
@@ -579,11 +589,71 @@ function playerConfigPart() {
   check('loader shows elapsed buffering seconds', /elapsed >= 4/.test(src));
   check('failover still reaches iframe servers', /setMode\('iframe'\)/.test(src));
   check('no leftover recoveredOnce flag', !/recoveredOnce/.test(src));
+}
 
-  console.log('\n══════════════════════════════════════');
-  console.log(`RESULT: ${pass} passed, ${fail} failed`);
-  if (fail) { console.log('Failures:'); failures.forEach(f => console.log('  ✗ ' + f)); }
-  process.exitCode = fail ? 1 : 0;
+// ── Status normalization + highlights contracts (async: live provider smoke) ──
+async function statusHighlightsPart() {
+  console.log('\n═══ UNIT: match status normalization (sportsStatus) ═══');
+  const statusMod = require('./services/sportsStatus');
+  check('"Match Finished" (TheSportsDB) → finished', statusMod.normalizeStatus('Match Finished', new Date().toISOString()) === 'finished');
+  check('"FT" → finished', statusMod.normalizeStatus('FT', null) === 'finished');
+  check('"AET"/"PEN" → finished', statusMod.normalizeStatus('AET', null) === 'finished' && statusMod.normalizeStatus('PEN', null) === 'finished');
+  check('"Not Started"/"NS" → scheduled', statusMod.normalizeStatus('Not Started', null) === 'scheduled' && statusMod.normalizeStatus('NS', null) === 'scheduled');
+  check('"1H"/"HT"/"2H" → live', statusMod.normalizeStatus('1H', null) === 'live' && statusMod.normalizeStatus('HT', null) === 'live');
+  check('ESPN "pre"/"in"/"post" mapped', statusMod.normalizeStatus('pre', null) === 'scheduled' && statusMod.normalizeStatus('in', null) === 'live' && statusMod.normalizeStatus('post', null) === 'finished');
+  check('postponed/cancelled → cancelled', statusMod.normalizeStatus('Postponed', null) === 'cancelled' && statusMod.normalizeStatus('Cancelled', null) === 'cancelled');
+  {
+    const sixHoursAgo = new Date(Date.now() - 6 * 3600e3).toISOString();
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60000).toISOString();
+    const inTwoHours = new Date(Date.now() + 2 * 3600e3).toISOString();
+    check('stale "scheduled" + kickoff 6h ago → finished (scraper-lag fix)', statusMod.normalizeStatus('scheduled', sixHoursAgo) === 'finished');
+    check('stale "NS" + kickoff 30min ago → live (within window)', statusMod.normalizeStatus('NS', thirtyMinAgo) === 'live');
+    check('"scheduled" + future kickoff stays scheduled', statusMod.normalizeStatus('scheduled', inTwoHours) === 'scheduled');
+    check('empty status + kickoff 6h ago → finished', statusMod.normalizeStatus('', sixHoursAgo) === 'finished');
+    check('empty status + no kickoff → scheduled (safe default)', statusMod.normalizeStatus('', null) === 'scheduled');
+  }
+
+  console.log('\n═══ UNIT: sports highlights service ═══');
+  const HL = require('./services/sportsHighlightsService');
+  const HT = HL._test;
+  check('espnSlugFor Premier League → eng.1', HT.espnSlugFor('Premier League Football') === 'eng.1');
+  check('espnSlugFor UEFA Champions League → uefa.champions', HT.espnSlugFor('UEFA Champions League') === 'uefa.champions');
+  check('espnSlugFor unknown competition → null', HT.espnSlugFor('NPFL') === null);
+  check('pickEspnVideoUrl prefers direct MP4 (links.source)', HT.pickEspnVideoUrl({ links: { source: { href: 'https://espnmedia-cdn.akamaized.net/x.mp4' }, web: { href: 'https://espn.com/clip' } } }) === 'https://espnmedia-cdn.akamaized.net/x.mp4');
+  check('pickEspnVideoUrl falls back to web page', HT.pickEspnVideoUrl({ links: { web: { href: 'https://espn.com/clip' } } }) === 'https://espn.com/clip');
+  check('dedupeClips strips duplicate URLs + empties', HT.dedupeClips([{ url: 'https://a.com/v.mp4', id: '1' }, { url: 'https://a.com/v.mp4', id: '2' }, { url: '', id: '3' }]).length === 1);
+  check('teamMatches exact + alias', HT.teamMatches('Arsenal', 'Arsenal FC') === true && HT.teamMatches('Man City', 'Manchester City') === true);
+  check('teamMatches rejects different clubs', HT.teamMatches('Arsenal', 'Chelsea') === false);
+  check('sportsDbDate formats UTC YYYY-MM-DD', HT.sportsDbDate('2026-10-17T23:00:00Z') === '2026-10-17');
+
+  console.log('\n═══ LIVE: highlight providers reachable ═══');
+  try {
+    const yesterday = new Date(Date.now() - 24 * 3600e3).toISOString().slice(0, 10);
+    const r = await fetch(`https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=${yesterday}&s=Soccer`);
+    const data = r.ok ? await r.json() : null;
+    const ev = (data?.events || []).find(e => e.strVideo);
+    check('TheSportsDB eventsday exposes strVideo highlights', !!ev, ev ? ev.strEvent : 'no video in payload');
+  } catch (e) { check('TheSportsDB eventsday reachable', false, e.message); }
+  try {
+    const d = new Date(Date.now() - 24 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
+    const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=' + d, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const sb = r.ok ? await r.json() : null;
+    check('ESPN scoreboard reachable for highlights lookup', Array.isArray(sb?.events), `${(sb?.events || []).length} events`);
+  } catch (e) { check('ESPN scoreboard reachable', false, e.message); }
+  try {
+    const hl = await HL.getHighlights({ home: 'Hartford Athletic', away: 'Brooklyn FC', kickoff: new Date(Date.now() - 24 * 3600e3).toISOString(), competition: 'USL Championship' });
+    check('getHighlights returns schema + youtubeSearch fallback', Array.isArray(hl.clips) && typeof hl.youtubeSearch === 'string' && hl.youtubeSearch.includes('youtube.com'), `${hl.count} clips`);
+  } catch (e) { check('getHighlights runs end-to-end', false, e.message); }
+
+  console.log('\n═══ REGRESSION: finished matches never pretend to be live ═══');
+  const sfs = require('fs');
+  const sss = sfs.readFileSync(path.join(__dirname, 'services', 'sportsStreamService.js'), 'utf8');
+  check('fetchDbMatches: clock cannot override explicit finished', /m\.status === 'scheduled' && isFixtureLive/.test(sss));
+  check('buildFeed: finished games excluded from live ladder', /m\.status === 'finished'\) return false;/.test(sss));
+  check('buildFeed: finished games get no generic ladder', /m\.status === 'finished'\) continue;/.test(sss));
+  const sportsApi = sfs.readFileSync(path.join(__dirname, '..', 'api', 'sports.js'), 'utf8');
+  check('api/sports.js uses shared status normalizer', /require\('\.\.\/backend\/services\/sportsStatus'\)/.test(sportsApi));
+  check('api/sports.js exposes /highlights route', /path === 'highlights'/.test(sportsApi));
 }
 
 process.on('exit', (c) => console.log('HARNESS-EXIT code=' + c));

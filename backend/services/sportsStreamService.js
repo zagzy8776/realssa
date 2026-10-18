@@ -869,7 +869,12 @@ async function fetchStreamedMatches() {
             const kickoff = item.date || item.time || null;
             // Upstream has no `live` flag — derive from the clock.
             const isLive = isFixtureLive(kickoff, item.live ?? item.isLive);
-            const status = isLive ? 'live' : (item.finished ? 'finished' : 'scheduled');
+            // /api/matches/all also lists YESTERDAY's games with no `finished`
+            // flag — without the clock check they re-entered the feed as
+            // "scheduled" and showed under Upcoming after the final whistle.
+            const kickoffTs = parseKickoffTs(kickoff);
+            const wellPast = !isNaN(kickoffTs) && Date.now() - kickoffTs > LIVE_WINDOW_AFTER_MS;
+            const status = isLive ? 'live' : (item.finished || wellPast ? 'finished' : 'scheduled');
             return {
               id: String(item.id || ''),
               event: title,
@@ -916,9 +921,11 @@ async function fetchDbMatches(pool) {
       awayCrest: m.away_team_crest || null,
       kickoff: m.kickoff_at || null,
       // The scraper can lag, leaving a genuinely in-play game as 'scheduled'.
-      // Trust `live`, but also derive liveness from the kickoff clock so a
-      // match never silently disappears from "Live Now" between refreshes.
-      isLive: m.status === 'live' || isFixtureLive(m.kickoff_at, false),
+      // Trust `live`, but also derive liveness from the kickoff clock — ONLY
+      // for still-scheduled games. The clock check must NOT override an
+      // explicit 'finished': a final whistle 30 min ago was being resurrected
+      // as LIVE (kickoff inside the 3h window) and shown with a Watch button.
+      isLive: m.status === 'live' || (m.status === 'scheduled' && isFixtureLive(m.kickoff_at, false)),
       status: m.status,
       score: (m.home_score != null || m.away_score != null)
         ? `${m.home_score ?? 0}-${m.away_score ?? 0}`
@@ -1089,8 +1096,15 @@ function mergeMatches(streamed, dbList, espnList) {
     if (m.isLive && !m.status) m.status = 'live';
   }
 
-  // Live first, then upcoming
-  merged.sort((a, b) => (b.isLive ? 1 : 0) - (a.isLive ? 1 : 0));
+  // Live first, then upcoming, then finished (newest final whistle first)
+  const rank = m => (m.isLive ? 0 : m.status === 'finished' ? 2 : 1);
+  merged.sort((a, b) => {
+    const r = rank(a) - rank(b);
+    if (r) return r;
+    const ta = new Date(a.kickoff || 0).getTime() || 0;
+    const tb = new Date(b.kickoff || 0).getTime() || 0;
+    return rank(a) === 2 ? tb - ta : ta - tb;
+  });
   return merged;
 }
 
@@ -1109,6 +1123,10 @@ async function buildFeed(pool) {
   const now = Date.now();
   const withSources = matches.filter(m => {
     if (m.isLive) return true;
+    // Finished games must NOT walk the live ladder — a "stream" for a match
+    // that ended 2h ago is a dead channel and a broken promise. They get the
+    // Highlights feature instead.
+    if (m.status === 'finished') return false;
     if (!m.kickoff) return false;
     const t = new Date(m.kickoff).getTime();
     return !isNaN(t) && t > now - 3 * 60 * 60 * 1000;   // live + all upcoming
@@ -1133,7 +1151,9 @@ async function buildFeed(pool) {
     : [];
   if (generic.length) {
     for (const m of matches) {
-      if (m.isLive || m.directSources?.length) continue;
+      // Finished games never get the generic live-channel ladder — that is
+      // what made finished cards claim "● Direct stream available".
+      if (m.isLive || m.directSources?.length || m.status === 'finished') continue;
       m.directSources = generic;
       m.sourceTier = 'generic';
       m.liveConfidence = { level: 'generic', exact: false, tier: 'generic', label: generic[0]?.label || null, score: null };

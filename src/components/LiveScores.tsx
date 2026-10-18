@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Trophy, Clock, X, ChevronDown, ChevronUp, AlertCircle, ExternalLink, Newspaper } from 'lucide-react';
 import { apiUrl } from '@/lib/api-base';
+import { HighlightsModal } from './HighlightsPanel';
 
 interface Match {
   match_id: string;
@@ -53,16 +54,16 @@ const MatchDetailModal = ({ match, onClose }: { match: Match; onClose: () => voi
   const isLive = match.status === 'live';
   const isFinished = match.status === 'finished';
   const flag = getFlag(match.competition);
+  const [hlOpen, setHlOpen] = useState(false);
 
   const handleViewNews = () => {
     const q = `${match.home_team} vs ${match.away_team} ${match.competition}`;
     window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}&tbm=nws`, '_blank');
   };
 
-  const handleHighlights = () => {
-    const q = `${match.home_team} vs ${match.away_team} highlights`;
-    window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank');
-  };
+  // In-app highlights experience (TheSportsDB + ESPN clips, YouTube fallback)
+  // instead of a raw YouTube search tab.
+  const handleHighlights = () => setHlOpen(true);
 
   return (
     <div
@@ -146,6 +147,20 @@ const MatchDetailModal = ({ match, onClose }: { match: Match; onClose: () => voi
           </div>
         </div>
       </div>
+
+      {/* In-app highlights (inline MP4 / YouTube) */}
+      {hlOpen && (
+        <HighlightsModal
+          source={{
+            id: match.match_id,
+            home: match.home_team,
+            away: match.away_team,
+            kickoff: match.kickoff_at,
+            competition: match.competition,
+          }}
+          onClose={() => setHlOpen(false)}
+        />
+      )}
     </div>
   );
 };

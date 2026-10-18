@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import VideoNews from "@/pages/VideoNews";
-import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2, Activity, Shield, Trophy } from 'lucide-react';
+import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2, Activity, Shield, Trophy, Clapperboard } from 'lucide-react';
+import { HighlightsModal } from '@/components/HighlightsPanel';
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api-base";
@@ -145,7 +146,8 @@ export default function CinemaHub() {
   } | null>(null);
   const [sportsMatches, setSportsMatches] = useState<any[]>([]);
   const [sportsSearchQuery, setSportsSearchQuery] = useState('');
-  const [sportsTimeFilter, setSportsTimeFilter] = useState<'All' | 'Live' | 'Upcoming'>('All');
+  const [sportsTimeFilter, setSportsTimeFilter] = useState<'All' | 'Live' | 'Upcoming' | 'Results'>('All');
+  const [highlightsMatch, setHighlightsMatch] = useState<{ id?: string; home: string; away: string; kickoff?: string | null; competition?: string | null; matchUrl?: string | null } | null>(null);
   const [sportsMatchesLoading, setSportsMatchesLoading] = useState(false);
   const [selectedSportMatch, setSelectedSportMatch] = useState<any | null>(null);
   const [selectedSportFilter, setSelectedSportFilter] = useState('All');
@@ -802,17 +804,18 @@ export default function CinemaHub() {
             </div>
           </div>
 
-          {/* Live / Upcoming Toggle */}
+          {/* Live / Upcoming / Results Toggle */}
           <div className="flex items-center justify-center gap-2 mb-4">
-            {([['All', 'All Fixtures'], ['Live', '● Live Now'], ['Upcoming', 'Upcoming']] as const).map(([key, label]) => {
+            {([['All', 'All Fixtures'], ['Live', '● Live Now'], ['Upcoming', 'Upcoming'], ['Results', '✓ Finished']] as const).map(([key, label]) => {
               const isLiveKey = key === 'Live';
+              const isResultsKey = key === 'Results';
               return (
                 <button
                   key={key}
                   onClick={() => setSportsTimeFilter(key)}
                   className={`px-3.5 py-1.5 rounded-full text-[11px] font-black transition-all active:scale-95 border ${
                     sportsTimeFilter === key
-                      ? (isLiveKey ? 'bg-red-600 text-white border-red-500' : 'bg-white text-black border-white')
+                      ? (isLiveKey ? 'bg-red-600 text-white border-red-500' : isResultsKey ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-white text-black border-white')
                       : 'bg-zinc-900/70 text-zinc-400 hover:text-white border-zinc-800'
                   }`}
                 >
@@ -873,9 +876,13 @@ export default function CinemaHub() {
 
                 if (!matchesQuery) return false;
 
-                // Live / Upcoming time filter
-                if (sportsTimeFilter === 'Live' && !m.isLive) return false;
-                if (sportsTimeFilter === 'Upcoming' && m.isLive) return false;
+                // Live / Upcoming / Results time filter. `status` is canonical
+                // from the feed ('live'|'finished'|'cancelled'|'scheduled');
+                // fall back to isLive for legacy rows without a status.
+                const st = String(m.status || (m.isLive ? 'live' : 'scheduled')).toLowerCase();
+                if (sportsTimeFilter === 'Live' && st !== 'live') return false;
+                if (sportsTimeFilter === 'Upcoming' && st !== 'scheduled') return false;
+                if (sportsTimeFilter === 'Results' && st !== 'finished') return false;
 
                 if (selectedSportFilter === 'All') return true;
 
@@ -901,19 +908,22 @@ export default function CinemaHub() {
                 return !isKnown;
               });
 
-              // Sort: live first (when showing everything), then by kickoff time
+              // Sort: live → upcoming (kickoff asc) → finished (newest first)
+              const statusRank = (mm: any) => {
+                const s = String(mm.status || (mm.isLive ? 'live' : 'scheduled')).toLowerCase();
+                return s === 'live' ? 0 : s === 'finished' ? 2 : 1;
+              };
               const sorted = [...filtered].sort((a, b) => {
-                if (sportsTimeFilter === 'All') {
-                  const la = a.isLive ? 0 : 1, lb = b.isLive ? 0 : 1;
-                  if (la !== lb) return la - lb;
-                }
+                const ra = statusRank(a), rb = statusRank(b);
+                if (ra !== rb) return ra - rb;
                 const ta = new Date(a.kickoff || 0).getTime() || 0;
                 const tb = new Date(b.kickoff || 0).getTime() || 0;
-                return ta - tb;
+                return ra === 2 ? tb - ta : ta - tb;
               });
 
-              const liveTotal = sportsMatches.filter(m => m.isLive).length;
-              const upcomingTotal = sportsMatches.length - liveTotal;
+              const liveTotal = sportsMatches.filter(m => statusRank(m) === 0).length;
+              const resultsTotal = sportsMatches.filter(m => statusRank(m) === 2).length;
+              const upcomingTotal = sportsMatches.length - liveTotal - resultsTotal;
 
               if (sorted.length === 0) {
                 const onlyLiveBlocked = sportsTimeFilter === 'Live' && upcomingTotal > 0;
@@ -975,12 +985,32 @@ export default function CinemaHub() {
                               key={idx}
                               className="bg-zinc-950/60 backdrop-blur-md border border-white/10 hover:border-amber-500/40 rounded-2xl p-4 flex flex-col justify-between gap-3.5 transition-all hover:bg-zinc-900/45 group relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.4)]"
                             >
-                              {/* Upper banner row */}
+                              {/* Upper banner row — status-aware pill */}
                               <div className="flex items-center justify-between text-[9px] text-zinc-500 font-extrabold uppercase tracking-wider">
-                                <span className="flex items-center gap-1 bg-red-950/40 text-red-400 px-2 py-0.5 rounded-full border border-red-900/20">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                                  {match.time || 'LIVE'}
-                                </span>
+                                {(() => {
+                                  const st = String(match.status || (match.isLive ? 'live' : 'scheduled')).toLowerCase();
+                                  const kt = match.kickoff ? new Date(match.kickoff) : null;
+                                  const timeStr = kt && !isNaN(kt.getTime())
+                                    ? kt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                    : (match.time || '');
+                                  if (st === 'finished') return (
+                                    <span className="flex items-center gap-1 bg-zinc-800/60 text-zinc-400 px-2 py-0.5 rounded-full border border-zinc-700/40">
+                                      FT{match.score ? ` · ${match.score}` : ''}
+                                    </span>
+                                  );
+                                  if (st === 'live') return (
+                                    <span className="flex items-center gap-1 bg-red-950/40 text-red-400 px-2 py-0.5 rounded-full border border-red-900/20">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                      {match.liveDetail || timeStr || 'LIVE'}
+                                    </span>
+                                  );
+                                  return (
+                                    <span className="flex items-center gap-1 bg-sky-950/40 text-sky-400 px-2 py-0.5 rounded-full border border-sky-900/20">
+                                      <Clock size={9} />
+                                      {timeStr || 'Upcoming'}
+                                    </span>
+                                  );
+                                })()}
                                 <span className="bg-white/5 text-zinc-400 px-2 py-0.5 rounded border border-white/5 font-extrabold">
                                   {match.sport || 'Sports'}
                                 </span>
@@ -1016,39 +1046,68 @@ export default function CinemaHub() {
                               {/* Button action row */}
                               <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1.5">
                                 <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider">
-                                  {match.directSources?.length
-                                    ? <span className="text-emerald-500">● Direct stream available</span>
-                                    : (match.streamId || match.id ? 'External source' : 'Find stream')}
+                                  {(() => {
+                                    const st = String(match.status || (match.isLive ? 'live' : 'scheduled')).toLowerCase();
+                                    if (st === 'finished') return <span className="text-zinc-500">● Match ended</span>;
+                                    return match.directSources?.length
+                                      ? <span className="text-emerald-500">● Direct stream available</span>
+                                      : (match.streamId || match.id ? 'External source' : 'Find stream');
+                                  })()}
                                 </span>
-                                <button
-                                  onClick={() => {
-                                    const d = [' vs ', ' VS ', ' - ', ' @ '];
-                                    let th = match.home || null, ta = match.away || null;
-                                    for (const x of d) {
-                                      if (!th && (match.event || '').includes(x)) {
-                                        const p = match.event.split(x);
-                                        th = p[0].trim(); ta = p[1].trim().replace(/\s*\(.*?\)\s*$/, '').trim();
+                                {String(match.status || (match.isLive ? 'live' : 'scheduled')).toLowerCase() === 'finished' ? (
+                                  <button
+                                    onClick={() => {
+                                      const d = [' vs ', ' VS ', ' - ', ' @ '];
+                                      let th = match.home || null, ta = match.away || null;
+                                      for (const x of d) {
+                                        if (!th && (match.event || '').includes(x)) {
+                                          const p = match.event.split(x);
+                                          th = p[0].trim(); ta = p[1].trim().replace(/\s*\(.*?\)\s*$/, '').trim();
+                                        }
                                       }
-                                    }
-                                    setActiveSportsPlayer({
-                                      channelId: match.streamId || match.id || 'superabbit',
-                                      title: match.event || 'Sports Match',
-                                      directSources: match.directSources,
-                                      home: th,
-                                      away: ta,
-                                      homeCrest: match.homeCrest,
-                                      awayCrest: match.awayCrest,
-                                      isLive: !!match.isLive,
-                                      sport: match.sport || null,
-                                      league: match.league || null,
-                                      liveConfidence: match.liveConfidence || null,
-                                      kickoff: match.kickoff ?? null,
-                                    });
-                                  }}
-                                  className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-[11px] font-black rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-amber-500/15 border border-amber-600"
-                                >
-                                  <Play size={10} className="fill-black" /> {match.directSources?.length ? 'Watch Now' : 'Find Stream'}
-                                </button>
+                                      setHighlightsMatch({
+                                        id: String(match.id || ''),
+                                        home: th || match.event || 'Home',
+                                        away: ta || '',
+                                        kickoff: match.kickoff ?? null,
+                                        competition: match.league || null,
+                                      });
+                                    }}
+                                    className="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-black text-[11px] font-black rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-emerald-500/15 border border-emerald-600"
+                                  >
+                                    <Clapperboard size={11} /> Highlights
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      const d = [' vs ', ' VS ', ' - ', ' @ '];
+                                      let th = match.home || null, ta = match.away || null;
+                                      for (const x of d) {
+                                        if (!th && (match.event || '').includes(x)) {
+                                          const p = match.event.split(x);
+                                          th = p[0].trim(); ta = p[1].trim().replace(/\s*\(.*?\)\s*$/, '').trim();
+                                        }
+                                      }
+                                      setActiveSportsPlayer({
+                                        channelId: match.streamId || match.id || 'superabbit',
+                                        title: match.event || 'Sports Match',
+                                        directSources: match.directSources,
+                                        home: th,
+                                        away: ta,
+                                        homeCrest: match.homeCrest,
+                                        awayCrest: match.awayCrest,
+                                        isLive: !!match.isLive,
+                                        sport: match.sport || null,
+                                        league: match.league || null,
+                                        liveConfidence: match.liveConfidence || null,
+                                        kickoff: match.kickoff ?? null,
+                                      });
+                                    }}
+                                    className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-[11px] font-black rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-amber-500/15 border border-amber-600"
+                                  >
+                                    <Play size={10} className="fill-black" /> {match.directSources?.length ? 'Watch Now' : 'Find Stream'}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -1910,6 +1969,9 @@ export default function CinemaHub() {
           onClose={() => setActivePlayer(null)}
         />
       )}
+      {/* ── Highlights modal (finished matches) ── */}
+      <HighlightsModal source={highlightsMatch} onClose={() => setHighlightsMatch(null)} />
+
       {/* ── RealSSA Sports Player ── */}
       {/* ── RealSSA Sports Player (native direct HLS + fallback servers) ── */}
       {activeSportsPlayer && (

@@ -13,16 +13,14 @@ const json = (res, status, body) => {
   return res.json(body);
 };
 
+const { normalizeStatus } = require('../backend/services/sportsStatus');
+
 function normalizeMatch(row) {
-  const raw = String(row.status || row.strStatus || '').trim().toLowerCase();
-  const liveStatuses = new Set(['1h', '2h', 'ht', 'et', 'bt', 'p', 'pen', 'in progress', 'in-progress', 'inplay', 'in-play', 'playing', 'live']);
-  const finishedStatuses = new Set(['ft', 'finished', 'complete', 'completed', 'after penalties', 'aet', 'full time', 'final']);
-  const cancelledStatuses = new Set(['pst', 'post', 'postponed', 'canc', 'cancelled', 'canceled', 'abd', 'abandoned', 'susp', 'suspended']);
-  let status = raw;
-  if (liveStatuses.has(raw)) status = 'live';
-  else if (finishedStatuses.has(raw)) status = 'finished';
-  else if (cancelledStatuses.has(raw)) status = 'cancelled';
-  else if (!['scheduled', 'live', 'finished', 'cancelled'].includes(status)) status = 'scheduled';
+  // Kickoff FIRST: the status normalizer uses the clock as a tiebreaker for
+  // stale/missing upstream statuses ("scheduled" from 4h ago ⇒ finished).
+  const kickoffAt = row.kickoff_at || row.start_time || row.match_time || row.strTimestamp
+    || (row.dateEvent && row.strTime ? `${row.dateEvent}T${row.strTime}` : '') || '';
+  const status = normalizeStatus(row.status || row.strStatus, kickoffAt || undefined);
 
   return {
     provider_match_id: String(row.provider_match_id || row.match_id || row.idEvent || row.id || ''),
@@ -32,13 +30,17 @@ function normalizeMatch(row) {
     away_team_name: row.away_team_name || row.away_team || row.strAwayTeam || 'Away',
     away_team_crest: row.away_team_crest || row.away_crest || row.strAwayTeamBadge || '',
     status,
-    minute: row.minute || row.match_minute || row.strProgress || row.strStatus || '',
+    minute: row.minute || row.match_minute || row.strProgress || (status === 'finished' ? 'FT' : ''),
     home_score: Number(row.home_score ?? row.intHomeScore ?? 0),
     away_score: Number(row.away_score ?? row.intAwayScore ?? 0),
-    kickoff_at: row.kickoff_at || row.start_time || row.match_time || row.strTimestamp || (row.dateEvent && row.strTime ? `${row.dateEvent}T${row.strTime}` : new Date().toISOString()),
+    kickoff_at: kickoffAt || new Date().toISOString(),
     updated_at: row.updated_at || new Date().toISOString(),
     match_url: row.match_url || row.url || (row.idEvent ? `https://www.thesportsdb.com/event/${row.idEvent}` : ''),
-    source: row.source || 'RealSSA Sports',
+    // Official highlight (TheSportsDB strVideo) + poster — powers the
+    // Highlights feature without an extra upstream round-trip.
+    highlight_url: row.highlight_url || row.strVideo || '',
+    highlight_thumb: row.highlight_thumb || row.strThumb || '',
+    source: row.source || (row.idEvent ? 'TheSportsDB' : 'RealSSA Sports'),
     home_hype_count: Number(row.home_hype_count || 0),
     away_hype_count: Number(row.away_hype_count || 0),
   };
@@ -197,6 +199,19 @@ module.exports = async function handler(req, res) {
         home: q.home, away: q.away,
         homeCrest: q.homeCrest, awayCrest: q.awayCrest,
         sport: q.sport, league: q.league, event: q.event,
+      });
+      return json(res, 200, result);
+    }
+
+    // Official highlight clips for finished fixtures (TheSportsDB + ESPN).
+    // Cached 30 min in Redis; ALWAYS carries a YouTube deep-search fallback
+    // so the client tab is never a dead end.
+    if (path === 'highlights') {
+      const { getHighlights } = require('../backend/services/sportsHighlightsService');
+      const q = req.query || {};
+      const result = await getHighlights({
+        id: q.id, home: q.home, away: q.away,
+        kickoff: q.kickoff, competition: q.competition, matchUrl: q.matchUrl,
       });
       return json(res, 200, result);
     }
