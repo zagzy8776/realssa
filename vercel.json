@@ -28,6 +28,7 @@
     {"source":"/api/news/sports/featured","destination":"/api/news-sports-featured.js"},
     {"source":"/api/news/sports","destination":"/api/news-sports.js"},
     {"source":"/api/news/:path*","destination":"/api/news.js"},
+    {"source":"/api/sports/proxy-stream","destination":"/api/index.js"},
     {"source":"/api/sports/:path*","destination":"/api/sports.js"},
     {"source":"/api/trending","destination":"/api/trending.js"},
     {"source":"/api/extract","destination":"/api/extract.js"},
