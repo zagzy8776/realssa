@@ -281,12 +281,103 @@ function findIptvSources(home, away, homeCrest, awayCrest, channels) {
   return sources.sort((x, y) => y.matchScore - x.matchScore).slice(0, 12);
 }
 
+// Full source ladder for a fixture:
+//   tier 1 (9-12) exact team/crest channel
+//   tier 2 (2-6)  broadcaster the league actually airs on
+//   tier 3 (1)    generic sports channels — guarantees something plays
+// Never returns an empty list (as long as we have any channels).
+function buildSourceLadder(match, channels) {
+  const out = [];
+  const seen = new Set();
+  const push = (arr) => {
+    for (const s of arr) {
+      if (!s?.url || seen.has(s.url)) continue;
+      seen.add(s.url);
+      out.push(s);
+    }
+  };
+  push(findIptvSources(match?.home, match?.away, match?.homeCrest, match?.awayCrest, channels || []));
+  push(pickBroadcasterSources(match || {}, channels || []));
+  push(genericChannelSources(channels || []));
+  return out.slice(0, 14);
+}
+
 // Always-available generic live-sports channels (watch *a* live match now)
 async function getGenericSportsChannels() {
   const channels = await getIptvChannels();
+  return genericChannelSources(channels, 10);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Smart channel picker — league/sport → broadcaster affinity
+//  How the big aggregators do it: they know Newcastle is on Sky/beIN,
+//  NBA is on ESPN, NFL on Sky/Fox. We do the same so a match always has
+//  a *sensible* channel even when the exact team channel isn't in our
+//  playlist — instead of a random channel list.
+// ══════════════════════════════════════════════════════════════
+
+const BROADCASTER_HINTS = [
+  // Football — by league
+  { test: /premier league|efl|championship|fa cup|carabao/i, names: ['sky sport', 'tnt sport', 'supersport', 'premier sports', 'beIN'] },
+  { test: /la liga|laliga|copa del rey/i,                     names: ['laliga', 'la liga', 'beIN', 'movistar', 'espn'] },
+  { test: /serie a|coppa italia/i,                            names: ['serie a', 'dazn', 'sky sport', 'bein'] },
+  { test: /bundesliga|dfb/i,                                  names: ['bundesliga', 'sky sport', 'dazn'] },
+  { test: /ligue 1|french/i,                                  names: ['ligue 1', 'beIN', 'dazn'] },
+  { test: /champions league|europa league|uefa|conference league/i, names: ['tnt sport', 'cbs sport', 'beIN', 'supersport', 'sky sport'] },
+  { test: /afcon|africa|nigeria|npfl/i,                       names: ['supersport', 'super sport', 'nff', 'nta', 'sport tv', 'gtv sport'] },
+  { test: /\bmls\b|usa\.1/i,                                  names: ['espn', 'fox sport', 'mls'] },
+  { test: /eredivisie|belgian|portugal|primeira|scottish|super ?lig/i, names: ['espn', 'sky sport', 'sport tv'] },
+  // US sports
+  { test: /\bnba\b|basketball|euroleague|\bncaa\b/i,           names: ['espn', 'tnt sport', 'sky sport', 'arena sport', 'sport tv'] },
+  { test: /\bnfl\b|american football/i,                        names: ['sky sport', 'fox sport', 'espn', 'nfl network'] },
+  { test: /\bmlb\b|baseball/i,                                 names: ['espn', 'fox sport', 'mlb'] },
+  { test: /\bnhl\b|ice hockey/i,                               names: ['espn', 'sky sport'] },
+  { test: /\bmls\b|\bnrl\b|rugby|six nations|super rugby/i,    names: ['sky sport', 'supersport', 'premier sports', 'fox sport'] },
+  { test: /cricket|\bipl\b|\bt20\b|ashes|\bbbl\b|\bpsl\b/i,    names: ['star sports', 'sky sport', 'supersport', 'willow', 'ten sports', 'sport tv'] },
+  { test: /formula 1|\bf1\b|motogp|nascar|motorsport|grand prix|superbike|wsbk/i, names: ['sky sport', 'espn', 'fox sport', 'tnt sport'] },
+  { test: /ufc|mma|boxing|fight|wwe|wrestling|combat/i,        names: ['espn', 'tnt sport', 'sky sport', 'dazn', 'arena sport'] },
+  { test: /tennis|\batp\b|\bwta\b|wimbledon|us open|roland/i,  names: ['sky sport', 'espn', 'tnt sport', 'eurosport', 'sport tv'] },
+  { test: /golf|pga|masters|ryder/i,                           names: ['sky sport', 'golf', 'espn'] },
+  { test: /cycling|tour de|giro|vuelta/i,                      names: ['eurosport', 'sky sport', 'tnt sport'] },
+  { test: /darts|snooker|athletics|volleyball|handball|netball|badminton|table tennis/i, names: ['sky sport', 'eurosport', 'sport tv', 'supersport'] },
+];
+
+// Fallback broadcaster list when we can't infer the league at all.
+const GENERIC_SPORTS_CHANNEL_RE = /superSport|Sky Sport|ESPN|Fox Sport|beIN|Star Sports|Arena Sport|SportTV|Sport TV|TNT Sports|Premier Sports|Setanta|Eleven Sport|Viaplay|Viasport|NTA Sports|GTV Sport|SCC|DAZN|Eurosport|Match ?!|Sport ?1|Movistar/i;
+
+// Rank our IPTV channels by broadcaster affinity for this fixture.
+// Returns sources tagged matchScore 3-6 (below an exact team match of 9/12).
+function pickBroadcasterSources(match, channels) {
+  const hay = `${match.league || ''} ${match.sport || ''} ${match.event || ''}`;
+  const hints = [];
+  for (const h of BROADCASTER_HINTS) {
+    if (h.test.test(hay)) hints.push(...h.names.map(n => n.toLowerCase()));
+  }
+  if (!hints.length) hints.push('espn', 'sky sport', 'supersport', 'bein', 'tnt sport');
+
+  const out = [];
+  const seen = new Set();
+  for (let hi = 0; hi < hints.length; hi++) {
+    const hint = hints[hi];
+    // higher weight for earlier (more specific) hints
+    const base = Math.max(2, 6 - Math.floor(hi / 2));
+    for (const ch of channels) {
+      if (seen.has(ch.url)) continue;
+      if (!ch.name.toLowerCase().includes(hint)) continue;
+      seen.add(ch.url);
+      out.push({ url: ch.url, quality: 'Auto', label: ch.name, matchScore: base });
+      if (out.length >= 10) return out;
+    }
+  }
+  return out;
+}
+
+// Generic sports channels — used as the guaranteed last-resort tier so a
+// fixture ALWAYS has something native to open (never a dead end).
+function genericChannelSources(channels, limit = 6) {
   return channels
-    .filter(ch => /superSport|Sky Sport|ESPN|Fox Sport|beIN|Star Sports|Arena Sport|SportTV|TNT Sports|Premier Sports|Setanta|Eleven Sport|Viaplay|Viasport|NTA Sports|GTV Sport|SCC/i.test(ch.name))
-    .slice(0, 10)
+    .filter(ch => GENERIC_SPORTS_CHANNEL_RE.test(ch.name))
+    .slice(0, limit)
     .map(ch => ({ url: ch.url, quality: 'Live', label: ch.name, matchScore: 1 }));
 }
 
@@ -481,28 +572,34 @@ async function buildFeed(pool) {
 
   let matches = mergeMatches(streamed, dbList, espnList);
 
-  // Enrich live matches (and soon-kickoff ones) with our own direct HLS sources
+  // ── Enrich EVERY fixture with our own direct HLS sources ──
+  // Upcoming matches included: the ladder is cheap in-memory work over the
+  // cached channel library, and it means a card is never a dead end.
   const now = Date.now();
-  const needSources = matches.filter(m => {
+  const withSources = matches.filter(m => {
     if (m.isLive) return true;
     if (!m.kickoff) return false;
     const t = new Date(m.kickoff).getTime();
-    return !isNaN(t) && t - now < 60 * 60 * 1000;
-  }).slice(0, 40);
+    return !isNaN(t) && t > now - 3 * 60 * 60 * 1000;   // live + all upcoming
+  }).slice(0, 60);
 
-  if (needSources.length) {
-    const channels = await getIptvChannels();
-    for (const m of needSources) {
-      const direct = findIptvSources(m.home, m.away, m.homeCrest, m.awayCrest, channels);
-      if (direct.length) m.directSources = direct;
+  const channels = await getIptvChannels();
+
+  if (withSources.length && channels.length) {
+    for (const m of withSources) {
+      const ladder = buildSourceLadder(m, channels);
+      if (ladder.length) m.directSources = ladder;
     }
   }
 
-  // Ensure every live match has *something* native to play
-  const generic = await getGenericSportsChannels();
-  for (const m of matches) {
-    if (m.isLive && !m.directSources?.length && generic.length) {
+  // Guarantee: anything still without a native source gets generic channels,
+  // so nobody is ever pushed off-site just to find a stream.
+  const generic = channels.length ? genericChannelSources(channels, 8) : [];
+  if (generic.length) {
+    for (const m of matches) {
+      if (m.isLive || m.directSources?.length) continue;
       m.directSources = generic;
+      m.sourceTier = 'generic';
     }
   }
 
@@ -552,17 +649,19 @@ function sourcesCacheKey(home, away) {
 }
 
 
-async function getMatchSources({ home, away, homeCrest, awayCrest }) {
-  if (!home || !away) return { directSources: await getGenericSportsChannels() };
+async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event }) {
+  const channels = await getIptvChannels();
+  if (!home || !away) {
+    return { directSources: genericChannelSources(channels, 10) };
+  }
   const key = sourcesCacheKey(home, away);
   try {
     const cached = await redisService.getCached(key);
-    if (cached?.directSources) return cached;
+    if (cached?.directSources?.length) return cached;
   } catch (_) {}
 
-  const channels = await getIptvChannels();
-  let directSources = findIptvSources(home, away, homeCrest, awayCrest, channels);
-  if (!directSources.length) directSources = await getGenericSportsChannels();
+  const ladder = buildSourceLadder({ home, away, homeCrest, awayCrest, sport, league, event }, channels);
+  const directSources = ladder.length ? ladder : genericChannelSources(channels, 10);
 
   const result = { directSources };
   redisService.setCached(key, result, SOURCES_TTL).catch(() => {});
@@ -573,5 +672,6 @@ module.exports = { getMatches, getMatchSources, _test: {
   normalizeTeam, tokenSet, teamScore, teamTokens, parseM3u: parseIptvPlaylist, dedupeChannels: null,
   fetchStreamedMatches, fetchEspnMatches, mergeMatches, buildFeed,
   getIptvChannels, getGenericSportsChannels, findIptvSources, sourcesCacheKey,
-  extract: { IPTV_CHANNEL_FILTER, IPTV_MAX_PER_PLAYLIST },
+  buildSourceLadder, pickBroadcasterSources, genericChannelSources,
+  extract: { IPTV_CHANNEL_FILTER, IPTV_MAX_PER_PLAYLIST, BROADCASTER_HINTS },
 } };
