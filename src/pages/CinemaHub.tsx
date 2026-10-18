@@ -944,7 +944,8 @@ export default function CinemaHub() {
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {items.map((match, idx) => {
-                          const parseTeams = (event: string) => {
+                          const parseTeams = (event: string = '') => {
+                            if (!event) return { home: '', away: null };
                             const delimiters = [' vs ', ' VS ', ' - ', ' @ '];
                             for (const d of delimiters) {
                               if (event.includes(d)) {
@@ -954,7 +955,7 @@ export default function CinemaHub() {
                             }
                             return { home: event, away: null };
                           };
-                          const { home, away } = parseTeams(match.event);
+                          const { home, away } = parseTeams(match.event || '');
 
                           return (
                             <div
@@ -994,7 +995,7 @@ export default function CinemaHub() {
                                     <div className="w-5 h-5 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-[11px] font-bold text-amber-500">
                                       ⚽
                                     </div>
-                                    <span className="text-zinc-200 font-bold text-xs sm:text-[13px] group-hover:text-white transition-colors line-clamp-2 leading-snug">{match.event}</span>
+                                    <span className="text-zinc-200 font-bold text-xs sm:text-[13px] group-hover:text-white transition-colors line-clamp-2 leading-snug">{match.event || 'Sports Match'}</span>
                                   </div>
                                 )}
                               </div>
@@ -1018,7 +1019,7 @@ export default function CinemaHub() {
                                     }
                                     setActiveSportsPlayer({
                                       channelId: match.streamId || match.id || 'superabbit',
-                                      title: match.event,
+                                      title: match.event || 'Sports Match',
                                       directSources: match.directSources,
                                       home: th,
                                       away: ta,
@@ -1122,7 +1123,7 @@ export default function CinemaHub() {
                           }
                           setActiveSportsPlayer({
                             channelId: selectedSportMatch.streamId || selectedSportMatch.id || 'superabbit',
-                            title: selectedSportMatch.event,
+                            title: selectedSportMatch.event || 'Sports Match',
                             directSources: selectedSportMatch.directSources,
                             home: th, away: ta,
                             homeCrest: selectedSportMatch.homeCrest,
