@@ -85,7 +85,7 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-gradient-to-b from-zinc-950 via-black to-zinc-950 flex flex-col font-sans select-none animate-in fade-in duration-300">
+    <div className="fixed inset-0 h-[100dvh] z-[9999] bg-gradient-to-b from-zinc-950 via-black to-zinc-950 flex flex-col font-sans select-none animate-in fade-in duration-300">
 
       {/* ── TOP BAR ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-zinc-950/85 backdrop-blur-md border-b border-white/10 shrink-0">
@@ -145,13 +145,14 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
         ))}
       </div>
 
-      {/* ── STREAM WINDOW with ambient glow backlight ── */}
-      <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center p-2 sm:p-6 md:p-10">
-        <div className="w-full h-full max-w-6xl max-h-[85vh] relative rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(245,158,11,0.12),0_20px_50px_rgba(0,0,0,0.9)] bg-zinc-950">
+      {/* ── STREAM WINDOW — full-bleed, fills all free height ── */}
+      <div className="flex-1 min-h-0 w-full h-full bg-black relative overflow-hidden">
+        <div className="absolute inset-0 bg-zinc-950">
           <iframe
             key={`${activeIdx}-${channelId}`}
             src={streamUrl}
-            className="absolute inset-0 w-full h-full border-0 bg-black"
+            className="absolute inset-0 block w-full h-full min-h-full border-0 bg-black"
+            style={{ height: '100%', minHeight: '100%' }}
             allowFullScreen
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
             referrerPolicy="no-referrer"

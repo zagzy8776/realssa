@@ -210,8 +210,8 @@ export default function CinemaPlayer({
       )}
 
       {/* ── VIDEO — direct HLS/MP4 first, provider iframe only if direct fails ── */}
-      <div className="flex-1 relative bg-black flex items-center justify-center p-2 sm:p-6 md:p-10">
-        <div className="w-full h-full max-w-6xl max-h-[85vh] relative rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(245,158,11,0.15),0_20px_50px_rgba(0,0,0,0.9)] bg-black">
+      <div className="flex-1 min-h-0 relative bg-black overflow-hidden">
+        <div className="absolute inset-0 bg-black">
           {directStream ? <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain bg-black" controls playsInline preload="metadata" autoPlay onError={() => { setStreamError('Direct playback failed.'); setDirectStream(null); }} /> : <SandboxedIframe key={String(tmdbId) + '-' + mediaType + '-' + season + '-' + episode + '-' + activeIdx} src={activeServer.url} className="absolute inset-0 w-full h-full" />}
           {streamLoading && !directStream && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 pointer-events-none"><div className="text-center"><div className="w-8 h-8 mx-auto mb-3 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" /><p className="text-zinc-300 text-xs font-bold">Connecting to video server…</p></div></div>}
           {!streamLoading && !directStream && streamError && <div className="absolute top-3 left-3 right-3 z-20 pointer-events-none"><div className="inline-flex max-w-full rounded-lg bg-black/75 border border-white/10 px-3 py-2 text-[11px] text-zinc-300 backdrop-blur-md">Direct playback unavailable · using {activeServer.name}</div></div>}
