@@ -188,18 +188,25 @@ async function aiFallbackExtractor(html, url) {
   const prompt = `Extract the main news article body text from this page content for ${url}. Return ONLY the article text, no intro. If you cannot find an article, return EMPTY.\n\n${cleanHtml}`;
 
   try {
-    const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 2500, temperature: 0.1 },
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    const textContent = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    // NVIDIA key → route to NVIDIA chat completions instead of Google Gemini
+    const { isNvidiaKey, callNvidia } = require('./aiProvider');
+    let textContent = null;
+    if (isNvidiaKey(GEMINI_API_KEY)) {
+      textContent = await callNvidia(GEMINI_API_KEY, prompt, { maxTokens: 2500, temperature: 0.1, timeout: 60000 });
+    } else {
+      const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 2500, temperature: 0.1 },
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      textContent = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    }
     if (textContent && textContent.length > 120 && !/^EMPTY/i.test(textContent.trim())) {
       return { textContent: textContent.trim() };
     }

@@ -10,6 +10,9 @@ const getGeminiKey = () => {
 };
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
+// NVIDIA keys (nvapi-...) can't use Google's Gemini endpoints — route via aiProvider
+const { isNvidiaKey, callNvidia } = require('./aiProvider');
+
 // ── Rate Limiter ──────────────────────────────────────────────────────────
 // Gemini free tier: 15 RPM, 1,500 RPD
 const RATE_WINDOW_MS = 60_000;
@@ -68,6 +71,14 @@ async function callGemini(systemInstruction, userPrompt, options = {}) {
     ].join('\n');
 
     try {
+        // NVIDIA key → route to NVIDIA chat completions instead of Google Gemini
+        if (isNvidiaKey(apiKey)) {
+            const text = await callNvidia(apiKey, prompt, {
+                maxTokens, temperature
+            });
+            return text && text.length > 5 ? text : null;
+        }
+
         const body = {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
@@ -134,4 +145,4 @@ async function callGeminiJSON(systemInstruction, userPrompt, options = {}) {
     }
 }
 
-module.exports = { callGemini, callGeminiJSON };
+module.exports = { callGemini, callGeminiJSON, callGeminiText: callGemini };

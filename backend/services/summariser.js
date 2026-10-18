@@ -51,6 +51,13 @@ async function callGemini(prompt, { maxOutputTokens = 800, temperature = 0.3, ti
   const key = getGeminiKey();
   if (!key) return null;
   try {
+    // NVIDIA key → route to NVIDIA chat completions instead of Google Gemini
+    const { isNvidiaKey, callNvidia } = require('./aiProvider');
+    if (isNvidiaKey(key)) {
+      return await callNvidia(key, prompt, {
+        maxTokens: maxOutputTokens, temperature, timeout: Math.max(timeout, 60000)
+      });
+    }
     const config = { maxOutputTokens, temperature, topP: 0.9 };
     if (responseMimeType) config.responseMimeType = responseMimeType;
     const res = await fetch(`${GEMINI_URL}?key=${key}`, {

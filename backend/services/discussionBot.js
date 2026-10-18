@@ -47,7 +47,13 @@ async function callGemini(prompt) {
   const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
   if (!keys.length) return null;
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(keys[Math.floor(Math.random() * keys.length)])}`, {
+    const key = keys[Math.floor(Math.random() * keys.length)];
+    // NVIDIA key → route to NVIDIA chat completions instead of Google Gemini
+    const { isNvidiaKey, callNvidia } = require('./aiProvider');
+    if (isNvidiaKey(key)) {
+      return clean(await callNvidia(key, prompt, { maxTokens: 512, temperature: 0.35, timeout: 60000 }));
+    }
+    const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(key)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 100, temperature: 0.35 } }),
       signal: AbortSignal.timeout(6000)

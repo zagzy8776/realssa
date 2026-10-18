@@ -5114,22 +5114,28 @@ ${SITE_GUIDE}${humanInstruction}${newsContext}`;
     } catch (e) { console.warn('[Chat] OpenRouter:', e.message); }
   }
 
-  // 3. Gemini fallback
+  // 3. Gemini fallback (also handles NVIDIA nvapi- keys via aiProvider)
   const geminiKeys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
   for (const geminiKey of geminiKeys) {
     try {
       const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System'}: ${m.content}`).join('\n');
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 600, temperature: 0.7 } }),
-        signal: AbortSignal.timeout(10000)
-      });
-      if (r.ok) {
-        const d = await r.json();
-        const text = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (text) return sendAndCache(text, 'gemini');
+      let text = null;
+      const { isNvidiaKey, callNvidia } = require('./services/aiProvider');
+      if (isNvidiaKey(geminiKey)) {
+        text = await callNvidia(geminiKey, prompt, { maxTokens: 600, temperature: 0.7, timeout: 60000 });
+      } else {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 600, temperature: 0.7 } }),
+          signal: AbortSignal.timeout(10000)
+        });
+        if (r.ok) {
+          const d = await r.json();
+          text = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        }
       }
+      if (text) return sendAndCache(text, isNvidiaKey(geminiKey) ? 'nvidia' : 'gemini');
     } catch (e) { console.warn('[Chat] Gemini:', e.message); }
   }
 
@@ -5972,28 +5978,38 @@ app.get('/api/search/ai', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          maxOutputTokens: 1000,
-          temperature: 0.2
-        }
-      }),
-      signal: AbortSignal.timeout(15000)
-    });
+    // NVIDIA key → route to NVIDIA chat completions instead of Google Gemini
+    const { isNvidiaKey, callNvidia } = require('./services/aiProvider');
+    let rawText = null;
+    if (isNvidiaKey(GEMINI_API_KEY)) {
+      rawText = await callNvidia(GEMINI_API_KEY, prompt, { maxTokens: 1000, temperature: 0.2, timeout: 60000 });
+      if (!rawText) throw new Error('NVIDIA synthesis returned no text');
+    } else {
+      const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 1000,
+            temperature: 0.2
+          }
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Gemini API failed: ${errText}`);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Gemini API failed: ${errText}`);
+      }
+
+      const data = await response.json();
+      rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     }
-
-    const data = await response.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    const aiOverview = JSON.parse(rawText);
+    // Strip markdown fences if the model added them, then parse
+    const cleanedText = String(rawText || '').replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    const aiOverview = JSON.parse(cleanedText);
 
     // If Gemini failed to extract a title or subtitle, fall back to Wikipedia's page details
     if (!aiOverview.title || aiOverview.title === 'null') {
