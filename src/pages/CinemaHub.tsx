@@ -828,32 +828,36 @@ export default function CinemaHub() {
             ) : (() => {
               const query = sportsSearchQuery.toLowerCase().trim();
               const filtered = sportsMatches.filter(m => {
+                // Safe string operations - handle undefined/null values
+                const eventStr = String(m.event || '').toLowerCase();
+                const sportStr = String(m.sport || '').toLowerCase();
+                
                 const matchesQuery = !query ||
-                  m.event?.toLowerCase().includes(query) ||
-                  m.sport?.toLowerCase().includes(query);
+                  eventStr.includes(query) ||
+                  sportStr.includes(query);
 
                 if (!matchesQuery) return false;
                 if (selectedSportFilter === 'All') return true;
 
-                const sport = (m.sport || '').toLowerCase();
+                // Use sportStr which is guaranteed to be a string
                 if (selectedSportFilter === 'Football') {
-                  return sport.includes('football') || sport.includes('soccer') || sport.includes('league') || sport.includes('champions');
+                  return sportStr.includes('football') || sportStr.includes('soccer') || sportStr.includes('league') || sportStr.includes('champions');
                 }
                 if (selectedSportFilter === 'Basketball') {
-                  return sport.includes('basketball') || sport.includes('nba');
+                  return sportStr.includes('basketball') || sportStr.includes('nba');
                 }
                 if (selectedSportFilter === 'F1 / Motor') {
-                  return sport.includes('f1') || sport.includes('formula') || sport.includes('racing') || sport.includes('motor');
+                  return sportStr.includes('f1') || sportStr.includes('formula') || sportStr.includes('racing') || sportStr.includes('motor');
                 }
                 if (selectedSportFilter === 'Combat') {
-                  return sport.includes('ufc') || sport.includes('mma') || sport.includes('boxing') || sport.includes('wrestling') || sport.includes('fight') || sport.includes('combat');
+                  return sportStr.includes('ufc') || sportStr.includes('mma') || sportStr.includes('boxing') || sportStr.includes('wrestling') || sportStr.includes('fight') || sportStr.includes('combat');
                 }
                 if (selectedSportFilter === 'Tennis') {
-                  return sport.includes('tennis');
+                  return sportStr.includes('tennis');
                 }
                 // Other
                 const known = ['football', 'soccer', 'league', 'champions', 'basketball', 'nba', 'f1', 'formula', 'racing', 'motor', 'ufc', 'mma', 'boxing', 'wrestling', 'fight', 'combat', 'tennis'];
-                const isKnown = known.some(k => sport.includes(k));
+                const isKnown = known.some(k => sportStr.includes(k));
                 return !isKnown;
               });
 
