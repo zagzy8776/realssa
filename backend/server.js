@@ -4,6 +4,11 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
+// NOTE: server.js uses axios in several inline route handlers (stream proxy,
+// ESPN fallbacks). It was never imported at module scope, which surfaced as
+// "[Stream Proxy Error]: axios is not defined" → the HLS proxy returned 502 for
+// EVERY stream, so hls.js had nothing to play and sat on "Connecting…".
+const axios = require('axios');
 const Parser = require('rss-parser');
 const { Pool } = require('pg');
 const dns = require('dns').promises;
@@ -2635,40 +2640,112 @@ app.get('/api/sports/match-sources', async (req, res) => {
 });
 
 // GET /api/sports/proxy-stream?url=... — CORS proxy for HLS streams
-app.get('/api/sports/proxy-stream', async (req, res) => {
-  try {
-    const { url } = req.query;
-    if (!url) return res.status(400).send('Missing url parameter');
-    
-    // Validate it's an HLS stream
-    if (!url.includes('.m3u8') && !url.includes('.m3u') && !url.includes('.ts')) {
-      return res.status(400).send('Invalid stream URL');
-    }
+//
+// WHY THIS NEEDS URL REWRITING (the bug that made every stream hang):
+// an .m3u8 body references its children by RELATIVE path, e.g.
+//     #EXTINF:6.0,
+//     seg-1.ts
+//     #EXT-X-STREAM-INF:...,
+//     720p/index.m3u8
+// When we hand that body to hls.js from OUR origin, the browser resolves
+// `seg-1.ts` against realssanews.com.ng — not the CDN — so every fragment
+// 404s and the player sits on "Connecting…" forever. The body MUST be
+// re-written so every child URL points back through this proxy too.
+function absoluteUrl(base, ref) {
+  try { return new URL(ref, base).toString(); } catch (_) { return ref; }
+}
 
-    const response = await axios.get(url, {
-      responseType: 'stream',
-      timeout: 10000,
+// Only these need proxying; data:/blob:/already-proxied stay as-is.
+function toProxyUrl(absolute, origin) {
+  if (/^(data|blob):/i.test(absolute)) return absolute;
+  if (absolute.startsWith(origin)) return absolute;
+  return `${origin}/api/sports/proxy-stream?url=${encodeURIComponent(absolute)}`;
+}
+
+function rewritePlaylist(body, targetUrl, origin) {
+  return body.split('\n').map((rawLine) => {
+    const line = rawLine.replace(/\r$/, '');
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    // #EXT-X-KEY / #EXT-X-MAP / #EXT-X-MEDIA carry URI="..." attributes.
+    if (trimmed.startsWith('#') && /URI="/.test(trimmed)) {
+      return line.replace(/URI="([^"]+)"/g, (_m, ref) =>
+        `URI="${toProxyUrl(absoluteUrl(targetUrl, ref), origin)}"`);
+    }
+    if (trimmed.startsWith('#')) return line;
+    // A bare line is a child playlist or a media segment.
+    return toProxyUrl(absoluteUrl(targetUrl, trimmed), origin);
+  }).join('\n');
+}
+
+app.get('/api/sports/proxy-stream', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).send('Missing url parameter');
+
+  // NOTE: no longer requires ".m3u8" in the URL — plenty of IPTV CDNs use
+  // extensionless paths (…/play/a06v/index.m3u8 is fine, but …/live/stream
+  // is too), and .ts fragments must proxy as well.
+  const targetUrl = url;
+
+  try {
+    const response = await axios.get(targetUrl, {
+      responseType: 'arraybuffer',
+      // These CDNs are slow; 10s starved them just like the hls.js defaults did.
+      timeout: 45000,
+      maxRedirects: 5,
+      maxContentLength: 64 * 1024 * 1024,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': new URL(url).origin,
-        'Origin': new URL(url).origin,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': '*/*',
       },
     });
 
-    // Set CORS headers to allow frontend access
+    const ctype = String(response.headers['content-type'] || '');
+    const buf = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data);
+    const head = buf.slice(0, 256).toString('utf8');
+    const isPlaylist = ctype.includes('mpegurl')
+      || ctype.includes('m3u')
+      || /\.m3u8?(\?|#|$)/i.test(targetUrl)
+      || head.startsWith('#EXTM3U');
+
+    // A text/html body is a channel error page / login wall, never media. It
+    // used to be relayed as `video/mp2t`, so hls.js "successfully" loaded an
+    // HTML document as a fragment — the player sat on a black frame with no
+    // error and the source looked healthy in our own checks.
+    const looksHtml = !isPlaylist && (
+      ctype.includes('text/html') ||
+      ctype.includes('application/json') ||
+      /^\s*<(!doctype|html|head|body|\?xml)/i.test(head)
+    );
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
-    res.setHeader('Content-Type', response.headers['content-type'] || 'application/vnd.apple.mpegurl');
-    
-    if (response.headers['content-length']) {
-      res.setHeader('Content-Length', response.headers['content-length']);
+
+    if (isPlaylist) {
+      // Manifests must never be cached long — live edge moves.
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      res.setHeader('Cache-Control', 'public, max-age=2, stale-while-revalidate=10');
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const rewritten = rewritePlaylist(buf.toString('utf8'), targetUrl, origin);
+      return res.send(rewritten);
     }
 
-    // Pipe the stream
-    response.data.pipe(res);
+    // Media segment — immutable, cacheable.
+    if (looksHtml) {
+      try { require('./services/sportsStreamService').markChannelDead(targetUrl); } catch (_) {}
+      return res.status(502).send('Upstream returned a non-media document');
+    }
+    res.setHeader('Content-Type', ctype || 'video/mp2t');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.send(buf);
   } catch (err) {
-    console.error('[Stream Proxy Error]:', err.message);
+    console.error('[Stream Proxy Error]:', targetUrl, err.message);
+    // Remember the failure so the source ladders stop leading with a host that
+    // is down (see markChannelDead in sportsStreamService).
+    try {
+      require('./services/sportsStreamService').markChannelDead(targetUrl);
+    } catch (_) {}
     res.status(502).send('Stream proxy failed');
   }
 });
