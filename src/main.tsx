@@ -13,6 +13,25 @@ import { applyUiVersion } from "./lib/uiFlag";
 
 applyUiVersion();
 
+// Detect stale chunk loading errors and force reload once
+// This happens when Vercel deploys new code with new hashed filenames
+// but the user's browser has cached the old index.html
+window.addEventListener('error', (event) => {
+  const isChunkError = event.message?.includes('Failed to fetch dynamically imported module') ||
+                       event.message?.includes('Importing a module script failed');
+  
+  if (isChunkError) {
+    const hasReloaded = sessionStorage.getItem('chunk-reload-attempted');
+    if (!hasReloaded) {
+      console.warn('[ChunkError] Stale build detected, forcing reload...');
+      sessionStorage.setItem('chunk-reload-attempted', 'true');
+      window.location.reload();
+    } else {
+      console.error('[ChunkError] Reload already attempted, showing error');
+    }
+  }
+});
+
 // Sync dark mode with system preference
 const applySystemTheme = () => {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
