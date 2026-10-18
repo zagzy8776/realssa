@@ -611,7 +611,9 @@ async function buildFeed(pool) {
 
   // Guarantee: anything still without a native source gets generic channels,
   // so nobody is ever pushed off-site just to find a stream.
-  const generic = channels.length ? genericChannelSources(channels, 8) : [];
+  const generic = channels.length
+    ? genericChannelSources(channels, 8).map(s => ({ ...s, sourceTier: 'generic' }))
+    : [];
   if (generic.length) {
     for (const m of matches) {
       if (m.isLive || m.directSources?.length) continue;
@@ -669,7 +671,7 @@ function sourcesCacheKey(home, away) {
 async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event }) {
   const channels = await getIptvChannels();
   if (!home || !away) {
-    return { directSources: genericChannelSources(channels, 10) };
+    return { directSources: genericChannelSources(channels, 10).map(s => ({ ...s, sourceTier: 'generic' })) };
   }
   const key = sourcesCacheKey(home, away);
   try {
@@ -678,7 +680,9 @@ async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league
   } catch (_) {}
 
   const ladder = buildSourceLadder({ home, away, homeCrest, awayCrest, sport, league, event }, channels);
-  const directSources = ladder.length ? ladder : genericChannelSources(channels, 10);
+  const directSources = ladder.length
+    ? ladder
+    : genericChannelSources(channels, 10).map(s => ({ ...s, sourceTier: 'generic' }));
 
   const result = { directSources };
   redisService.setCached(key, result, SOURCES_TTL).catch(() => {});

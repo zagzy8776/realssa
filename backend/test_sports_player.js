@@ -178,6 +178,8 @@ async function liveParts() {
   check('majority of feed carries directSources', withDir.length >= Math.floor(feed.matches.length * 0.8), `${withDir.length}/${feed.matches.length}`);
   check('directSources well-formed', withDir.slice(0, 5).every(m => m.directSources.every(s => /^https:\/\/.+\.m3u8/.test(s.url) && s.label)), JSON.stringify(withDir[0]?.directSources?.[0]).slice(0, 140));
   check('upcoming (non-live) matches also carry sources', withDir.some(m => !m.isLive), `${withDir.filter(m => !m.isLive).length} upcoming enriched`);
+  check('EVERY source in feed is tier-tagged (no undefined)', feed.matches.every(m => (m.directSources || []).every(s => ['team', 'broadcaster', 'generic'].includes(s.sourceTier))), JSON.stringify(feed.matches.find(m => (m.directSources || []).some(s => !s.sourceTier))?.event));
+  check('no fixture is a dead end (all have ≥1 source)', feed.matches.every(m => m.directSources?.length > 0));
   const liveOnes = feed.matches.filter(m => m.isLive);
   if (liveOnes.length) {
     check('live matches have directSources (≥1)', liveOnes.some(m => m.directSources?.length), `${liveOnes.filter(m => m.directSources?.length).length}/${liveOnes.length} live have direct sources`);
