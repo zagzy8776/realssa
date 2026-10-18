@@ -75,15 +75,28 @@ function parseTeamsFromTitle(title: string): { home: string | null; away: string
   return { home: null, away: null };
 }
 
-// Proxy HLS streams through backend to bypass CORS
+// Proxy HLS streams through backend to bypass CORS / mixed-content.
+//
+// Two reasons a source MUST be proxied, not played directly:
+//   1. CORS  — most IPTV CDNs send no Access-Control-Allow-Origin.
+//   2. Mixed content — ~54% of the channel library (beIN Sports 1/2/3,
+//      Arena Sport…) is plain `http://`. On our https:// page the browser
+//      blocks those outright; an `http` source that "should work" silently
+//      never loads otherwise.
+// The backend proxy also rewrites child .m3u8/.ts URLs so fragments resolve.
 function proxyStreamUrl(originalUrl: string): string {
-  if (!originalUrl) return originalUrl;
-  // Only proxy external m3u8 streams, not already-proxied ones
-  if (originalUrl.startsWith(apiUrl(''))) return originalUrl;
-  if (!originalUrl.includes('.m3u8')) return originalUrl;
+  // TEMPORARY: Disable proxy until backend endpoint deploys (currently 404)
+  // Try direct URLs first - some IPTV sources allow CORS
+  return originalUrl;
   
-  const encoded = encodeURIComponent(originalUrl);
-  return apiUrl(`/api/sports/proxy-stream?url=${encoded}`);
+  /* RE-ENABLE AFTER BACKEND PROXY DEPLOYS:
+  if (!originalUrl) return originalUrl;
+  // Already proxied.
+  if (originalUrl.includes('/api/sports/proxy-stream')) return originalUrl;
+  const needsProxy = /^http:\/\//i.test(originalUrl) || /^https:\/\//i.test(originalUrl);
+  if (!needsProxy) return originalUrl;
+  return apiUrl(`/api/sports/proxy-stream?url=${encodeURIComponent(originalUrl)}`);
+  */
 }
 
 export default function SportsPlayer({
