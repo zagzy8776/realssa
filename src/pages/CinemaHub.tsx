@@ -140,6 +140,8 @@ export default function CinemaHub() {
     directSources?: any[]; home?: string | null; away?: string | null;
     homeCrest?: string | null; awayCrest?: string | null; isLive?: boolean;
     sport?: string | null; league?: string | null;
+    liveConfidence?: { level: 'match' | 'channel' | 'generic' | 'none'; exact?: boolean; label?: string | null } | null;
+    kickoff?: string | number | null;
   } | null>(null);
   const [sportsMatches, setSportsMatches] = useState<any[]>([]);
   const [sportsSearchQuery, setSportsSearchQuery] = useState('');
@@ -772,7 +774,9 @@ export default function CinemaHub() {
               <Trophy className="text-amber-500 animate-pulse" size={24} />
               RealSSA Live Sports TV
             </h2>
-            <p className="text-xs text-zinc-400 font-semibold mt-1">Search active clubs or leagues to stream any match live in HD with redirect-hijack protection.</p>
+            <p className="text-xs text-zinc-400 font-semibold mt-1">
+              Watch live sports in our native player with direct streams when available. Some matches use external sources — you may need to browse to find your match.
+            </p>
           </div>
 
 
@@ -1013,8 +1017,8 @@ export default function CinemaHub() {
                               <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1.5">
                                 <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider">
                                   {match.directSources?.length
-                                    ? <span className="text-emerald-500">● Direct feed ready</span>
-                                    : (match.streamId || match.id ? 'Native player' : 'Source lookup')}
+                                    ? <span className="text-emerald-500">● Direct stream available</span>
+                                    : (match.streamId || match.id ? 'External source' : 'Find stream')}
                                 </span>
                                 <button
                                   onClick={() => {
@@ -1037,11 +1041,13 @@ export default function CinemaHub() {
                                       isLive: !!match.isLive,
                                       sport: match.sport || null,
                                       league: match.league || null,
+                                      liveConfidence: match.liveConfidence || null,
+                                      kickoff: match.kickoff ?? null,
                                     });
                                   }}
                                   className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-[11px] font-black rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-amber-500/15 border border-amber-600"
                                 >
-                                  <Play size={10} className="fill-black" /> Watch Live
+                                  <Play size={10} className="fill-black" /> {match.directSources?.length ? 'Watch Now' : 'Find Stream'}
                                 </button>
                               </div>
                             </div>
@@ -1140,6 +1146,8 @@ export default function CinemaHub() {
                             isLive: !!selectedSportMatch.isLive,
                             sport: selectedSportMatch.sport || null,
                             league: selectedSportMatch.league || null,
+                            liveConfidence: selectedSportMatch.liveConfidence || null,
+                            kickoff: selectedSportMatch.kickoff ?? null,
                           });
                           setSelectedSportMatch(null);
                         }}
@@ -1193,7 +1201,11 @@ export default function CinemaHub() {
               <Tv size={14} />
               Browse Live Sports By Category
             </h3>
-            <p className="text-[10px] text-zinc-600 mb-5">All streams use Server 1, Server 2 and Server 3 — 3 independent sources. If one server is blank, switch inside the player.</p>
+            <p className="text-[10px] text-zinc-600 mb-5">
+              <strong className="text-zinc-500">How it works:</strong> When you click a match, we try to play it directly in our player. 
+              If no direct stream is found, you'll be shown external sports sites where you can browse to find your match. 
+              Multiple servers are available — switch between them if one doesn't work.
+            </p>
 
 
             {/* ── Football / Soccer ── */}
@@ -1912,6 +1924,8 @@ export default function CinemaHub() {
           isLive={activeSportsPlayer.isLive}
           sport={activeSportsPlayer.sport}
           league={activeSportsPlayer.league}
+          liveConfidence={activeSportsPlayer.liveConfidence}
+          kickoff={activeSportsPlayer.kickoff}
           onClose={() => setActiveSportsPlayer(null)}
         />
       )}

@@ -38,6 +38,12 @@ interface SportsPlayerProps {
   isLive?: boolean;
   sport?: string | null;
   league?: string | null;
+  // How confident we are that the source is showing THIS fixture:
+  //   'match'   → a team/broadcast channel for this exact fixture
+  //   'channel' → the right broadcaster for the league, but not team-specific
+  //   'generic' → a live sports channel (never a dead end)
+  liveConfidence?: { level: 'match' | 'channel' | 'generic' | 'none'; exact?: boolean; label?: string | null } | null;
+  kickoff?: string | number | null;
 }
 
 // Iframe fallback servers (used when no direct HLS is available)
@@ -85,18 +91,12 @@ function parseTeamsFromTitle(title: string): { home: string | null; away: string
 //      never loads otherwise.
 // The backend proxy also rewrites child .m3u8/.ts URLs so fragments resolve.
 function proxyStreamUrl(originalUrl: string): string {
-  // TEMPORARY: Disable proxy until backend endpoint deploys (currently 404)
-  // Try direct URLs first - some IPTV sources allow CORS
-  return originalUrl;
-  
-  /* RE-ENABLE AFTER BACKEND PROXY DEPLOYS:
   if (!originalUrl) return originalUrl;
   // Already proxied.
   if (originalUrl.includes('/api/sports/proxy-stream')) return originalUrl;
-  const needsProxy = /^http:\/\//i.test(originalUrl) || /^https:\/\//i.test(originalUrl);
-  if (!needsProxy) return originalUrl;
+  // Only absolute web URLs are proxied; data:/blob: pass through.
+  if (!/^https?:\/\//i.test(originalUrl)) return originalUrl;
   return apiUrl(`/api/sports/proxy-stream?url=${encodeURIComponent(originalUrl)}`);
-  */
 }
 
 export default function SportsPlayer({
@@ -111,6 +111,8 @@ export default function SportsPlayer({
   isLive,
   sport,
   league,
+  liveConfidence,
+  kickoff,
 }: SportsPlayerProps) {
   // Category browsing (non-numeric channel id) → iframe homepage mode
   const isCategory = typeof channelId === 'string' && (
@@ -122,6 +124,18 @@ export default function SportsPlayer({
   const parsed = useMemo(() => parseTeamsFromTitle(title), [title]);
   const teamHome = home || parsed.home;
   const teamAway = away || parsed.away;
+
+  // Honesty badge: tell the user whether this feed IS the match, the right
+  // broadcaster for it, or just live sport — instead of implying all three
+  // are the same thing.
+  const [fetchedConfidence, setFetchedConfidence] = useState<SportsPlayerProps['liveConfidence']>(null);
+  const activeConfidence = liveConfidence || fetchedConfidence;
+  const confidenceLevel = activeConfidence?.level || 'none';
+  const confidenceTitle = confidenceLevel === 'match'
+    ? `Team/broadcast channel for this fixture${activeConfidence?.label ? `: ${activeConfidence.label}` : ''}`
+    : confidenceLevel === 'channel'
+      ? `${league || 'League'} broadcaster${activeConfidence?.label ? `: ${activeConfidence.label}` : ''} — showing this league`
+      : 'A live sports channel — not necessarily this exact fixture';
 
   // Playback mode: native if we have direct sources, otherwise iframe
   const [sources, setSources] = useState<DirectSource[]>(directSources || []);
@@ -163,12 +177,14 @@ export default function SportsPlayer({
       ...(sport ? { sport } : {}),
       ...(league ? { league } : {}),
       ...(title ? { event: title } : {}),
+      ...(kickoff ? { kickoff } : {}),
     });
     fetch(apiUrl(`/api/sports/match-sources?${params.toString()}`))
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled) return;
         const list: DirectSource[] = Array.isArray(data?.directSources) ? data.directSources : [];
+        if (data?.liveConfidence) setFetchedConfidence(data.liveConfidence);
         if (list.length) {
           setSources(list);
           setMode('native');
@@ -473,6 +489,22 @@ export default function SportsPlayer({
               )}
               {mode === 'native' ? 'RealSSA Direct Stream' : 'Live Sports Stream'}
             </span>
+            {/* Be honest about what the feed actually is — an exact team
+                channel vs the right broadcaster vs merely live sport. */}
+            {confidenceLevel !== 'none' && (
+              <span
+                className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${
+                  confidenceLevel === 'match'
+                    ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                    : confidenceLevel === 'channel'
+                      ? 'text-sky-400 border-sky-500/30 bg-sky-500/10'
+                      : 'text-zinc-400 border-white/10 bg-white/5'
+                }`}
+                title={confidenceTitle}
+              >
+                {confidenceLevel === 'match' ? '✓ This match' : confidenceLevel === 'channel' ? 'Right channel' : 'Live sport'}
+              </span>
+            )}
             <h3 className="text-white text-xs sm:text-sm font-black truncate max-w-[280px] sm:max-w-md mt-0.5 flex items-center gap-2">
               <Tv size={14} className="text-zinc-400 shrink-0" />
               {title}
@@ -599,6 +631,22 @@ export default function SportsPlayer({
           </div>
         ) : (
           <div className="absolute inset-0 bg-zinc-950">
+            {/* Warning overlay for iframe fallback mode */}
+            {!isCategory && (
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-amber-500/10 backdrop-blur-md border border-amber-500/30 rounded-xl px-4 py-2.5 max-w-md mx-auto">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-amber-200 text-xs font-bold leading-snug">
+                      Direct stream unavailable — using external source
+                    </p>
+                    <p className="text-amber-300/70 text-[10px] mt-1 leading-snug">
+                      Browse the external site below to find your match. If redirected by ads, press Back or close pop-ups.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <iframe
               key={`iframe-${serverIdx}-${channelId}`}
               src={streamUrl}
