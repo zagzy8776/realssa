@@ -2597,6 +2597,44 @@ app.get('/api/sports/stream-schedule', async (req, res) => {
 });
 
 
+// ==========================================
+// REALSSA OWN SPORTS PLAYER API (direct HLS — no heavy-ad embeds)
+// ==========================================
+
+// GET /api/sports/matches — full native fixture feed with direct .m3u8 sources
+app.get('/api/sports/matches', async (req, res) => {
+  try {
+    const { getMatches } = require('./services/sportsStreamService');
+    const feed = await getMatches(pool);
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    res.json(feed);
+  } catch (err) {
+    console.error('[sportsStreamService] /api/sports/matches failed:', err.message);
+    // Last-resort: legacy events array shape so old clients never break
+    try {
+      const fallback = await axios.get('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard', { timeout: 5000 });
+      res.json({ generatedAt: new Date().toISOString(), count: 0, liveCount: 0, matches: [] });
+    } catch (_) {
+      res.status(502).json({ error: 'Sports feed unavailable', matches: [] });
+    }
+  }
+});
+
+// GET /api/sports/match-sources?home=..&away=.. — on-demand direct sources for one fixture
+app.get('/api/sports/match-sources', async (req, res) => {
+  try {
+    const { getMatchSources } = require('./services/sportsStreamService');
+    const { home, away, homeCrest, awayCrest } = req.query;
+    const result = await getMatchSources({ home, away, homeCrest, awayCrest });
+    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
+    res.json(result);
+  } catch (err) {
+    console.error('[sportsStreamService] /api/sports/match-sources failed:', err.message);
+    res.status(502).json({ error: 'Source lookup failed', directSources: [] });
+  }
+});
+
+
 
 // Get today's matches
 app.get('/api/sports/matches', async (req, res) => {

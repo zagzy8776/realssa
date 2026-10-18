@@ -137,6 +137,8 @@ export default function CinemaHub() {
   // Sports Stream Player & Matches State
   const [activeSportsPlayer, setActiveSportsPlayer] = useState<{
     channelId: string | number; title: string;
+    directSources?: any[]; home?: string | null; away?: string | null;
+    homeCrest?: string | null; awayCrest?: string | null; isLive?: boolean;
   } | null>(null);
   const [sportsMatches, setSportsMatches] = useState<any[]>([]);
   const [sportsSearchQuery, setSportsSearchQuery] = useState('');
@@ -166,19 +168,30 @@ export default function CinemaHub() {
     fetchPage(requestedPage, true);
   }, []);
 
-  // ── Load Sports Matches when activeTab === 'sports' ──
+  // ── Load Sports Matches when activeTab === 'sports' (own native feed) ──
   useEffect(() => {
     if (activeTab === 'sports') {
       setSportsMatchesLoading(true);
-      fetch(apiUrl('/api/sports/stream-schedule'))
-        .then(r => r.ok ? r.json() : [])
+      fetch(apiUrl('/api/sports/matches'))
+        .then(r => r.ok ? r.json() : null)
         .then(data => {
-          setSportsMatches(Array.isArray(data) ? data : []);
+          // New rich feed: { matches: [...] } — legacy fallback: raw array
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.matches) ? data.matches : []);
+          setSportsMatches(list);
           setSportsMatchesLoading(false);
         })
         .catch(() => {
-          setSportsMatches([]);
-          setSportsMatchesLoading(false);
+          // Legacy endpoint fallback keeps the hub alive
+          fetch(apiUrl('/api/sports/stream-schedule'))
+            .then(r => r.ok ? r.json() : [])
+            .then(legacy => {
+              setSportsMatches(Array.isArray(legacy) ? legacy : []);
+              setSportsMatchesLoading(false);
+            })
+            .catch(() => {
+              setSportsMatches([]);
+              setSportsMatchesLoading(false);
+            });
         });
     }
   }, [activeTab]);
@@ -928,10 +941,31 @@ export default function CinemaHub() {
                               {/* Button action row */}
                               <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1.5">
                                 <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider">
-                                  {match.id ? 'Direct stream' : 'Redirect lookup'}
+                                  {match.directSources?.length
+                                    ? <span className="text-emerald-500">● Direct feed ready</span>
+                                    : (match.streamId || match.id ? 'Native player' : 'Source lookup')}
                                 </span>
                                 <button
-                                  onClick={() => setSelectedSportMatch(match)}
+                                  onClick={() => {
+                                    const d = [' vs ', ' VS ', ' - ', ' @ '];
+                                    let th = match.home || null, ta = match.away || null;
+                                    for (const x of d) {
+                                      if (!th && (match.event || '').includes(x)) {
+                                        const p = match.event.split(x);
+                                        th = p[0].trim(); ta = p[1].trim().replace(/\s*\(.*?\)\s*$/, '').trim();
+                                      }
+                                    }
+                                    setActiveSportsPlayer({
+                                      channelId: match.streamId || match.id || 'superabbit',
+                                      title: match.event,
+                                      directSources: match.directSources,
+                                      home: th,
+                                      away: ta,
+                                      homeCrest: match.homeCrest,
+                                      awayCrest: match.awayCrest,
+                                      isLive: !!match.isLive,
+                                    });
+                                  }}
                                   className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-[11px] font-black rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-amber-500/15 border border-amber-600"
                                 >
                                   <Play size={10} className="fill-black" /> Watch Live
@@ -1009,13 +1043,42 @@ export default function CinemaHub() {
                     </div>
                   </div>
                 ) : (
-                  /* ── CASE B: ESPN match — no direct ID, open Server 2/Server 3 homepage ── */
+                  /* ── CASE B: no channel list — native direct feed + browse servers ── */
                   <div className="flex-1 flex flex-col">
                     <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider mb-3">Watch On</p>
-                    <p className="text-[10px] text-zinc-600 mb-3 leading-relaxed">
-                      Find <span className="text-zinc-400 font-bold">{selectedSportMatch.event}</span> on the streaming site and click to watch.
-                    </p>
                     <div className="grid grid-cols-1 gap-2.5">
+                      <button
+                        onClick={() => {
+                          const d = [' vs ', ' VS ', ' - ', ' @ '];
+                          let th = selectedSportMatch.home || null, ta = selectedSportMatch.away || null;
+                          for (const x of d) {
+                            if (!th && (selectedSportMatch.event || '').includes(x)) {
+                              const p = selectedSportMatch.event.split(x);
+                              th = p[0].trim(); ta = p[1].trim().replace(/\s*\(.*?\)\s*$/, '').trim();
+                            }
+                          }
+                          setActiveSportsPlayer({
+                            channelId: selectedSportMatch.streamId || selectedSportMatch.id || 'superabbit',
+                            title: selectedSportMatch.event,
+                            directSources: selectedSportMatch.directSources,
+                            home: th, away: ta,
+                            homeCrest: selectedSportMatch.homeCrest,
+                            awayCrest: selectedSportMatch.awayCrest,
+                            isLive: !!selectedSportMatch.isLive,
+                          });
+                          setSelectedSportMatch(null);
+                        }}
+                        className="w-full flex items-center justify-between p-3.5 bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-700/40 hover:border-emerald-500/60 rounded-xl text-left transition-all group"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            RealSSA Direct Feed
+                          </p>
+                          <p className="text-[9px] text-zinc-500 mt-0.5">Native player — no pop-ups, ad-light</p>
+                        </div>
+                        <Play size={12} className="text-emerald-500 group-hover:text-emerald-300 transition-colors shrink-0" />
+                      </button>
                       {[
                         { label: 'Server 2', key: 'superabbit', id: 'superabbit-browse' },
                         { label: 'Server 3', key: 'strikeout', id: 'strikeout-browse' },
@@ -1761,10 +1824,17 @@ export default function CinemaHub() {
         />
       )}
       {/* ── RealSSA Sports Player ── */}
+      {/* ── RealSSA Sports Player (native direct HLS + fallback servers) ── */}
       {activeSportsPlayer && (
         <SportsPlayer
           channelId={activeSportsPlayer.channelId}
           title={activeSportsPlayer.title}
+          directSources={activeSportsPlayer.directSources}
+          home={activeSportsPlayer.home}
+          away={activeSportsPlayer.away}
+          homeCrest={activeSportsPlayer.homeCrest}
+          awayCrest={activeSportsPlayer.awayCrest}
+          isLive={activeSportsPlayer.isLive}
           onClose={() => setActiveSportsPlayer(null)}
         />
       )}
