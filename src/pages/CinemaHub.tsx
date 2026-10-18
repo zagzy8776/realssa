@@ -139,9 +139,11 @@ export default function CinemaHub() {
     channelId: string | number; title: string;
     directSources?: any[]; home?: string | null; away?: string | null;
     homeCrest?: string | null; awayCrest?: string | null; isLive?: boolean;
+    sport?: string | null; league?: string | null;
   } | null>(null);
   const [sportsMatches, setSportsMatches] = useState<any[]>([]);
   const [sportsSearchQuery, setSportsSearchQuery] = useState('');
+  const [sportsTimeFilter, setSportsTimeFilter] = useState<'All' | 'Live' | 'Upcoming'>('All');
   const [sportsMatchesLoading, setSportsMatchesLoading] = useState(false);
   const [selectedSportMatch, setSelectedSportMatch] = useState<any | null>(null);
   const [selectedSportFilter, setSelectedSportFilter] = useState('All');
@@ -787,6 +789,26 @@ export default function CinemaHub() {
             </div>
           </div>
 
+          {/* Live / Upcoming Toggle */}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            {([['All', 'All Fixtures'], ['Live', '● Live Now'], ['Upcoming', 'Upcoming']] as const).map(([key, label]) => {
+              const isLiveKey = key === 'Live';
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSportsTimeFilter(key)}
+                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-black transition-all active:scale-95 border ${
+                    sportsTimeFilter === key
+                      ? (isLiveKey ? 'bg-red-600 text-white border-red-500' : 'bg-white text-black border-white')
+                      : 'bg-zinc-900/70 text-zinc-400 hover:text-white border-zinc-800'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Sport Filter Tabs (Pills) */}
           <div className="flex items-center justify-start sm:justify-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none shrink-0">
             {['All', 'Football', 'Basketball', 'F1 / Motor', 'Combat', 'Tennis', 'Other'].map(tab => (
@@ -837,6 +859,11 @@ export default function CinemaHub() {
                   sportStr.includes(query);
 
                 if (!matchesQuery) return false;
+
+                // Live / Upcoming time filter
+                if (sportsTimeFilter === 'Live' && !m.isLive) return false;
+                if (sportsTimeFilter === 'Upcoming' && m.isLive) return false;
+
                 if (selectedSportFilter === 'All') return true;
 
                 // Use sportStr which is guaranteed to be a string
@@ -861,17 +888,47 @@ export default function CinemaHub() {
                 return !isKnown;
               });
 
-              if (filtered.length === 0) {
+              // Sort: live first (when showing everything), then by kickoff time
+              const sorted = [...filtered].sort((a, b) => {
+                if (sportsTimeFilter === 'All') {
+                  const la = a.isLive ? 0 : 1, lb = b.isLive ? 0 : 1;
+                  if (la !== lb) return la - lb;
+                }
+                const ta = new Date(a.kickoff || 0).getTime() || 0;
+                const tb = new Date(b.kickoff || 0).getTime() || 0;
+                return ta - tb;
+              });
+
+              const liveTotal = sportsMatches.filter(m => m.isLive).length;
+              const upcomingTotal = sportsMatches.length - liveTotal;
+
+              if (sorted.length === 0) {
+                const onlyLiveBlocked = sportsTimeFilter === 'Live' && upcomingTotal > 0;
                 return (
-                  <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-8 text-center text-zinc-500 text-xs">
-                    No active live matches found matching your filters.
+                  <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-8 text-center text-zinc-500 text-xs space-y-3">
+                    <p className="font-bold text-zinc-400">
+                      {onlyLiveBlocked
+                        ? `No match is live right now — ${upcomingTotal} fixture${upcomingTotal === 1 ? '' : 's'} coming up`
+                        : 'No matches found matching your filters.'}
+                    </p>
+                    {onlyLiveBlocked && (
+                      <button
+                        onClick={() => setSportsTimeFilter('Upcoming')}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black rounded-full transition-colors active:scale-95"
+                      >
+                        Show {upcomingTotal} upcoming fixture{upcomingTotal === 1 ? '' : 's'}
+                      </button>
+                    )}
+                    <p className="text-[10px] text-zinc-600">
+                      Every fixture below opens in our own player — no pop-ups, no leaving the site.
+                    </p>
                   </div>
                 );
               }
 
               // Group by sport category
               const groups: { [key: string]: typeof sportsMatches } = {};
-              filtered.forEach(m => {
+              sorted.forEach(m => {
                 const sp = m.sport || 'General Sports';
                 if (!groups[sp]) groups[sp] = [];
                 groups[sp].push(m);
@@ -968,6 +1025,8 @@ export default function CinemaHub() {
                                       homeCrest: match.homeCrest,
                                       awayCrest: match.awayCrest,
                                       isLive: !!match.isLive,
+                                      sport: match.sport || null,
+                                      league: match.league || null,
                                     });
                                   }}
                                   className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-[11px] font-black rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-amber-500/15 border border-amber-600"
@@ -1069,6 +1128,8 @@ export default function CinemaHub() {
                             homeCrest: selectedSportMatch.homeCrest,
                             awayCrest: selectedSportMatch.awayCrest,
                             isLive: !!selectedSportMatch.isLive,
+                            sport: selectedSportMatch.sport || null,
+                            league: selectedSportMatch.league || null,
                           });
                           setSelectedSportMatch(null);
                         }}
@@ -1839,6 +1900,8 @@ export default function CinemaHub() {
           homeCrest={activeSportsPlayer.homeCrest}
           awayCrest={activeSportsPlayer.awayCrest}
           isLive={activeSportsPlayer.isLive}
+          sport={activeSportsPlayer.sport}
+          league={activeSportsPlayer.league}
           onClose={() => setActiveSportsPlayer(null)}
         />
       )}

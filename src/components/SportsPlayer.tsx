@@ -26,6 +26,8 @@ interface SportsPlayerProps {
   homeCrest?: string | null;
   awayCrest?: string | null;
   isLive?: boolean;
+  sport?: string | null;
+  league?: string | null;
 }
 
 // Iframe fallback servers (used when no direct HLS is available)
@@ -73,6 +75,8 @@ export default function SportsPlayer({
   homeCrest,
   awayCrest,
   isLive,
+  sport,
+  league,
 }: SportsPlayerProps) {
   // Category browsing (non-numeric channel id) → iframe homepage mode
   const isCategory = typeof channelId === 'string' && (
@@ -108,10 +112,15 @@ export default function SportsPlayer({
     if (!teamHome || !teamAway) { setMode('iframe'); return; }
 
     let cancelled = false;
+    // Pass crests + league/sport so the backend can pick the right broadcaster
+    // (Sky/beIN for Premier League, ESPN for NBA…) and never leave us empty.
     const params = new URLSearchParams({
       home: teamHome, away: teamAway,
       ...(homeCrest ? { homeCrest } : {}),
       ...(awayCrest ? { awayCrest } : {}),
+      ...(sport ? { sport } : {}),
+      ...(league ? { league } : {}),
+      ...(title ? { event: title } : {}),
     });
     fetch(apiUrl(`/api/sports/match-sources?${params.toString()}`))
       .then(r => r.ok ? r.json() : null)
@@ -129,7 +138,7 @@ export default function SportsPlayer({
       })
       .catch(() => { if (!cancelled) setMode('iframe'); });
     return () => { cancelled = true; };
-  }, [directSources, isCategory, teamHome, teamAway, homeCrest, awayCrest]);
+  }, [directSources, isCategory, teamHome, teamAway, homeCrest, awayCrest, sport, league, title]);
 
   // ── Native HLS engine with watchdog + auto source-fallback ──
   useEffect(() => {
@@ -146,16 +155,22 @@ export default function SportsPlayer({
     const failover = () => {
       clearWatchdog();
       if (hls) { hls.destroy(); hls = null; hlsRef.current = null; }
-      setSrcIdx(prev => {
-        if (prev + 1 < sources.length) {
-          setAutoSwitched(p => p + 1);
-          return prev + 1;
-        }
-        // All direct sources exhausted → iframe fallback servers
-        setMode('iframe');
-        setSourcesNote('Direct streams are down — switched to fallback servers.');
-        return prev;
-      });
+      const nextIdx = srcIdx + 1;
+      if (nextIdx < sources.length) {
+        setSrcIdx(nextIdx);
+        setAutoSwitched(p => p + 1);
+        return;
+      }
+      // Every direct source exhausted → walk the fallback servers themselves
+      // (Server 1 → 2 → 3) so the user stays inside our site no matter what.
+      setSourcesNote('Direct streams are down — switching through fallback servers.');
+      if (serverIdx + 1 < IFRAME_SERVERS.length) {
+        setServerIdx(serverIdx + 1);
+        setAutoSwitched(p => p + 1);
+      } else {
+        setServerIdx(0);
+      }
+      setMode('iframe');
     };
     watchdogRef.current = setTimeout(failover, 20000);
 
@@ -238,7 +253,7 @@ export default function SportsPlayer({
       clearWatchdog();
       return () => clearWatchdog();
     }
-  }, [mode, activeSource?.url, sources.length]);
+  }, [mode, activeSource?.url, sources.length, srcIdx, serverIdx]);
 
   // Iframe mode watchdog (blank embeds are common)
   useEffect(() => {

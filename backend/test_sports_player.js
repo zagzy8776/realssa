@@ -40,6 +40,45 @@ async function main() {
   check('Real Madrid vs Real Sociedad partial', T.teamScore('Real Madrid', 'Real Sociedad') === 4, `got ${T.teamScore('Real Madrid', 'Real Sociedad')}`);
   check('empty vs team = 0', T.teamScore('', 'Arsenal') === 0);
 
+  console.log('\n═══ UNIT: broadcaster affinity picker (never a dead end) ═══');
+  const bk = [
+    { name: 'Sky Sports Premier League', url: 'https://a/skypl.m3u8', logo: '', group: '' },
+    { name: 'beIN Sports 1', url: 'https://a/bein1.m3u8', logo: '', group: '' },
+    { name: 'ESPN', url: 'https://a/espn.m3u8', logo: '', group: '' },
+    { name: 'SuperSport Football', url: 'https://a/ss.m3u8', logo: '', group: '' },
+  ];
+  const plPicks = T.pickBroadcasterSources({ league: 'Premier League', sport: 'Premier League Football', event: 'Leeds United vs Manchester United' }, bk);
+  check('Premier League → Sky ranked before ESPN', plPicks[0]?.label === 'Sky Sports Premier League', JSON.stringify(plPicks.map(s => s.label)));
+  const nbaPicks = T.pickBroadcasterSources({ league: 'NBA', sport: 'NBA Basketball', event: 'Lakers vs Celtics' }, bk);
+  check('NBA → ESPN present', nbaPicks.some(s => s.label === 'ESPN'), JSON.stringify(nbaPicks.map(s => s.label)));
+  check('broadcaster scores capped (≤8, below team 12)', plPicks.every(s => s.matchScore <= 8), JSON.stringify(plPicks.map(s => s.matchScore)));
+  check('Premier League → no ESPN ranked at top', plPicks[0]?.label !== 'ESPN', plPicks[0]?.label);
+  check('unknown league still returns channels', T.pickBroadcasterSources({ event: 'Foo vs Bar' }, bk).length > 0);
+
+  console.log('\n═══ UNIT: buildSourceLadder tiers + dedupe ═══');
+  const bkChannels = [
+    { name: 'PSG TV', url: 'https://a/psg.m3u8', logo: 'https://logos/psg-crest.png', group: '' },
+    ...bk,
+  ];
+  const ladder = T.buildSourceLadder(
+    { home: 'Paris Saint-Germain', away: 'Marseille', league: 'Ligue 1', sport: 'Football', event: 'Paris Saint-Germain vs Marseille', homeCrest: 'https://db/crests/psg-crest.png' },
+    bkChannels
+  );
+  check('ladder non-empty', ladder.length > 0, `${ladder.length}`);
+  check('ladder deduped by url', new Set(ladder.map(s => s.url)).size === ladder.length);
+  check('ladder picks exact-team channel first', ladder[0]?.label === 'PSG TV', `${ladder[0]?.label} (tier=${ladder[0]?.sourceTier})`);
+  check('ladder tier 1 = team', ladder[0]?.sourceTier === 'team', ladder[0]?.sourceTier);
+  check('ladder has no tier after generic (3 ordered runs)',
+    ladder.map(s => s.sourceTier).filter((v, i, a) => v !== a[i - 1]).join(',') === 'team,broadcaster,generic',
+    ladder.map(s => s.sourceTier).join(','));
+  check('ladder capped ≤ 14', ladder.length <= 14, `${ladder.length}`);
+  const ladderNoTeams = T.buildSourceLadder({ event: 'Some Event', league: 'NBA', sport: 'Basketball' }, bk);
+  check('ladder works with no teams (broadcaster+generic tiers)', ladderNoTeams.length > 0, `${ladderNoTeams.length}`);
+  check('ladder never empty even with no hints', T.buildSourceLadder({}, bk).length > 0);
+  const gen = T.genericChannelSources(bk);
+  check('genericChannelSources tags matchScore 1', gen.every(s => s.matchScore === 1));
+  check('genericChannelSources respects limit', T.genericChannelSources(bk, 2).length === 2);
+
   console.log('\n═══ UNIT: IPTV channel filter ═══');
   const F = T.extract.IPTV_CHANNEL_FILTER;
   check('filter passes Sky Sports Premier', F.test('Sky Sports Premier'));
@@ -135,13 +174,15 @@ async function liveParts() {
   check('feed has matches', feed.count > 0);
   check('liveCount consistent', feed.liveCount === feed.matches.filter(m => m.isLive).length);
   check('feed has generatedAt', !!feed.generatedAt);
+  const withDir = feed.matches.filter(m => m.directSources?.length);
+  check('majority of feed carries directSources', withDir.length >= Math.floor(feed.matches.length * 0.8), `${withDir.length}/${feed.matches.length}`);
+  check('directSources well-formed', withDir.slice(0, 5).every(m => m.directSources.every(s => /^https:\/\/.+\.m3u8/.test(s.url) && s.label)), JSON.stringify(withDir[0]?.directSources?.[0]).slice(0, 140));
+  check('upcoming (non-live) matches also carry sources', withDir.some(m => !m.isLive), `${withDir.filter(m => !m.isLive).length} upcoming enriched`);
   const liveOnes = feed.matches.filter(m => m.isLive);
   if (liveOnes.length) {
-    const withDir = liveOnes.filter(m => m.directSources?.length);
-    check('live matches have directSources (≥1)', withDir.length > 0, `${withDir.length}/${liveOnes.length} live have direct sources`);
-    check('directSources well-formed', withDir.every(m => m.directSources.every(s => /^https:\/\/.+\.m3u8/.test(s.url) && s.label)), JSON.stringify(withDir[0]?.directSources?.[0]).slice(0, 140));
+    check('live matches have directSources (≥1)', liveOnes.some(m => m.directSources?.length), `${liveOnes.filter(m => m.directSources?.length).length}/${liveOnes.length} live have direct sources`);
   } else {
-    console.log('        (no live matches right now — directSources check skipped)');
+    console.log('        (no live matches right now)');
   }
   await apiPart();
 }

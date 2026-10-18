@@ -2624,8 +2624,8 @@ app.get('/api/sports/matches', async (req, res) => {
 app.get('/api/sports/match-sources', async (req, res) => {
   try {
     const { getMatchSources } = require('./services/sportsStreamService');
-    const { home, away, homeCrest, awayCrest } = req.query;
-    const result = await getMatchSources({ home, away, homeCrest, awayCrest });
+    const { home, away, homeCrest, awayCrest, sport, league, event } = req.query;
+    const result = await getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event });
     res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
     res.json(result);
   } catch (err) {

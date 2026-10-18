@@ -296,9 +296,15 @@ function buildSourceLadder(match, channels) {
       out.push(s);
     }
   };
-  push(findIptvSources(match?.home, match?.away, match?.homeCrest, match?.awayCrest, channels || []));
-  push(pickBroadcasterSources(match || {}, channels || []));
-  push(genericChannelSources(channels || []));
+  // ── tier 1: exact team / crest channel ──
+  push(findIptvSources(match?.home, match?.away, match?.homeCrest, match?.awayCrest, channels || [])
+    .map(s => ({ ...s, sourceTier: 'team' })));
+  // ── tier 2: broadcaster this league actually airs on ──
+  push(pickBroadcasterSources(match || {}, channels || [])
+    .map(s => ({ ...s, sourceTier: 'broadcaster' })));
+  // ── tier 3: generic sports channels — never a dead end ──
+  push(genericChannelSources(channels || [])
+    .map(s => ({ ...s, sourceTier: 'generic' })));
   return out.slice(0, 14);
 }
 
@@ -355,19 +361,30 @@ function pickBroadcasterSources(match, channels) {
   }
   if (!hints.length) hints.push('espn', 'sky sport', 'supersport', 'bein', 'tnt sport');
 
-  const out = [];
-  const seen = new Set();
+  const scored = [];
   for (let hi = 0; hi < hints.length; hi++) {
     const hint = hints[hi];
-    // higher weight for earlier (more specific) hints
-    const base = Math.max(2, 6 - Math.floor(hi / 2));
+    // Earlier (more specific) hints win; long broadcaster names beat short/generic ones.
+    const base = Math.max(2, 6 - Math.floor(hi / 2)) + (hint.length >= 6 ? 1 : 0);
     for (const ch of channels) {
-      if (seen.has(ch.url)) continue;
-      if (!ch.name.toLowerCase().includes(hint)) continue;
-      seen.add(ch.url);
-      out.push({ url: ch.url, quality: 'Auto', label: ch.name, matchScore: base });
-      if (out.length >= 10) return out;
+      const name = ch.name.toLowerCase();
+      if (!name.includes(hint)) continue;
+      // Prefer channels whose *leading* word is the broadcaster (e.g. "beIN Sports 1"
+      // over "Adjarasport 1" which merely contains it) — avoids junk ranked at tier 6.
+      const starts = name.trimStart().startsWith(hint) ? 1 : 0;
+      scored.push({ ch, score: base + starts, starts, hi });
     }
+  }
+  // Highest score first; tie-break on specificity then original channel order.
+  scored.sort((a, b) => b.score - a.score || a.starts - b.starts || a.hi - b.hi);
+
+  const out = [];
+  const seen = new Set();
+  for (const s of scored) {
+    if (seen.has(s.ch.url)) continue;
+    seen.add(s.ch.url);
+    out.push({ url: s.ch.url, quality: 'Auto', label: s.ch.name, matchScore: s.score });
+    if (out.length >= 10) break;
   }
   return out;
 }
