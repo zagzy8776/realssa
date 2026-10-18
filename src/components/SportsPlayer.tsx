@@ -75,6 +75,17 @@ function parseTeamsFromTitle(title: string): { home: string | null; away: string
   return { home: null, away: null };
 }
 
+// Proxy HLS streams through backend to bypass CORS
+function proxyStreamUrl(originalUrl: string): string {
+  if (!originalUrl) return originalUrl;
+  // Only proxy external m3u8 streams, not already-proxied ones
+  if (originalUrl.startsWith(apiUrl(''))) return originalUrl;
+  if (!originalUrl.includes('.m3u8')) return originalUrl;
+  
+  const encoded = encodeURIComponent(originalUrl);
+  return apiUrl(`/api/sports/proxy-stream?url=${encoded}`);
+}
+
 export default function SportsPlayer({
   channelId,
   title,
@@ -227,7 +238,8 @@ export default function SportsPlayer({
 
     const isHlsUrl = /\.m3u8(?:$|[?#])/i.test(activeSource.url);
     if (!isHlsUrl) {
-      video.src = activeSource.url;
+      // Proxy non-HLS URLs as well
+      video.src = proxyStreamUrl(activeSource.url);
       const onCan = () => { setStatus('playing'); armWatchdog(); };
       const onErr = () => failover();
       video.addEventListener('loadeddata', onCan);
@@ -272,7 +284,9 @@ export default function SportsPlayer({
         appendErrorMaxRetry: 5,
       });
       hlsRef.current = hls;
-      hls.loadSource(activeSource.url);
+      // Proxy the stream URL through backend to bypass CORS
+      const proxiedUrl = proxyStreamUrl(activeSource.url);
+      hls.loadSource(proxiedUrl);
       hls.attachMedia(video);
 
       // Any real forward progress (manifest, fragment, decode) proves the stream
@@ -327,8 +341,8 @@ export default function SportsPlayer({
         video.load();
       };
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS (Safari)
-      video.src = activeSource.url;
+      // Native HLS (Safari) - also proxy the URL
+      video.src = proxyStreamUrl(activeSource.url);
       const onCan = () => { setStatus('playing'); armWatchdog(); };
       const onErr = () => failover();
       const onProg = () => armWatchdog();

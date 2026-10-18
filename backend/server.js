@@ -2624,14 +2624,61 @@ app.get('/api/sports/matches', async (req, res) => {
 app.get('/api/sports/match-sources', async (req, res) => {
   try {
     const { getMatchSources } = require('./services/sportsStreamService');
-    const { home, away, homeCrest, awayCrest, sport, league, event } = req.query;
-    const result = await getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event });
+    const { home, away, homeCrest, awayCrest, sport, league, event, kickoff } = req.query;
+    const result = await getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event, kickoff });
     res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
     res.json(result);
   } catch (err) {
     console.error('[sportsStreamService] /api/sports/match-sources failed:', err.message);
     res.status(502).json({ error: 'Source lookup failed', directSources: [] });
   }
+});
+
+// GET /api/sports/proxy-stream?url=... — CORS proxy for HLS streams
+app.get('/api/sports/proxy-stream', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).send('Missing url parameter');
+    
+    // Validate it's an HLS stream
+    if (!url.includes('.m3u8') && !url.includes('.m3u') && !url.includes('.ts')) {
+      return res.status(400).send('Invalid stream URL');
+    }
+
+    const response = await axios.get(url, {
+      responseType: 'stream',
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': new URL(url).origin,
+        'Origin': new URL(url).origin,
+      },
+    });
+
+    // Set CORS headers to allow frontend access
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+    res.setHeader('Content-Type', response.headers['content-type'] || 'application/vnd.apple.mpegurl');
+    
+    if (response.headers['content-length']) {
+      res.setHeader('Content-Length', response.headers['content-length']);
+    }
+
+    // Pipe the stream
+    response.data.pipe(res);
+  } catch (err) {
+    console.error('[Stream Proxy Error]:', err.message);
+    res.status(502).send('Stream proxy failed');
+  }
+});
+
+// Handle OPTIONS for CORS preflight
+app.options('/api/sports/proxy-stream', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+  res.sendStatus(204);
 });
 
 // ── RealSSA OS Platform Subsystem Endpoints ────────────────────────────────────
