@@ -1186,6 +1186,93 @@ function sourcesCacheKey(home, away) {
 }
 
 
+// ── Liveness probe ───────────────────────────────────────────────────────────
+//
+// Why this exists: the ladder is a guess. Roughly a third of the community IPTV
+// hosts in it are dead at any given moment (measured: primetv.cc.cd and the
+// AMGI/Premier Sports host both fail DNS right now while Arena Sport and the
+// Turkish beIN mirrors answer in ~450ms). The player used to discover this the
+// slow way -- a watchdog per source -- so a user watched "Connecting…" churn
+// through the whole list before reaching the iframe servers.
+//
+// Checking the manifest server-side costs ~450ms per source in PARALLEL and
+// lets us hand the player only streams that are verifiably up, which is what
+// the iframe-based competitors effectively do.
+const PROBE_TIMEOUT_MS = 5000;
+const PROBE_MAX_SOURCES = 12;
+
+async function probeSource(source) {
+  const url = source?.url;
+  if (!url || !/^https?:\/\//i.test(url)) return { source, ok: false, ms: 0 };
+  const t0 = Date.now();
+  try {
+    // GET, not HEAD: a number of these CDNs answer HEAD with 404/403 but serve
+    // the manifest fine. We only need the first bytes to prove it is HLS.
+    const res = await axios.get(url, {
+      timeout: PROBE_TIMEOUT_MS,
+      maxRedirects: 3,
+      responseType: 'stream',
+      headers: { Origin: 'https://realssanews.com.ng/', Referer: 'https://realssanews.com.ng/', 'User-Agent': 'Mozilla/5.0' },
+    });
+    const ct = String(res.headers['content-type'] || '').toLowerCase();
+    const head = await new Promise(resolve => {
+      let buf = '';
+      res.data.on('data', chunk => {
+        buf += chunk.toString('utf8').slice(0, 512);
+        // Enough bytes to see the #EXTM3U magic -- stop reading immediately so
+        // we do not pull a whole live playlist down the socket.
+        if (buf.includes('#EXTM3U') || buf.length > 400) { try { res.data.destroy(); } catch (_) {} resolve(buf); }
+      });
+      res.data.on('end', () => resolve(buf));
+      res.data.on('error', () => resolve(buf));
+    });
+    const ms = Date.now() - t0;
+    const looksHls = head.includes('#EXTM3U') || /mpegurl/i.test(ct);
+    const ok = res.status >= 200 && res.status < 300 && looksHls;
+    if (!ok) markChannelDead(url);
+    return { source, ok, ms };
+  } catch (_) {
+    markChannelDead(url);
+    return { source, ok: false, ms: Date.now() - t0 };
+  }
+}
+
+// Order a ladder by verified liveness, WITHOUT destroying relevance.
+//
+// Tier must outrank speed: if we sorted purely by response time, a live-but-
+// useless channel (Arena Sport for an ISL fixture) would jump ahead of the
+// broadcaster that actually shows the match, and the user would watch the wrong
+// game. So we probe everything, then re-sort WITHIN each tier.
+//
+// Fail-open: if the probe cannot answer for ANY source (our own network is the
+// problem), return the original ladder untouched rather than an empty list.
+async function probeLadder(ladder) {
+  if (!Array.isArray(ladder) || ladder.length === 0) return ladder;
+  const head = ladder.slice(0, PROBE_MAX_SOURCES);
+  const tail = ladder.slice(PROBE_MAX_SOURCES);
+  const results = await Promise.all(head.map(probeSource));
+  const alive = results.filter(r => r.ok);
+  if (!alive.length) return ladder;                       // fail-open
+  const dead = results.filter(r => !r.ok);
+
+  // Rank so that (a) verified-alive beats unverified beats probed-dead, and
+  // (b) inside each group the original ladder order is preserved, since that
+  // order encodes relevance (team channel → league broadcaster → generic).
+  const rank = new Map();
+  alive.forEach(r => rank.set(r.source, 0));
+  tail.forEach(s => { if (!rank.has(s)) rank.set(s, 1); });
+  dead.forEach(r => rank.set(r.source, 2));
+
+  const indexed = ladder.map((s, i) => ({ s, i }));
+  indexed.sort((a, b) => {
+    const ra = rank.has(a.s) ? rank.get(a.s) : 1;
+    const rb = rank.has(b.s) ? rank.get(b.s) : 1;
+    if (ra !== rb) return ra - rb;
+    return a.i - b.i;                                     // stable: keep relevance order
+  });
+  return indexed.map(x => x.s);
+}
+
 async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event, kickoff }) {
   const channels = await getIptvChannels();
   const shaped = (list) => ({
@@ -1202,9 +1289,13 @@ async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league
   } catch (_) {}
 
   const ladder = buildSourceLadder({ home, away, homeCrest, awayCrest, sport, league, event, kickoff }, channels);
-  const directSources = ladder.length
+  const fallback = ladder.length
     ? ladder
     : genericChannelSources(channels, 10).map(s => ({ ...s, sourceTier: 'generic' }));
+
+  // Lead with what is actually up. Cached, so the next viewer of this fixture
+  // gets the verified order for free.
+  const directSources = await probeLadder(fallback);
 
   const result = shaped(directSources);
   redisService.setCached(key, result, SOURCES_TTL).catch(() => {});
@@ -1219,6 +1310,7 @@ module.exports = { getMatches, getMatchSources, markChannelDead, _test: {
   extract: { IPTV_CHANNEL_FILTER, IPTV_MAX_PER_PLAYLIST, IPTV_LIBRARY_MAX, BROADCASTER_HINTS, IPTV_PLAYLIST_COUNT: IPTV_PLAYLISTS.length, IPTV_PLAYLISTS, ESPN_LEAGUES, LEAGUE_BY_CLUB },
   isFixtureLive, parseKickoffTs, liveConfidence, inferLeagueFromTeams,
   markChannelDead, isChannelDead,
+  probeSource, probeLadder,
   resetIptvMemo: () => { _iptvMemo = null; _iptvMemoAt = 0; },
   resetDeadChannels: () => { _deadChannels.clear(); },
 } };

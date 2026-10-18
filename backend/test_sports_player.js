@@ -295,6 +295,29 @@ function liveDetectionPart() {
   T.resetDeadChannels();
   check('resetDeadChannels clears the memory', T.isChannelDead(deadUrl) === false);
 
+  console.log('\n═══ PROBE: source liveness verification ═══');
+  // The ladder is a guess; ~1/3 of community IPTV hosts are dead at any moment.
+  // Probing the manifest server-side (~450ms each, in parallel) lets the player
+  // start on a stream that is verifiably up instead of discovering death via a
+  // watchdog per source.
+  check('probeSource is exported', typeof T.probeSource === 'function');
+  check('probeLadder is exported', typeof T.probeLadder === 'function');
+  // Fail-open contract: if OUR network is down, every probe rejects, and the
+  // ladder must come back untouched rather than empty (empty = iframe churn).
+  const probeSrc = require('fs').readFileSync(path.join(__dirname, 'services', 'sportsStreamService.js'), 'utf8');
+  check('probeLadder fails open when no source verifies',
+    /if\s*\(\s*!alive\.length\s*\)\s*return\s+ladder\s*;/.test(probeSrc));
+  check('probe preserves relevance order (tier beats speed)',
+    /return a\.i - b\.i/.test(probeSrc) && /if \(ra !== rb\) return ra - rb/.test(probeSrc));
+  check('probe ranks alive > unverified > probed-dead', /rank\.set\(r\.source, 0\)/.test(probeSrc) && /rank\.set\(r\.source, 2\)/.test(probeSrc));
+  check('probe never drops the tail of the ladder',
+    /const tail = ladder\.slice\(PROBE_MAX_SOURCES\)/.test(probeSrc) && /indexed\.map\(x => x\.s\)/.test(probeSrc));
+  check('probe marks failures dead (feeds ladder demotion)',
+    /markChannelDead\(url\)/.test(probeSrc.slice(probeSrc.indexOf('async function probeSource'))));
+  check('probe caps concurrency work per request', /PROBE_MAX_SOURCES\s*=\s*(\d+)/.test(probeSrc) && Number(RegExp.$1) <= 16, `cap=${RegExp.$1}`);
+  check('probe uses a short timeout', /PROBE_TIMEOUT_MS\s*=\s*(\d+)/.test(probeSrc) && Number(RegExp.$1) <= 6000, `${RegExp.$1}ms`);
+  check('getMatchSources routes ladder through probe', /const directSources = await probeLadder\(/.test(probeSrc));
+
   console.log('\n═══ REGRESSION: Asian broadcasters reach the ladder ═══');
   const asiaChannels = [
     { name: 'Star Sports 1 (576p)', url: 'https://i/ss1.m3u8', logo: '', group: 'sports' },
@@ -511,17 +534,38 @@ function playerConfigPart() {
     return m ? Number(m[1]) : null;
   };
 
-  check('manifestLoadingTimeOut ≥ 25000', (num('manifestLoadingTimeOut') || 0) >= 25000, `${num('manifestLoadingTimeOut')}ms`);
-  check('manifestLoadingMaxRetry ≥ 3', (num('manifestLoadingMaxRetry') || 0) >= 3, `${num('manifestLoadingMaxRetry')}`);
+  // The manifest is the liveness oracle: a host that cannot answer it in a few
+  // seconds is gone. Keep the manifest budget tight, and keep it strictly
+  // INSIDE the 15s no-manifest watchdog tier so hls.js reports death rather
+  // than the watchdog having to guess.
+  const manTimeout = num('manifestLoadingTimeOut') || 0;
+  const manRetry = num('manifestLoadingMaxRetry') || 0;
+  const manDelay = num('manifestLoadingRetryDelay') || 0;
+  const manWorstCase = manTimeout * (manRetry + 1) + manDelay * manRetry;
+  check('manifest fails fast (≤ 15s worst case)', manWorstCase > 0 && manWorstCase <= 15000, `${manWorstCase}ms`);
+  check('manifestLoadingTimeOut ≤ 6000', manTimeout > 0 && manTimeout <= 6000, `${manTimeout}ms`);
+  // Segments are the genuinely slow part of these CDNs (first frame 17–46s,
+  // first segment up to 5.5MB) — that budget must stay generous.
   check('fragLoadingTimeOut ≥ 45000', (num('fragLoadingTimeOut') || 0) >= 45000, `${num('fragLoadingTimeOut')}ms`);
   check('fragLoadingMaxRetry ≥ 6', (num('fragLoadingMaxRetry') || 0) >= 6, `${num('fragLoadingMaxRetry')}`);
 
-  // Measured reality: first frame from these CDNs takes 17–46s. A fixed timer
-  // alone was the original bug, so assert both the floor AND re-arming.
-  const wdMatch = src.match(/armWatchdog\s*=\s*\(\s*ms\s*=\s*(\d+)\s*\)/);
-  const wdMs = wdMatch ? Number(wdMatch[1]) : 0;
-  check('watchdog floor ≥ 60000ms', wdMs >= 60000, `${wdMs}ms`);
-  check('watchdog outlasts frag timeout', wdMs > (num('fragLoadingTimeOut') || 0), `${wdMs} vs ${num('fragLoadingTimeOut')}`);
+  // Tiered watchdog: the old single 75s timer was applied to every stage, so a
+  // source that never returned a manifest held the spinner for 75s and the CORS
+  // retry added another 75s — 150s per dead source, ~35 min to walk a ladder.
+  // The contract is now: dead-host tier is short, playing tier stays long.
+  const tiers = [...src.matchAll(/startedPlaying\s*\?\s*(\d+)\s*:\s*manifestSeen\s*\?\s*(\d+)\s*:\s*\(\s*corsBypass\s*\?\s*(\d+)\s*:\s*(\d+)\s*\)/g)]
+    .map(m => ({ playing: +m[1], manifest: +m[2], cors: +m[3], first: +m[4] }));
+  const tier = tiers[0] || {};
+  check('watchdog is tiered (playing/manifest/cors/first-byte)', !!tier.playing, JSON.stringify(tier));
+  check('dead-host tier short (≤ 20s)', tier.first > 0 && tier.first <= 20000, `${tier.first}ms`);
+  check('cors-retry tier shorter than first tier', tier.cors > 0 && tier.cors <= tier.first, `${tier.cors}ms vs ${tier.first}ms`);
+  check('playing tier stays generous (≥ 60s)', tier.playing >= 60000, `${tier.playing}ms`);
+  check('manifest tier sits between cors and playing', tier.manifest >= tier.first && tier.manifest <= tier.playing, `${tier.manifest}ms`);
+  check('dead source costs < 30s total (first + cors)', (tier.first + tier.cors) < 30000, `${tier.first + tier.cors}ms`);
+  // A dead host must be abandonable: worst case through a 14-source ladder
+  // should be minutes, not the half-hour it used to be.
+  check('full 14-source ladder clears in < 7 min worst case', (tier.first + tier.cors) * 14 < 420000, `${((tier.first + tier.cors) * 14 / 60).toFixed(0)}s`);
+  check('manifestSeen gates the relaxed tier', /manifestSeen\s*=\s*true/.test(src) && /MANIFEST_PARSED/.test(src));
   check('watchdog RE-ARMS on progress (not one-shot)', /const armWatchdog/.test(src) && (src.match(/armWatchdog\(\)/g) || []).length >= 5, `${(src.match(/armWatchdog\(\)/g) || []).length} re-arm call sites`);
 
   check('FRAG_LOADED re-arms watchdog', /FRAG_LOADED,\s*\(\)\s*=>\s*armWatchdog\(\)/.test(src));

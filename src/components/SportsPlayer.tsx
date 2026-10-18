@@ -8,15 +8,21 @@ import { X, Tv, Shield, RefreshCw, Signal, AlertTriangle } from 'lucide-react';
 // Plays DIRECT HLS (.m3u8) streams natively — no foreign sites,
 // no heavy ads, full control. Iframe servers remain as fallback.
 //
-// IMPORTANT — why the hls.js budgets below are so generous:
-// the IPTV CDNs we source from are genuinely slow. Measured on
-// prod sources: first frame lands in 17–46s and the first segment
-// alone can be 5.5MB. hls.js defaults (10s manifest timeout, 1
-// retry) gave up long before a playable frame existed, so every
-// card sat on "Connecting…" and auto-switched forever. Two rules:
-//   1. Budgets must clear the slowest measured source with room.
-//   2. The watchdog must RE-ARM on progress, never be a one-shot
-//      deadline — a slow-but-alive stream must be allowed to finish.
+// IMPORTANT — why the hls.js budgets below look inconsistent:
+// the IPTV CDNs we source from are genuinely slow, but only at the SEGMENT
+// stage. Measured on prod sources: first frame lands in 17–46s and the first
+// segment alone can be 5.5MB — so fragment budgets stay generous.
+// The MANIFEST stage is the opposite: a host that cannot answer a manifest in
+// a few seconds is gone (roughly a third of community IPTV hosts are dead at
+// any moment). The original single 75s watchdog was applied to every stage, so
+// each dead source cost 75s — plus another 75s when the CORS retry re-armed it,
+// i.e. 150s per source and ~35 minutes to walk a 14-source ladder. That is the
+// "connecting forever, then it switches" behaviour. Two rules:
+//   1. Segment budgets must clear the slowest measured source with room.
+//   2. The watchdog must RE-ARM on progress, never be a one-shot deadline —
+//      a slow-but-alive stream must be allowed to finish.
+//   3. Pre-playback budgets must be SHORT, because waiting longer on a host
+//      that has not sent a single byte never turns into a playable stream.
 // ─────────────────────────────────────────────────────────────
 
 export interface DirectSource {
@@ -209,19 +215,31 @@ export default function SportsPlayer({
     let mediaRetries = 0;
     let corsRetried = false;
     let startedPlaying = false;
+    // True once the manifest parsed. Before that we are waiting on the source
+    // host for the FIRST byte; a host that cannot answer a manifest within
+    // MANIFEST_DEADLINE is gone, and holding a "Connecting…" spinner on it for
+    // 75s is what made the whole ladder feel broken.
+    let manifestSeen = false;
 
     const clearWatchdog = () => {
       if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
     };
     // Re-arm the stall timer. Called on every sign of life so a slow-but-alive
     // source is never killed mid-buffer; only a genuine stall trips it.
-    const armWatchdog = (ms = 75000) => {
+    //
+    // Three tiers, because the three stages have wildly different honest
+    // latencies and the old single 75s budget was applied to all of them:
+    //   no manifest yet   -> 15s   (host is dead or geo-blocked)
+    //   CORS retry pass   -> 10s   (second opinion on the same URL)
+    //   frames flowing    -> 75s   (a live stream may stall on a long play)
+    const armWatchdog = () => {
       clearWatchdog();
+      const ms = startedPlaying ? 75000 : manifestSeen ? 30000 : (corsBypass ? 10000 : 15000);
       if (startedPlaying) {
         // Already rendering frames: don't tear the source down for a hiccup,
         // just let hls.js keep retrying and re-check later.
         watchdogRef.current = setTimeout(() => {
-          if (video.readyState >= 2 && !video.paused) { armWatchdog(ms); return; }
+          if (video.readyState >= 2 && !video.paused) { armWatchdog(); return; }
           failover();
         }, ms);
       } else {
@@ -239,7 +257,9 @@ export default function SportsPlayer({
         corsRetried = true;
         networkRetries = 0;
         mediaRetries = 0;
-        // State change re-runs this effect with crossOrigin dropped.
+        // State change re-runs this effect with crossOrigin dropped. The
+        // re-armed watchdog for this pass is only 10s (see armWatchdog), so a
+        // genuinely dead host costs 15s + 10s instead of 150s.
         setCorsBypass(true);
         setStatus('loading');
         return;
@@ -288,20 +308,23 @@ export default function SportsPlayer({
       // These IPTV CDNs serve very large, slow segments (0.8–1.2MB, often
       // 6–16s each). hls.js defaults give up long before the first frame is
       // decodable, which is what produced the endless "Connecting…" churn.
-      // Budgets below are deliberately generous and bounded by the watchdog.
+      // Budgets below are deliberately generous for SEGMENTS (a live stream
+      // really can take 40s to decode a 5MB first frame) but tight for the
+      // MANIFEST, because a manifest that has not answered in a few seconds
+      // means the host is dead and the watchdog wants to move on.
       hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
         capLevelToPlayerSize: true,
         maxBufferLength: 30,
-        // Measured on our live CDNs: first frame can take 17–46s and the first
-        // segment alone is up to 5.5MB. Budgets must clear that comfortably.
-        // Manifest: 30s per try, 4 tries — a blip must not be instantly fatal.
-        manifestLoadingTimeOut: 30000,
-        manifestLoadingMaxRetry: 4,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingTimeOut: 30000,
-        levelLoadingMaxRetry: 5,
+        // Manifest: 4s per try, 2 tries → dead in ~12s, inside the 15s tier.
+        manifestLoadingTimeOut: 4000,
+        manifestLoadingMaxRetry: 2,
+        manifestLoadingRetryDelay: 800,
+        // Variant/level playlists: host is known-good by now, be patient.
+        levelLoadingTimeOut: 20000,
+        levelLoadingMaxRetry: 4,
+        // Segments: the genuinely slow part of these CDNs. Keep the big budget.
         fragLoadingTimeOut: 60000,
         fragLoadingMaxRetry: 8,
         fragLoadingRetryDelay: 1000,
@@ -322,6 +345,9 @@ export default function SportsPlayer({
       // is alive → push the stall deadline out rather than cancelling it, so a
       // slow CDN is allowed to finish buffering however long it needs.
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // The host answered and the variant list is valid: it is alive. Only
+        // now may we relax the watchdog from the 15s manifest deadline.
+        manifestSeen = true;
         armWatchdog();
         video.play().catch(() => {});
       });
