@@ -187,7 +187,33 @@ module.exports = async function handler(req, res) {
     if (path === 'matches/live' || mode === 'live') return json(res, 200, { matches: await queryMatches('live') });
     if (path === 'matches/upcoming' || mode === 'upcoming') return json(res, 200, { matches: await queryMatches('upcoming') });
     if (path === 'matches/results' || mode === 'results') return json(res, 200, { matches: await queryMatches('results') });
-    if (path === 'matches' || !path) return json(res, 200, { matches: await queryMatches('all') });
+
+    // On-demand native .m3u8 sources for one fixture (RealSSA own player).
+    // Must be checked BEFORE the generic `matches` branch.
+    if (path === 'match-sources') {
+      const q = req.query || {};
+      const { getMatchSources } = require('../backend/services/sportsStreamService');
+      const result = await getMatchSources({
+        home: q.home, away: q.away,
+        homeCrest: q.homeCrest, awayCrest: q.awayCrest,
+        sport: q.sport, league: q.league, event: q.event,
+      });
+      return json(res, 200, result);
+    }
+
+    if (path === 'matches' || !path) {
+      // Prefer the rich native feed (Streamed + DB + ESPN merged, directSources
+      // attached to every live/upcoming fixture) so cards play inside our site
+      // instead of linking off to Server 1/2/3 iframes.
+      try {
+        const { getMatches } = require('../backend/services/sportsStreamService');
+        const feed = await getMatches(getPool());
+        if (feed?.matches?.length) return json(res, 200, feed);
+      } catch (error) {
+        console.warn('[Sports API] Native feed failed, falling back to DB:', error.message);
+      }
+      return json(res, 200, { matches: await queryMatches('all') });
+    }
 
     if (path === 'leagues') {
       const db = getPool();
