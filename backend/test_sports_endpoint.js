@@ -4,7 +4,7 @@
 
 const axios = require('axios');
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:5000';
 
 async function testSportsEndpoint() {
   console.log('Testing /api/sports/matches endpoint...\n');
