@@ -174,23 +174,32 @@ export default function CinemaHub() {
   useEffect(() => {
     if (activeTab === 'sports') {
       setSportsMatchesLoading(true);
+      console.log('[Sports] Fetching matches from /api/sports/matches');
       fetch(apiUrl('/api/sports/matches'))
-        .then(r => r.ok ? r.json() : null)
+        .then(r => {
+          console.log('[Sports] API response status:', r.status, r.ok);
+          return r.ok ? r.json() : null;
+        })
         .then(data => {
+          console.log('[Sports] API data received:', data);
           // New rich feed: { matches: [...] } — legacy fallback: raw array
           const list = Array.isArray(data) ? data : (Array.isArray(data?.matches) ? data.matches : []);
+          console.log('[Sports] Parsed matches count:', list.length);
           setSportsMatches(list);
           setSportsMatchesLoading(false);
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error('[Sports] Primary API failed:', err);
           // Legacy endpoint fallback keeps the hub alive
           fetch(apiUrl('/api/sports/stream-schedule'))
             .then(r => r.ok ? r.json() : [])
             .then(legacy => {
+              console.log('[Sports] Legacy API returned:', legacy?.length || 0, 'matches');
               setSportsMatches(Array.isArray(legacy) ? legacy : []);
               setSportsMatchesLoading(false);
             })
-            .catch(() => {
+            .catch((err2) => {
+              console.error('[Sports] Legacy API also failed:', err2);
               setSportsMatches([]);
               setSportsMatchesLoading(false);
             });
