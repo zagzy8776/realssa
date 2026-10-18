@@ -201,6 +201,49 @@ async function apiPart() {
   check('cache key normalizes team names', T.sourcesCacheKey('Arsenal FC', 'CHELSEA') === T.sourcesCacheKey('arsenal', 'chelsea'), `${T.sourcesCacheKey('Arsenal FC', 'CHELSEA')} vs ${T.sourcesCacheKey('arsenal', 'chelsea')}`);
   check('cache key separates different pairs', T.sourcesCacheKey('Arsenal', 'Chelsea') !== T.sourcesCacheKey('Chelsea', 'Arsenal') || true);
 
+  playerConfigPart();
+}
+
+// ── Static guard for the browser player's HLS timing budgets ──
+// The IPTV CDNs behind our sources serve huge, slow segments (0.8–1.2MB, often
+// 6–16s each). hls.js defaults give up long before the first frame, which is
+// exactly what made every card sit on "Connecting…" and auto-switch forever.
+// These assertions stop anyone silently reverting to tight timeouts.
+function playerConfigPart() {
+  console.log('\n═══ PLAYER: hls.js timing budgets & failover ═══');
+  const fs = require('fs');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'SportsPlayer.tsx'), 'utf8');
+
+  const num = (key) => {
+    const m = src.match(new RegExp(key + ':\\s*(\\d+)'));
+    return m ? Number(m[1]) : null;
+  };
+
+  check('manifestLoadingTimeOut ≥ 25000', (num('manifestLoadingTimeOut') || 0) >= 25000, `${num('manifestLoadingTimeOut')}ms`);
+  check('manifestLoadingMaxRetry ≥ 3', (num('manifestLoadingMaxRetry') || 0) >= 3, `${num('manifestLoadingMaxRetry')}`);
+  check('fragLoadingTimeOut ≥ 45000', (num('fragLoadingTimeOut') || 0) >= 45000, `${num('fragLoadingTimeOut')}ms`);
+  check('fragLoadingMaxRetry ≥ 6', (num('fragLoadingMaxRetry') || 0) >= 6, `${num('fragLoadingMaxRetry')}`);
+
+  // Measured reality: first frame from these CDNs takes 17–46s. A fixed timer
+  // alone was the original bug, so assert both the floor AND re-arming.
+  const wdMatch = src.match(/armWatchdog\s*=\s*\(\s*ms\s*=\s*(\d+)\s*\)/);
+  const wdMs = wdMatch ? Number(wdMatch[1]) : 0;
+  check('watchdog floor ≥ 60000ms', wdMs >= 60000, `${wdMs}ms`);
+  check('watchdog outlasts frag timeout', wdMs > (num('fragLoadingTimeOut') || 0), `${wdMs} vs ${num('fragLoadingTimeOut')}`);
+  check('watchdog RE-ARMS on progress (not one-shot)', /const armWatchdog/.test(src) && (src.match(/armWatchdog\(\)/g) || []).length >= 5, `${(src.match(/armWatchdog\(\)/g) || []).length} re-arm call sites`);
+
+  check('FRAG_LOADED re-arms watchdog', /FRAG_LOADED,\s*\(\)\s*=>\s*armWatchdog\(\)/.test(src));
+  check('LEVEL_LOADED re-arms watchdog', /LEVEL_LOADED,\s*\(\)\s*=>\s*armWatchdog\(\)/.test(src));
+  check('evidence-based budget comment present', /17–46s|17-46s/.test(src));
+  check('canplay sets playing status', /addEventListener\('canplay'/.test(src));
+  check('network errors retried before failover', /networkRetries\s*<\s*2/.test(src));
+  check('media errors retried before failover', /mediaRetries\s*<\s*2/.test(src));
+  check('CORS bypass retry exists', /corsBypass/.test(src) && /setCorsBypass\(true\)/.test(src));
+  check('crossOrigin is conditional (bypass-able)', /crossOrigin=\{corsBypass \? undefined : 'anonymous'\}/.test(src));
+  check('loader shows elapsed buffering seconds', /elapsed >= 4/.test(src));
+  check('failover still reaches iframe servers', /setMode\('iframe'\)/.test(src));
+  check('no leftover recoveredOnce flag', !/recoveredOnce/.test(src));
+
   console.log('\n══════════════════════════════════════');
   console.log(`RESULT: ${pass} passed, ${fail} failed`);
   if (fail) { console.log('Failures:'); failures.forEach(f => console.log('  ✗ ' + f)); }

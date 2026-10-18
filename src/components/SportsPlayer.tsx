@@ -7,6 +7,16 @@ import { X, Tv, Shield, RefreshCw, Signal, AlertTriangle } from 'lucide-react';
 // RealSSA Own Sports Player
 // Plays DIRECT HLS (.m3u8) streams natively — no foreign sites,
 // no heavy ads, full control. Iframe servers remain as fallback.
+//
+// IMPORTANT — why the hls.js budgets below are so generous:
+// the IPTV CDNs we source from are genuinely slow. Measured on
+// prod sources: first frame lands in 17–46s and the first segment
+// alone can be 5.5MB. hls.js defaults (10s manifest timeout, 1
+// retry) gave up long before a playable frame existed, so every
+// card sat on "Connecting…" and auto-switched forever. Two rules:
+//   1. Budgets must clear the slowest measured source with room.
+//   2. The watchdog must RE-ARM on progress, never be a one-shot
+//      deadline — a slow-but-alive stream must be allowed to finish.
 // ─────────────────────────────────────────────────────────────
 
 export interface DirectSource {
@@ -97,6 +107,14 @@ export default function SportsPlayer({
   const [status, setStatus] = useState<'loading' | 'playing' | 'error'>('loading');
   const [autoSwitched, setAutoSwitched] = useState(0);
   const [sourcesNote, setSourcesNote] = useState<string | null>(null);
+  // Set when the current CDN rejects CORS-mode requests; we then re-attach the
+  // same stream without crossOrigin so a CORS-only failure isn't treated as a
+  // dead source.
+  const [corsBypass, setCorsBypass] = useState(false);
+  // Seconds spent on the current attempt — surfaced in the loader so the user
+  // can see progress during the long first-segment buffer instead of staring
+  // at a static spinner.
+  const [elapsed, setElapsed] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -147,14 +165,45 @@ export default function SportsPlayer({
 
     setStatus('loading');
     let hls: Hls | null = null;
-    let recoveredOnce = false;
+    let networkRetries = 0;
+    let mediaRetries = 0;
+    let corsRetried = false;
+    let startedPlaying = false;
 
     const clearWatchdog = () => {
       if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
     };
+    // Re-arm the stall timer. Called on every sign of life so a slow-but-alive
+    // source is never killed mid-buffer; only a genuine stall trips it.
+    const armWatchdog = (ms = 75000) => {
+      clearWatchdog();
+      if (startedPlaying) {
+        // Already rendering frames: don't tear the source down for a hiccup,
+        // just let hls.js keep retrying and re-check later.
+        watchdogRef.current = setTimeout(() => {
+          if (video.readyState >= 2 && !video.paused) { armWatchdog(ms); return; }
+          failover();
+        }, ms);
+      } else {
+        watchdogRef.current = setTimeout(failover, ms);
+      }
+    };
     const failover = () => {
       clearWatchdog();
       if (hls) { hls.destroy(); hls = null; hlsRef.current = null; }
+      // Some IPTV CDNs send CORS headers on the manifest but not on child
+      // playlists/segments. With crossOrigin="anonymous" the browser then
+      // blocks them and the source looks dead. Before discarding it, retry
+      // the SAME source once without CORS mode.
+      if (!corsRetried && !corsBypass) {
+        corsRetried = true;
+        networkRetries = 0;
+        mediaRetries = 0;
+        // State change re-runs this effect with crossOrigin dropped.
+        setCorsBypass(true);
+        setStatus('loading');
+        return;
+      }
       const nextIdx = srcIdx + 1;
       if (nextIdx < sources.length) {
         setSrcIdx(nextIdx);
@@ -172,63 +221,107 @@ export default function SportsPlayer({
       }
       setMode('iframe');
     };
-    watchdogRef.current = setTimeout(failover, 20000);
+    // Watchdog only trips on a genuine stall. Re-armed by every progress event
+    // below, so total time may far exceed this as long as data keeps flowing.
+    armWatchdog();
 
     const isHlsUrl = /\.m3u8(?:$|[?#])/i.test(activeSource.url);
     if (!isHlsUrl) {
       video.src = activeSource.url;
-      const onCan = () => { setStatus('playing'); clearWatchdog(); };
+      const onCan = () => { setStatus('playing'); armWatchdog(); };
       const onErr = () => failover();
       video.addEventListener('loadeddata', onCan);
+      video.addEventListener('progress', onCan);
       video.addEventListener('error', onErr);
       video.play().catch(() => {});
       return () => {
         clearWatchdog();
         video.removeEventListener('loadeddata', onCan);
+        video.removeEventListener('progress', onCan);
         video.removeEventListener('error', onErr);
         video.removeAttribute('src'); video.load();
       };
     }
 
     if (Hls.isSupported()) {
+      // These IPTV CDNs serve very large, slow segments (0.8–1.2MB, often
+      // 6–16s each). hls.js defaults give up long before the first frame is
+      // decodable, which is what produced the endless "Connecting…" churn.
+      // Budgets below are deliberately generous and bounded by the watchdog.
       hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
         capLevelToPlayerSize: true,
         maxBufferLength: 30,
-        manifestLoadingTimeOut: 12000,
-        manifestLoadingMaxRetry: 1,
+        // Measured on our live CDNs: first frame can take 17–46s and the first
+        // segment alone is up to 5.5MB. Budgets must clear that comfortably.
+        // Manifest: 30s per try, 4 tries — a blip must not be instantly fatal.
+        manifestLoadingTimeOut: 30000,
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingTimeOut: 30000,
+        levelLoadingMaxRetry: 5,
+        fragLoadingTimeOut: 60000,
+        fragLoadingMaxRetry: 8,
+        fragLoadingRetryDelay: 1000,
+        // Start at a mid rung: the top rung is often the slowest to buffer in.
+        startLevel: -1,
+        // Play as soon as anything is decodable instead of waiting for a full buffer.
+        maxStarvationDelay: 4,
+        maxLoadingDelay: 6,
+        appendErrorMaxRetry: 5,
       });
       hlsRef.current = hls;
       hls.loadSource(activeSource.url);
       hls.attachMedia(video);
 
+      // Any real forward progress (manifest, fragment, decode) proves the stream
+      // is alive → push the stall deadline out rather than cancelling it, so a
+      // slow CDN is allowed to finish buffering however long it needs.
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setStatus('playing');
-        clearWatchdog();
+        armWatchdog();
         video.play().catch(() => {});
       });
-      const onPlaying = () => clearWatchdog();
+      hls.on(Hls.Events.FRAG_LOADED, () => armWatchdog());
+      hls.on(Hls.Events.LEVEL_LOADED, () => armWatchdog());
+      const onLoadedMeta = () => armWatchdog();
+      const onCanPlay = () => { startedPlaying = true; setStatus('playing'); armWatchdog(); video.play().catch(() => {}); };
+      const onPlaying = () => { startedPlaying = true; setStatus('playing'); armWatchdog(); };
+      // `progress` fires as bytes arrive — the earliest possible liveness signal.
+      const onProgress = () => armWatchdog();
+      video.addEventListener('loadedmetadata', onLoadedMeta);
+      video.addEventListener('canplay', onCanPlay);
       video.addEventListener('playing', onPlaying);
+      video.addEventListener('progress', onProgress);
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data?.fatal) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !recoveredOnce) {
-          recoveredOnce = true;
-          hls?.startLoad();
-          return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          // Retry the network layer a couple of times; only then move on.
+          if (networkRetries < 2) {
+            networkRetries++;
+            setStatus('loading');
+            hls?.startLoad();
+            return;
+          }
         }
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredOnce) {
-          recoveredOnce = true;
-          hls?.recoverMediaError();
-          return;
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          if (mediaRetries < 2) {
+            mediaRetries++;
+            setStatus('loading');
+            hls?.recoverMediaError();
+            return;
+          }
         }
         failover();
       });
 
       return () => {
         clearWatchdog();
+        video.removeEventListener('loadedmetadata', onLoadedMeta);
+        video.removeEventListener('canplay', onCanPlay);
         video.removeEventListener('playing', onPlaying);
+        video.removeEventListener('progress', onProgress);
         if (hls) { hls.destroy(); hlsRef.current = null; }
         video.removeAttribute('src');
         video.load();
@@ -236,15 +329,18 @@ export default function SportsPlayer({
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Native HLS (Safari)
       video.src = activeSource.url;
-      const onCan = () => { setStatus('playing'); clearWatchdog(); };
+      const onCan = () => { setStatus('playing'); armWatchdog(); };
       const onErr = () => failover();
+      const onProg = () => armWatchdog();
       video.addEventListener('loadeddata', onCan);
       video.addEventListener('error', onErr);
+      video.addEventListener('progress', onProg);
       video.play().catch(() => {});
       return () => {
         clearWatchdog();
         video.removeEventListener('loadeddata', onCan);
         video.removeEventListener('error', onErr);
+        video.removeEventListener('progress', onProg);
         video.removeAttribute('src'); video.load();
       };
     } else {
@@ -253,7 +349,7 @@ export default function SportsPlayer({
       clearWatchdog();
       return () => clearWatchdog();
     }
-  }, [mode, activeSource?.url, sources.length, srcIdx, serverIdx]);
+  }, [mode, activeSource?.url, sources.length, srcIdx, serverIdx, corsBypass]);
 
   // Iframe mode watchdog (blank embeds are common)
   useEffect(() => {
@@ -269,6 +365,18 @@ export default function SportsPlayer({
     else if (channelId === 'strikeout') setServerIdx(2);
     else if (channelId === 'streamed') setServerIdx(0);
   }, [channelId]);
+
+  // Reset the CORS bypass when we move to a different source, so each new
+  // source gets a clean CORS-mode attempt first.
+  useEffect(() => { setCorsBypass(false); }, [srcIdx, activeSource?.url]);
+
+  // Elapsed-seconds ticker for the loader; resets on every new attempt.
+  useEffect(() => {
+    if (status !== 'loading') return;
+    setElapsed(0);
+    const t = setInterval(() => setElapsed(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [status, srcIdx, serverIdx, corsBypass]);
 
   const streamUrl = isCategory
     ? iframeServer.homepage
@@ -432,7 +540,7 @@ export default function SportsPlayer({
               playsInline
               autoPlay
               muted
-              crossOrigin="anonymous"
+              crossOrigin={corsBypass ? undefined : 'anonymous'}
             />
             {status === 'loading' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 pointer-events-none">
@@ -440,6 +548,13 @@ export default function SportsPlayer({
                 <p className="text-[10px] uppercase font-black tracking-widest text-zinc-400">
                   Connecting to {activeLabel}…
                 </p>
+                {elapsed >= 4 && (
+                  <p className="text-[10px] text-zinc-500 font-bold tabular-nums">
+                    {elapsed < 20
+                      ? `Buffering ${elapsed}s — these feeds open slowly`
+                      : `Still buffering (${elapsed}s) — slow feed, hang tight`}
+                  </p>
+                )}
                 {autoSwitched > 0 && (
                   <p className="text-[10px] text-amber-400 font-bold">Auto-switched {autoSwitched}×</p>
                 )}
