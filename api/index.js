@@ -347,7 +347,34 @@ const maybeRefreshSparseCategory = async (parsed, pool) => {
 
 const handleStableApi = async (parsed, req, res, pool) => {
   if (!pool || req.method !== 'GET') return false;
+  // ── Native sports player: prefer the rich aggregating service (direct .m3u8
+  //    sources, live + upcoming). The DB table alone has no stream URLs, so
+  //    without this prod cards had nothing to play natively.
+  if (parsed.pathname === '/api/sports/match-sources') {
+    try {
+      const { getMatchSources } = require('../backend/services/sportsStreamService');
+      const q = parsed.searchParams || new URLSearchParams();
+      const result = await getMatchSources({
+        home: q.get('home'), away: q.get('away'),
+        homeCrest: q.get('homeCrest'), awayCrest: q.get('awayCrest'),
+        sport: q.get('sport'), league: q.get('league'), event: q.get('event'),
+      });
+      return sendJson(res, 200, result), true;
+    } catch (error) {
+      console.warn('[Vercel Sports] match-sources failed:', error.message);
+      return sendJson(res, 200, { directSources: [] }), true;
+    }
+  }
   if (parsed.pathname === '/api/sports/matches') {
+    // 1) Rich native feed (Streamed + DB + ESPN merged, directSources attached)
+    try {
+      const { getMatches } = require('../backend/services/sportsStreamService');
+      const feed = await getMatches(pool);
+      if (feed?.matches?.length) return sendJson(res, 200, feed), true;
+    } catch (error) {
+      console.warn('[Vercel Sports] Native feed failed, falling back to DB:', error.message);
+    }
+    // 2) Legacy DB-only shape — keeps old clients working if the aggregators are down
     try {
       const result = await pool.query(`
         SELECT match_id AS provider_match_id, COALESCE(competition, 'Other') AS competition_name,
