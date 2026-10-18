@@ -10,19 +10,19 @@ interface SportsPlayerProps {
 // ── Working sports streaming servers ──
 const SERVERS = [
   {
-    label: 'Server 1 · Streamed.st',
+    label: 'Server 1',
     key: 'streamed',
     buildUrl: (id: string | number) => `https://streamed.st/embed/${id}`,
     homepage: 'https://streamed.st',
   },
   {
-    label: 'Server 2 · VIPRow',
-    key: 'viprow',
-    buildUrl: (id: string | number) => `https://viprow.me/embed/${id}`,
-    homepage: 'https://viprow.me',
+    label: 'Server 2',
+    key: 'superabbit',
+    buildUrl: (id: string | number) => `https://site04.superabbit77hd.skin/`,
+    homepage: 'https://site04.superabbit77hd.skin/',
   },
   {
-    label: 'Server 3 · Strikeout',
+    label: 'Server 3',
     key: 'strikeout',
     buildUrl: (id: string | number) => `https://strikeout.im/embed/${id}`,
     homepage: 'https://strikeout.im',
@@ -38,7 +38,7 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
 
   // Auto-switch to corresponding server if channelId matches a provider key
   useEffect(() => {
-    if (channelId === 'viprow') {
+    if (channelId === 'superabbit') {
       setActiveIdx(1);
     } else if (channelId === 'strikeout') {
       setActiveIdx(2);
@@ -52,7 +52,7 @@ export default function SportsPlayer({ channelId, title, onClose }: SportsPlayer
   // If no specific channelId or if category browsing, show the homepage of the active server
   const isCategory = typeof channelId === 'string' && (
     isNaN(Number(channelId)) || 
-    channelId === 'viprow' || 
+    channelId === 'superabbit' || 
     channelId === 'strikeout' || 
     channelId === 'streamed'
   );

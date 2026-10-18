@@ -1009,7 +1009,7 @@ export default function CinemaHub() {
                     </div>
                   </div>
                 ) : (
-                  /* ── CASE B: ESPN match — no direct ID, open VIPRow/Strikeout homepage ── */
+                  /* ── CASE B: ESPN match — no direct ID, open Server 2/Server 3 homepage ── */
                   <div className="flex-1 flex flex-col">
                     <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider mb-3">Watch On</p>
                     <p className="text-[10px] text-zinc-600 mb-3 leading-relaxed">
@@ -1017,8 +1017,8 @@ export default function CinemaHub() {
                     </p>
                     <div className="grid grid-cols-1 gap-2.5">
                       {[
-                        { label: 'VIPRow', key: 'viprow', id: 'viprow-browse' },
-                        { label: 'Strikeout', key: 'strikeout', id: 'strikeout-browse' },
+                        { label: 'Server 2', key: 'superabbit', id: 'superabbit-browse' },
+                        { label: 'Server 3', key: 'strikeout', id: 'strikeout-browse' },
                       ].map(srv => (
                         <button
                           key={srv.key}
@@ -1049,13 +1049,13 @@ export default function CinemaHub() {
             </div>
           )}
 
-          {/* Live Sports Access — VIPRow · Strikeout */}
+          {/* Live Sports Access — Server 1 · Server 2 · Server 3 */}
           <div className="mt-8 border-t border-zinc-900 pt-8 mb-6">
             <h3 className="text-sm font-extrabold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2">
               <Tv size={14} />
               Browse Live Sports By Category
             </h3>
-            <p className="text-[10px] text-zinc-600 mb-5">All streams use VIPRow and Strikeout — 2 independent CDNs. If one server is blank, switch inside the player.</p>
+            <p className="text-[10px] text-zinc-600 mb-5">All streams use Server 1, Server 2 and Server 3 — 3 independent sources. If one server is blank, switch inside the player.</p>
 
 
             {/* ── Football / Soccer ── */}
@@ -1079,7 +1079,7 @@ export default function CinemaHub() {
                   <span className="text-[8px] uppercase font-extrabold tracking-widest text-zinc-500">Live Stream</span>
                   <span className="text-zinc-200 font-extrabold text-xs mt-1 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
                   <div className="mt-3 flex items-center justify-between w-full">
-                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">VIPRow · Strikeout</span>
+                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">Server 1 · Server 2 · Server 3</span>
                     <Play size={10} className="text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0" />
                   </div>
                 </button>
@@ -1103,7 +1103,7 @@ export default function CinemaHub() {
                   <span className="text-[8px] uppercase font-extrabold tracking-widest text-zinc-500">Live Stream</span>
                   <span className="text-zinc-200 font-extrabold text-xs mt-1 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
                   <div className="mt-3 flex items-center justify-between w-full">
-                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">VIPBox · Strikeout</span>
+                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">Server 1 · Server 2 · Server 3</span>
                     <Play size={10} className="text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0" />
                   </div>
                 </button>
@@ -1127,7 +1127,7 @@ export default function CinemaHub() {
                   <span className="text-[8px] uppercase font-extrabold tracking-widest text-zinc-500">Live Stream</span>
                   <span className="text-zinc-200 font-extrabold text-xs mt-1 leading-tight group-hover:text-white transition-colors">{ch.name}</span>
                   <div className="mt-3 flex items-center justify-between w-full">
-                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">VIPRow · VIPBox</span>
+                    <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-zinc-500 font-bold border border-white/5">Server 1 · Server 2 · Server 3</span>
                     <Play size={10} className="text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0" />
                   </div>
                 </button>
