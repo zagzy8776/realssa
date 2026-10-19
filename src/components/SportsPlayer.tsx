@@ -170,6 +170,9 @@ export default function SportsPlayer({
   league,
   liveConfidence,
   kickoff,
+  streamId,
+  venue,
+  onSwitchMatch,
 }: SportsPlayerProps) {
   // Category browsing (non-numeric channel id) → iframe homepage mode
   const isCategory = typeof channelId === 'string' && (

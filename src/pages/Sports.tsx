@@ -116,7 +116,12 @@ function groupByCompetition(matches: Match[]): Record<string, Match[]> {
 /* ═══════════════════════════════════════════════════════════════════════ */
 const teamLogoCache = new Map<string, string>();
 
-const TeamAvatar = ({ crest, name, size = 28 }: { crest?: string; name: string; size?: number }) => {
+const TeamAvatar = ({ crest, name: rawName, size = 28 }: { crest?: string | null; name?: string | null; size?: number }) => {
+  // API payloads omit the team name (null/undefined) for TBD fixtures. Normalise
+  // once here: `bg` below reads `name.length` inside a useMemo, and an undefined
+  // name threw "Cannot read properties of undefined (reading 'length')" and took
+  // down the entire /sports page.
+  const name = rawName || '';
   const [imgUrl, setImgUrl] = useState<string | null>(crest || null);
   const [broken, setBroken] = useState(false);
 
@@ -1340,7 +1345,12 @@ const Sports = () => {
   /* ── Live Streams ── */
   useEffect(() => {
     fetchWithRetry(apiUrl('/api/streams/live'))
-      .then(async r => { if (r?.ok) { const d = await r.json(); setHasLiveStreams(d.length > 0); } })
+      .then(async r => {
+        if (!r?.ok) return;
+        const d = await r.json();
+        // Endpoint may return a bare array or an envelope — never assume shape.
+        setHasLiveStreams(Array.isArray(d) ? d.length > 0 : (Array.isArray(d?.streams) ? d.streams.length > 0 : false));
+      })
       .catch(() => {});
   }, []);
 
