@@ -40,6 +40,9 @@ function normalizeMatch(row) {
     // Highlights feature without an extra upstream round-trip.
     highlight_url: row.highlight_url || row.strVideo || '',
     highlight_thumb: row.highlight_thumb || row.strThumb || '',
+    // Fixture-site style metadata: stadium/arena (TheSportsDB strVenue when
+    // the scraper supplies it). Empty string = unknown, cards hide the row.
+    venue: row.venue || row.strVenue || '',
     source: row.source || (row.idEvent ? 'TheSportsDB' : 'RealSSA Sports'),
     home_hype_count: Number(row.home_hype_count || 0),
     away_hype_count: Number(row.away_hype_count || 0),
@@ -199,6 +202,8 @@ module.exports = async function handler(req, res) {
         home: q.home, away: q.away,
         homeCrest: q.homeCrest, awayCrest: q.awayCrest,
         sport: q.sport, league: q.league, event: q.event,
+        kickoff: q.kickoff,
+        pool: getPool(),
       });
       return json(res, 200, result);
     }

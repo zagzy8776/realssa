@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Trophy, PlayCircle, Bell, BellOff, RefreshCw, Calendar,
   Flame, X, ChevronRight, Clock, Shield, Activity, Zap,
-  BarChart3, CheckCircle2, Users, Award, Clapperboard
+  BarChart3, CheckCircle2, Users, Award, Clapperboard, MapPin
 } from 'lucide-react';
 import HighlightsPanel from '../components/HighlightsPanel';
 import Header from '../components/Header';
@@ -15,7 +15,7 @@ import CategorySearch from '@/components/CategorySearch';
 import Pagination from '@/components/Pagination';
 import SEO from '@/components/SEO';
 import { fetchWithRetry } from '@/lib/fetchWithRetry';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 /* ─────────────────────────── Types ───────────────────────────────────── */
 interface Match {
@@ -34,6 +34,7 @@ interface Match {
   match_url?: string;
   highlight_url?: string;
   highlight_thumb?: string;
+  venue?: string | null;
   source?: string;
   home_hype_count?: number;
   away_hype_count?: number;
@@ -504,6 +505,7 @@ const CompetitionGroup = ({ competition, matches, followedIds, onFollowToggle, o
 /*  ScraperMatchPanel — Simplified Overview panel (no duplicate scoreboard) */
 /* ═══════════════════════════════════════════════════════════════════════ */
 const ScraperMatchPanel = ({ match, matchId, onOpenHighlights }: { match: Match; matchId: string; onOpenHighlights?: () => void }) => {
+  const navigate = useNavigate();
   const isLive = match.status === 'live';
   const isFin  = match.status === 'finished';
   const isSched = match.status === 'scheduled';
@@ -554,6 +556,58 @@ const ScraperMatchPanel = ({ match, matchId, onOpenHighlights }: { match: Match;
             </div>
           </div>
           <span style={{ background: '#eab308', color: '#000', fontSize: 10, fontWeight: 900, borderRadius: 8, padding: '6px 12px', whiteSpace: 'nowrap' }}>WATCH</span>
+        </button>
+      )}
+
+      {/* ── Fixture-style meta: kickoff + venue (like the fixture sites show) ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '0 2px' }}>
+        {match.kickoff_at && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, color: '#94a3b8' }}>
+            <Clock size={12} style={{ color: '#64748b' }} />
+            {new Date(match.kickoff_at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+        {match.venue && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, color: '#94a3b8' }}>
+            <MapPin size={12} style={{ color: '#64748b' }} />
+            {match.venue}
+          </span>
+        )}
+      </div>
+
+      {/* ── Live / upcoming → watch THIS exact fixture in our own player ── */}
+      {(isLive || isSched) && (
+        <button
+          onClick={() => navigate('/videos', {
+            state: {
+              sportsMatch: {
+                event: `${match.home_team_name} vs ${match.away_team_name}`,
+                home: match.home_team_name,
+                away: match.away_team_name,
+                league: match.competition_name,
+                sport: 'Football',
+                kickoff: match.kickoff_at,
+                venue: match.venue || null,
+              },
+            },
+          })}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            padding: '14px 16px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+            background: 'linear-gradient(135deg, rgba(16,185,129,0.16) 0%, rgba(16,185,129,0.05) 100%)',
+            border: '1px solid rgba(16,185,129,0.4)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <PlayCircle size={20} style={{ color: '#10b981' }} />
+            <div>
+              <p style={{ fontSize: 12.5, fontWeight: 900, color: '#f1f5f9' }}>{isLive ? 'This match is LIVE right now' : 'Watch when it kicks off'}</p>
+              <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 1 }}>Play the exact fixture in the RealSSA player — if it has not started, we show you what IS live</p>
+            </div>
+          </div>
+          <span style={{ background: '#10b981', color: '#03231a', fontSize: 10, fontWeight: 900, borderRadius: 8, padding: '6px 12px', whiteSpace: 'nowrap' }}>
+            {isLive ? 'WATCH LIVE' : 'GO TO MATCH'}
+          </span>
         </button>
       )}
 

@@ -1001,6 +1001,10 @@ async function fetchEspnMatches() {
           events.push({
             id: `espn:${ev.id}`,
             event: name,
+            // Fixture-site style metadata: the stadium/arena this game is
+            // played at (ESPN competitions carry `venue.fullName`), shown on
+            // cards and in the player's "kicks off at …" banner.
+            venue: ev.competitions?.[0]?.venue?.fullName || null,
             sport,
             league: league || ev.competitions?.[0]?.league?.name || '',
             country: country || ev.competitions?.[0]?.league?.abbreviation || '',
@@ -1061,6 +1065,7 @@ function mergeMatches(streamed, dbList, espnList) {
       if (!existing.homeCrest) existing.homeCrest = e.homeCrest;
       if (!existing.awayCrest) existing.awayCrest = e.awayCrest;
       if (!existing.liveDetail) existing.liveDetail = e.liveDetail;
+      if (!existing.venue) existing.venue = e.venue;
       continue;
     }
     const key = e.event.toLowerCase();
@@ -1141,6 +1146,11 @@ async function buildFeed(pool) {
         m.directSources = ladder;
         m.liveConfidence = liveConfidence(m, ladder);
       }
+      // Exact per-match embed (Streamed). An IPTV ladder entry is CHANNEL
+      // level — even a perfect Sky hit airs whatever Sky chose today. The
+      // per-match embed is the ONE source guaranteed to be this fixture, so
+      // the player surfaces it as the "★ Exact Match" tab.
+      if (m.streamId) m.exactEmbedUrl = `https://streamed.st/embed/${m.streamId}`;
     }
   }
 
@@ -1293,14 +1303,80 @@ async function probeLadder(ladder) {
   return indexed.map(x => x.s);
 }
 
-async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event, kickoff }) {
+// ── Exact-match context for one fixture ────────────────────────────────────
+//
+// "I clicked Man City vs Arsenal — why am I watching Brighton vs Everton?"
+// Because the IPTV ladder is CHANNEL level: even a perfect broadcaster hit is
+// showing whatever that broadcaster chose to air. resolveFeedContext closes
+// the gap by finding, in the merged feed:
+//   1. `exactStreamId`  → the Streamed per-match embed for THIS fixture (the
+//      one source that is guaranteed to be this game, not channel roulette);
+//   2. `venue`          → stadium/arena for the fixture card / player banner;
+//   3. `matchLive`      → has this fixture actually kicked off;
+//   4. `othersLive`     → fixtures live RIGHT NOW, so when the clicked match
+//      has not started (or is not airing anywhere), the player can honestly
+//      say "not live yet — here is what IS live" with one-tap switching,
+//      instead of silently opening a random channel.
+function resolveFeedContext(list, home, away, kickoff) {
+  const out = { self: null, exactStreamId: null, venue: null, matchLive: null, othersLive: [] };
+  try {
+    if (!Array.isArray(list)) return out;
+    const self = (home && away)
+      ? list.find(m => m.home && m.away && teamScore(m.home, home) >= 7 && teamScore(m.away, away) >= 7)
+      : null;
+    if (self) {
+      out.self = self;
+      out.exactStreamId = self.streamId || null;
+      out.venue = self.venue || null;
+      out.matchLive = !!self.isLive;
+      // A feed entry flagged live must still be inside its live window — the
+      // Streamed mirror has no live flag of its own (see isFixtureLive).
+      if (out.matchLive && !isFixtureLive(self.kickoff, true)) out.matchLive = false;
+    }
+    if (out.matchLive === null) {
+      // No feed entry for this fixture — fall back to the kickoff clock.
+      const t = parseKickoffTs(kickoff);
+      out.matchLive = isNaN(t) ? null : isFixtureLive(t, false);
+    }
+    const selfKey = self ? `${normalizeTeam(self.home)}|${normalizeTeam(self.away)}` : null;
+    out.othersLive = list
+      .filter(m => m.isLive && m.status !== 'finished' && m.home && m.away)
+      .filter(m => !selfKey || `${normalizeTeam(m.home)}|${normalizeTeam(m.away)}` !== selfKey)
+      .slice(0, 8)
+      .map(m => ({
+        event: m.event || `${m.home} vs ${m.away}`,
+        home: m.home,
+        away: m.away,
+        homeCrest: m.homeCrest || null,
+        awayCrest: m.awayCrest || null,
+        league: m.league || '',
+        sport: m.sport || '',
+        kickoff: m.kickoff ?? null,
+        venue: m.venue || null,
+        score: m.score || null,
+        liveDetail: m.liveDetail || null,
+        streamId: m.streamId || null,
+        directSources: Array.isArray(m.directSources) ? m.directSources.slice(0, 4) : [],
+        liveConfidence: m.liveConfidence || null,
+      }));
+    return out;
+  } catch (_) {
+    return out;
+  }
+}
+
+async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event, kickoff, pool }) {
   const channels = await getIptvChannels();
   const shaped = (list) => ({
     directSources: list,
     liveConfidence: liveConfidence({ home, away }, list),
   });
+  const EMPTY_CTX = { exactStreamId: null, exactEmbedUrl: null, venue: null, matchLive: null, othersLive: [] };
   if (!home || !away) {
-    return shaped(genericChannelSources(channels, 10).map(s => ({ ...s, sourceTier: 'generic' })));
+    return {
+      ...shaped(genericChannelSources(channels, 10).map(s => ({ ...s, sourceTier: 'generic' }))),
+      ...EMPTY_CTX,
+    };
   }
   const key = sourcesCacheKey(home, away);
   try {
@@ -1317,7 +1393,24 @@ async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league
   // gets the verified order for free.
   const directSources = await probeLadder(fallback);
 
-  const result = shaped(directSources);
+  // Exact-match context (per-match embed + what else is live right now) from
+  // the merged feed. Own try/catch: a feed failure must never cost the user
+  // their sources. `pool` may be absent (Vercel routes without DB access) —
+  // getMatches(null) still merges Streamed + ESPN.
+  let ctx = { self: null, exactStreamId: null, venue: null, matchLive: null, othersLive: [] };
+  try {
+    const feed = await getMatches(pool || null, { staleOk: true });
+    ctx = resolveFeedContext(feed?.matches || [], home, away, kickoff);
+  } catch (_) {}
+
+  const result = {
+    ...shaped(directSources),
+    exactStreamId: ctx.exactStreamId,
+    exactEmbedUrl: ctx.exactStreamId ? `https://streamed.st/embed/${ctx.exactStreamId}` : null,
+    venue: ctx.venue,
+    matchLive: ctx.matchLive,
+    othersLive: ctx.othersLive,
+  };
   redisService.setCached(key, result, SOURCES_TTL).catch(() => {});
   return result;
 }
@@ -1326,7 +1419,7 @@ module.exports = { getMatches, getMatchSources, markChannelDead, _test: {
   normalizeTeam, tokenSet, teamScore, teamTokens, parseM3u: parseIptvPlaylist, dedupeChannels: null,
   fetchStreamedMatches, fetchEspnMatches, mergeMatches, buildFeed,
   getIptvChannels, getGenericSportsChannels, findIptvSources, sourcesCacheKey,
-  buildSourceLadder, pickBroadcasterSources, genericChannelSources,
+  buildSourceLadder, pickBroadcasterSources, genericChannelSources, resolveFeedContext,
   extract: { IPTV_CHANNEL_FILTER, IPTV_MAX_PER_PLAYLIST, IPTV_LIBRARY_MAX, BROADCASTER_HINTS, IPTV_PLAYLIST_COUNT: IPTV_PLAYLISTS.length, IPTV_PLAYLISTS, ESPN_LEAGUES, LEAGUE_BY_CLUB },
   isFixtureLive, parseKickoffTs, liveConfidence, inferLeagueFromTeams,
   markChannelDead, isChannelDead,

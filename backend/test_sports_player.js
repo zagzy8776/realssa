@@ -343,8 +343,49 @@ function liveDetectionPart() {
 
   liveDetectionPart();
   liveConfidencePart();
+  exactMatchPart();
 
   await liveParts();
+}
+
+// ── EXACT MATCH: the "wrong match on Watch Now" regression suite ──────────
+// The IPTV ladder is CHANNEL level; the per-match Streamed embed is the only
+// source guaranteed to be the clicked fixture. resolveFeedContext must find
+// it (through team aliases), report whether the fixture is live, surface the
+// venue, and list the OTHER live fixtures for the one-tap fallback rail.
+function exactMatchPart() {
+  console.log('\n═══ EXACT MATCH: resolveFeedContext (per-match embed + others live) ═══');
+  const now = Date.now();
+  const feedList = [
+    { event: 'Manchester City vs Arsenal', home: 'Manchester City', away: 'Arsenal', isLive: false, status: 'scheduled', kickoff: now + 3600e3, streamId: 'stMC', venue: 'Etihad Stadium' },
+    { event: 'Chelsea vs Liverpool', home: 'Chelsea', away: 'Liverpool', isLive: true, status: 'live', kickoff: now - 1800e3, streamId: 'stCL', venue: 'Stamford Bridge', liveDetail: "45'+1" },
+    { event: 'Bayern Munich vs Borussia Dortmund', home: 'Bayern Munich', away: 'Borussia Dortmund', isLive: true, status: 'live', kickoff: now - 3600e3, streamId: null, score: '2-1' },
+    { event: 'Old Final', home: 'X', away: 'Y', isLive: false, status: 'finished', kickoff: now - 8 * 3600e3, streamId: 'stOld' },
+  ];
+  const ctxMC = T.resolveFeedContext(feedList, 'Man City', 'Arsenal', feedList[0].kickoff);
+  check('exact streamId resolved via alias ("Man City" → feed)', ctxMC.exactStreamId === 'stMC', `got ${ctxMC.exactStreamId}`);
+  check('venue resolved for the fixture', ctxMC.venue === 'Etihad Stadium', `got ${ctxMC.venue}`);
+  check('scheduled fixture → matchLive false', ctxMC.matchLive === false, `got ${ctxMC.matchLive}`);
+  check('othersLive excludes the clicked match', ctxMC.othersLive.length === 2 && !ctxMC.othersLive.some(m => /manchester/i.test(m.home || '')), `n=${ctxMC.othersLive.length}`);
+  check('othersLive drops finished games', !ctxMC.othersLive.some(m => m.event === 'Old Final'));
+  check('othersLive carries slim switch fields', ctxMC.othersLive.every(m => m.event && m.home && m.away && Array.isArray(m.directSources)));
+  check('othersLive keeps liveDetail/score', ctxMC.othersLive.some(m => m.liveDetail === "45'+1") && ctxMC.othersLive.some(m => m.score === '2-1'));
+
+  const ctxCL = T.resolveFeedContext(feedList, 'Chelsea', 'Liverpool', feedList[1].kickoff);
+  check('live fixture → matchLive true', ctxCL.matchLive === true, `got ${ctxCL.matchLive}`);
+  check('othersLive excludes self even by alias key', !ctxCL.othersLive.some(m => /chelsea/i.test(m.home || '')));
+
+  const ctxNone = T.resolveFeedContext(feedList, 'Real Madrid', 'Barcelona', now + 7200e3);
+  check('unknown fixture falls back to kickoff clock (scheduled → false)', ctxNone.matchLive === false && ctxNone.exactStreamId === null);
+  check('unknown fixture still lists others live', ctxNone.othersLive.length === 2);
+
+  // Venue fill through the merge (ESPN competitions carry venue.fullName).
+  const mergedV = T.mergeMatches(
+    [{ id: 's1', event: 'Juventus vs Napoli', home: 'Juventus', away: 'Napoli', isLive: true, kickoff: now, source: 'streamed' }],
+    [],
+    [{ id: 'espn:1', event: 'Juventus vs Napoli', home: 'Juventus', away: 'Napoli', isLive: true, kickoff: now, venue: 'Allianz Stadium', source: 'espn' }]
+  );
+  check('mergeMatches fills venue from ESPN', mergedV[0]?.venue === 'Allianz Stadium', `got ${mergedV[0]?.venue}`);
 }
 
 function liveConfidencePart() {

@@ -359,6 +359,7 @@ const handleStableApi = async (parsed, req, res, pool) => {
         homeCrest: q.get('homeCrest'), awayCrest: q.get('awayCrest'),
         sport: q.get('sport'), league: q.get('league'), event: q.get('event'),
         kickoff: q.get('kickoff'),
+        pool: await waitForDatabasePool(),
       });
       return sendJson(res, 200, result), true;
     } catch (error) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import VideoNews from "@/pages/VideoNews";
-import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2, Activity, Shield, Trophy, Clapperboard } from 'lucide-react';
+import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2, Activity, Shield, Trophy, Clapperboard, MapPin } from 'lucide-react';
 import { HighlightsModal } from '@/components/HighlightsPanel';
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
@@ -143,6 +144,8 @@ export default function CinemaHub() {
     sport?: string | null; league?: string | null;
     liveConfidence?: { level: 'match' | 'channel' | 'generic' | 'none'; exact?: boolean; label?: string | null } | null;
     kickoff?: string | number | null;
+    streamId?: string | number | null;
+    venue?: string | null;
   } | null>(null);
   const [sportsMatches, setSportsMatches] = useState<any[]>([]);
   const [sportsSearchQuery, setSportsSearchQuery] = useState('');
@@ -151,6 +154,48 @@ export default function CinemaHub() {
   const [sportsMatchesLoading, setSportsMatchesLoading] = useState(false);
   const [selectedSportMatch, setSelectedSportMatch] = useState<any | null>(null);
   const [selectedSportFilter, setSelectedSportFilter] = useState('All');
+
+  // ── Deep-link handoff: the Sports page and the LiveScores widget "Watch"
+  // buttons hand a fixture over via router state; once the feed (with
+  // directSources + exact embed ids) has loaded, open it in OUR player so the
+  // user watches that exact match instead of hunting through external sites.
+  const handoffDone = useRef(false);
+  const location = useLocation();
+  useEffect(() => {
+    if (handoffDone.current || activeSportsPlayer) return;
+    const handoff = (location.state as { sportsMatch?: Record<string, unknown> } | null)?.sportsMatch;
+    if (!handoff) return;
+    const list = sportsMatches || [];
+    if (!list.length) return;   // feed still loading — retry when it lands
+    const norm = (s: unknown) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const hh = norm(handoff.home), aa = norm(handoff.away);
+    if (!hh || !aa) return;
+    const overlap = (x: string, y: string) => !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+    const target = list.find((m: any) => {
+      const h = norm(m.home), a = norm(m.away);
+      return (overlap(h, hh) || overlap(h, aa)) && (overlap(a, aa) || overlap(a, hh));
+    });
+    if (!target) return;
+    handoffDone.current = true;
+    setActiveSportsPlayer({
+      channelId: target.streamId || target.id || 'superabbit',
+      title: target.event || `${handoff.home} vs ${handoff.away}`,
+      directSources: target.directSources,
+      home: target.home || (handoff.home as string) || null,
+      away: target.away || (handoff.away as string) || null,
+      homeCrest: target.homeCrest || null,
+      awayCrest: target.awayCrest || null,
+      isLive: !!target.isLive,
+      sport: target.sport || (handoff.sport as string) || null,
+      league: target.league || (handoff.league as string) || null,
+      liveConfidence: target.liveConfidence || null,
+      kickoff: target.kickoff ?? (handoff.kickoff as string) ?? null,
+      streamId: target.streamId || null,
+      venue: target.venue || null,
+    });
+    // Clear the state so a refresh does not re-open the player.
+    window.history.replaceState({}, '');
+  }, [location.state, sportsMatches, activeSportsPlayer]);
 
   // ── Continue Watching (localStorage persistence) ──
   const [continueWatching, setContinueWatching] = useState<Array<{
@@ -1032,6 +1077,13 @@ export default function CinemaHub() {
                                       </div>
                                       <span className="text-zinc-200 font-bold text-xs sm:text-[13px] group-hover:text-white transition-colors truncate">{away}</span>
                                     </div>
+                                    {/* Fixture-style metadata: stadium/arena */}
+                                    {match.venue ? (
+                                      <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-bold -mt-0.5">
+                                        <MapPin size={9} className="text-zinc-600 shrink-0" />
+                                        <span className="truncate">{match.venue}</span>
+                                      </div>
+                                    ) : null}
                                   </>
                                 ) : (
                                   <div className="flex items-center gap-3">
@@ -1049,9 +1101,12 @@ export default function CinemaHub() {
                                   {(() => {
                                     const st = String(match.status || (match.isLive ? 'live' : 'scheduled')).toLowerCase();
                                     if (st === 'finished') return <span className="text-zinc-500">● Match ended</span>;
-                                    return match.directSources?.length
-                                      ? <span className="text-emerald-500">● Direct stream available</span>
-                                      : (match.streamId || match.id ? 'External source' : 'Find stream');
+                                    if (match.directSources?.length) {
+                                      return match.liveConfidence?.exact
+                                        ? <span className="text-emerald-400">● ✓ Exact match feed</span>
+                                        : <span className="text-emerald-500">● Direct stream available</span>;
+                                    }
+                                    return (match.streamId || match.id ? 'External source' : 'Find stream');
                                   })()}
                                 </span>
                                 {String(match.status || (match.isLive ? 'live' : 'scheduled')).toLowerCase() === 'finished' ? (
@@ -1101,6 +1156,8 @@ export default function CinemaHub() {
                                         league: match.league || null,
                                         liveConfidence: match.liveConfidence || null,
                                         kickoff: match.kickoff ?? null,
+                                        streamId: match.streamId || null,
+                                        venue: match.venue || null,
                                       });
                                     }}
                                     className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-[11px] font-black rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-md shadow-amber-500/15 border border-amber-600"
@@ -1207,6 +1264,8 @@ export default function CinemaHub() {
                             league: selectedSportMatch.league || null,
                             liveConfidence: selectedSportMatch.liveConfidence || null,
                             kickoff: selectedSportMatch.kickoff ?? null,
+                            streamId: selectedSportMatch.streamId || null,
+                            venue: selectedSportMatch.venue || null,
                           });
                           setSelectedSportMatch(null);
                         }}
@@ -1988,6 +2047,24 @@ export default function CinemaHub() {
           league={activeSportsPlayer.league}
           liveConfidence={activeSportsPlayer.liveConfidence}
           kickoff={activeSportsPlayer.kickoff}
+          streamId={activeSportsPlayer.streamId}
+          venue={activeSportsPlayer.venue}
+          onSwitchMatch={m => setActiveSportsPlayer({
+            channelId: m.streamId || 'superabbit',
+            title: m.event || 'Live Match',
+            directSources: m.directSources,
+            home: m.home || null,
+            away: m.away || null,
+            homeCrest: m.homeCrest || null,
+            awayCrest: m.awayCrest || null,
+            isLive: true,
+            sport: m.sport || null,
+            league: m.league || null,
+            liveConfidence: m.liveConfidence || null,
+            kickoff: m.kickoff ?? null,
+            streamId: m.streamId || null,
+            venue: m.venue || null,
+          })}
           onClose={() => setActiveSportsPlayer(null)}
         />
       )}

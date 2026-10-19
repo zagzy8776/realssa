@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, Trophy, Clock, X, ChevronDown, ChevronUp, AlertCircle, ExternalLink, Newspaper } from 'lucide-react';
+import { RefreshCw, Trophy, Clock, X, ChevronDown, ChevronUp, AlertCircle, ExternalLink, Newspaper, Play, MapPin } from 'lucide-react';
 import { apiUrl } from '@/lib/api-base';
+import { useNavigate } from 'react-router-dom';
 import { HighlightsModal } from './HighlightsPanel';
 
 interface Match {
@@ -14,6 +15,7 @@ interface Match {
   match_minute: string | null;
   kickoff_at: string;
   updated_at: string;
+  venue?: string | null;
   home_hype_count?: number;
   away_hype_count?: number;
 }
@@ -51,6 +53,7 @@ function fmtDate(iso: string) {
 }
 
 const MatchDetailModal = ({ match, onClose }: { match: Match; onClose: () => void }) => {
+  const navigate = useNavigate();
   const isLive = match.status === 'live';
   const isFinished = match.status === 'finished';
   const flag = getFlag(match.competition);
@@ -129,6 +132,35 @@ const MatchDetailModal = ({ match, onClose }: { match: Match; onClose: () => voi
               <p style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.3 }}>{match.away_team}</p>
             </div>
           </div>
+
+          {/* Venue (fixture-style metadata) */}
+          {match.venue && (
+            <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#64748b', marginTop: -10, marginBottom: 16 }}>
+              <MapPin size={11} /> {match.venue}
+            </p>
+          )}
+
+          {/* Watch THIS fixture in our own player */}
+          {!isFinished && (
+            <button
+              onClick={() => navigate('/videos', {
+                state: {
+                  sportsMatch: {
+                    event: `${match.home_team} vs ${match.away_team}`,
+                    home: match.home_team,
+                    away: match.away_team,
+                    league: match.competition,
+                    sport: 'Football',
+                    kickoff: match.kickoff_at,
+                    venue: match.venue || null,
+                  },
+                },
+              })}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '11px 16px', borderRadius: 10, marginBottom: 10, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', color: '#03231a', fontSize: 13, fontWeight: 900, cursor: 'pointer' }}
+            >
+              <Play size={15} /> {isLive ? 'Watch LIVE in RealSSA Player' : 'Watch in RealSSA Player'}
+            </button>
+          )}
 
           {/* Actions */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

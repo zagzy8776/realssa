@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Hls from 'hls.js';
 import { apiUrl } from '@/lib/api-base';
-import { X, Tv, Shield, RefreshCw, Signal, AlertTriangle } from 'lucide-react';
+import { X, Tv, Shield, RefreshCw, Signal, AlertTriangle, Clock, MapPin, Radio } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
 // RealSSA Own Sports Player
@@ -50,6 +50,31 @@ interface SportsPlayerProps {
   //   'generic' → a live sports channel (never a dead end)
   liveConfidence?: { level: 'match' | 'channel' | 'generic' | 'none'; exact?: boolean; label?: string | null } | null;
   kickoff?: string | number | null;
+  // Exact per-match embed id (Streamed). When present, the "★ Exact Match"
+  // tab plays THE fixture the user clicked — an IPTV channel airs whatever
+  // the broadcaster scheduled, this embed is bound to one single game.
+  streamId?: string | number | null;
+  venue?: string | null;
+  // One-tap switch to another fixture from the "Others live now" rail.
+  onSwitchMatch?: (m: LiveSwitchMatch) => void;
+}
+
+// Slim fixture descriptor handed to onSwitchMatch (backend `othersLive` items).
+export interface LiveSwitchMatch {
+  event?: string;
+  home?: string | null;
+  away?: string | null;
+  homeCrest?: string | null;
+  awayCrest?: string | null;
+  league?: string | null;
+  sport?: string | null;
+  kickoff?: string | number | null;
+  venue?: string | null;
+  score?: string | null;
+  liveDetail?: string | null;
+  streamId?: string | null;
+  directSources?: DirectSource[];
+  liveConfidence?: { level: 'match' | 'channel' | 'generic' | 'none'; exact?: boolean; label?: string | null } | null;
 }
 
 // Iframe fallback servers (used when no direct HLS is available)
@@ -73,6 +98,32 @@ const IFRAME_SERVERS = [
     homepage: 'https://strikeout.im',
   },
 ];
+
+// Exact-match server FIRST: streamed.st hosts ONE embed PER FIXTURE, so with
+// a streamId the first tab is guaranteed to be the clicked match. An IPTV
+// channel is not — it airs whatever the broadcaster scheduled today.
+function serversFor(exactId: string | null) {
+  if (!exactId) return IFRAME_SERVERS;
+  return [
+    {
+      label: '★ Exact Match',
+      key: 'exact',
+      buildUrl: () => `https://streamed.st/embed/${exactId}`,
+      homepage: `https://streamed.st/embed/${exactId}`,
+    },
+    ...IFRAME_SERVERS,
+  ];
+}
+
+// Kickoff clock for the "not live yet" banner (epoch-ms or ISO in, HH:MM out).
+function fmtKickoff(k: string | number | null | undefined): string {
+  if (k == null || k === '') return '';
+  try {
+    const d = new Date(typeof k === 'number' ? (k > 1e12 ? k : k * 1000) : k);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
+}
 
 function parseTeamsFromTitle(title: string): { home: string | null; away: string | null } {
   const delimiters = [' vs ', ' VS ', ' - ', ' @ '];
@@ -160,18 +211,36 @@ export default function SportsPlayer({
   // at a static spinner.
   const [elapsed, setElapsed] = useState(0);
 
+  // Exact-match context from /api/sports/match-sources: per-match embed id,
+  // venue, whether THIS fixture is live, and what else is live right now.
+  const [ctx, setCtx] = useState<{
+    exactStreamId: string | null;
+    venue: string | null;
+    matchLive: boolean | null;
+    othersLive: LiveSwitchMatch[];
+  } | null>(null);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const exactId = (streamId != null && streamId !== '' ? String(streamId) : null) || ctx?.exactStreamId || null;
+  const servers = useMemo(() => serversFor(exactId), [exactId]);
+  const serversRef = useRef(servers);
+  serversRef.current = servers;
+
   const activeSource = sources[srcIdx] || null;
-  const iframeServer = IFRAME_SERVERS[serverIdx];
+  const iframeServer = servers[Math.min(serverIdx, servers.length - 1)];
+  const effectiveVenue = ctx?.venue || venue || null;
 
   // On-demand source fetch when we don't have direct sources for a real fixture
   useEffect(() => {
-    if (directSources?.length) { setSources(directSources); setMode('native'); return; }
+    // Keep native mode when direct sources were provided, but STILL fetch —
+    // the response now also carries the exact-match context (per-match embed
+    // id, venue, matchLive, othersLive) that powers the exactness features.
+    if (directSources?.length) { setSources(directSources); setMode('native'); }
     if (isCategory) { setMode('iframe'); return; }
-    if (!teamHome || !teamAway) { setMode('iframe'); return; }
+    if (!teamHome || !teamAway) { if (!directSources?.length) setMode('iframe'); return; }
 
     let cancelled = false;
     // Pass crests + league/sport so the backend can pick the right broadcaster
@@ -191,6 +260,12 @@ export default function SportsPlayer({
         if (cancelled) return;
         const list: DirectSource[] = Array.isArray(data?.directSources) ? data.directSources : [];
         if (data?.liveConfidence) setFetchedConfidence(data.liveConfidence);
+        setCtx({
+          exactStreamId: data?.exactStreamId || null,
+          venue: data?.venue || null,
+          matchLive: typeof data?.matchLive === 'boolean' ? data.matchLive : null,
+          othersLive: Array.isArray(data?.othersLive) ? data.othersLive : [],
+        });
         if (list.length) {
           setSources(list);
           setMode('native');
@@ -203,6 +278,24 @@ export default function SportsPlayer({
       .catch(() => { if (!cancelled) setMode('iframe'); });
     return () => { cancelled = true; };
   }, [directSources, isCategory, teamHome, teamAway, homeCrest, awayCrest, sport, league, title]);
+
+  // EXACTNESS DEFAULT: when a per-match embed exists and the IPTV ladder is
+  // only league-broadcaster/generic confidence, LEAD with the exact embed.
+  // The user clicked THIS match — "the right channel for the league" can be
+  // airing a different game, which is exactly the complaint we are fixing.
+  const exactDefaultDone = useRef(false);
+  useEffect(() => {
+    if (!exactId || exactDefaultDone.current) return;
+    exactDefaultDone.current = true;
+    if (confidenceLevel === 'match') return;   // team channel found — already exact
+    setMode('iframe');
+    setServerIdx(0);                            // exact entry is servers[0]
+  }, [exactId, confidenceLevel]);
+
+  // Keep serverIdx inside bounds when the exact entry appears/disappears.
+  useEffect(() => {
+    setServerIdx(i => Math.min(i, servers.length - 1));
+  }, [servers.length]);
 
   // ── Native HLS engine with watchdog + auto source-fallback ──
   useEffect(() => {
@@ -273,7 +366,7 @@ export default function SportsPlayer({
       // Every direct source exhausted → walk the fallback servers themselves
       // (Server 1 → 2 → 3) so the user stays inside our site no matter what.
       setSourcesNote('Direct streams are down — switching through fallback servers.');
-      if (serverIdx + 1 < IFRAME_SERVERS.length) {
+      if (serverIdx + 1 < serversRef.current.length) {
         setServerIdx(serverIdx + 1);
         setAutoSwitched(p => p + 1);
       } else {
@@ -456,12 +549,14 @@ export default function SportsPlayer({
     localStorage.setItem('realssa_sports_server', IFRAME_SERVERS[idx].key);
   };
 
-  // Restore saved iframe server preference
+  // Restore saved iframe server preference (only when there is no exact
+  // match tab — exactness outranks a remembered generic server).
   useEffect(() => {
+    if (exactId) return;
     const saved = localStorage.getItem('realssa_sports_server');
     const found = IFRAME_SERVERS.findIndex(s => s.key === saved);
-    if (found >= 0 && !isCategory) setServerIdx(found);
-  }, [isCategory]);
+    if (found >= 0 && !isCategory) setServerIdx(found + (servers.length - IFRAME_SERVERS.length));
+  }, [isCategory, exactId, servers.length]);
 
   // Close on Escape
   useEffect(() => {
@@ -486,7 +581,7 @@ export default function SportsPlayer({
       setSrcIdx(p => (p + 1) % sources.length);
       setAutoSwitched(p => p + 1);
     } else if (mode === 'iframe') {
-      setServerIdx(p => (p + 1) % IFRAME_SERVERS.length);
+      setServerIdx(p => (p + 1) % serversRef.current.length);
     }
   };
 
@@ -598,7 +693,7 @@ export default function SportsPlayer({
         </div>
       ) : !isCategory ? (
         <div className="flex gap-2 px-4 py-2.5 bg-zinc-950 border-b border-white/10 shrink-0 overflow-x-auto no-scrollbar">
-          {IFRAME_SERVERS.map((srv, i) => (
+          {servers.map((srv, i) => (
             <button
               key={srv.key}
               onClick={() => handleSwitchServer(i)}
@@ -613,6 +708,24 @@ export default function SportsPlayer({
           ))}
         </div>
       ) : null}
+
+      {/* ── NOT-LIVE-YET banner — the honest answer to "why is this not my match" ── */}
+      {ctx?.matchLive === false && (
+        <div className="px-4 py-2 bg-sky-950/40 border-b border-sky-900/40 flex items-center gap-2 shrink-0">
+          <Clock size={12} className="text-sky-400 shrink-0" />
+          <p className="text-[10px] text-sky-200 font-bold leading-snug">
+            {title} has NOT kicked off yet{kickoff ? ` — starts ${fmtKickoff(kickoff)}` : ''}{effectiveVenue ? ` at ${effectiveVenue}` : ''}. The exact feed goes live at kickoff — or jump to a match below that IS live.
+          </p>
+        </div>
+      )}
+      {ctx?.matchLive !== false && effectiveVenue && (
+        <div className="px-4 py-1.5 bg-zinc-950/80 border-b border-white/5 flex items-center gap-2 shrink-0">
+          <MapPin size={10} className="text-zinc-500 shrink-0" />
+          <span className="text-[9px] text-zinc-500 font-bold truncate">
+            {effectiveVenue}{kickoff ? ` · ${fmtKickoff(kickoff)}` : ''}
+          </span>
+        </div>
+      )}
 
       {/* ── STREAM WINDOW — full-bleed, fills all free height ── */}
       <div className="flex-1 min-h-0 w-full h-full bg-black relative overflow-hidden">
@@ -658,7 +771,22 @@ export default function SportsPlayer({
         ) : (
           <div className="absolute inset-0 bg-zinc-950">
             {/* Warning overlay for iframe fallback mode */}
-            {!isCategory && (
+            {!isCategory && iframeServer.key === 'exact' && (
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/30 rounded-xl px-4 py-2.5 max-w-md mx-auto">
+                <div className="flex items-start gap-2">
+                  <Shield size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-emerald-200 text-xs font-bold leading-snug">
+                      Exact match feed — this stream IS {title}
+                    </p>
+                    <p className="text-emerald-300/70 text-[10px] mt-1 leading-snug">
+                      One embed per fixture: no channel roulette. If it says "starting soon", the match has not kicked off yet.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!isCategory && iframeServer.key !== 'exact' && (
               <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-amber-500/10 backdrop-blur-md border border-amber-500/30 rounded-xl px-4 py-2.5 max-w-md mx-auto">
                 <div className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
@@ -687,6 +815,36 @@ export default function SportsPlayer({
           </div>
         )}
       </div>
+
+      {/* ── OTHERS LIVE NOW — one-tap switch to a fixture that IS live ── */}
+      {onSwitchMatch && !!ctx?.othersLive?.length && (
+        <div className="px-4 py-2 bg-zinc-950 border-t border-white/10 shrink-0">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Radio size={11} className="text-red-500 shrink-0" />
+            <span className="text-[9px] uppercase font-black tracking-widest text-zinc-500">
+              Others live right now
+            </span>
+            {ctx?.matchLive === false && (
+              <span className="text-[9px] text-sky-400 font-bold">· your match starts soon</span>
+            )}
+          </div>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+            {ctx!.othersLive.map((m, i) => (
+              <button
+                key={`${m.event}-${i}`}
+                onClick={() => onSwitchMatch(m)}
+                title={m.event}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900/70 hover:bg-zinc-800 border border-white/5 hover:border-red-500/40 rounded-full text-[9px] font-bold text-zinc-300 hover:text-white whitespace-nowrap shrink-0 transition-all active:scale-95"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                <span className="uppercase tracking-wider text-zinc-500">{(m.league || m.sport || 'Live').slice(0, 16)}</span>
+                <span className="max-w-[150px] truncate">{m.event}</span>
+                {m.liveDetail ? <span className="text-amber-400">{m.liveDetail}</span> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── BOTTOM HINT ── */}
       <div className="px-4 py-2.5 bg-zinc-950 border-t border-white/10 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-zinc-500 shrink-0">
