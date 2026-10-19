@@ -60,3 +60,16 @@ rust-engine/data/
 rust-engine/brain_weights.bin
 backend/data/
 scratch/
+
+# Accidental local artifacts / deploy secrets (never commit)
+~
+.kilo/
+.flytoken
+.flygq.cjs
+.vercel-env.json
+.vercelenv.cjs
+_p.json
+service-config.json
+service-full-config.json
+service-full-output.txt
+backend/_boot.err

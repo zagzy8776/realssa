@@ -6397,6 +6397,11 @@ app.use('/api/notifications', notificationRoutes);
 const trendingRoutes = require('./routes/trending');
 app.use('/api/trending', trendingRoutes);
 
+// Use Empire of Attention routes (velocity, predictive trending, crypto-live,
+// image scrape, behavior intelligence)
+const empireRoutes = require('./routes/empireApi');
+app.use('/api', empireRoutes);
+
 // GET /api/sports/standings/:league
 app.get('/api/sports/standings/:league', async (req, res) => {
   try {
@@ -7332,6 +7337,16 @@ if (!process.env.VERCEL) {
     startTelegramBot();
   } catch (tgErr) {
     console.error('❌ Failed to initialize Telegram Bot:', tgErr.message);
+  }
+
+  try {
+    console.log('⚡ Initializing Empire of Attention background engines...');
+    require('./services/velocity.service').start();
+    require('./services/socialPredictive.service').start();
+    require('./services/cryptoLive.service').start();
+    console.log('✅ Empire of Attention engines active (velocity, predictive, crypto-live).');
+  } catch (empireErr) {
+    console.error('❌ Failed to initialize Empire of Attention engines:', empireErr.message);
   }
 
 
