@@ -1,5 +1,6 @@
 
 import { apiUrl } from '@/lib/api-base';
+import { normalizeMatches, type Match } from '@/lib/sportsMatchNormalize';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Trophy, PlayCircle, Bell, BellOff, RefreshCw, Calendar,
@@ -18,27 +19,9 @@ import { fetchWithRetry } from '@/lib/fetchWithRetry';
 import { Link, useNavigate } from 'react-router-dom';
 
 /* ─────────────────────────── Types ───────────────────────────────────── */
-interface Match {
-  provider_match_id: string;
-  competition_name: string;
-  home_team_name: string;
-  home_team_crest: string;
-  away_team_name: string;
-  away_team_crest: string;
-  status: 'scheduled' | 'live' | 'finished' | 'cancelled';
-  minute: string;
-  home_score: number;
-  away_score: number;
-  kickoff_at: string;
-  updated_at: string;
-  match_url?: string;
-  highlight_url?: string;
-  highlight_thumb?: string;
-  venue?: string | null;
-  source?: string;
-  home_hype_count?: number;
-  away_hype_count?: number;
-}
+// `Match` lives in src/lib/sportsMatchNormalize.ts — the API payload is mapped
+// there once so this page, the CinemaHub player and the /videos handoff all
+// read the same fields.
 
 interface SportsArticle {
   id: string;
@@ -64,19 +47,24 @@ const TABS = [
 
 /* ─────────────────────────── Helpers ─────────────────────────────────── */
 function fmtTime(iso: string) {
-  try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-  catch { return '--:--'; }
+  if (!iso) return '--:--';
+  const d = new Date(iso);
+  // `new Date('')` / `new Date(undefined)` do NOT throw — they yield an Invalid
+  // Date whose toLocaleTimeString() is literally "Invalid Date". Guard the time
+  // value instead of relying on try/catch.
+  if (isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function fmtDate(iso: string) {
-  try {
-    const d = new Date(iso);
-    const today = new Date();
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    if (d.toDateString() === today.toDateString()) return 'Today';
-    if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
-    return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
-  } catch { return ''; }
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const today = new Date();
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+  return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 function initials(name: string) {
@@ -1310,7 +1298,7 @@ const Sports = () => {
         fetch(apiUrl('/api/sports/matches')),
         fetch(apiUrl(`/api/sports/following/${deviceId}`))
       ]);
-      if (mRes.ok) { const d = await mRes.json(); setMatches(d.matches || []); }
+      if (mRes.ok) { const d = await mRes.json(); setMatches(normalizeMatches(d)); }
       if (fRes.ok) { const d = await fRes.json(); setFollowedIds(d.following || []); }
       setLastRefreshed(new Date());
     } catch (e) { console.error(e); }

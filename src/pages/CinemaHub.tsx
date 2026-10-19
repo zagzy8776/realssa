@@ -6,6 +6,7 @@ import { HighlightsModal } from '@/components/HighlightsPanel';
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api-base";
+import { normalizeFeedMatches, type FeedMatch } from "@/lib/sportsMatchNormalize";
 import CinemaPlayer from "@/components/CinemaPlayer";
 import SportsPlayer from "@/components/SportsPlayer";
 import Header from "@/components/Header";
@@ -147,7 +148,7 @@ export default function CinemaHub() {
     streamId?: string | number | null;
     venue?: string | null;
   } | null>(null);
-  const [sportsMatches, setSportsMatches] = useState<any[]>([]);
+  const [sportsMatches, setSportsMatches] = useState<FeedMatch[]>([]);
   const [sportsSearchQuery, setSportsSearchQuery] = useState('');
   const [sportsTimeFilter, setSportsTimeFilter] = useState<'All' | 'Live' | 'Upcoming' | 'Results'>('All');
   const [highlightsMatch, setHighlightsMatch] = useState<{ id?: string; home: string; away: string; kickoff?: string | null; competition?: string | null; matchUrl?: string | null } | null>(null);
@@ -231,9 +232,13 @@ export default function CinemaHub() {
         })
         .then(data => {
           console.log('[Sports] API data received:', data);
-          // New rich feed: { matches: [...] } — legacy fallback: raw array
-          const list = Array.isArray(data) ? data : (Array.isArray(data?.matches) ? data.matches : []);
-          console.log('[Sports] Parsed matches count:', list.length);
+          // The endpoint answers with the rich camelCase feed, but the DB
+          // fallback sends legacy snake_case rows. Normalise BOTH into the
+          // camelCase view the cards render, so teams/crests/kickoff and the
+          // direct HLS sources never disappear when the fallback answers.
+          const list = normalizeFeedMatches(data);
+          console.log('[Sports] Parsed matches count:', list.length,
+            '| live:', list.filter(m => m.isLive).length);
           setSportsMatches(list);
           setSportsMatchesLoading(false);
         })
@@ -243,8 +248,9 @@ export default function CinemaHub() {
           fetch(apiUrl('/api/sports/stream-schedule'))
             .then(r => r.ok ? r.json() : [])
             .then(legacy => {
-              console.log('[Sports] Legacy API returned:', legacy?.length || 0, 'matches');
-              setSportsMatches(Array.isArray(legacy) ? legacy : []);
+              const list = normalizeFeedMatches(legacy);
+              console.log('[Sports] Legacy API returned:', list.length, 'matches');
+              setSportsMatches(list);
               setSportsMatchesLoading(false);
             })
             .catch((err2) => {

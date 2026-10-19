@@ -4,10 +4,12 @@ const { Readability } = require('@mozilla/readability');
 const cheerio = require('cheerio');
 
 // ─── Backend base URL for the image compression proxy ────────────────────────
-// In production this is the Fly.io backend. In dev it's localhost:5000.
+// In production this is the public RealSSA origin (Vercel / Northflank both serve
+// /api/img through backend/server.js). The old realssa-backend.fly.dev host is
+// suspended, so it must not be the fallback. In dev it's localhost:5000.
 const BACKEND = process.env.BACKEND_URL ||
   (process.env.NODE_ENV === 'production'
-    ? 'https://realssa-backend.fly.dev'   // adjust if your Fly.io URL differs
+    ? 'https://www.realssanews.com.ng'
     : 'http://localhost:5000');
 
 // Rewrite an image src to route through /api/img (Opera Mini-style compression)

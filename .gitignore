@@ -66,6 +66,7 @@ scratch/
 .kilo/
 .flytoken
 .flygq.cjs
+.webui_secret_key
 .vercel-env.json
 .vercelenv.cjs
 _p.json

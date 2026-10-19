@@ -99,7 +99,28 @@ const IFRAME_SERVERS = [
   },
 ];
 
-// Exact-match server FIRST: streamed.st hosts ONE embed PER FIXTURE, so with
+// Browse-only channel ids open a provider homepage. Match ids are opaque
+// strings (`db:558576`, Streamed slugs…) and category tiles are league slugs
+// ('football', 'la-liga', 'nba'…). The old check ("anything non-numeric is a
+// category") misclassified EVERY real fixture as a browse channel, forced the
+// third-party iframe and skipped source lookup entirely — the reason a live
+// match opened streamed.st instead of our player. Keep this an explicit list.
+const BROWSE_CHANNEL_IDS = new Set([
+  // provider homepages
+  'superabbit', 'strikeout', 'streamed',
+  // CinemaHub category tiles
+  'football', 'premier-league', 'la-liga', 'champions-league', 'serie-a',
+  'bundesliga', 'ligue-1', 'afcon', 'nba', 'boxing', 'ufc', 'wrestling',
+  'rugby', 'cricket', 'f1', 'tennis',
+]);
+
+// Internal fixture ids (`db:…`, `match:…`) belong to OUR database, not to a
+// third-party embed provider, so they must never be interpolated into a
+// streamed.st embed URL (that just renders the provider's own site).
+const isInternalFixtureId = (id: string | number) =>
+  typeof id === 'string' && /^(db|match)[:_-]/i.test(id.trim());
+
+
 // a streamId the first tab is guaranteed to be the clicked match. An IPTV
 // channel is not — it airs whatever the broadcaster scheduled today.
 function serversFor(exactId: string | null) {
@@ -156,6 +177,57 @@ function proxyStreamUrl(originalUrl: string): string {
   return apiUrl(`/api/sports/proxy-stream?url=${encodeURIComponent(originalUrl)}`);
 }
 
+// ─────────────────────────── Fast source preflight ───────────────────────────
+// The IPTV ladder is real but noisy: a 14-source match routinely leads with
+// eight 404s. Walking it with hls.js costs ~25s per dead source (15s manifest
+// deadline + 10s CORS retry), so the user sat on "Connecting…" for minutes and
+// gave up — which is why the player used to dump them into a third-party
+// iframe. Reading the manifest ourselves is a few KB: probe sources IN
+// PARALLEL, put the ones that answer first, and let hls.js start on a live feed
+// within seconds. Results are cached briefly because the same broadcaster URLs
+// are reused across fixtures.
+type ProbeResult = 'alive' | 'dead' | 'unknown';
+const MANIFEST_CACHE = new Map<string, { result: ProbeResult; at: number }>();
+const MANIFEST_TTL_MS = 5 * 60 * 1000;
+const MANIFEST_PROBE_TIMEOUT_MS = 7000;
+
+function isHlsUrl(url: string) {
+  return /\.m3u8(?:$|[?#])/i.test(url);
+}
+
+async function probeManifest(url: string): Promise<ProbeResult> {
+  // Non-HLS sources (mp4/ts) are not preflighted — an #EXTM3U check would
+  // misclassify them as dead. Keep their original position instead.
+  if (!isHlsUrl(url)) return 'unknown';
+
+  const cached = MANIFEST_CACHE.get(url);
+  if (cached && Date.now() - cached.at < MANIFEST_TTL_MS) return cached.result;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MANIFEST_PROBE_TIMEOUT_MS);
+  let result: ProbeResult = 'dead';
+  try {
+    // Go through our proxy: these CDNs send no CORS headers, so a direct
+    // browser fetch would fail even when the stream is perfectly healthy.
+    const res = await fetch(proxyStreamUrl(url), {
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: { Accept: '*/*' },
+    });
+    if (res.ok) {
+      const body = await res.text();
+      result = body.trimStart().startsWith('#EXTM3U') ? 'alive' : 'dead';
+    }
+  } catch {
+    result = 'dead';
+  } finally {
+    clearTimeout(timer);
+  }
+  MANIFEST_CACHE.set(url, { result, at: Date.now() });
+  return result;
+}
+
+
 export default function SportsPlayer({
   channelId,
   title,
@@ -174,11 +246,10 @@ export default function SportsPlayer({
   venue,
   onSwitchMatch,
 }: SportsPlayerProps) {
-  // Category browsing (non-numeric channel id) → iframe homepage mode
-  const isCategory = typeof channelId === 'string' && (
-    isNaN(Number(channelId)) ||
-    ['superabbit', 'strikeout', 'streamed'].includes(channelId)
-  );
+  // Category browsing → iframe homepage mode. Only genuine browse tiles are
+  // categories; opaque fixture ids (`db:…`) are real matches and must go
+  // through the native player / source lookup below.
+  const isCategory = typeof channelId === 'string' && BROWSE_CHANNEL_IDS.has(channelId.trim().toLowerCase());
 
   // Resolve teams for on-demand source lookup
   const parsed = useMemo(() => parseTeamsFromTitle(title), [title]);
@@ -205,6 +276,15 @@ export default function SportsPlayer({
   const [status, setStatus] = useState<'loading' | 'playing' | 'error'>('loading');
   const [autoSwitched, setAutoSwitched] = useState(0);
   const [sourcesNote, setSourcesNote] = useState<string | null>(null);
+  // Preflight state: true while we probe manifests, so the HLS engine does not
+  // start on a source we already know is dead. `allSourcesDead` is the honest
+  // dead end — we show it inside OUR player instead of silently opening a
+  // third-party iframe.
+  const [preflighting, setPreflighting] = useState(false);
+  const [allSourcesDead, setAllSourcesDead] = useState(false);
+  const [preflightNonce, setPreflightNonce] = useState(0);
+  const preflightSigRef = useRef('');
+  const preflightRunRef = useRef(0);
   // Set when the current CDN rejects CORS-mode requests; we then re-attach the
   // same stream without crossOrigin so a CORS-only failure isn't treated as a
   // dead source.
@@ -236,12 +316,79 @@ export default function SportsPlayer({
   const iframeServer = servers[Math.min(serverIdx, servers.length - 1)];
   const effectiveVenue = ctx?.venue || venue || null;
 
+  // A new match reuses the same broadcaster URLs, so the source array changes
+  // identity without changing its URLs. Keep the index valid (otherwise
+  // activeSource becomes null and the player renders a blank stage).
+  useEffect(() => {
+    setSrcIdx(i => (i < sources.length ? i : 0));
+  }, [sources]);
+
+  // ── Parallel manifest preflight ──────────────────────────────────────────
+  // Skip dead hosts BEFORE handing the ladder to hls.js. Same-signature guard
+  // keeps the reorder from re-triggering itself, and `preflightNonce` lets the
+  // user force a fresh probe after a transient outage.
+  useEffect(() => {
+    if (mode !== 'native' || sources.length === 0) {
+      setPreflighting(false);
+      return;
+    }
+    const signature = `${preflightNonce}|${sources.map(s => s.url).sort().join('|')}`;
+    if (preflightSigRef.current === signature) return;
+    preflightSigRef.current = signature;
+
+    // Nothing HLS to probe (mp4/ts only) — let the native engine decide.
+    if (!sources.some(s => isHlsUrl(s.url))) {
+      setPreflighting(false);
+      return;
+    }
+
+    let cancelled = false;
+    const runId = ++preflightRunRef.current;
+    setPreflighting(true);
+    setAllSourcesDead(false);
+    setSrcIdx(0);
+    setStatus('loading');
+
+    (async () => {
+      const results = await Promise.all(sources.map(s => probeManifest(s.url)));
+      if (cancelled || preflightRunRef.current !== runId) return;
+
+      const alive = sources.filter((_, i) => results[i] !== 'dead');
+      const dead = sources.filter((_, i) => results[i] === 'dead');
+
+      if (alive.length === 0) {
+        setAllSourcesDead(true);
+        setPreflighting(false);
+        setStatus('error');
+        setSourcesNote('Every direct feed for this match is offline right now. Retry in a moment or use external servers.');
+        return;
+      }
+
+      const ordered = [...alive, ...dead];
+      const changed = ordered.map(s => s.url).join('|') !== sources.map(s => s.url).join('|');
+      if (changed) setSources(ordered);
+      setPreflighting(false);
+      setSourcesNote(dead.length
+        ? `${dead.length} of ${sources.length} direct feeds are offline — moved them behind the working feed.`
+        : null);
+    })();
+
+    return () => { cancelled = true; };
+  }, [mode, sources, preflightNonce]);
+
+
   // On-demand source fetch when we don't have direct sources for a real fixture
   useEffect(() => {
     // Keep native mode when direct sources were provided, but STILL fetch —
     // the response now also carries the exact-match context (per-match embed
     // id, venue, matchLive, othersLive) that powers the exactness features.
-    if (directSources?.length) { setSources(directSources); setMode('native'); }
+    if (directSources?.length) {
+      setSources(directSources);
+      setMode('native');
+      setAllSourcesDead(false);
+      setSrcIdx(0);
+      setStatus('loading');
+    }
     if (isCategory) { setMode('iframe'); return; }
     if (!teamHome || !teamAway) { if (!directSources?.length) setMode('iframe'); return; }
 
@@ -255,7 +402,7 @@ export default function SportsPlayer({
       ...(sport ? { sport } : {}),
       ...(league ? { league } : {}),
       ...(title ? { event: title } : {}),
-      ...(kickoff ? { kickoff } : {}),
+      ...(kickoff ? { kickoff: String(kickoff) } : {}),
     });
     fetch(apiUrl(`/api/sports/match-sources?${params.toString()}`))
       .then(r => r.ok ? r.json() : null)
@@ -270,15 +417,33 @@ export default function SportsPlayer({
           othersLive: Array.isArray(data?.othersLive) ? data.othersLive : [],
         });
         if (list.length) {
-          setSources(list);
+          // MERGE, never replace: the feed's own directSources and the
+          // match-sources ladder often contain DIFFERENT broadcasters (e.g. the
+          // feed has the team channel that is geo-blocked while the ladder has
+          // a working beIN feed). The preflight ranks whichever actually answer.
+          const seen = new Set<string>();
+          const merged: DirectSource[] = [];
+          for (const s of [...(directSources || []), ...list]) {
+            if (!s?.url || seen.has(s.url)) continue;
+            seen.add(s.url);
+            merged.push(s);
+          }
+          setSources(merged);
           setMode('native');
-        } else {
+          // A different fixture can reuse the same broadcaster URLs, so the
+          // ladder's identity may be unchanged. Always restart cleanly.
+          setAllSourcesDead(false);
+          setSrcIdx(0);
+          setStatus('loading');
+        } else if (!directSources?.length) {
+          // Only tear playback down when nothing native was supplied: a failed
+          // or empty lookup must never discard direct feeds we already hold.
           setSources([]);
           setMode('iframe');
           setSourcesNote('No direct stream found for this match yet — using fallback servers.');
         }
       })
-      .catch(() => { if (!cancelled) setMode('iframe'); });
+      .catch(() => { if (!cancelled && !directSources?.length) setMode('iframe'); });
     return () => { cancelled = true; };
   }, [directSources, isCategory, teamHome, teamAway, homeCrest, awayCrest, sport, league, title]);
 
@@ -286,14 +451,19 @@ export default function SportsPlayer({
   // only league-broadcaster/generic confidence, LEAD with the exact embed.
   // The user clicked THIS match — "the right channel for the league" can be
   // airing a different game, which is exactly the complaint we are fixing.
+  //
+  // EXCEPT when the caller already handed us direct HLS feeds: those play in
+  // OUR player with no ads, so they always win. The exact embed stays one tap
+  // away as the "★ Exact Match" server tab instead of hijacking playback.
   const exactDefaultDone = useRef(false);
   useEffect(() => {
     if (!exactId || exactDefaultDone.current) return;
     exactDefaultDone.current = true;
     if (confidenceLevel === 'match') return;   // team channel found — already exact
+    if (directSources?.length) return;         // native feed available — keep it
     setMode('iframe');
     setServerIdx(0);                            // exact entry is servers[0]
-  }, [exactId, confidenceLevel]);
+  }, [exactId, confidenceLevel, directSources]);
 
   // Keep serverIdx inside bounds when the exact entry appears/disappears.
   useEffect(() => {
@@ -303,7 +473,7 @@ export default function SportsPlayer({
   // ── Native HLS engine with watchdog + auto source-fallback ──
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || mode !== 'native' || !activeSource?.url) return;
+    if (!video || mode !== 'native' || preflighting || allSourcesDead || !activeSource?.url) return;
 
     setStatus('loading');
     let hls: Hls | null = null;
@@ -366,16 +536,14 @@ export default function SportsPlayer({
         setAutoSwitched(p => p + 1);
         return;
       }
-      // Every direct source exhausted → walk the fallback servers themselves
-      // (Server 1 → 2 → 3) so the user stays inside our site no matter what.
-      setSourcesNote('Direct streams are down — switching through fallback servers.');
-      if (serverIdx + 1 < serversRef.current.length) {
-        setServerIdx(serverIdx + 1);
-        setAutoSwitched(p => p + 1);
-      } else {
-        setServerIdx(0);
-      }
-      setMode('iframe');
+      // Every direct source exhausted. DO NOT jump into a third-party iframe:
+      // that is the exact behaviour users complained about ("it takes us to
+      // the third party websites"). Stay in OUR player, say the feeds are down,
+      // and let the user explicitly choose Retry or External servers.
+      setSourcesNote('All direct feeds for this match are offline right now.');
+      setAllSourcesDead(true);
+      setStatus('error');
+      setSrcIdx(0);
     };
     // Watchdog only trips on a genuine stall. Re-armed by every progress event
     // below, so total time may far exceed this as long as data keeps flowing.
@@ -514,7 +682,7 @@ export default function SportsPlayer({
       clearWatchdog();
       return () => clearWatchdog();
     }
-  }, [mode, activeSource?.url, sources.length, srcIdx, serverIdx, corsBypass]);
+  }, [mode, activeSource?.url, sources.length, srcIdx, serverIdx, corsBypass, preflighting, allSourcesDead]);
 
   // Iframe mode watchdog (blank embeds are common)
   useEffect(() => {
@@ -543,7 +711,10 @@ export default function SportsPlayer({
     return () => clearInterval(t);
   }, [status, srcIdx, serverIdx, corsBypass]);
 
-  const streamUrl = isCategory
+  // Never build an embed URL from an internal fixture id (`db:…`): no provider
+  // can resolve it, so the iframe just renders the provider's own website.
+  // Without an exact embed id we show that homepage honestly instead.
+  const streamUrl = isCategory || (isInternalFixtureId(channelId) && !exactId)
     ? iframeServer.homepage
     : iframeServer.buildUrl(channelId);
 
@@ -581,11 +752,27 @@ export default function SportsPlayer({
 
   const manualNextSource = () => {
     if (mode === 'native' && sources.length > 1) {
+      setAllSourcesDead(false);
       setSrcIdx(p => (p + 1) % sources.length);
       setAutoSwitched(p => p + 1);
     } else if (mode === 'iframe') {
       setServerIdx(p => (p + 1) % serversRef.current.length);
     }
+  };
+
+  // Force a fresh probe of every source (drops the 5-minute manifest cache) and
+  // restart playback from the top of the ladder — all without leaving the page.
+  const retryDirectFeeds = () => {
+    const urls = sources.map(s => s.url);
+    urls.forEach(u => MANIFEST_CACHE.delete(u));
+    setAllSourcesDead(false);
+    setPreflighting(false);
+    setSrcIdx(0);
+    setCorsBypass(false);
+    setStatus('loading');
+    setMode('native');
+    setPreflightNonce(n => n + 1);
+    setAutoSwitched(0);
   };
 
   const activeLabel = mode === 'native'
@@ -747,9 +934,13 @@ export default function SportsPlayer({
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 pointer-events-none">
                 <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
                 <p className="text-[10px] uppercase font-black tracking-widest text-zinc-400">
-                  Connecting to {activeLabel}…
+                  {preflighting ? 'Finding a working feed…' : `Connecting to ${activeLabel}…`}
                 </p>
-                {elapsed >= 4 && (
+                {preflighting ? (
+                  <p className="text-[10px] text-zinc-500 font-bold">
+                    Checking {sources.length} direct feeds — skipping offline channels.
+                  </p>
+                ) : elapsed >= 4 && (
                   <p className="text-[10px] text-zinc-500 font-bold tabular-nums">
                     {elapsed < 20
                       ? `Buffering ${elapsed}s — these feeds open slowly`
@@ -762,12 +953,29 @@ export default function SportsPlayer({
               </div>
             )}
             {status === 'error' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/85">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/85 px-6 text-center">
                 <AlertTriangle size={22} className="text-amber-500" />
-                <p className="text-xs font-black text-zinc-200">This source went down</p>
-                <button onClick={manualNextSource} className="mt-1 px-4 py-1.5 bg-amber-500 text-black text-[10px] font-black uppercase rounded-full">
-                  Try Next Source
-                </button>
+                <p className="text-xs font-black text-zinc-200">
+                  {allSourcesDead ? 'No direct feed is answering right now' : 'This source went down'}
+                </p>
+                <p className="text-[10px] text-zinc-400 font-bold max-w-sm leading-snug">
+                  {sourcesNote || 'The broadcaster feed stopped responding. You are still inside RealSSA — nothing opened in a new tab.'}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <button onClick={retryDirectFeeds} className="px-4 py-1.5 bg-emerald-500 text-black text-[10px] font-black uppercase rounded-full">
+                    Retry direct feeds
+                  </button>
+                  {sources.length > 1 && (
+                    <button onClick={manualNextSource} className="px-4 py-1.5 bg-zinc-800 text-zinc-200 text-[10px] font-black uppercase rounded-full border border-white/10">
+                      Try next source
+                    </button>
+                  )}
+                  {!isCategory && (
+                    <button onClick={() => setMode('iframe')} className="px-4 py-1.5 bg-zinc-900 text-zinc-400 text-[10px] font-black uppercase rounded-full border border-white/10">
+                      External servers
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -803,6 +1011,16 @@ export default function SportsPlayer({
                   </div>
                 </div>
               </div>
+            )}
+            {/* Escape hatch back to OUR player: tapping "External servers" must
+                not be a one-way trip. Re-probes and restarts the ladder. */}
+            {!isCategory && sources.length > 0 && (
+              <button
+                onClick={retryDirectFeeds}
+                className="absolute top-4 right-4 z-10 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black text-[10px] font-black uppercase rounded-full shadow-lg transition-colors"
+              >
+                Back to direct stream
+              </button>
             )}
             <iframe
               key={`iframe-${serverIdx}-${channelId}`}
