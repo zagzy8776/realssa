@@ -241,7 +241,8 @@ const CryptoNews = () => {
                 {lastMove && lastMove.change && Math.abs(lastMove.change) >= 2 && (
                   <Zap size={14} className="text-yellow-500 animate-pulse" title="Heavy haptic triggered" />
                 )}
-              )}
+                </div>
+              ))}
               {Object.keys(cryptoPrices).length === 0 && (
                 <span className="text-xs text-white/60">Loading crypto prices...</span>
               )}
