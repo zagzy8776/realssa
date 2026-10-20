@@ -1056,11 +1056,17 @@ async function fetchDbMatches(pool) {
       awayCrest: m.away_team_crest || null,
       kickoff: m.kickoff_at || null,
       // The scraper can lag, leaving a genuinely in-play game as 'scheduled'.
-      // Trust `live`, but also derive liveness from the kickoff clock — ONLY
-      // for still-scheduled games. The clock check must NOT override an
-      // explicit 'finished': a final whistle 30 min ago was being resurrected
-      // as LIVE (kickoff inside the 3h window) and shown with a Watch button.
-      isLive: m.status === 'live' || (m.status === 'scheduled' && isFixtureLive(m.kickoff_at, false)),
+      // Trust `live` — but only while the clock agrees. STALE-LIVE FIX: a row
+      // frozen on 'live' long after the final whistle (scraper bot down or
+      // behind) used to keep a LIVE card on the site for hours; an 11-hour-old
+      // fixture flagged live now ages out through the same 3h kickoff window.
+      // Rows with no kickoff to argue with keep the upstream flag. The clock
+      // check must NOT override an explicit 'finished': a final whistle 30
+      // min ago was being resurrected as LIVE (kickoff inside the 3h window)
+      // and shown with a Watch button.
+      isLive: m.status === 'live'
+        ? (!m.kickoff_at || isFixtureLive(m.kickoff_at, false))
+        : (m.status === 'scheduled' && isFixtureLive(m.kickoff_at, false)),
       status: m.status,
       score: (m.home_score != null || m.away_score != null)
         ? `${m.home_score ?? 0}-${m.away_score ?? 0}`
@@ -1712,7 +1718,7 @@ async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league
 
 module.exports = { getMatches, getMatchSources, markChannelDead, _test: {
   normalizeTeam, tokenSet, teamScore, teamTokens, parseM3u: parseIptvPlaylist, dedupeChannels: null,
-  fetchStreamedMatches, fetchEspnMatches, mergeMatches, buildFeed,
+  fetchStreamedMatches, fetchEspnMatches, fetchDbMatches, mergeMatches, buildFeed,
   getIptvChannels, getGenericSportsChannels, findIptvSources, sourcesCacheKey,
   buildSourceLadder, pickBroadcasterSources, genericChannelSources, resolveFeedContext,
   extract: { IPTV_CHANNEL_FILTER, IPTV_MAX_PER_PLAYLIST, IPTV_LIBRARY_MAX, BROADCASTER_HINTS, IPTV_PLAYLIST_COUNT: IPTV_PLAYLISTS.length, IPTV_PLAYLISTS, ESPN_LEAGUES, LEAGUE_BY_CLUB },

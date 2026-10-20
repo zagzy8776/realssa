@@ -542,7 +542,14 @@ async function liveParts() {
   console.log(`        buildFeed took ${Date.now() - t1}ms — ${feed.count} matches, ${feed.liveCount} live`);
   check('feed has matches', feed.count > 0);
   check('liveCount consistent', feed.liveCount === feed.matches.filter(m => m.isLive).length);
-  check('DETECTED LIVE FIXTURES EXIST (was 0 — the bug)', feed.liveCount > 0, `${feed.liveCount} live`);
+  // Quiet hours are real (mid-week ~10:00 UTC: nothing in play anywhere), so
+  // only fail when the upstream mirrors DO report in-play fixtures that the
+  // feed then failed to detect — that was the original bug (0 detected while
+  // games were actually running).
+  const upstreamLive = (await T.fetchStreamedMatches()).filter(m => m.isLive).length;
+  check('DETECTED LIVE FIXTURES EXIST (was 0 — the bug)',
+    feed.liveCount > 0 || upstreamLive === 0,
+    `${feed.liveCount} live (upstream: ${upstreamLive})`);
   check('live matches carry a status field', feed.matches.filter(m => m.isLive).every(m => m.status === 'live'));
   check('live matches are actually inside the live window',
     feed.matches.filter(m => m.isLive).every(m => {
@@ -736,6 +743,25 @@ async function statusHighlightsPart() {
   const sfs = require('fs');
   const sss = sfs.readFileSync(path.join(__dirname, 'services', 'sportsStreamService.js'), 'utf8');
   check('fetchDbMatches: clock cannot override explicit finished', /m\.status === 'scheduled' && isFixtureLive/.test(sss));
+  check('fetchDbMatches: stale explicit live is gated by the kickoff window',
+    /m\.status === 'live'\s*\?\s*\(!m\.kickoff_at \|\| isFixtureLive/.test(sss));
+  // Functional proof with a mocked pool: a row frozen on 'live' long after
+  // kickoff must age out, while fresh live / lagging-scheduled rows stay live.
+  const dbRows = await T.fetchDbMatches({ query: async () => ({ rows: [
+    { provider_match_id: 'stale1', home_team_name: 'Stale FC', away_team_name: 'Old United',
+      status: 'live', kickoff_at: new Date(Date.now() - 11 * 3600e3).toISOString() },
+    { provider_match_id: 'fresh1', home_team_name: 'Fresh FC', away_team_name: 'In Play',
+      status: 'live', kickoff_at: new Date(Date.now() - 60 * 60e3).toISOString() },
+    { provider_match_id: 'fin1', home_team_name: 'Done FC', away_team_name: 'Final Whistle',
+      status: 'finished', kickoff_at: new Date(Date.now() - 30 * 60e3).toISOString() },
+    { provider_match_id: 'lag1', home_team_name: 'Lag FC', away_team_name: 'Scraper Behind',
+      status: 'scheduled', kickoff_at: new Date(Date.now() - 30 * 60e3).toISOString() },
+  ] }) });
+  const row = (id) => dbRows.find(r => r.id === 'db:' + id);
+  check('stale DB row frozen on live 11h ago → NOT live', row('stale1')?.isLive === false, `isLive=${row('stale1')?.isLive}`);
+  check('fresh explicit live stays live', row('fresh1')?.isLive === true);
+  check('explicit finished stays not-live (clock cannot resurrect)', row('fin1')?.isLive === false);
+  check('lagging scheduled inside the window still counts as live', row('lag1')?.isLive === true);
   check('buildFeed: finished games excluded from live ladder', /m\.status === 'finished'\) return false;/.test(sss));
   check('buildFeed: finished games get no generic ladder', /m\.status === 'finished'\) continue;/.test(sss));
   const sportsApi = sfs.readFileSync(path.join(__dirname, '..', 'api', 'sports.js'), 'utf8');
