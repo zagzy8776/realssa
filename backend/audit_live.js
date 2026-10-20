@@ -68,8 +68,8 @@ async function runAudit() {
         const img = (await newPool.query(`
             SELECT COUNT(*) as total,
                    SUM(CASE WHEN image IS NULL OR image = '' THEN 1 ELSE 0 END) as no_img,
-                   SUM(CASE WHEN image ~* '(logo|icon|brand|placeholder|avatar|favicon|punchng)' THEN 1 ELSE 0 END) as logo,
-                   SUM(CASE WHEN image IS NOT NULL AND image != '' AND image !~* '(logo|icon|brand|placeholder|avatar|favicon|punchng)' THEN 1 ELSE 0 END) as good
+                   SUM(CASE WHEN image ~* '(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)' THEN 1 ELSE 0 END) as logo,
+                   SUM(CASE WHEN image IS NOT NULL AND image != '' AND image !~* '(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)' THEN 1 ELSE 0 END) as good
             FROM rss_articles
         `)).rows[0];
         console.log(`\n🖼️  IMAGE QUALITY:  ${img.total} total  |  Good: ${img.good} (${((img.good / img.total) * 100).toFixed(1)}%)  |  Logo: ${img.logo} (${((img.logo / img.total) * 100).toFixed(1)}%)  |  No img: ${img.no_img} (${((img.no_img / img.total) * 100).toFixed(1)}%)`);

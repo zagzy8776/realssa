@@ -35,7 +35,7 @@ async function checkImage(imageUrl, title, excerpt, sourceName) {
         return { verdict: 'FAIL', failure_mode: 'BROKEN', confidence: 1.0, reason: 'No image URL provided.' };
     }
 
-    if (/logo|icon|brand|placeholder|default[-_]?image|gravatar|avatar|favicon|punchng\.com.*cropped|realssanews\.com\.ng\/logo/i.test(imageUrl)) {
+    if (/logo|icon|brand|placeholder|default[-_]?image|gravatar|avatar|favicon|punchng\.com.*cropped|punchng\.com.*logo|realssanews\.com\.ng\/logo/i.test(imageUrl)) {
         return { verdict: 'FAIL', failure_mode: 'LOGO_FAKE', confidence: 0.95, reason: 'Image appears to be a publication logo/icon, not a real story photo.' };
     }
 

@@ -12,7 +12,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bump": "node bump_version.js",
-    "db:migrate": "node backend/migrate-aiven.cjs"
+    "db:migrate": "node backend/migrate-aiven.cjs",
+    "nf:status": "node northflank-status.cjs info",
+    "nf:health": "node northflank-api-demo.cjs health",
+    "nf:deploy": "node deploy-to-northflank.cjs",
+    "nf:builds": "node northflank-api-demo.cjs builds",
+    "nf:logs": "node northflank-status.cjs logs",
+    "nf:restart": "node northflank-api-demo.cjs restart",
+    "nf:full": "node northflank-api-demo.cjs full",
+    "verify:volatility": "node verify-volatility-alarm.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",

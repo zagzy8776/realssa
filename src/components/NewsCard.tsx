@@ -221,7 +221,7 @@ const NewsCard = ({
 
   const isLogoPattern = (url?: string) => {
     if (!url) return true;
-    return /(logo|icon|brand|placeholder|avatar|favicon|punchng)/i.test(url);
+    return /(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)/i.test(url);
   };
 
   const resolveCardImage = (url?: string) => (!url || isLogoPattern(url) ? CARD_FALLBACK_IMAGE : url);

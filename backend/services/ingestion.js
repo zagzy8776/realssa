@@ -359,12 +359,19 @@ function hashUrl(url) {
 }
 
 // Keywords that indicate a logo/icon rather than a real article photo
-const LOGO_URL_PATTERNS = /logo|icon|brand|placeholder|default[-_]?image|site[-_]?image|gravatar|avatar|badge|sprite|watermark|favicon|punchng\.com\/wp-content\/uploads\/\d{4}\/\d{2}\/cropped-|punch-logo/i;
+// Note: We exclude "punchng" from the general pattern because it was too broad
+// and was filtering out legitimate article images from Punch News.
+// Instead, we check for specific Punch logo patterns separately.
+const LOGO_URL_PATTERNS = /logo|icon|brand|placeholder|default[-_]?image|site[-_]?image|gravatar|avatar|badge|sprite|watermark|favicon/i;
+
+// Specific patterns for Punch News logos only (not all punchng URLs)
+const PUNCH_LOGO_PATTERNS = /punchng\.com\/wp-content\/uploads\/\d{4}\/\d{2}\/cropped-|punch-logo|punchng\.com\/wp-content\/uploads\/\d{4}\/\d{2}\/punch-logo/i;
 
 function isLikelyStoryImage(url) {
   if (!url || !url.startsWith('http')) return false;
-  // Specific check to reject Punch's generic fallbacks and brand logo placeholders
-  if (url.includes('punchng.com') && (url.includes('cropped-') || url.includes('punch-logo') || url.includes('PUNCH-Logo'))) return false;
+  // Check for Punch logo patterns specifically (not all punchng URLs)
+  if (PUNCH_LOGO_PATTERNS.test(url)) return false;
+  // Check for general logo/icon patterns
   if (LOGO_URL_PATTERNS.test(url)) return false;
   if (url.startsWith('data:')) return false;
   return true;
@@ -1013,8 +1020,9 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           }
         }
 
-        // If image is a logo/placeholder (punchng, icon, brand, etc.), scrape the real article image
-        const LOGO_PATTERN = /(logo|icon|brand|placeholder|avatar|favicon|punchng)/i;
+        // If image is a logo/placeholder (icon, brand, etc.), scrape the real article image
+        // FIXED: Removed "punchng" from pattern - it was too broad and matching legitimate article images
+        const LOGO_PATTERN = /(logo|icon|brand|placeholder|avatar|favicon)/i;
         if (image && LOGO_PATTERN.test(image)) {
           console.log(`Image is a logo/placeholder for "${title}", scraping real article image...`);
           try {

@@ -53,7 +53,7 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.image && !/(logo|icon|brand|placeholder|avatar|favicon|punchng)/i.test(data.image)) {
+        if (data.image && !/(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)/i.test(data.image)) {
           setDisplayImage(data.image);
         }
       }
@@ -63,7 +63,7 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
   // Reset image state when article changes
   useEffect(() => {
     const imgUrl = article.image || null;
-    const isLogoUrl = imgUrl && /(logo|icon|brand|placeholder|avatar|favicon|punchng)/i.test(imgUrl);
+    const isLogoUrl = imgUrl && /(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)/i.test(imgUrl);
 
     if (!imgUrl) {
       // Empty or null image: attempt recovery immediately
@@ -77,7 +77,7 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
         })
           .then(res => res.ok ? res.json() : null)
           .then(data => {
-            if (data?.image && !/(logo|icon|brand|placeholder|avatar|favicon|punchng)/i.test(data.image)) {
+            if (data?.image && !/(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)/i.test(data.image)) {
               setDisplayImage(data.image);
             }
           })
@@ -96,7 +96,7 @@ const ReelsCard = ({ article, isActive }: ReelsCardProps) => {
         })
           .then(res => res.ok ? res.json() : null)
           .then(data => {
-            if (data?.image && !/(logo|icon|brand|placeholder|avatar|favicon|punchng)/i.test(data.image)) {
+            if (data?.image && !/(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)/i.test(data.image)) {
               setDisplayImage(data.image);
             }
           })

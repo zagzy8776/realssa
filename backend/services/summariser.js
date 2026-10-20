@@ -2,10 +2,14 @@
  * AI Summariser — Multi-Provider with Job Assignment
  *
  * Job assignments (primary → fallbacks):
- *  generateAIAnalysis  → Gemini (JSON mode, structured output)  → Groq → Cerebras → title fallback
- *  generateSocialHook  → Cerebras 120B (editorial quality)      → Gemini → Groq → Cloudflare → title fallback
- *  rewriteArticle      → Cerebras gemma-4-31b (best writing)    → Groq → Gemini → plain text fallback
+ *  generateAIAnalysis  → Waterfall (free router) → Gemini (JSON mode) → Groq → Cerebras → title fallback
+ *  generateSocialHook  → Waterfall → Cerebras 120B → Gemini → Groq → Cloudflare → title fallback
+ *  rewriteArticle      → Waterfall → Groq → Gemini → Cerebras → plain text fallback
  *  generateEmbedding   → Gemini embedding-001                   → null (no fallback, optional feature)
+ *
+ * Free LLM endpoint (Waterfall) is OpenAI-compatible and configured via
+ * WATERFALL_BASE_URL + WATERFALL_API_KEY. When unset, all Waterfall calls return
+ * null and the existing provider chain is used unchanged.
  */
 
 // ── Key Rotation Helpers ──────────────────────────────────────────────────
@@ -33,6 +37,11 @@ const getGroqKey = () => {
 
 const getCerebrasKey = () => process.env.CEREBRAS_API_KEY || null;
 const getCfToken    = () => process.env.CF_API_TOKEN || null;
+
+// Free LLM endpoint (Waterfall) — OpenAI-compatible chat completions.
+const getWaterfallKey  = () => process.env.WATERFALL_API_KEY || null;
+const getWaterfallBase = () => (process.env.WATERFALL_BASE_URL || 'https://api.getwaterfall.org/v1').replace(/\/+$/, '');
+const WATERFALL_MODEL  = () => process.env.WATERFALL_MODEL || 'auto';
 
 // ── Provider URLs ─────────────────────────────────────────────────────────
 
@@ -120,6 +129,37 @@ async function callCloudflare(prompt, { maxTokens = 256 } = {}) {
   } catch (err) { console.warn(`[Cloudflare] ${err.message}`); return null; }
 }
 
+/**
+ * Free LLM endpoint (Waterfall) — OpenAI-compatible chat completions.
+ * Primary provider when configured; the router picks the best available free model.
+ */
+async function callWaterfall(prompt, { maxTokens = 800, temperature = 0.3, timeout = 20000 } = {}) {
+  const key = getWaterfallKey();
+  const base = getWaterfallBase();
+  if (!key || !base) return null;
+  try {
+    const res = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({
+        model: WATERFALL_MODEL(),
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature,
+      }),
+      signal: AbortSignal.timeout(timeout),
+    });
+    const data = await res.json();
+    if (!res.ok) { console.warn(`[Waterfall] ${res.status} — ${data?.error?.message || JSON.stringify(data)}`); return null; }
+    const raw = data.choices?.[0]?.message?.content?.trim() || null;
+    if (!raw) return null;
+    // Free routers sometimes wrap JSON in ```json ... ``` fences. Strip them
+    // so the bare JSON.parse in the analysis chains succeeds.
+    const fence = raw.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    return fence ? fence[1].trim() : raw;
+  } catch (err) { console.warn(`[Waterfall] ${err.message}`); return null; }
+}
+
 // ── Job: AI Analysis (Summary + Translations + Entities) ─────────────────
 // Primary: Gemini (JSON mode) → Groq → Cerebras → minimal fallback
 
@@ -146,13 +186,19 @@ async function generateAIAnalysis(title, excerpt) {
   const cleanText = (excerpt || title || '').replace(/<[^>]+>/g, '').slice(0, 600);
   const prompt = AI_ANALYSIS_PROMPT(title, cleanText);
 
-  // 1. Gemini — best for structured JSON
-  let raw = await callGemini(prompt, { maxOutputTokens: 800, temperature: 0.2, timeout: 12000, responseMimeType: 'application/json' });
+  // 1. Waterfall — free router, picks best available model
+  let raw = await callWaterfall(prompt, { maxTokens: 900, temperature: 0.2, timeout: 20000 });
+  if (raw) {
+    try { const r = JSON.parse(raw); console.log('[AIAnalysis] ✅ Waterfall'); return r; } catch {}
+  }
+
+  // 2. Gemini — best for structured JSON
+  raw = await callGemini(prompt, { maxOutputTokens: 800, temperature: 0.2, timeout: 12000, responseMimeType: 'application/json' });
   if (raw) {
     try { const r = JSON.parse(raw); console.log('[AIAnalysis] ✅ Gemini'); return r; } catch {}
   }
 
-  // 2. Groq fallback
+  // 3. Groq fallback
   raw = await callGroq(prompt, { maxTokens: 900, temperature: 0.2 });
   if (raw) {
     try {
@@ -161,7 +207,7 @@ async function generateAIAnalysis(title, excerpt) {
     } catch {}
   }
 
-  // 3. Cerebras fallback
+  // 4. Cerebras fallback
   raw = await callCerebras(prompt, { maxTokens: 900, temperature: 0.2 });
   if (raw) {
     try {
@@ -195,13 +241,19 @@ async function generateFullArticleBreakdown(title, excerpt) {
   const cleanText = (excerpt || title || '').replace(/<[^>]+>/g, '').slice(0, 2000);
   const prompt = FULL_ARTICLE_PROMPT(title, cleanText);
 
-  // 1. Gemini (primary - max 2500 tokens)
-  let raw = await callGemini(prompt, { maxOutputTokens: 2500, temperature: 0.3, timeout: 15000, responseMimeType: 'application/json' });
+  // 1. Waterfall — free router, picks best available model
+  let raw = await callWaterfall(prompt, { maxTokens: 2500, temperature: 0.3, timeout: 25000 });
+  if (raw) {
+    try { const r = JSON.parse(raw); console.log('[FullArticleAI] ✅ Waterfall'); return r; } catch {}
+  }
+
+  // 2. Gemini (primary - max 2500 tokens)
+  raw = await callGemini(prompt, { maxOutputTokens: 2500, temperature: 0.3, timeout: 15000, responseMimeType: 'application/json' });
   if (raw) {
     try { const r = JSON.parse(raw); console.log('[FullArticleAI] ✅ Gemini'); return r; } catch {}
   }
 
-  // 2. Groq fallback
+  // 3. Groq fallback
   raw = await callGroq(prompt, { maxTokens: 2500, temperature: 0.3 });
   if (raw) {
     try {
@@ -210,7 +262,7 @@ async function generateFullArticleBreakdown(title, excerpt) {
     } catch {}
   }
 
-  // 3. Cerebras fallback
+  // 4. Cerebras fallback
   raw = await callCerebras(prompt, { maxTokens: 2500, temperature: 0.3 });
   if (raw) {
     try {
@@ -302,7 +354,11 @@ const FACEBOOK_PROMPT = (title, cleanText) => [
 async function _callWithFallbacks(prompt, maxTokens, label) {
   // The Buffer caption is published without a human review step, so prefer the
   // larger editorial model over the fast 8B model used for fallbacks.
-  let text = await callCerebras(prompt, { maxTokens, temperature: 0.35 });
+  // Waterfall is the free router endpoint — try it first when configured.
+  text = await callWaterfall(prompt, { maxTokens, temperature: 0.35, timeout: 20000 });
+  if (text && text.length > 20) { console.log(`[${label}] ✅ Waterfall`); return text; }
+
+  text = await callCerebras(prompt, { maxTokens, temperature: 0.35 });
   if (text && text.length > 20) { console.log(`[${label}] ✅ Cerebras 120B`); return text; }
 
   text = await callGemini(prompt, { maxOutputTokens: maxTokens, temperature: 0.35, timeout: 8000 });
@@ -362,15 +418,19 @@ async function rewriteArticle(title, text) {
   const cleanText = (text || '').replace(/<[^>]+>/g, '').slice(0, 10000);
   const prompt = REWRITE_PROMPT(title, cleanText);
 
-  // 1. Groq — Primary (Fast & High Quota Pool)
-  let result = await callGroq(prompt, { maxTokens: 900, temperature: 0.7 });
+  // 1. Waterfall — free router, picks best available model
+  let result = await callWaterfall(prompt, { maxTokens: 900, temperature: 0.7, timeout: 25000 });
+  if (result && result.length > 50) { console.log('[Rewrite] ✅ Waterfall'); return result; }
+
+  // 2. Groq — Primary (Fast & High Quota Pool)
+  result = await callGroq(prompt, { maxTokens: 900, temperature: 0.7 });
   if (result && result.length > 50) { console.log('[Rewrite] ✅ Groq'); return result; }
 
-  // 2. Gemini fallback
+  // 3. Gemini fallback
   result = await callGemini(prompt, { maxOutputTokens: 800, temperature: 0.7, timeout: 12000 });
   if (result && result.length > 50) { console.log('[Rewrite] ✅ Gemini fallback'); return result; }
 
-  // 3. Cerebras fallback (saves Cerebras API calls!)
+  // 4. Cerebras fallback (saves Cerebras API calls!)
   result = await callCerebras(prompt, { maxTokens: 900, temperature: 0.7 });
   if (result && result.length > 50) { console.log('[Rewrite] ✅ Cerebras fallback'); return result; }
 

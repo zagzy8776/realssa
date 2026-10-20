@@ -306,9 +306,9 @@ function initRouter(pool) {
                 pool.query(`
                     SELECT COUNT(*) as total,
                            SUM(CASE WHEN image IS NULL OR image = '' THEN 1 ELSE 0 END) as no_image,
-                           SUM(CASE WHEN image ~* \'(logo|icon|brand|placeholder|avatar|favicon|punchng)\' THEN 1 ELSE 0 END) as logo_image,
+                           SUM(CASE WHEN image ~* \'(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)\' THEN 1 ELSE 0 END) as logo_image,
                            SUM(CASE WHEN image IS NOT NULL AND image != \'\'
-                                     AND image !~* \'(logo|icon|brand|placeholder|avatar|favicon|punchng)\' THEN 1 ELSE 0 END) as good_image
+                                     AND image !~* \'(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)\' THEN 1 ELSE 0 END) as good_image
                     FROM rss_articles
                 `),
                 pool.query(`

@@ -780,7 +780,7 @@ app._legacyExtractPlaceholder = async url => {  // dead code placeholder
       const m = html.match(pat);
       if (m && m[1] && m[1].startsWith('http')) {
         const candidate = m[1];
-        const isPunchBrand = candidate.includes('punchng.com') && (candidate.includes('cropped-') || candidate.includes('punch-logo') || candidate.includes('PUNCH-Logo') || candidate.includes('logo'));
+        const isPunchBrand = candidate.includes('punchng.com') && (candidate.includes('cropped-') || candidate.includes('punch-logo') || candidate.includes('PUNCH-Logo') || /punchng\.com.*\/logo/i.test(candidate));
         if (!isPunchBrand) {
           ogImage = candidate;
           break;

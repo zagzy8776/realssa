@@ -62,15 +62,7 @@ async function runAudit() {
 
     // ── 3. ARTICLES WITH IMAGES ─────────────────────────────────────────
     console.log('\n─── 3. IMAGE QUALITY ───');
-    const imgRes = await pool.query(`
-        SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN image IS NULL OR image = '' THEN 1 ELSE 0 END) as no_image,
-            SUM(CASE WHEN image ~* '(logo|icon|brand|placeholder|avatar|favicon|punchng)' THEN 1 ELSE 0 END) as logo_image,
-            SUM(CASE WHEN image IS NOT NULL AND image != ''
-                      AND image !~* '(logo|icon|brand|placeholder|avatar|favicon|punchng)' THEN 1 ELSE 0 END) as good_image
-        FROM rss_articles
-    `);
+    const imgRes = await pool.query(`\n        SELECT\n            COUNT(*) as total,\n            SUM(CASE WHEN image IS NULL OR image = '' THEN 1 ELSE 0 END) as no_image,\n            SUM(CASE WHEN image ~* '(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)' THEN 1 ELSE 0 END) as logo_image,\n            SUM(CASE WHEN image IS NOT NULL AND image != ''\n                      AND image !~* '(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)' THEN 1 ELSE 0 END) as good_image\n        FROM rss_articles\n    `);
     const img = imgRes.rows[0];
     console.log(`   Total articles:         ${String(img.total).padStart(6)}`);
     console.log(`   With good images:       ${String(img.good_image).padStart(6)} (${((parseInt(img.good_image) / parseInt(img.total)) * 100).toFixed(1)}%)`);
