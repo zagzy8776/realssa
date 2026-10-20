@@ -20,14 +20,38 @@
 const axios = require('axios');
 const redisService = require('./redisService');
 
-const MATCHES_CACHE_KEY = 'sports:feed:v2';
+const MATCHES_CACHE_KEY = 'sports:feed:v3';
 const IPTV_CACHE_KEY = 'sports:iptv:v1';
-const SOURCES_CACHE_PREFIX = 'sports:sources:v2:';
+const SOURCES_CACHE_PREFIX = 'sports:sources:v3:';
+const EXACT_SERVERS_CACHE_PREFIX = 'sports:exact:v1:';
 
 const MATCHES_TTL = 120;        // fixtures refresh every 2 min
 const MATCHES_STALE = 1800;     // serve stale up to 30 min on upstream failure
 const IPTV_TTL = 3600 * 6;      // channel library refresh every 6 hours
 const SOURCES_TTL = 300;        // per-match direct sources cache 5 min
+const EXACT_SERVERS_TTL = 180;  // per-fixture embed mirrors cache 3 min
+
+// How long a finished fixture is allowed to linger in the feed. The Results
+// tab needs recent finals (and their Highlights button), but yesterday's games
+// must not keep occupying the card grid: past this age they leave the site.
+const FINISHED_KEEP_MS = 6 * 60 * 60 * 1000;   // 6h — finished games leave the site so today's kickoffs surface
+const FINISHED_MAX = 5;                           // cap at 5 recent finals
+
+// ── Exact per-fixture playback ──
+// An IPTV channel airs whatever the broadcaster scheduled. The Streamed
+// per-match stream list is bound to ONE game, which is the only honest answer
+// to "this is the right channel" (see the beIN Haber → F1 / Premier Sports 2 →
+// WTA complaints). The old code pointed at `streamed.st/embed/<matchId>`, a URL
+// that 404s — so the "★ Exact Match" tab never played the fixture. The working
+// contract is:
+//   1. match object carries `sources: [{ source, id }]`  (e.g. admin / ppv-…)
+//   2. GET streamed.st/api/stream/<source>/<matchId>
+//        → [{ streamNo, language, hd, embedUrl }]
+//   3. embedUrl (embed.st/embed/<source>/<id>/<n>) is the fixture-locked player
+// Those mirrors also give us language/quality choices per fixture.
+const EXACT_STREAM_SOURCES = [
+  'admin', 'alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel',
+];
 
 const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -849,15 +873,34 @@ function genericChannelSources(channels, limit = 6) {
     .map(ch => ({ url: ch.url, quality: 'Live', label: ch.name, matchScore: 1 }));
 }
 
+// A streamed row is a real FIXTURE only when it carries either explicit teams
+// (`item.teams`) or a genuine kickoff. The `/api/matches/all` mirror packs in
+// 24/7 CHANNEL entries ("Sky Sports Golf", "NHL Network", …) that have neither —
+// those land in the feed as cards with empty home/away and no kickoff: garbage
+// cards that push real fixtures out of the grid. Legitimate shows (WWE NXT with
+// a future date) and real fixtures are kept; bogus 1969-era timestamps
+// (date=-60000 / -3600000) are dropped too.
+function isFixtureItem(item) {
+  if (item.teams?.home?.name || item.teams?.away?.name) return true;
+  const k = parseKickoffTs(item.date || item.time);
+  return Number.isFinite(k) && k > 0;
+}
+
 // ── Source 1: Streamed API mirrors (all sports + embed match IDs) ──
 async function fetchStreamedMatches() {
   for (const host of STREAMED_HOSTS) {
-    for (const path of ['/api/matches/live', '/api/matches/all']) {
+    // `/api/matches/all` is a SUPERSET: it carries today's later kickoffs and
+    // tomorrow's fixtures with their per-match stream ids, which is exactly
+    // what "the right exact match for the day" needs. `/api/matches/live` only
+    // returns the two or three games in play right now, so using it first
+    // (the old order) silently dropped every upcoming fixture — and with it
+    // every exact source. `/all` is tried first; `live` remains as fallback.
+    for (const path of ['/api/matches/all', '/api/matches/live']) {
       try {
         const resp = await axios.get(`${host}${path}`, { headers: BROWSER_HEADERS, timeout: 6000 });
         if (resp.status === 200 && Array.isArray(resp.data) && resp.data.length) {
           console.log(`[sportsStreams] Streamed mirror OK: ${host}${path} (${resp.data.length} matches)`);
-          return resp.data.map(item => {
+          return resp.data.filter(isFixtureItem).map(item => {
             const title = item.title || item.name || '';
             const rawSport = item.category || item.sport || inferSportFromTitle(title);
             const sport = rawSport ? rawSport.charAt(0).toUpperCase() + rawSport.slice(1) : 'Sports';
@@ -886,6 +929,14 @@ async function fetchStreamedMatches() {
               isLive,
               status,
               source: 'streamed',
+              // Which provider namespace owns this fixture's streams. Needed to
+              // ask /api/stream/<source>/<id> for the fixture-locked mirrors.
+              // `sources[]` is the authoritative list — the match id is NOT a
+              // stream id (see resolveExactServers).
+              streamSources: (Array.isArray(item.sources) ? item.sources : [])
+                .filter(s => s && s.id && s.source)
+                .map(s => ({ source: String(s.source), id: String(s.id) })),
+              streamSource: (Array.isArray(item.sources) ? item.sources.find(s => s && s.id)?.source : null) || null,
             };
           }).filter(m => m.event);
         }
@@ -897,7 +948,91 @@ async function fetchStreamedMatches() {
   return [];
 }
 
-// ── Source 2: our own DB (football-data via sportsBot — crests, scores, status) ──
+// ── Exact fixture playback: Streamed's per-match stream mirrors ──
+//
+// CRITICAL: a match object's OWN id is not a stream id. The ids live in
+// `sources`: [{ source: 'admin', id: 'ppv-getafe-vs-rayo-vallecano' },
+//            { source: 'hotel', id: 'getafe-…-laliga-ea-sports-1792434900' }]
+// Feeding the match id to /api/stream/<source>/<matchId> returns nothing —
+// the second reason the "★ Exact Match" tab never played anything.
+//
+// Accepts that pair list (a bare id is treated as admin, kept for tests) and
+// returns the fixture-locked players, HD first:
+//   [{ url, label, source, language, hd, streamNo }]
+// Empty array = no exact source exists for this fixture (nothing is invented —
+// the caller must fall back to the broadcaster ladder and SAY SO).
+//
+// Redis-cached because every viewer of the same fixture asks for the same list
+// and the upstream is a third party we must not hammer.
+async function resolveExactServers(exactSources) {
+  const pairs = (Array.isArray(exactSources) ? exactSources : [exactSources])
+    .map(s => (typeof s === 'string' ? { source: 'admin', id: s } : s))
+    .filter(s => s && s.id && s.source)
+    .map(s => ({ source: String(s.source), id: String(s.id) }));
+  if (!pairs.length) return [];
+
+  const cacheKey = EXACT_SERVERS_CACHE_PREFIX + pairs.map(p => `${p.source}:${p.id}`).join(',');
+  try {
+    const cached = await redisService.getCached(cacheKey);
+    if (Array.isArray(cached?.servers)) return cached.servers;
+  } catch (_) {}
+
+  // Declared pairs first, then the known source namespaces as a safety net
+  // (their match payload occasionally ships a partial `sources` array).
+  const order = [];
+  const seenPairs = new Set();
+  const pushPair = (p) => {
+    if (!p?.source || !p?.id) return;
+    const k = `${p.source}:${p.id}`;
+    if (seenPairs.has(k)) return;
+    seenPairs.add(k);
+    order.push(p);
+  };
+  pairs.forEach(pushPair);
+  EXACT_STREAM_SOURCES
+    .filter(s => !pairs.some(p => p.source === s))
+    .forEach(source => pushPair({ source, id: pairs[0].id }));
+
+  const servers = [];
+  const seenUrls = new Set();
+  for (const { source, id } of order) {
+    try {
+      const resp = await axios.get(
+        `https://streamed.st/api/stream/${encodeURIComponent(source)}/${encodeURIComponent(id)}`,
+        {
+          headers: { ...BROWSER_HEADERS, Referer: 'https://streamed.st/' },
+          timeout: 6000,
+          validateStatus: s => s === 200,
+        }
+      );
+      const list = Array.isArray(resp.data) ? resp.data.filter(r => r && r.embedUrl) : [];
+      for (const r of list) {
+        const url = String(r.embedUrl || '');
+        if (!url || seenUrls.has(url)) continue;
+        seenUrls.add(url);
+        const lang = r.language ? String(r.language) : '';
+        const quality = r.hd ? 'HD' : 'SD';
+        const n = r.streamNo != null ? `Mirror ${r.streamNo}` : `Mirror ${servers.length + 1}`;
+        servers.push({
+          url,
+          // "English - Paramount+ · HD" tells the user exactly what they get.
+          label: [lang || n, quality].filter(Boolean).join(' · '),
+          source: r.source || source,
+          language: lang || null,
+          hd: !!r.hd,
+          streamNo: r.streamNo ?? null,
+        });
+      }
+    } catch (_) { /* wrong namespace for this fixture — try the next pair */ }
+  }
+  // HD first: it is the same fixture, so only quality can rank it.
+  servers.sort((a, b) => Number(b.hd) - Number(a.hd));
+
+  try { redisService.setCached(cacheKey, { servers }, EXACT_SERVERS_TTL).catch(() => {}); } catch (_) {}
+  return servers;
+}
+
+
 async function fetchDbMatches(pool) {
   if (!pool) return [];
   try {
@@ -1030,48 +1165,107 @@ async function fetchEspnMatches() {
 //  Aggregator — merged fixture feed with direct-source enrichment
 // ══════════════════════════════════════════════════════════════
 
+// Two rows describe the SAME fixture when the club pair matches, regardless of
+// which side each source lists first. ESPN and the Streamed mirror disagree on
+// home/away for some games (ESPN "San Antonio Spurs vs Oklahoma City Thunder"
+// vs Streamed "Oklahoma City Thunder vs. San Antonio Spurs" — identical
+// kickoff). The old same-orientation-only test could not see that pair, so the
+// SAME game was published twice in the feed.
+//
+// A reversed pair is only the same fixture when the kickoffs agree. The same two
+// clubs also meet on different days (FC Cincinnati vs D.C. United on the 21st
+// and D.C. United vs FC Cincinnati on the 24th are two separate legs), and
+// collapsing those would drop a real fixture.
+const SAME_FIXTURE_MAX_KICKOFF_GAP_MS = 6 * 60 * 60 * 1000;   // 6h
+
+function kickoffGapMs(a, b) {
+  const ta = parseKickoffTs(a);
+  const tb = parseKickoffTs(b);
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return Infinity;
+  return Math.abs(ta - tb);
+}
+
+// Two rows can only be the same fixture if their kickoffs do not contradict
+// each other. A missing kickoff on either side is NOT a contradiction (the
+// DB row for a fixture can legitimately lack one) — it simply cannot be used
+// to disprove the match.
+function kickoffsCompatible(a, b) {
+  const ta = parseKickoffTs(a);
+  const tb = parseKickoffTs(b);
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return true;
+  return Math.abs(ta - tb) <= SAME_FIXTURE_MAX_KICKOFF_GAP_MS;
+}
+
+// Does `row` describe the same fixture as `m`?
+//   - same orientation: both clubs must match (score >= threshold) and the
+//     kickoffs must not contradict each other
+//   - reversed orientation: clubs must match crosswise AND both kickoffs must
+//     be known and within 6h — two legs of the same tie are never merged
+function isSameFixture(m, row, threshold) {
+  if (!m?.home || !m?.away || !row?.home || !row?.away) return false;
+  if (teamScore(m.home, row.home) >= threshold && teamScore(m.away, row.away) >= threshold) {
+    return kickoffsCompatible(m.kickoff, row.kickoff);
+  }
+  if (teamScore(m.home, row.away) >= threshold && teamScore(m.away, row.home) >= threshold) {
+    return kickoffGapMs(m.kickoff, row.kickoff) <= SAME_FIXTURE_MAX_KICKOFF_GAP_MS;
+  }
+  return false;
+}
+
 function mergeMatches(streamed, dbList, espnList) {
   const merged = [];
-  const used = new Set();
+  // `used` maps an event string to the kickoffs already published for it.
+  // A plain Set dropped legitimate repeats: the same pairing can be played
+  // twice inside the feed window (a midweek round and the weekend round, or a
+  // cup tie and the league game) and those are two different fixtures. The
+  // kickoff is what tells them apart.
+  const used = new Map();
+  const alreadyPublished = (key, kickoff) =>
+    (used.get(key) || []).some(k => kickoffsCompatible(k, kickoff));
+  const markPublished = (key, kickoff) => {
+    if (!used.has(key)) used.set(key, []);
+    used.get(key).push(kickoff);
+  };
 
   // DB first (rich: crests, scores) — primary football source
   for (const m of dbList) {
     merged.push({ ...m, streamId: null });
-    used.add(m.event.toLowerCase());
+    markPublished(m.event.toLowerCase(), m.kickoff);
   }
 
   // Streamed: attach embed IDs to DB matches; add extra sports
   for (const s of streamed) {
     const key = s.event.toLowerCase();
-    const existing = merged.find(m =>
-      (m.home && s.home && teamScore(m.home, s.home) >= 7 && teamScore(m.away, s.away) >= 7)
-    );
+    const existing = merged.find(m => isSameFixture(m, s, 7));
     if (existing) {
       existing.streamId = s.id;          // enables iframe fallback servers
+      existing.streamSource = existing.streamSource || s.streamSource || null;
+      if (!existing.streamSources?.length) existing.streamSources = s.streamSources || [];
       existing.sport = existing.sport || s.sport;
       continue;
     }
-    if (used.has(key)) continue;
+    if (alreadyPublished(key, s.kickoff)) continue;
     merged.push({ ...s, streamId: s.id });
-    used.add(key);
+    markPublished(key, s.kickoff);
   }
 
   // ESPN: fill gaps (US sports) + attach logos to matches missing them
   for (const e of espnList) {
-    const existing = merged.find(m =>
-      (m.home && e.home && teamScore(m.home, e.home) >= 8 && teamScore(m.away, e.away) >= 8)
-    );
+    const existing = merged.find(m => isSameFixture(m, e, 8));
     if (existing) {
       if (!existing.homeCrest) existing.homeCrest = e.homeCrest;
       if (!existing.awayCrest) existing.awayCrest = e.awayCrest;
       if (!existing.liveDetail) existing.liveDetail = e.liveDetail;
       if (!existing.venue) existing.venue = e.venue;
+      // NOTE: ESPN's `id` is an ESPN event id (espn:401882842), never a Streamed
+      // match id. It must NOT be written into `streamId` — the exact-match embed
+      // URL is built from that field, so an ESPN id there produces a 404.
       continue;
     }
     const key = e.event.toLowerCase();
-    if (used.has(key)) continue;
+    if (alreadyPublished(key, e.kickoff)) continue;
     merged.push({ ...e, streamId: null });
-    used.add(key);
+    markPublished(key, e.kickoff);
   }
 
   // Broadcaster matching reads league/sport/event. Streamed only supplies a
@@ -1098,7 +1292,16 @@ function mergeMatches(streamed, dbList, espnList) {
       const guess = inferLeagueFromTeams(m.home, m.away, m.sport);
       m.league = guess || '';
     }
-    if (m.isLive && !m.status) m.status = 'live';
+    if (m.isLive) m.status = 'live';
+    else if (m.status !== 'cancelled' && m.status !== 'postponed') {
+      // STALE-STATUS FIX: the matches DB only flips a fixture to `finished`
+      // when the sports bot next runs, so a game that ended hours ago stayed
+      // `scheduled` forever and kept a "Direct stream available" card on the
+      // site. The clock cannot go stale — when it outlives the live window,
+      // the fixture is over no matter what the upstream row says.
+      const t = parseKickoffTs(m.kickoff);
+      if (!isNaN(t) && Date.now() - t > LIVE_WINDOW_AFTER_MS) m.status = 'finished';
+    }
   }
 
   // Live first, then upcoming, then finished (newest final whistle first)
@@ -1121,6 +1324,34 @@ async function buildFeed(pool) {
   ]);
 
   let matches = mergeMatches(streamed, dbList, espnList);
+
+  // ── Day hygiene: ended fixtures leave so the new ones can come in ──
+  // The feed is a "what can I watch now" surface, not an archive. Keep recent
+  // finals (the Results tab + Highlights depend on them) but drop anything
+  // older than FINISHED_KEEP_MS and cap how many finals can occupy the grid,
+  // otherwise yesterday's card list buries today's kickoffs — the "18 Oct
+  // matches still on the site on 19 Oct" complaint.
+  {
+    const ts = (m) => {
+      const t = parseKickoffTs(m.kickoff);
+      return isNaN(t) ? 0 : t;
+    };
+    const cutoff = Date.now() - FINISHED_KEEP_MS;
+    matches = matches.filter(m => {
+      if (m.isLive) return true;
+      if (m.status !== 'finished') return true;
+      const t = ts(m);
+      return t === 0 || t >= cutoff;      // undated finals are kept, they are rare
+    });
+    const finals = matches
+      .filter(m => !m.isLive && m.status === 'finished')
+      .sort((a, b) => ts(b) - ts(a))
+      .slice(FINISHED_MAX);
+    if (finals.length < matches.filter(m => !m.isLive && m.status === 'finished').length) {
+      const keep = new Set(finals);
+      matches = matches.filter(m => m.isLive || m.status !== 'finished' || keep.has(m));
+    }
+  }
 
   // ── Enrich EVERY fixture with our own direct HLS sources ──
   // Upcoming matches included: the ladder is cheap in-memory work over the
@@ -1146,12 +1377,31 @@ async function buildFeed(pool) {
         m.directSources = ladder;
         m.liveConfidence = liveConfidence(m, ladder);
       }
-      // Exact per-match embed (Streamed). An IPTV ladder entry is CHANNEL
-      // level — even a perfect Sky hit airs whatever Sky chose today. The
-      // per-match embed is the ONE source guaranteed to be this fixture, so
-      // the player surfaces it as the "★ Exact Match" tab.
-      if (m.streamId) m.exactEmbedUrl = `https://streamed.st/embed/${m.streamId}`;
     }
+  }
+
+  // Exact per-match embed (Streamed). An IPTV ladder entry is CHANNEL level —
+  // even a perfect Sky hit airs whatever Sky chose today. The per-match embed
+  // is the ONE source guaranteed to be this fixture, so the player surfaces it
+  // as the "★ Exact Match" tab.
+  //
+  // IMPORTANT: this runs OUTSIDE the IPTV block on purpose. When the playlist
+  // download fails there is no ladder at all, and the fixture-locked player —
+  // the only source that is guaranteed to be THIS game — must not disappear
+  // with it. Same for matches outside the ladder window (e.g. a fixture that
+  // already kicked off more than 3h ago): the embed is still the right answer.
+  for (const m of matches) {
+    // `streamed.st/embed/<matchId>` 404s — that broken URL is why the exact
+    // tab never played the fixture. The fixture-locked player lives at
+    // embed.st/embed/<source>/<streamId>/<mirror>, where <streamId> is the id
+    // from `streamSources`, NOT the match id.
+    const first = m.streamSources?.[0];
+    m.exactEmbedUrl = first
+      ? `https://embed.st/embed/${first.source}/${first.id}/1`
+      : null;
+    // The raw source/id pairs travel with the feed so the client can build
+    // the embed URL itself even if the backend is unreachable.
+    m.exactSources = Array.isArray(m.streamSources) ? m.streamSources : [];
   }
 
   // Guarantee: anything still without a native source gets generic channels,
@@ -1318,7 +1568,10 @@ async function probeLadder(ladder) {
 //      say "not live yet — here is what IS live" with one-tap switching,
 //      instead of silently opening a random channel.
 function resolveFeedContext(list, home, away, kickoff) {
-  const out = { self: null, exactStreamId: null, venue: null, matchLive: null, othersLive: [] };
+  const out = {
+    self: null, exactStreamId: null, exactStreamSource: null, exactSources: [],
+    venue: null, matchLive: null, matchStatus: null, othersLive: [],
+  };
   try {
     if (!Array.isArray(list)) return out;
     const self = (home && away)
@@ -1327,8 +1580,16 @@ function resolveFeedContext(list, home, away, kickoff) {
     if (self) {
       out.self = self;
       out.exactStreamId = self.streamId || null;
+      out.exactStreamSource = self.streamSource || null;
+      out.exactSources = Array.isArray(self.streamSources) && self.streamSources.length
+        ? self.streamSources
+        : (self.streamSource ? [{ source: self.streamSource, id: self.streamId }] : []);
       out.venue = self.venue || null;
       out.matchLive = !!self.isLive;
+      // Distinguish "ended" from "not started yet" — the player says very
+      // different things in each case, and a finished match must not keep
+      // offering a live feed.
+      out.matchStatus = self.status || (self.isLive ? 'live' : 'scheduled');
       // A feed entry flagged live must still be inside its live window — the
       // Streamed mirror has no live flag of its own (see isFixtureLive).
       if (out.matchLive && !isFixtureLive(self.kickoff, true)) out.matchLive = false;
@@ -1356,6 +1617,9 @@ function resolveFeedContext(list, home, away, kickoff) {
         score: m.score || null,
         liveDetail: m.liveDetail || null,
         streamId: m.streamId || null,
+        // The fixture-locked embed for THIS match, so switching to a sibling
+        // fixture also lands on the right game instead of a generic channel.
+        exactEmbedUrl: m.exactEmbedUrl || null,
         directSources: Array.isArray(m.directSources) ? m.directSources.slice(0, 4) : [],
         liveConfidence: m.liveConfidence || null,
       }));
@@ -1371,7 +1635,11 @@ async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league
     directSources: list,
     liveConfidence: liveConfidence({ home, away }, list),
   });
-  const EMPTY_CTX = { exactStreamId: null, exactEmbedUrl: null, venue: null, matchLive: null, othersLive: [] };
+  const EMPTY_CTX = {
+    exactStreamId: null, exactStreamSource: null, exactEmbedUrl: null, exactServers: [],
+    exactSources: [],
+    venue: null, matchLive: null, matchStatus: null, othersLive: [],
+  };
   if (!home || !away) {
     return {
       ...shaped(genericChannelSources(channels, 10).map(s => ({ ...s, sourceTier: 'generic' }))),
@@ -1381,7 +1649,9 @@ async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league
   const key = sourcesCacheKey(home, away);
   try {
     const cached = await redisService.getCached(key);
-    if (cached?.directSources?.length) return cached;
+    // Older cache entries (no exactServers field) must be rebuilt: the exact
+    // tab is the whole point of this payload.
+    if (cached?.directSources?.length && Array.isArray(cached.exactServers)) return cached;
   } catch (_) {}
 
   const ladder = buildSourceLadder({ home, away, homeCrest, awayCrest, sport, league, event, kickoff }, channels);
@@ -1397,18 +1667,43 @@ async function getMatchSources({ home, away, homeCrest, awayCrest, sport, league
   // the merged feed. Own try/catch: a feed failure must never cost the user
   // their sources. `pool` may be absent (Vercel routes without DB access) —
   // getMatches(null) still merges Streamed + ESPN.
-  let ctx = { self: null, exactStreamId: null, venue: null, matchLive: null, othersLive: [] };
+  let ctx = {
+    self: null, exactStreamId: null, exactStreamSource: null, exactSources: [],
+    venue: null, matchLive: null, matchStatus: null, othersLive: [],
+  };
   try {
     const feed = await getMatches(pool || null, { staleOk: true });
     ctx = resolveFeedContext(feed?.matches || [], home, away, kickoff);
   } catch (_) {}
 
+  // Resolve the fixture-locked players for THIS match. This is the only list
+  // that is guaranteed to show the game the user clicked — everything in
+  // `directSources` is a TV channel that may be airing something else.
+  let exactServers = [];
+  try {
+    exactServers = await resolveExactServers(ctx.exactSources);
+  } catch (_) { exactServers = []; }
+
+  // The mirror list can be empty (upstream hiccup, unusual namespace) while the
+  // fixture itself is still known. In that case we still hand the client the
+  // source/id pair so it can build embed.st/embed/<source>/<id>/1 itself —
+  // a working exact tab beats a dead-end ladder.
+  const exactPair = (Array.isArray(ctx.exactSources) ? ctx.exactSources : [])
+    .find(p => p && p.source && p.id);
+  const derivedEmbedUrl = exactPair
+    ? `https://embed.st/embed/${exactPair.source}/${exactPair.id}/1`
+    : null;
+
   const result = {
     ...shaped(directSources),
     exactStreamId: ctx.exactStreamId,
-    exactEmbedUrl: ctx.exactStreamId ? `https://streamed.st/embed/${ctx.exactStreamId}` : null,
+    exactStreamSource: ctx.exactStreamSource,
+    exactSources: ctx.exactSources,
+    exactServers,
+    exactEmbedUrl: exactServers[0]?.url || derivedEmbedUrl,
     venue: ctx.venue,
     matchLive: ctx.matchLive,
+    matchStatus: ctx.matchStatus,
     othersLive: ctx.othersLive,
   };
   redisService.setCached(key, result, SOURCES_TTL).catch(() => {});
@@ -1421,7 +1716,7 @@ module.exports = { getMatches, getMatchSources, markChannelDead, _test: {
   getIptvChannels, getGenericSportsChannels, findIptvSources, sourcesCacheKey,
   buildSourceLadder, pickBroadcasterSources, genericChannelSources, resolveFeedContext,
   extract: { IPTV_CHANNEL_FILTER, IPTV_MAX_PER_PLAYLIST, IPTV_LIBRARY_MAX, BROADCASTER_HINTS, IPTV_PLAYLIST_COUNT: IPTV_PLAYLISTS.length, IPTV_PLAYLISTS, ESPN_LEAGUES, LEAGUE_BY_CLUB },
-  isFixtureLive, parseKickoffTs, liveConfidence, inferLeagueFromTeams,
+  isFixtureLive, parseKickoffTs, liveConfidence, inferLeagueFromTeams, resolveExactServers,
   markChannelDead, isChannelDead,
   probeSource, probeLadder,
   resetIptvMemo: () => { _iptvMemo = null; _iptvMemoAt = 0; },

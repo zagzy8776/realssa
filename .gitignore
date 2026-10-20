@@ -66,6 +66,8 @@ scratch/
 .kilo/
 .flytoken
 .flygq.cjs
+.fly-ctl.cjs
+.fly-suspend.cjs
 .webui_secret_key
 .vercel-env.json
 .vercelenv.cjs

@@ -29,6 +29,21 @@ export interface DirectSource {
   url: string;
   quality?: string;
   label?: string;
+  // Which rung of the backend ladder this URL came from. Drives the honesty
+  // badge: a channel named after a club is still a TV channel, not the match.
+  sourceTier?: 'team' | 'broadcaster' | 'generic';
+  matchScore?: number;
+}
+
+// Fixture-locked player from /api/sports/match-sources (`exactServers`).
+// `url` is embed.st/embed/<source>/<matchId>/<mirror> — bound to ONE fixture.
+export interface ExactServer {
+  url: string;
+  label?: string;
+  source?: string | null;
+  language?: string | null;
+  hd?: boolean;
+  streamNo?: number | null;
 }
 
 interface SportsPlayerProps {
@@ -54,6 +69,10 @@ interface SportsPlayerProps {
   // tab plays THE fixture the user clicked — an IPTV channel airs whatever
   // the broadcaster scheduled, this embed is bound to one single game.
   streamId?: string | number | null;
+  // The fixture-locked embed URL, built from the match's source/id pair
+  // (embed.st/embed/<source>/<id>/1). The match id alone is NOT a stream id,
+  // so this is what makes the "★ Exact Match" tab actually play the game.
+  exactEmbedUrl?: string | null;
   venue?: string | null;
   // One-tap switch to another fixture from the "Others live now" rail.
   onSwitchMatch?: (m: LiveSwitchMatch) => void;
@@ -73,11 +92,15 @@ export interface LiveSwitchMatch {
   score?: string | null;
   liveDetail?: string | null;
   streamId?: string | null;
+  /** Fixture-locked embed for the sibling fixture (so a switch stays exact). */
+  exactEmbedUrl?: string | null;
   directSources?: DirectSource[];
   liveConfidence?: { level: 'match' | 'channel' | 'generic' | 'none'; exact?: boolean; label?: string | null } | null;
 }
 
-// Iframe fallback servers (used when no direct HLS is available)
+// ── Fallback servers (third-party sites) ──
+// The FIRST tab is the fixture-locked player supplied by the backend; these
+// only exist for when that fixture has no exact source at all.
 const IFRAME_SERVERS = [
   {
     label: 'Server 1',
@@ -123,18 +146,49 @@ const isInternalFixtureId = (id: string | number) =>
 
 // a streamId the first tab is guaranteed to be the clicked match. An IPTV
 // channel is not — it airs whatever the broadcaster scheduled today.
-function serversFor(exactId: string | null) {
-  if (!exactId) return IFRAME_SERVERS;
+//
+// The backend resolves the fixture-locked mirrors from Streamed's
+// /api/stream/<source>/<id> contract and returns them as `exactServers`
+// (language + quality variants, HD first). When it has them, EVERY mirror
+// becomes a tab; when it does not, we still show one exact tab pointing at the
+// real embed path — the URL the player used before
+// (`streamed.st/embed/<matchId>`) 404s, which is why "★ Exact Match" never
+// actually played the fixture.
+function serversFor(
+  exactId: string | null,
+  exactServers?: ExactServer[] | null,
+  exactEmbedUrl?: string | null,
+) {
+  const exactTabs = (exactServers || [])
+    .filter(s => !!s?.url)
+    .map((s, i) => ({
+      label: `★ ${s.label || `Exact ${i + 1}`}`,
+      key: `exact-${i}`,
+      buildUrl: () => s.url,
+      homepage: s.url,
+    }));
+  if (exactTabs.length) return [...exactTabs, ...IFRAME_SERVERS];
+
+  // No mirror list from the backend. We still know WHICH fixture this is, so
+  // build the fixture-locked URL from the source/id pair. The old
+  // `embed.st/embed/admin/<matchId>` guess 404s — the match id is NOT a stream
+  // id — so prefer the backend-provided exact URL, and only fall back to the
+  // admin form when nothing better is known.
+  const fallbackUrl = exactEmbedUrl
+    || (exactId && !isInternalFixtureId(exactId) ? `https://embed.st/embed/admin/${exactId}/1` : null);
+  if (!fallbackUrl) return IFRAME_SERVERS;
   return [
     {
       label: '★ Exact Match',
-      key: 'exact',
-      buildUrl: () => `https://streamed.st/embed/${exactId}`,
-      homepage: `https://streamed.st/embed/${exactId}`,
+      key: 'exact-fallback',
+      buildUrl: () => fallbackUrl,
+      homepage: fallbackUrl,
     },
     ...IFRAME_SERVERS,
   ];
 }
+
+const isExactKey = (key: string | undefined) => !!key && key.startsWith('exact');
 
 // Kickoff clock for the "not live yet" banner (epoch-ms or ISO in, HH:MM out).
 function fmtKickoff(k: string | number | null | undefined): string {
@@ -243,6 +297,7 @@ export default function SportsPlayer({
   liveConfidence,
   kickoff,
   streamId,
+  exactEmbedUrl: exactEmbedUrlProp,
   venue,
   onSwitchMatch,
 }: SportsPlayerProps) {
@@ -256,17 +311,12 @@ export default function SportsPlayer({
   const teamHome = home || parsed.home;
   const teamAway = away || parsed.away;
 
-  // Honesty badge: tell the user whether this feed IS the match, the right
-  // broadcaster for it, or just live sport — instead of implying all three
-  // are the same thing.
+  // Badge input only. The label shown on screen is derived from the source
+  // actually playing (see `activeBadge`) — a confidence computed for
+  // sources[0] lied as soon as the preflight reordered the ladder.
   const [fetchedConfidence, setFetchedConfidence] = useState<SportsPlayerProps['liveConfidence']>(null);
   const activeConfidence = liveConfidence || fetchedConfidence;
   const confidenceLevel = activeConfidence?.level || 'none';
-  const confidenceTitle = confidenceLevel === 'match'
-    ? `Team/broadcast channel for this fixture${activeConfidence?.label ? `: ${activeConfidence.label}` : ''}`
-    : confidenceLevel === 'channel'
-      ? `${league || 'League'} broadcaster${activeConfidence?.label ? `: ${activeConfidence.label}` : ''} — showing this league`
-      : 'A live sports channel — not necessarily this exact fixture';
 
   // Playback mode: native if we have direct sources, otherwise iframe
   const [sources, setSources] = useState<DirectSource[]>(directSources || []);
@@ -294,12 +344,16 @@ export default function SportsPlayer({
   // at a static spinner.
   const [elapsed, setElapsed] = useState(0);
 
-  // Exact-match context from /api/sports/match-sources: per-match embed id,
-  // venue, whether THIS fixture is live, and what else is live right now.
+  // Exact-match context from /api/sports/match-sources: fixture-locked players,
+  // per-match embed id, venue, whether THIS fixture is live, and what else is
+  // live right now.
   const [ctx, setCtx] = useState<{
     exactStreamId: string | null;
+    exactServers: ExactServer[];
+    exactEmbedUrl: string | null;
     venue: string | null;
     matchLive: boolean | null;
+    matchStatus: string | null;
     othersLive: LiveSwitchMatch[];
   } | null>(null);
 
@@ -308,7 +362,14 @@ export default function SportsPlayer({
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const exactId = (streamId != null && streamId !== '' ? String(streamId) : null) || ctx?.exactStreamId || null;
-  const servers = useMemo(() => serversFor(exactId), [exactId]);
+  const exactServers = useMemo(() => ctx?.exactServers || [], [ctx]);
+  // The prop wins: the feed already knows this fixture's source/id pair, so
+  // the exact tab can be built even if the on-demand lookup fails.
+  const exactEmbedUrl = ctx?.exactEmbedUrl || exactEmbedUrlProp || null;
+  const servers = useMemo(
+    () => serversFor(exactId, exactServers, exactEmbedUrl),
+    [exactId, exactServers, exactEmbedUrl],
+  );
   const serversRef = useRef(servers);
   serversRef.current = servers;
 
@@ -410,12 +471,32 @@ export default function SportsPlayer({
         if (cancelled) return;
         const list: DirectSource[] = Array.isArray(data?.directSources) ? data.directSources : [];
         if (data?.liveConfidence) setFetchedConfidence(data.liveConfidence);
+        const exactList: ExactServer[] = Array.isArray(data?.exactServers) ? data.exactServers : [];
         setCtx({
           exactStreamId: data?.exactStreamId || null,
+          exactServers: exactList,
+          // The backend hands back the fixture-locked URL even when the mirror
+          // list came back empty, so the exact tab still plays the right game.
+          exactEmbedUrl: data?.exactEmbedUrl || null,
           venue: data?.venue || null,
           matchLive: typeof data?.matchLive === 'boolean' ? data.matchLive : null,
+          matchStatus: data?.matchStatus || null,
           othersLive: Array.isArray(data?.othersLive) ? data.othersLive : [],
         });
+
+        // ROUTE TO THE FIXTURE-LOCKED PLAYER when everything we hold is a
+        // broadcaster/generic channel: those air whatever they scheduled (the
+        // "picked Parma, got tennis" complaint). A team's own channel is
+        // trusted and stays in OUR player. Only routing that happens BEFORE
+        // the first frame — the player is still in preflight at this point.
+        const topTier = data?.liveConfidence?.level;
+        const leadWithExact = exactList.length > 0
+          && data?.matchLive === true
+          && topTier !== 'match';
+        if (leadWithExact) {
+          setMode('iframe');
+          setServerIdx(0);
+        }
         if (list.length) {
           // MERGE, never replace: the feed's own directSources and the
           // match-sources ladder often contain DIFFERENT broadcasters (e.g. the
@@ -429,7 +510,11 @@ export default function SportsPlayer({
             merged.push(s);
           }
           setSources(merged);
-          setMode('native');
+          // The exact tab wins the first frame. Falling back to `native` here
+          // was the bug that put the WRONG game on screen: the ladder was
+          // re-selected a tick after we routed to the fixture-locked player.
+          // The native ladder stays loaded and one tap away (the server tabs).
+          if (!leadWithExact) setMode('native');
           // A different fixture can reuse the same broadcaster URLs, so the
           // ladder's identity may be unchanged. Always restart cleanly.
           setAllSourcesDead(false);
@@ -447,23 +532,29 @@ export default function SportsPlayer({
     return () => { cancelled = true; };
   }, [directSources, isCategory, teamHome, teamAway, homeCrest, awayCrest, sport, league, title]);
 
-  // EXACTNESS DEFAULT: when a per-match embed exists and the IPTV ladder is
-  // only league-broadcaster/generic confidence, LEAD with the exact embed.
+  // EXACTNESS DEFAULT: when a fixture-locked embed exists and the IPTV ladder
+  // is only league-broadcaster/generic confidence, LEAD with the exact embed.
   // The user clicked THIS match — "the right channel for the league" can be
   // airing a different game, which is exactly the complaint we are fixing.
   //
-  // EXCEPT when the caller already handed us direct HLS feeds: those play in
-  // OUR player with no ads, so they always win. The exact embed stays one tap
-  // away as the "★ Exact Match" server tab instead of hijacking playback.
-  const exactDefaultDone = useRef(false);
+  // A team's own channel ('match' confidence) is trusted and stays in OUR
+  // player — it is the one channel guaranteed to carry this club's game.
+  //
+  // IMPORTANT: this waits for the exact source to actually EXIST. Routing
+  // before the lookup landed picked `servers[0]` = "Server 1" (a generic
+  // provider homepage) and showed the wrong game — the same bug in a slower
+  // form. It also re-runs when the exact list arrives, so a late lookup still
+  // takes over the first frame.
+  const hasExactSource = exactServers.length > 0 || !!exactEmbedUrl;
+  const exactDefaultFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!exactId || exactDefaultDone.current) return;
-    exactDefaultDone.current = true;
-    if (confidenceLevel === 'match') return;   // team channel found — already exact
-    if (directSources?.length) return;         // native feed available — keep it
+    if (!hasExactSource) return;                // nothing exact to play yet
+    if (confidenceLevel === 'match') return;     // team channel found — already exact
+    if (exactDefaultFor.current === exactId) return;
+    exactDefaultFor.current = exactId;
     setMode('iframe');
     setServerIdx(0);                            // exact entry is servers[0]
-  }, [exactId, confidenceLevel, directSources]);
+  }, [exactId, confidenceLevel, hasExactSource]);
 
   // Keep serverIdx inside bounds when the exact entry appears/disappears.
   useEffect(() => {
@@ -720,7 +811,20 @@ export default function SportsPlayer({
 
   const handleSwitchServer = (idx: number) => {
     setServerIdx(idx);
-    localStorage.setItem('realssa_sports_server', IFRAME_SERVERS[idx].key);
+    // Only remember GENERIC servers: the exact fixture tab is per-match and
+    // must never be restored for a different game.
+    const key = servers[idx]?.key;
+    if (key && IFRAME_SERVERS.some(s => s.key === key)) {
+      localStorage.setItem('realssa_sports_server', key);
+    }
+  };
+
+  // One tap from a broadcaster channel to the fixture-locked player.
+  const playExactFixture = () => {
+    const idx = servers.findIndex(s => isExactKey(s.key));
+    setMode('iframe');
+    setServerIdx(idx >= 0 ? idx : 0);
+    setStatus('loading');
   };
 
   // Restore saved iframe server preference (only when there is no exact
@@ -779,6 +883,61 @@ export default function SportsPlayer({
     ? (activeSource?.label || `Direct Stream ${srcIdx + 1}`)
     : iframeServer.label;
 
+  // ── Honesty badge, computed from the source ACTUALLY on screen ──
+  // The backend ranks sources by "how likely is this channel showing the
+  // fixture"; the preflight then reorders them by liveness. Reading the badge
+  // from sources[0] is therefore a lie the moment source #10 is playing — a
+  // beIN news channel wearing a "THIS MATCH" label. Only the fixture-locked
+  // embed may claim the fixture; a TV channel is always just a TV channel.
+  const isExactTab = isExactKey(iframeServer?.key);
+  const activeTier: 'team' | 'broadcaster' | 'generic' | null = mode === 'native'
+    ? (activeSource?.sourceTier
+      ?? (srcIdx === 0
+        ? (confidenceLevel === 'match' ? 'team'
+          : confidenceLevel === 'channel' ? 'broadcaster'
+            : confidenceLevel === 'generic' ? 'generic' : null)
+        : null))
+    : null;
+
+  const BADGE_TONE = {
+    emerald: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    sky: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
+    zinc: 'text-zinc-400 border-white/10 bg-white/5',
+    amber: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+  } as const;
+
+  const activeBadge: { text: string; tone: keyof typeof BADGE_TONE; title: string } | null = isCategory
+    ? null
+    : mode === 'iframe'
+      ? (isExactTab
+        ? {
+          text: '✓ Exact fixture',
+          tone: 'emerald',
+          title: `Fixture-locked player: bound to ${title} — it cannot show another game.`,
+        }
+        : {
+          text: 'External site',
+          tone: 'amber',
+          title: 'Third-party page. Nothing here is verified to be this fixture.',
+        })
+      : activeTier === 'team'
+        ? {
+          text: 'Team channel',
+          tone: 'emerald',
+          title: `${activeLabel} is named for one of these clubs, but it is still a TV channel and can air another event.`,
+        }
+        : activeTier === 'broadcaster'
+          ? {
+            text: 'League broadcaster',
+            tone: 'sky',
+            title: `${activeLabel} carries ${league || 'this competition'} — it airs whatever is on its schedule, not necessarily this fixture.`,
+          }
+          : {
+            text: 'Live TV channel',
+            tone: 'zinc',
+            title: 'A live sports channel. Not tied to this fixture.',
+          };
+
   return (
     <div className="fixed inset-0 h-[100dvh] z-[9999] bg-gradient-to-b from-zinc-950 via-black to-zinc-950 flex flex-col font-sans select-none animate-in fade-in duration-300">
 
@@ -800,20 +959,14 @@ export default function SportsPlayer({
               )}
               {mode === 'native' ? 'RealSSA Direct Stream' : 'Live Sports Stream'}
             </span>
-            {/* Be honest about what the feed actually is — an exact team
-                channel vs the right broadcaster vs merely live sport. */}
-            {confidenceLevel !== 'none' && (
+            {/* Be honest about what is on screen: a fixture-locked player vs a
+                TV channel that may be airing a completely different event. */}
+            {activeBadge && (
               <span
-                className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${
-                  confidenceLevel === 'match'
-                    ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
-                    : confidenceLevel === 'channel'
-                      ? 'text-sky-400 border-sky-500/30 bg-sky-500/10'
-                      : 'text-zinc-400 border-white/10 bg-white/5'
-                }`}
-                title={confidenceTitle}
+                className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${BADGE_TONE[activeBadge.tone]}`}
+                title={activeBadge.title}
               >
-                {confidenceLevel === 'match' ? '✓ This match' : confidenceLevel === 'channel' ? 'Right channel' : 'Live sport'}
+                {activeBadge.text}
               </span>
             )}
             <h3 className="text-white text-xs sm:text-sm font-black truncate max-w-[280px] sm:max-w-md mt-0.5 flex items-center gap-2">
@@ -827,7 +980,13 @@ export default function SportsPlayer({
           {mode === 'native' && (
             <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-black uppercase tracking-wider">
               <Shield size={11} />
-              Ad-Light Direct Feed
+              Direct HLS · No pop-ups
+            </div>
+          )}
+          {mode === 'iframe' && isExactTab && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-black uppercase tracking-wider">
+              <Shield size={11} />
+              Fixture-locked
             </div>
           )}
 
@@ -899,8 +1058,16 @@ export default function SportsPlayer({
         </div>
       ) : null}
 
-      {/* ── NOT-LIVE-YET banner — the honest answer to "why is this not my match" ── */}
-      {ctx?.matchLive === false && (
+      {/* ── NOT-LIVE-YET / ENDED banner — the honest answer to "why is this not my match" ── */}
+      {ctx?.matchStatus === 'finished' && (
+        <div className="px-4 py-2 bg-zinc-950/80 border-b border-white/10 flex items-center gap-2 shrink-0">
+          <Clock size={12} className="text-zinc-400 shrink-0" />
+          <p className="text-[10px] text-zinc-300 font-bold leading-snug">
+            {title} has ended. This fixture has left the site — pick a match below that IS live, or close this player.
+          </p>
+        </div>
+      )}
+      {ctx?.matchStatus !== 'finished' && ctx?.matchLive === false && (
         <div className="px-4 py-2 bg-sky-950/40 border-b border-sky-900/40 flex items-center gap-2 shrink-0">
           <Clock size={12} className="text-sky-400 shrink-0" />
           <p className="text-[10px] text-sky-200 font-bold leading-snug">
@@ -908,12 +1075,36 @@ export default function SportsPlayer({
           </p>
         </div>
       )}
-      {ctx?.matchLive !== false && effectiveVenue && (
+      {ctx?.matchStatus !== 'finished' && ctx?.matchLive !== false && effectiveVenue && (
         <div className="px-4 py-1.5 bg-zinc-950/80 border-b border-white/5 flex items-center gap-2 shrink-0">
           <MapPin size={10} className="text-zinc-500 shrink-0" />
           <span className="text-[9px] text-zinc-500 font-bold truncate">
             {effectiveVenue}{kickoff ? ` · ${fmtKickoff(kickoff)}` : ''}
           </span>
+        </div>
+      )}
+
+      {/* ── CHANNEL HONESTY STRIP ──
+          A TV channel can air ANY event; saying so is the whole fix for the
+          "I picked Parma and got tennis" complaint. When a fixture-locked
+          player exists, it is one tap away instead of a hunt. */}
+      {!isCategory && mode === 'native' && activeTier !== 'team' && !!activeSource && (
+        <div className="px-4 py-2 bg-emerald-950/30 border-b border-emerald-900/30 flex items-center gap-2 shrink-0">
+          <Shield size={12} className="text-emerald-400 shrink-0" />
+          <p className="text-[10px] text-emerald-100/90 font-bold leading-snug flex-1 min-w-0">
+            Watching <span className="text-white">{activeLabel}</span>
+            {exactServers.length
+              ? ' — a broadcaster channel that may be airing a different event.'
+              : ' — a broadcaster channel. No fixture-locked feed is listed for this match yet.'}
+          </p>
+          {exactServers.length > 0 && (
+            <button
+              onClick={playExactFixture}
+              className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-black text-[10px] font-black uppercase rounded-full shrink-0 active:scale-95 transition-all"
+            >
+              Watch exact fixture
+            </button>
+          )}
         </div>
       )}
 
@@ -982,22 +1173,22 @@ export default function SportsPlayer({
         ) : (
           <div className="absolute inset-0 bg-zinc-950">
             {/* Warning overlay for iframe fallback mode */}
-            {!isCategory && iframeServer.key === 'exact' && (
+            {!isCategory && isExactTab && (
               <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/30 rounded-xl px-4 py-2.5 max-w-md mx-auto">
                 <div className="flex items-start gap-2">
                   <Shield size={16} className="text-emerald-400 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <p className="text-emerald-200 text-xs font-bold leading-snug">
-                      Exact match feed — this stream IS {title}
+                      Fixture-locked player — this feed is bound to {title}
                     </p>
                     <p className="text-emerald-300/70 text-[10px] mt-1 leading-snug">
-                      One embed per fixture: no channel roulette. If it says "starting soon", the match has not kicked off yet.
+                      One embed per fixture: no channel roulette. If it says "starting soon", the match has not kicked off yet. Pop-ups and redirects are blocked here.
                     </p>
                   </div>
                 </div>
               </div>
             )}
-            {!isCategory && iframeServer.key !== 'exact' && (
+            {!isCategory && !isExactTab && (
               <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-amber-500/10 backdrop-blur-md border border-amber-500/30 rounded-xl px-4 py-2.5 max-w-md mx-auto">
                 <div className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
@@ -1022,13 +1213,17 @@ export default function SportsPlayer({
                 Back to direct stream
               </button>
             )}
+            {/* No allow-popups / allow-top-navigation: a provider ad must never
+                open a tab or navigate RealSSA away. That is the "it took me to
+                a third-party site" complaint, blocked at the browser level. */}
             <iframe
-              key={`iframe-${serverIdx}-${channelId}`}
+              key={`iframe-${serverIdx}-${channelId}-${exactId || 'none'}`}
               src={streamUrl}
               className="absolute inset-0 block w-full h-full min-h-full border-0 bg-black"
               style={{ height: '100%', minHeight: '100%' }}
               allowFullScreen
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+              sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
               referrerPolicy="no-referrer"
               title="RealSSA Sports Stream"
               onLoad={() => setStatus('playing')}

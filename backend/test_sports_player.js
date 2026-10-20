@@ -162,6 +162,52 @@ async function pipelinePart() {
   check('Lakers single entry after ESPN merge', merged.filter(m => (m.home || '').toLowerCase().includes('lakers')).length === 1);
   check('ESPN logo attached where missing', merged.find(m => (m.home || '').includes('Lakers'))?.homeCrest === 'lh.png');
   check('live matches sorted first', merged.every((m, i, a) => i === 0 || a[i - 1].isLive || !m.isLive));
+
+  // ── REGRESSION: the merged feed must not publish the same game twice ──
+  // The Streamed mirror and ESPN disagree on which side is "home" for some
+  // games (ESPN "San Antonio Spurs vs Oklahoma City Thunder" vs Streamed
+  // "Oklahoma City Thunder vs. San Antonio Spurs", identical kickoff). The
+  // merge only compared same-orientation pairs, so the SAME fixture was
+  // published twice and the user saw two cards for one game.
+  console.log('\n═══ REGRESSION: reversed home/away merges into ONE fixture ═══');
+  const iso = (ms) => new Date(Date.now() + ms).toISOString();
+  const reversed = T.mergeMatches(
+    [{ id: 'stRev', event: 'Oklahoma City Thunder vs. San Antonio Spurs', sport: 'Basketball', home: 'Oklahoma City Thunder', away: 'San Antonio Spurs', kickoff: iso(0), isLive: false, source: 'streamed' }],
+    [],
+    [{ id: 'espn:401873008', event: 'San Antonio Spurs vs Oklahoma City Thunder', sport: 'Basketball', home: 'San Antonio Spurs', away: 'Oklahoma City Thunder', homeCrest: 'lh.png', awayCrest: 'bc.png', kickoff: iso(0), isLive: false, source: 'espn' }]
+  );
+  check('reversed same-kickoff pair collapses to ONE card', reversed.length === 1,
+    `${reversed.length} cards: ${reversed.map(m => m.event).join(' || ')}`);
+  check('the surviving card keeps the Streamed embed id', reversed[0]?.streamId === 'stRev', `got ${reversed[0]?.streamId}`);
+  check('ESPN crest is still attached to the merged card', reversed[0]?.homeCrest === 'lh.png', `got ${reversed[0]?.homeCrest}`);
+
+  // The same two clubs also meet on DIFFERENT days (home and away legs).
+  // Those are two real fixtures and must NOT be collapsed into one.
+  const legs = T.mergeMatches(
+    [
+      { id: 'leg1', event: 'FC Cincinnati vs. D.C. United', sport: 'Soccer', home: 'FC Cincinnati', away: 'D.C. United', kickoff: iso(0), isLive: false, source: 'streamed' },
+      { id: 'leg2', event: 'D.C. United vs. FC Cincinnati', sport: 'Soccer', home: 'D.C. United', away: 'FC Cincinnati', kickoff: iso(3 * 86400e3), isLive: false, source: 'streamed' },
+    ], [], []
+  );
+  check('two legs on different days stay TWO fixtures', legs.length === 2, `${legs.length} cards`);
+
+  // Same orientation, different days → also two fixtures.
+  const twoGames = T.mergeMatches(
+    [
+      { id: 'g1', event: 'Arsenal vs Chelsea', sport: 'Soccer', home: 'Arsenal', away: 'Chelsea', kickoff: iso(0), isLive: false, source: 'streamed' },
+      { id: 'g2', event: 'Arsenal vs Chelsea', sport: 'Soccer', home: 'Arsenal', away: 'Chelsea', kickoff: iso(5 * 86400e3), isLive: false, source: 'streamed' },
+    ], [], []
+  );
+  check('same pairing on different days stays TWO fixtures', twoGames.length === 2, `${twoGames.length} cards`);
+
+  // ESPN event ids must never land in `streamId`: the exact-match embed URL is
+  // built from that field, so an ESPN id there produces a 404.
+  const espnIdLeak = T.mergeMatches(
+    [{ id: 'stKeep', event: 'Denver Broncos vs Seattle Seahawks', sport: 'American-football', home: 'Denver Broncos', away: 'Seattle Seahawks', kickoff: iso(0), isLive: false, source: 'streamed' }],
+    [],
+    [{ id: 'espn:401872995', event: 'Denver Broncos vs Seattle Seahawks', sport: 'American-football', home: 'Denver Broncos', away: 'Seattle Seahawks', homeCrest: 'dc.png', awayCrest: 'ss.png', kickoff: iso(0), isLive: false, source: 'espn' }]
+  );
+  check('ESPN id never overwrites the Streamed streamId', espnIdLeak[0]?.streamId === 'stKeep', `got ${espnIdLeak[0]?.streamId}`);
 // ── Regression guards for the "nothing is ever live + no Asian feeds" bugs ──
 //   1. The upstream Streamed API carries NO `live`/`isLive` field at all, so
 //      `!!(item.live || item.isLive)` was false for every fixture → the Live
@@ -512,7 +558,7 @@ async function liveParts() {
   const playable = feed.matches.filter(m => m.status !== 'finished');
   const playableWithDir = playable.filter(m => m.directSources?.length);
   check('majority of playable (live+upcoming) feed carries directSources', playableWithDir.length >= Math.floor(playable.length * 0.8), `${playableWithDir.length}/${playable.length} playable (finished excluded → Highlights)`);
-  check('directSources well-formed', withDir.slice(0, 5).every(m => m.directSources.every(s => /^https?:\/\/.+\.m3u8/.test(s.url) && s.label)), JSON.stringify(withDir[0]?.directSources?.[0]).slice(0, 140));
+  check('directSources well-formed', withDir.slice(0, 5).every(m => m.directSources.every(s => /^https?:\/\/.+\.m3u8/.test(s.url) && s.label)), String(JSON.stringify(withDir[0]?.directSources?.[0] ?? null)).slice(0, 140));
   check('upcoming (non-live) matches also carry sources', withDir.some(m => !m.isLive), `${withDir.filter(m => !m.isLive).length} upcoming enriched`);
   check('EVERY source in feed is tier-tagged (no undefined)', feed.matches.every(m => (m.directSources || []).every(s => ['team', 'broadcaster', 'generic'].includes(s.sourceTier))), JSON.stringify(feed.matches.find(m => (m.directSources || []).some(s => !s.sourceTier))?.event));
   check('no playable fixture is a dead end (finished get Highlights instead)', playable.every(m => m.directSources?.length > 0), `${playable.filter(m => !m.directSources?.length).length} playable without sources`);

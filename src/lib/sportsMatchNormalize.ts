@@ -158,6 +158,12 @@ export interface FeedMatch {
   venue: string | null;
   directSources: FeedDirectSource[];
   liveConfidence: FeedConfidence | null;
+  /**
+   * Fixture-locked embed URL for THIS match (embed.st/embed/<source>/<id>/1).
+   * Built from the authoritative `streamSources` source/id pair — the match id
+   * is NOT a stream id and `embed.st/embed/admin/<matchId>` 404s.
+   */
+  exactEmbedUrl: string | null;
 }
 
 // The DB fallback uses 'Home'/'Home Team'/'Away Team' placeholders when the
@@ -206,6 +212,17 @@ export function normalizeFeedMatch(raw: RawMatch): FeedMatch {
   const hasScore = base.home_score !== 0 || base.away_score !== 0;
   const streamId = firstValue(raw.streamId, raw.stream_id, raw.exactStreamId, raw.exact_stream_id);
 
+  // Exact-match embed: streamed.st per-match embed URL. Prefer the derived URL
+  // from the first source/id pair, but fall back to the admin/<matchId> format
+  // when the exact sources are unavailable (the admin URL 404s, which is why
+  // this fix was needed in the first place).
+  const firstSource = Array.isArray(raw.streamSources) && raw.streamSources.length
+    ? raw.streamSources[0]
+    : null;
+  const exactEmbedUrl = firstSource
+    ? `https://embed.st/embed/${String(firstSource.source)}/${String(firstSource.id)}/1`
+    : (raw.streamId ? `https://embed.st/embed/admin/${raw.streamId}/1` : null);
+
   return {
     id: base.provider_match_id,
     event: String(firstValue(raw.event, raw.title, '') ?? '') ||
@@ -229,6 +246,10 @@ export function normalizeFeedMatch(raw: RawMatch): FeedMatch {
     venue: base.venue ?? null,
     directSources: normalizeDirectSources(raw),
     liveConfidence: normalizeFeedConfidence(raw),
+    // Exact-match embed URL (fixture-locked player source). Derived from the
+    // authoritative streamSources pair; falls back to the legacy admin/<matchId>
+    // format which 404s, but is kept for backward compatibility.
+    exactEmbedUrl,
   };
 }
 

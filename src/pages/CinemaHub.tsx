@@ -146,6 +146,7 @@ export default function CinemaHub() {
     liveConfidence?: { level: 'match' | 'channel' | 'generic' | 'none'; exact?: boolean; label?: string | null } | null;
     kickoff?: string | number | null;
     streamId?: string | number | null;
+    exactEmbedUrl?: string | null;
     venue?: string | null;
   } | null>(null);
   const [sportsMatches, setSportsMatches] = useState<FeedMatch[]>([]);
@@ -192,6 +193,7 @@ export default function CinemaHub() {
       liveConfidence: target.liveConfidence || null,
       kickoff: target.kickoff ?? (handoff.kickoff as string) ?? null,
       streamId: target.streamId || null,
+      exactEmbedUrl: target.exactEmbedUrl || null,
       venue: target.venue || null,
     });
     // Clear the state so a refresh does not re-open the player.
@@ -221,17 +223,29 @@ export default function CinemaHub() {
   }, []);
 
   // ── Load Sports Matches when activeTab === 'sports' (own native feed) ──
+  //
+  // The feed is a LIVE surface: a match that ends must leave the grid and the
+  // next day's fixtures must arrive on their own. That needs a periodic
+  // refresh, not a one-shot fetch on tab open — otherwise the page keeps
+  // showing yesterday's card list until the user reloads.
+  //
+  // The backend already drops finished fixtures (FINISHED_KEEP_MS) and caches
+  // the feed for 2 min, so a 90s poll is cheap and never hammers the upstream.
+  const SPORTS_FEED_REFRESH_MS = 90_000;
   useEffect(() => {
-    if (activeTab === 'sports') {
-      setSportsMatchesLoading(true);
-      console.log('[Sports] Fetching matches from /api/sports/matches');
+    if (activeTab !== 'sports') return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const load = (first: boolean) => {
+      if (first) setSportsMatchesLoading(true);
       fetch(apiUrl('/api/sports/matches'))
         .then(r => {
-          console.log('[Sports] API response status:', r.status, r.ok);
+          if (!cancelled) console.log('[Sports] API response status:', r.status, r.ok);
           return r.ok ? r.json() : null;
         })
         .then(data => {
-          console.log('[Sports] API data received:', data);
+          if (cancelled) return;
           // The endpoint answers with the rich camelCase feed, but the DB
           // fallback sends legacy snake_case rows. Normalise BOTH into the
           // camelCase view the cards render, so teams/crests/kickoff and the
@@ -239,27 +253,45 @@ export default function CinemaHub() {
           const list = normalizeFeedMatches(data);
           console.log('[Sports] Parsed matches count:', list.length,
             '| live:', list.filter(m => m.isLive).length);
-          setSportsMatches(list);
+          // A failed/empty payload must NOT wipe a good list we already have.
+          if (list.length || first) setSportsMatches(list);
           setSportsMatchesLoading(false);
         })
         .catch((err) => {
+          if (cancelled) return;
           console.error('[Sports] Primary API failed:', err);
-          // Legacy endpoint fallback keeps the hub alive
-          fetch(apiUrl('/api/sports/stream-schedule'))
-            .then(r => r.ok ? r.json() : [])
-            .then(legacy => {
-              const list = normalizeFeedMatches(legacy);
-              console.log('[Sports] Legacy API returned:', list.length, 'matches');
-              setSportsMatches(list);
-              setSportsMatchesLoading(false);
-            })
-            .catch((err2) => {
-              console.error('[Sports] Legacy API also failed:', err2);
-              setSportsMatches([]);
-              setSportsMatchesLoading(false);
-            });
+          if (first) {
+            // Legacy endpoint fallback keeps the hub alive
+            fetch(apiUrl('/api/sports/stream-schedule'))
+              .then(r => r.ok ? r.json() : [])
+              .then(legacy => {
+                if (cancelled) return;
+                const list = normalizeFeedMatches(legacy);
+                console.log('[Sports] Legacy API returned:', list.length, 'matches');
+                setSportsMatches(list);
+                setSportsMatchesLoading(false);
+              })
+              .catch((err2) => {
+                console.error('[Sports] Legacy API also failed:', err2);
+                setSportsMatches([]);
+                setSportsMatchesLoading(false);
+              });
+          }
         });
-    }
+    };
+
+    load(true);
+    // Chain the next poll off the previous one (not setInterval) so a slow
+    // response can never stack up overlapping requests.
+    const schedule = () => {
+      timer = setTimeout(() => { load(false); schedule(); }, SPORTS_FEED_REFRESH_MS);
+    };
+    schedule();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [activeTab]);
 
   // ── Data saver: auto-detect via navigator.connection ──
@@ -1163,6 +1195,7 @@ export default function CinemaHub() {
                                         liveConfidence: match.liveConfidence || null,
                                         kickoff: match.kickoff ?? null,
                                         streamId: match.streamId || null,
+                                        exactEmbedUrl: match.exactEmbedUrl || null,
                                         venue: match.venue || null,
                                       });
                                     }}
@@ -2041,6 +2074,10 @@ export default function CinemaHub() {
       {/* ── RealSSA Sports Player (native direct HLS + fallback servers) ── */}
       {activeSportsPlayer && (
         <SportsPlayer
+          // Remount per fixture. Without this, switching from Parma to Getafe
+          // reused the same <video>/hls instance and kept playing the PREVIOUS
+          // match's channel under the new title — the "wrong match" bleed.
+          key={`${activeSportsPlayer.channelId}|${activeSportsPlayer.streamId || ''}|${activeSportsPlayer.title}`}
           channelId={activeSportsPlayer.channelId}
           title={activeSportsPlayer.title}
           directSources={activeSportsPlayer.directSources}
@@ -2054,6 +2091,7 @@ export default function CinemaHub() {
           liveConfidence={activeSportsPlayer.liveConfidence}
           kickoff={activeSportsPlayer.kickoff}
           streamId={activeSportsPlayer.streamId}
+          exactEmbedUrl={activeSportsPlayer.exactEmbedUrl}
           venue={activeSportsPlayer.venue}
           onSwitchMatch={m => setActiveSportsPlayer({
             channelId: m.streamId || 'superabbit',
@@ -2069,6 +2107,7 @@ export default function CinemaHub() {
             liveConfidence: m.liveConfidence || null,
             kickoff: m.kickoff ?? null,
             streamId: m.streamId || null,
+            exactEmbedUrl: m.exactEmbedUrl || null,
             venue: m.venue || null,
           })}
           onClose={() => setActiveSportsPlayer(null)}
