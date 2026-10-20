@@ -15,6 +15,7 @@ const { generateDiscussionStarter } = require('./aiCommunityBot');
 const notificationService = require('./notificationService');
 const { postToBuffer } = require('./buffer');
 const { extractArticle } = require('./extractor');
+const { scrapeAndRehost } = require('./imagePipeline');
 
 const SITE_URL = 'https://realssanews.com.ng';
 
@@ -1012,9 +1013,27 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
           }
         }
 
+        // If image is a logo/placeholder (punchng, icon, brand, etc.), scrape the real article image
+        const LOGO_PATTERN = /(logo|icon|brand|placeholder|avatar|favicon|punchng)/i;
+        if (image && LOGO_PATTERN.test(image)) {
+          console.log(`Image is a logo/placeholder for "${title}", scraping real article image...`);
+          try {
+            const scraped = await scrapeAndRehost(externalLink, { category, headline: title });
+            if (scraped?.r2Url && isLikelyStoryImage(scraped.r2Url)) {
+              image = scraped.r2Url;
+              console.log(`✅ Re-hosted real image for "${title}": ${image.substring(0, 50)}...`);
+            } else if (scraped?.originalUrl && isLikelyStoryImage(scraped.originalUrl)) {
+              image = scraped.originalUrl;
+              console.log(`✅ Found real image (no rehost) for "${title}": ${image.substring(0, 50)}...`);
+            }
+          } catch (scrapeErr) {
+            console.warn(`Image scrape failed for "${title}": ${scrapeErr.message}`);
+          }
+        }
+
         // No real image found — use RealSSA default logo instead of skipping
-        if (!image) {
-          console.log(`No image found for "${title}" — using RealSSA fallback`);
+        if (!image || LOGO_PATTERN.test(image)) {
+          console.log(`No real image for "${title}" — using RealSSA fallback`);
           image = 'https://realssanews.com.ng/logo.png';
         }
 
