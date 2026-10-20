@@ -6320,9 +6320,9 @@ app.get('/api/cron/summarize', async (req, res) => {
        WHERE ai_summary IS NULL 
        AND content_type = 'article'
        AND original_excerpt IS NOT NULL
-       AND published_at > NOW() - INTERVAL '2 days'
+       AND published_at > NOW() - INTERVAL '7 days'
        ORDER BY published_at DESC
-       LIMIT 3`
+       LIMIT 15`
     );
     const articles = articlesResult.rows;
     console.log(`📊 Found ${articles.length} articles needing summaries`);

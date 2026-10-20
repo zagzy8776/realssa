@@ -165,10 +165,13 @@ async function callWaterfall(prompt, { maxTokens = 800, temperature = 0.3, timeo
 
 const AI_ANALYSIS_PROMPT = (title, cleanText) => [
   'You are the lead editor for RealSSA News, Africa\'s leading digital news platform.',
-  'Analyze the following news article and output a structured JSON object.',
+  'Write a comprehensive, book-like summary of the following news article.',
+  'Your summary should read like a compelling narrative — detailed, engaging, and easy to follow.',
+  'Tell the full story: what happened, who was involved, why it matters, and what comes next.',
+  'Write in a storytelling style that keeps readers hooked from start to finish.',
   'Strict requirements for the JSON schema:',
   '{',
-  '  "summary": "2-sentence summary. First sentence states key fact directly. Second sentence explains why it matters for Africa or everyday people.",',
+  '  "summary": "A comprehensive 4-6 paragraph book-like summary. Each paragraph should flow naturally into the next, telling the complete story with all key details, context, and significance. Do NOT use bullet points. Write as continuous narrative prose, like a chapter from a book."',
   '  "entities": [{ "name": "Full canonical name", "type": "person|organization|location|sports_team" }],',
   '  "translations": {',
   '    "pidgin":  { "title": "...", "summary": "..." },',
@@ -183,23 +186,23 @@ const AI_ANALYSIS_PROMPT = (title, cleanText) => [
 ].join('\n');
 
 async function generateAIAnalysis(title, excerpt) {
-  const cleanText = (excerpt || title || '').replace(/<[^>]+>/g, '').slice(0, 600);
+  const cleanText = (excerpt || title || '').replace(/<[^>]+>/g, '').slice(0, 4000);
   const prompt = AI_ANALYSIS_PROMPT(title, cleanText);
 
   // 1. Waterfall — free router, picks best available model
-  let raw = await callWaterfall(prompt, { maxTokens: 900, temperature: 0.2, timeout: 20000 });
+  let raw = await callWaterfall(prompt, { maxTokens: 2000, temperature: 0.3, timeout: 25000 });
   if (raw) {
     try { const r = JSON.parse(raw); console.log('[AIAnalysis] ✅ Waterfall'); return r; } catch {}
   }
 
   // 2. Gemini — best for structured JSON
-  raw = await callGemini(prompt, { maxOutputTokens: 800, temperature: 0.2, timeout: 12000, responseMimeType: 'application/json' });
+  raw = await callGemini(prompt, { maxOutputTokens: 2000, temperature: 0.3, timeout: 20000, responseMimeType: 'application/json' });
   if (raw) {
     try { const r = JSON.parse(raw); console.log('[AIAnalysis] ✅ Gemini'); return r; } catch {}
   }
 
   // 3. Groq fallback
-  raw = await callGroq(prompt, { maxTokens: 900, temperature: 0.2 });
+  raw = await callGroq(prompt, { maxTokens: 2000, temperature: 0.3 });
   if (raw) {
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -208,7 +211,7 @@ async function generateAIAnalysis(title, excerpt) {
   }
 
   // 4. Cerebras fallback
-  raw = await callCerebras(prompt, { maxTokens: 900, temperature: 0.2 });
+  raw = await callCerebras(prompt, { maxTokens: 2000, temperature: 0.3 });
   if (raw) {
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -216,9 +219,9 @@ async function generateAIAnalysis(title, excerpt) {
     } catch {}
   }
 
-  // 4. Minimal fallback — at least return a basic summary so article isn't blank
+  // 5. Minimal fallback — at least return a basic summary so article isn't blank
   console.warn(`[AIAnalysis] All providers failed for: "${title.slice(0, 50)}" — using excerpt fallback`);
-  return { summary: cleanText.slice(0, 200) || title, entities: [], translations: {} };
+  return { summary: cleanText.slice(0, 800) || title, entities: [], translations: {} };
 }
 
 const FULL_ARTICLE_PROMPT = (title, cleanText) => [
