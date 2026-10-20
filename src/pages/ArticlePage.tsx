@@ -10,6 +10,7 @@ import ExternalArticleComments from "@/components/ExternalArticleComments";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import LiveReacts from "@/components/LiveReacts";
+import LiveViewerCount from "@/components/LiveViewerCount";
 import ReadProgressBar from "@/components/ReadProgressBar";
 import SEO from "@/components/SEO";
 import { fetchWithRetry } from "@/lib/fetchWithRetry";
@@ -22,7 +23,10 @@ import { Input } from "@/components/ui/input";
 import { ShieldCheck, ShieldAlert, Users } from "lucide-react";
 import { ArrowLeft, Share2, Facebook, Twitter, Mail, Copy, Heart, MessageCircle, Send, ExternalLink } from "lucide-react";
 import { trackArticleRead } from "@/lib/userPreferences";
+import { useEventHaptics } from "@/hooks/useEventHaptics";
 import MovieRail from "@/components/MovieRail";
+import ProphecyCard from "@/components/ProphecyCard";
+import PsychoacousticSoundscape from "@/components/PsychoacousticSoundscape";
 
 interface Comment {
   id: string;
@@ -53,6 +57,7 @@ const ArticlePage = () => {
   const [parseError, setParseError] = useState(false);
   const [imgError, setImgError] = useState(false);
   const navigate = useNavigate();
+  const { triggerCryptoHaptic, triggerGoalHaptic, triggerPanicHaptic } = useEventHaptics();
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -684,6 +689,11 @@ const ArticlePage = () => {
           {/* Live Reacts Section */}
           <LiveReacts articleId={article.id} />
 
+          {/* Live Viewer Count (Phantom Live Feed) */}
+          <div className="flex justify-center mb-6">
+            <LiveViewerCount articleId={article.id} category={article.category || 'general'} />
+          </div>
+
           {/* Comments Section */}
           <div className="mt-12 border-t border-border pt-8">
             <ExternalArticleComments
@@ -729,6 +739,24 @@ const ArticlePage = () => {
           {article && (
             <MovieRail headline={article.title || ''} articleId={article.id} />
           )}
+
+          {/* Prophecy Engine — for sports articles */}
+          {article && (article.category === 'sports' || article.category === 'football') && (
+            <div className="mt-12 border-t border-border pt-8">
+              <ProphecyCard
+                matchId={article.id}
+                homeTeam={article.homeTeam}
+                awayTeam={article.awayTeam}
+                competition={article.competition}
+                className="w-full"
+              />
+            </div>
+          )}
+
+          {/* Psychoacoustic Soundscape — Biometric Mirroring */}
+          <div className="mt-12 border-t border-border pt-8">
+            <PsychoacousticSoundscape className="w-full" />
+          </div>
         </article>
       </div>
       <Footer />

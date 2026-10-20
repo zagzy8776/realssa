@@ -20,6 +20,7 @@ const { getHumanContextForPrompt } = require('./services/brainStore');
 const { runLearningCycle } = require('./services/humanBrainBot');
 const { initIntelligenceAgent } = require('./services/aiIntelligenceAgent');
 const { initTrendingSynthesizer } = require('./services/aiTrendingSynthesizer');
+const { initHotTakesEngine } = require('./services/aiHotTakesEngine');
 const { moderateUserComment } = require('./services/aiCommunityBot');
 const notificationService = require('./services/notificationService');
 const { postToTelegramChannel } = require('./services/telegramPublisher');
@@ -222,6 +223,7 @@ if (process.env.DATABASE_URL) {
         initSportsBot(pool, notificationService);
         initIntelligenceAgent(pool);
         initTrendingSynthesizer(pool);
+        initHotTakesEngine(pool);
         initTelemetryFlusher(pool);
         initWhatsAppBots(pool);
         initWhatsAppBots(pool);
@@ -1490,6 +1492,83 @@ app.post('/api/articles/:id/view', async (req, res) => {
     res.status(500).json({ error: 'Failed to update view count', views: 0 });
   }
 });
+
+// ── Article Reactions ───────────────────────────────────────────────────
+app.post('/api/articles/:id/react', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const { emoji } = req.body || {};
+    if (!emoji) return res.status(400).json({ error: 'emoji required' });
+
+    const dbId = rawId.startsWith('rss-') ? rawId.replace('rss-', '') : rawId;
+
+    if (!process.env.DATABASE_URL) {
+      return res.json({ ok: true, message: 'No DB configured' });
+    }
+
+    // Ensure article_reactions table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_reactions (
+        id SERIAL PRIMARY KEY,
+        article_id INTEGER NOT NULL,
+        reaction_type TEXT NOT NULL,
+        emoji TEXT,
+        source TEXT DEFAULT 'native',
+        device_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('ALTER TABLE article_reactions ADD COLUMN IF NOT EXISTS emoji TEXT');
+    await pool.query('ALTER TABLE article_reactions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT \'native\'');
+
+    await pool.query(
+      `INSERT INTO article_reactions (article_id, reaction_type, emoji, source, device_id, created_at)
+       VALUES ($1, $2, $2, $3, $4, NOW())`,
+      [dbId, emoji, 'native', req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anon']
+    );
+
+    res.json({ ok: true, emoji });
+  } catch (err) {
+    console.error('Failed to record reaction:', err.message);
+    res.status(500).json({ error: 'Failed to record reaction' });
+  }
+});
+
+app.get('/api/articles/:id/reactions', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const dbId = rawId.startsWith('rss-') ? rawId.replace('rss-', '') : rawId;
+
+    if (!process.env.DATABASE_URL) {
+      return res.json({ counts: [] });
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_reactions (
+        id SERIAL PRIMARY KEY,
+        article_id INTEGER NOT NULL,
+        reaction_type TEXT NOT NULL,
+        emoji TEXT,
+        source TEXT DEFAULT 'native',
+        device_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    const result = await pool.query(
+      `SELECT emoji as emoji, count(*)::int as count
+       FROM article_reactions
+       WHERE article_id = $1
+       GROUP BY emoji`,
+      [dbId]
+    );
+    res.json({ counts: result.rows });
+  } catch (err) {
+    console.error('Failed to fetch reactions:', err.message);
+    res.json({ counts: [] });
+  }
+});
+
 // ── Dynamic Server-Side Pre-Rendering for Crawlers (SEO & Social Cards) ──────
 app.get('/article/:id', async (req, res) => {
   const userAgent = (req.headers['user-agent'] || '').toLowerCase();
@@ -5487,28 +5566,79 @@ app.get('/api/img', async (req, res) => {
     return res.send(cached.buf);
   }
 
+  // Aggressive bypass: many CDNs/CMSes reject hotlink requests (403/404) when the
+  // Referer doesn't match the image host, when the UA is a bot, or when the
+  // Accept header doesn't advertise JPEG/PNG. We try a ladder of header
+  // strategies and keep the first response that is OK and actually an image.
+  let imgOrigin;
+  try { imgOrigin = new URL(imgUrl).origin; } catch (_) { imgOrigin = ''; }
+
+  const STRATEGIES = [
+    // 1. Pretend to be the image's own page (self-referer + browser UA) —
+    //    passes the strictest referrer checks (WordPress, Wix, Shopify).
+    { name: 'self', headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': imgOrigin + '/',
+    }},
+    // 2. No referrer at all (curl-like) — passes sites that BLOCK known referrers.
+    { name: 'no-referrer', headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; RealSSABot/1.0)',
+      'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
+    }},
+    // 3. Google referrer — bypasses sites that whitelist search-engine referrers.
+    { name: 'google', headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
+      'Referer': 'https://www.google.com/',
+    }},
+    // 4. Generic bot (legacy behaviour — kept as last resort).
+    { name: 'bot', headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; RealSSABot/1.0)',
+      'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
+      'Referer': imgOrigin,
+    }},
+  ];
+
+  let upstream = null;
+  let usedStrategy = null;
+  for (const strat of STRATEGIES) {
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 8000);
+      const r = await fetch(imgUrl, {
+        headers: strat.headers,
+        signal: controller.signal,
+        redirect: 'follow',
+      });
+      clearTimeout(tid);
+
+      if (!r.ok) {
+        // Some CDNs answer 403 only for specific referers — keep trying.
+        continue;
+      }
+      const ct = r.headers.get('content-type') || '';
+      if (!ct.startsWith('image/')) continue; // got an HTML error page — retry
+      upstream = r;
+      usedStrategy = strat.name;
+      break;
+    } catch (fetchErr) {
+      // Network error / timeout — try the next strategy.
+    }
+  }
+
+  if (!upstream) return res.status(502).send('Upstream error (all header strategies failed)');
+
   try {
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 10000);
-
-    const upstream = await fetch(imgUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; RealSSABot/1.0)',
-        'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
-        'Referer': new URL(imgUrl).origin,
-      },
-      signal: controller.signal,
-      redirect: 'follow',
-    });
-    clearTimeout(tid);
-
-    if (!upstream.ok) return res.status(upstream.status).send('Upstream error');
-
     const contentType = upstream.headers.get('content-type') || '';
     if (!contentType.startsWith('image/')) return res.status(415).send('Not an image');
 
     const origBytes = await upstream.arrayBuffer();
     const origBuf = Buffer.from(origBytes);
+    if (usedStrategy && usedStrategy !== 'self') {
+      console.log(`[img] bypass via '${usedStrategy}' for ${new URL(imgUrl).hostname}`);
+    }
 
     // If Sharp is available: resize + convert to WebP
     if (sharp) {
@@ -7344,7 +7474,12 @@ if (!process.env.VERCEL) {
     require('./services/velocity.service').start();
     require('./services/socialPredictive.service').start();
     require('./services/cryptoLive.service').start();
-    console.log('✅ Empire of Attention engines active (velocity, predictive, crypto-live).');
+    // Volatility alarm subscribes to cryptoLive ticks + socialPredictive polls
+    // and fires OneSignal pushes (with affiliate deep links) on market panics.
+    require('./services/volatilityAlarm.service').start();
+    // Live Viewer Service — synthetic social proof counts
+    require('./services/liveViewerService').start();
+    console.log('✅ Empire of Attention engines active (velocity, predictive, crypto-live, volatility-alarm, live-viewer).');
   } catch (empireErr) {
     console.error('❌ Failed to initialize Empire of Attention engines:', empireErr.message);
   }

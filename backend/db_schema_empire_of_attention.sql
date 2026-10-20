@@ -117,6 +117,59 @@ ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS predicted_trend_score DOUBLE P
 ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS image_r2_url TEXT;
 ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS ai_headline TEXT;
 
+-- =====================================================
+-- Empire of Attention — Phase 2: Manufactured Attention Features
+-- Run this block ONCE in Neon SQL Editor (appended to Phase 1)
+-- =====================================================
+
+-- ── Volatility Alarm Log (push triggers from price/social spikes) ──
+CREATE TABLE IF NOT EXISTS volatility_alarms (
+  id SERIAL PRIMARY KEY,
+  trigger_source TEXT NOT NULL, -- 'crypto_price', 'social_panic', 'fear_greed'
+  symbol TEXT,
+  price DOUBLE PRECISION,
+  prev_price DOUBLE PRECISION,
+  pct_change DOUBLE PRECISION,
+  social_velocity DOUBLE PRECISION,
+  fear_greed_value INTEGER,
+  severity TEXT DEFAULT 'watch', -- 'watch' | 'alert' | 'panic'
+  push_sent BOOLEAN DEFAULT FALSE,
+  affiliate_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_volatility_alarm_severity ON volatility_alarms(severity, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_volatility_alarm_symbol ON volatility_alarms(symbol, created_at DESC);
+
+-- ── Live Viewer Counts (synthetic social proof) ──
+-- Real counts come from the telemetry beacon; synthetic baseline is
+-- seeded from category affinity + time-of-day curves so the number
+-- always looks alive even when the room is quiet.
+CREATE TABLE IF NOT EXISTS live_viewer_counts (
+  id SERIAL PRIMARY KEY,
+  scope_type TEXT NOT NULL, -- 'article' | 'category' | 'global'
+  scope_id TEXT NOT NULL,
+  real_count INTEGER DEFAULT 0,
+  synthetic_boost INTEGER DEFAULT 0,
+  display_count INTEGER DEFAULT 0,
+  computed_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (scope_type, scope_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_live_viewer_computed ON live_viewer_counts(computed_at DESC);
+
+-- ── Live Reactions persistence (extends article_reactions) ──
+-- The existing article_reactions table uses fire/heart/wow. LiveReacts.tsx
+-- uses fire/angry/sad/clap/shock. We normalize them here.
+ALTER TABLE article_reactions ADD COLUMN IF NOT EXISTS emoji TEXT;
+ALTER TABLE article_reactions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'native';
+
+-- Normalize legacy rows
+UPDATE article_reactions SET emoji = reaction_type, source = 'native' WHERE emoji IS NULL;
+
+-- =====================================================
+-- End of Empire of Attention Schema — Phase 2
+-- =====================================================
 -- ======================================================
 -- End of Empire of Attention Schema
 -- ======================================================

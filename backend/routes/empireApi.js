@@ -20,6 +20,8 @@ const socialPredictive = require('../services/socialPredictive.service');
 const cryptoLive = require('../services/cryptoLive.service');
 const imagePipeline = require('../services/imagePipeline');
 const behavior = require('../services/behaviorIntelligence.service');
+const liveViewer = require('../services/liveViewerService');
+const prophecyEngine = require('../services/prophecyEngine');
 
 // ── Velocity ──────────────────────────────────────────────────────────────
 router.get('/velocity', async (req, res) => {
@@ -114,6 +116,49 @@ router.get('/image-scrape', async (req, res) => {
   }
 });
 
+// ── Live Viewer Counts (synthetic social proof) ──────────────────────────
+router.get('/live-viewer-counts', (req, res) => {
+  const counts = liveViewer.getAllViewerCounts();
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ counts, computedAt: new Date().toISOString() });
+});
+
+router.get('/live-viewer-count/:scopeType/:scopeId', (req, res) => {
+  const { scopeType, scopeId } = req.params;
+  const count = liveViewer.getViewerCount(scopeType, scopeId);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ scopeType, scopeId, ...count });
+});
+
+router.post('/live-viewer-track', (req, res) => {
+  const { scopeType, scopeId, deviceId } = req.body || {};
+  if (!scopeType || !scopeId) return res.status(400).json({ error: 'scopeType and scopeId required' });
+  const display = liveViewer.trackView(scopeType, scopeId, deviceId || 'anon');
+  res.status(200).json({ ok: true, displayCount: display });
+});
+
+// ── Prophecy Engine (The Predictable Future) ──────────────────────────────
+router.post('/prophecy/generate', async (req, res) => {
+  try {
+    const match = req.body || {};
+    const prophecy = await prophecyEngine.generateProphecy(match);
+    if (!prophecy) return res.status(503).json({ error: 'Prophecy engine disabled or unavailable' });
+    if (match.match_id) await prophecyEngine.saveProphecy(match.match_id, prophecy);
+    res.json({ prophecy, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/prophecy/:matchId', async (req, res) => {
+  try {
+    const prophecy = await prophecyEngine.getProphecy(req.params.matchId);
+    res.json({ matchId: req.params.matchId, prophecy: prophecy?.prophecy_text || null, createdAt: prophecy?.created_at || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Behavior telemetry + insights ─────────────────────────────────────────
 // Beacon-safe: always returns 200 so navigator.sendBeacon never retries.
 router.post('/behavior/report', (req, res) => {
@@ -176,6 +221,8 @@ router.get('/empire/dashboard', async (req, res) => {
   out.socialStatus = snap.trends.length ? 'active' : 'warming';
   // Crypto
   out.crypto = cryptoLive.getSnapshot();
+  // Live Viewer Counts
+  out.liveViewerCounts = liveViewer.getAllViewerCounts();
   res.setHeader('Cache-Control', 'no-store');
   res.json(out);
 });

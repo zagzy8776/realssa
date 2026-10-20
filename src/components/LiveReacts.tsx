@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
+import { apiUrl } from '@/lib/api-base';
 
 interface EmojiOption {
   id: string;
@@ -20,6 +21,20 @@ const EMOJIS: EmojiOption[] = [
 export default function LiveReacts({ articleId }: { articleId: string }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [floatingEmojis, setFloatingEmojis] = useState<{ id: number, emoji: string }[]>([]);
+  const [reactionCounts, setReactionCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    fetch(`${apiUrl(`/api/articles/${articleId}/reactions`)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.counts) {
+          const counts: Record<string, number> = {};
+          data.counts.forEach((row: any) => { counts[row.emoji] = row.count; });
+          setReactionCounts(counts);
+        }
+      })
+      .catch(() => {});
+  }, [articleId]);
 
   const handleReact = async (emojiObj: EmojiOption) => {
     setSelected(emojiObj.id);
@@ -37,13 +52,29 @@ export default function LiveReacts({ articleId }: { articleId: string }) {
       setFloatingEmojis(prev => prev.filter(e => e.id !== newEmoji.id));
     }, 2000);
 
-    // TODO: Send to backend
-    // fetch(`/api/articles/${articleId}/react`, { method: 'POST', body: JSON.stringify({ emoji: emojiObj.id }) })
+    // Persist reaction to backend
+    try {
+      await fetch(`/api/articles/${articleId}/react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji: emojiObj.id }),
+      }).catch(() => {});
+
+      // Optimistically update count
+      setReactionCounts(prev => ({
+        ...prev,
+        [emojiObj.id]: (prev[emojiObj.id] || 0) + 1,
+      }));
+    } catch (e) {
+      // Silent fail
+    }
   };
 
   return (
     <div className="py-6 border-t border-border mt-8 relative">
-      <h3 className="text-lg font-bold text-center mb-4">How does this make you feel?</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-center">How does this make you feel?</h3>
+      </div>
       
       <div className="flex justify-center items-center gap-2 sm:gap-4 relative">
         {EMOJIS.map((item) => (
@@ -55,6 +86,9 @@ export default function LiveReacts({ articleId }: { articleId: string }) {
             }`}
           >
             <span className="text-3xl sm:text-4xl">{item.emoji}</span>
+            {reactionCounts[item.id] && reactionCounts[item.id] > 0 && (
+              <span className="text-[10px] font-bold bg-black/20 px-1.5 rounded-full">{reactionCounts[item.id]}</span>
+            )}
           </button>
         ))}
 

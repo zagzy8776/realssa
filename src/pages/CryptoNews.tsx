@@ -1,6 +1,8 @@
 import { apiUrl, getArticleExternalLink } from '@/lib/api-base';
 import { useState, useEffect } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Zap, TrendingUp, TrendingDown } from "lucide-react";
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Capacitor } from '@capacitor/core';
 import CategoryBadge from "../components/CategoryBadge";
 import SimpleImage from "../components/SimpleImage";
 import Header from "../components/Header";
@@ -33,6 +35,46 @@ const CryptoNews = () => {
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<CryptoNewsItem[] | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  // Crypto live prices with haptic feedback on significant moves
+  const [cryptoPrices, setCryptoPrices] = useState<Record<string, { price: number; change: number }>>({});
+  const [lastMove, setLastMove] = useState<{ symbol: string; change: number } | null>(null);
+
+  // Event-driven haptics for crypto support/resistance breaks
+  const triggerCryptoHaptic = (change: number) => {
+    if (!Capacitor.isNativePlatform()) return;
+    const style = Math.abs(change) >= 2 ? ImpactStyle.Heavy : ImpactStyle.Medium;
+    Haptics.impact({ style });
+    setLastMove({ symbol: 'CRYPTO', change });
+  };
+
+  useEffect(() => {
+    // Poll crypto live prices from backend
+    const fetchPrices = async () => {
+      try {
+        const res = await fetch(`${apiUrl('/api/crypto-live')}`);
+        if (res.ok) {
+          const data = await res.json();
+          const prices: Record<string, { price: number; change: number }> = {};
+          data.coins?.forEach((coin: any) => {
+            prices[coin.symbol] = { price: coin.price, change: coin.tickChange || coin.change24h || 0 };
+          });
+          setCryptoPrices(prices);
+
+          // Trigger haptic on significant price moves (>1%)
+          const significant = data.coins?.find((coin: any) => Math.abs(coin.tickChange || coin.change24h || 0) > 1);
+          if (significant) {
+            triggerCryptoHaptic(significant.tickChange || significant.change24h || 0);
+          }
+        }
+      } catch (e) {
+        // Silent fail
+      }
+    };
+
+    fetchPrices();
+    const timer = setInterval(fetchPrices, 10000); // poll every 10s
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const fetchCryptoNews = async () => {
@@ -182,6 +224,28 @@ const CryptoNews = () => {
             <p className="text-lg md:text-xl text-white/90 mb-8 max-w-3xl">
               Your gateway to the latest cryptocurrency news, market analysis, and blockchain developments.
             </p>
+
+            {/* Crypto Live Price Ticker with Haptic Feedback */}
+            <div className="mt-8 flex flex-wrap gap-4 items-center">
+              {Object.entries(cryptoPrices).map(([symbol, data]) => (
+                <div key={symbol} className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20">
+                  <span className="text-xs font-bold text-white">{symbol}</span>
+                  <span className="text-xs font-mono text-white">${data.price.toLocaleString()}</span>
+                  <span
+                    className={`text-xs font-bold ${data.change >= 0 ? 'text-green-400' : 'text-red-400'}`}
+                  title={data.change >= 0 ? '📈' : '📉'}
+                  onClick={() => triggerCryptoHaptic(data.change)}
+                >
+                  {data.change >= 0 ? '▲' : '▼'} {Math.abs(data.change).toFixed(2)}%
+                </span>
+                {lastMove && lastMove.change && Math.abs(lastMove.change) >= 2 && (
+                  <Zap size={14} className="text-yellow-500 animate-pulse" title="Heavy haptic triggered" />
+                )}
+              )}
+              {Object.keys(cryptoPrices).length === 0 && (
+                <span className="text-xs text-white/60">Loading crypto prices...</span>
+              )}
+            </div>
 
             <div className="flex flex-wrap gap-4">
               <a

@@ -276,6 +276,10 @@ async function start() {
   const { initDiscussionBot } = require('./services/discussionBot');
   initDiscussionBot();
 
+  console.log('👉 Running Hot Takes Engine (manufactured controversy)');
+  const { initHotTakesEngine } = require('./services/aiHotTakesEngine');
+  initHotTakesEngine(pool);
+
   console.log('====================================');
 }
 
