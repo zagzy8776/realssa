@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CrystalBall, Zap, AlertTriangle, Trophy } from 'lucide-react';
+import { Wand, Zap, AlertTriangle, Trophy } from 'lucide-react';
 import { apiUrl } from '@/lib/api-base';
 
 interface ProphecyCardProps {
@@ -61,7 +61,7 @@ export default function ProphecyCard({ matchId, homeTeam, awayTeam, competition,
     return (
       <div className={`bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-4 ${className || ''}`}>
         <div className="flex items-center gap-3 mb-3">
-          <CrystalBall size={20} className="text-amber-500" />
+          <Wand size={20} className="text-amber-500" />
           <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Prophecy Engine</span>
         </div>
         <button
@@ -78,7 +78,7 @@ export default function ProphecyCard({ matchId, homeTeam, awayTeam, competition,
   return (
     <div className={`bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-4 ${className || ''}`}>
       <div className="flex items-center gap-3 mb-3">
-        <CrystalBall size={20} className="text-amber-500 animate-pulse" />
+        <Wand size={20} className="text-amber-500 animate-pulse" />
         <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Prophecy Engine</span>
       </div>
       <div className="flex items-start gap-2 mb-3">
