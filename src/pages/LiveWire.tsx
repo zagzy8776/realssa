@@ -378,7 +378,12 @@ export default function LiveWire() {
     try {
       const stored = localStorage.getItem("realssa_followed_publishers");
       if (stored) {
-        setFollowedPublishers(JSON.parse(stored));
+        try {
+          const parsed = JSON.parse(stored);
+          setFollowedPublishers(Array.isArray(parsed) ? parsed : []);
+        } catch (_) {
+          setFollowedPublishers([]);
+        }
       }
     } catch (_) {}
   }, []);
@@ -404,7 +409,7 @@ export default function LiveWire() {
       
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setPosts(data);
+      setPosts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.warn("Failed to fetch Live Wire feeds");
       toast.error("Could not fetch Live Wire feed. Try again.");
@@ -430,7 +435,7 @@ export default function LiveWire() {
         const res = await fetch(`${host}/api/news/publisher/${selectedProfilePublisher.handle}/live`);
         if (!res.ok) throw new Error();
         const data = await res.json();
-        setProfilePosts(data);
+        setProfilePosts(Array.isArray(data) ? data : []);
       } catch (err) {
         console.warn("Failed to fetch live publisher feed, falling back to database", err);
         const fallback = posts.filter(p => {
