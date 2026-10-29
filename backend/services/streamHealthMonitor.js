@@ -65,13 +65,13 @@ async function pingServer(url) {
     const resp = await axios.head(url, {
       timeout: 8000,
       maxRedirects: 3,
-      validateStatus: (s) => s < 500, // 4xx = reachable but blocked, 5xx = server error
+      validateStatus: (s) => s >= 200 && s < 400, // Reject access-denied and unavailable responses
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RealSSABot/1.0)' },
     });
     const latency = Date.now() - start;
     // 403 = probably geo-blocked or auth wall but server is up
     // 200/301/302 = healthy
-    const healthy = resp.status < 500;
+    const healthy = resp.status >= 200 && resp.status < 400;
     return { healthy, status: resp.status, latency };
   } catch (err) {
     return { healthy: false, status: 0, latency: Date.now() - start, error: err.message };
@@ -164,7 +164,7 @@ async function getServerHealthStatus() {
 
   // No data yet — return all servers as unknown/healthy (don't block play)
   return SERVERS.reduce((acc, s) => {
-    acc[s.id] = { id: s.id, name: s.name, healthy: true, latency_ms: null, last_checked: null };
+    acc[s.id] = { id: s.id, name: s.name, healthy: null, latency_ms: null, last_checked: null };
     return acc;
   }, {});
 }
