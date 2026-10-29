@@ -58,7 +58,6 @@ export default function CinemaPlayer({
   const [directStream, setDirectStream] = useState<string | null>(null);
   const [streamLoading, setStreamLoading] = useState(true);
   const [streamError, setStreamError] = useState<string | null>(null);
-  const [iframeFailed, setIframeFailed] = useState(false);
   const [fallbackSources, setFallbackSources] = useState<Array<{ name: string; url: string }>>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -85,7 +84,7 @@ export default function CinemaPlayer({
 
   const goNext = useCallback(() => {
     setActiveIdx(prev => (prev + 1) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
-  }, [servers.length, fallbackSources.length]);
+  }, [servers, fallbackSources]);
 
   const goPrev = useCallback(() => {
     setActiveIdx(prev => (prev - 1 + (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length)) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
@@ -93,7 +92,7 @@ export default function CinemaPlayer({
 
   const availableServers = [...servers, ...fallbackSources.filter(source => !servers.some(server => server.url === source.url))];
   const activeServer = availableServers[activeIdx % availableServers.length];
-  useEffect(() => { setIframeFailed(false); }, [activeIdx, tmdbId, mediaType, season, episode]);
+  useEffect(() => { }, [activeIdx, tmdbId, mediaType, season, episode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -104,7 +103,7 @@ export default function CinemaPlayer({
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || 'Stream resolver failed');
-        if (data?.success && data?.stream_url) return data.stream_url as string;
+        if (data?.success && typeof data?.stream_url === 'string' && /^https:\/\//i.test(data.stream_url)) return data.stream_url as string;
         if (Array.isArray(data?.sources)) {
           const valid = data.sources.filter((source: any) => source?.is_embed && /^https:\/\//i.test(source.url || '')).map((source: any) => ({ name: source.source_name || 'Backup server', url: source.url }));
           if (!cancelled && valid.length) setFallbackSources(valid);
@@ -203,7 +202,7 @@ export default function CinemaPlayer({
             {availableServers.map((srv, i) => (
               <button
                 key={i}
-                onClick={() => { setActiveIdx(i); setShowServers(false); setIframeFailed(false); }}
+                onClick={() => { setActiveIdx(i); setShowServers(false); }}
                 className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 active:scale-95 ${
                   i === activeIdx
                     ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-md shadow-amber-500/25 scale-105 font-black'
@@ -222,7 +221,7 @@ export default function CinemaPlayer({
         <div className="absolute inset-0 bg-black">
           {directStream ? <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain bg-black" controls playsInline preload="metadata" autoPlay onError={() => { setStreamError('Direct playback failed.'); setDirectStream(null); }} /> : <SandboxedIframe key={String(tmdbId) + '-' + mediaType + '-' + season + '-' + episode + '-' + activeIdx} src={activeServer.url} className="absolute inset-0 w-full h-full" />}
           {streamLoading && !directStream && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 pointer-events-none"><div className="text-center"><div className="w-8 h-8 mx-auto mb-3 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" /><p className="text-zinc-300 text-xs font-bold">Connecting to video server…</p></div></div>}
-          {!streamLoading && !directStream && <div className="absolute bottom-4 left-4 right-4 z-20 flex justify-center gap-2"><button onClick={() => { setActiveIdx(i => (i + 1) % availableServers.length); setIframeFailed(false); }} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-black">Try another server</button><button onClick={() => { setIframeFailed(false); setActiveIdx(i => (i + 1) % availableServers.length); }} className="rounded-lg bg-zinc-800 px-4 py-2 text-xs text-white">Skip broken page</button></div>}
+          {!streamLoading && !directStream && <div className="absolute bottom-4 left-4 right-4 z-20 flex justify-center gap-2"><button onClick={() => { setActiveIdx(i => (i + 1) % availableServers.length); }} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-black">Try another server</button></div>}
           {!streamLoading && !directStream && streamError && <div className="absolute top-3 left-3 right-3 z-20 pointer-events-none"><div className="inline-flex max-w-full rounded-lg bg-black/75 border border-white/10 px-3 py-2 text-[11px] text-zinc-300 backdrop-blur-md">Direct playback unavailable · using {activeServer.name}</div></div>}
         </div>
       </div>
