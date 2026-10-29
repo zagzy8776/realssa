@@ -10,27 +10,27 @@ function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: numb
   const isTV = mediaType === 'tv';
   return [
     {
-      name: 'Server 1 · AutoEmbed',
+      name: 'Server 1 · VidSrc.su',
+      url: isTV
+        ? `https://vidsrc.su/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidsrc.su/embed/movie/${tmdbId}`
+    },
+    {
+      name: 'Server 2 · AutoEmbed',
       url: isTV
         ? `https://autoembed.co/tv/tmdb/${tmdbId}-${season}-${episode}`
         : `https://autoembed.co/movie/tmdb/${tmdbId}`
     },
     {
-      name: 'Server 2 · MultiEmbed',
+      name: 'Server 3 · MultiEmbed',
       url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}`
     },
     {
-      name: 'Server 3 · VidSrc',
+      name: 'Server 4 · VidSrc',
       url: isTV
         ? `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}`
         : `https://vidsrc.to/embed/movie/${tmdbId}`
-    },
-    {
-      name: 'Server 4 · VidSrc.su',
-      url: isTV
-        ? `https://vidsrc.su/embed/tv/${tmdbId}/${season}/${episode}`
-        : `https://vidsrc.su/embed/movie/${tmdbId}`
-    },
+    }
   ];
 }
 
