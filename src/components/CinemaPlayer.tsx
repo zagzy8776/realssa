@@ -88,7 +88,7 @@ export default function CinemaPlayer({
 
   const goPrev = useCallback(() => {
     setActiveIdx(prev => (prev - 1 + (fallbackSources.length || servers.length)) % (fallbackSources.length || servers.length));
-  }, [servers.length]);
+  }, [servers.length, fallbackSources.length]);
 
   const availableServers = fallbackSources.length ? fallbackSources : servers;
   const activeServer = availableServers[activeIdx % availableServers.length];
