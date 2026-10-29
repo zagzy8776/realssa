@@ -58,6 +58,7 @@ export default function CinemaPlayer({
   const [directStream, setDirectStream] = useState<string | null>(null);
   const [streamLoading, setStreamLoading] = useState(true);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [fallbackSources, setFallbackSources] = useState<Array<{ name: string; url: string }>>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -82,25 +83,30 @@ export default function CinemaPlayer({
   }, []);
 
   const goNext = useCallback(() => {
-    setActiveIdx(prev => (prev + 1) % servers.length);
-  }, [servers.length]);
+    setActiveIdx(prev => (prev + 1) % (fallbackSources.length || servers.length));
+  }, [servers.length, fallbackSources.length]);
 
   const goPrev = useCallback(() => {
-    setActiveIdx(prev => (prev - 1 + servers.length) % servers.length);
+    setActiveIdx(prev => (prev - 1 + (fallbackSources.length || servers.length)) % (fallbackSources.length || servers.length));
   }, [servers.length]);
 
-  const activeServer = servers[activeIdx];
+  const availableServers = fallbackSources.length ? fallbackSources : servers;
+  const activeServer = availableServers[activeIdx % availableServers.length];
 
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
-    setDirectStream(null); setStreamLoading(true); setStreamError(null);
+    setDirectStream(null); setFallbackSources([]); setActiveIdx(0); setStreamLoading(true); setStreamError(null);
     const params = new URLSearchParams({ id: String(tmdbId), type: mediaType, season: String(season), episode: String(episode) });
     fetch(apiUrl('/api/cinema/resolve-stream?' + params.toString()), { headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || 'Stream resolver failed');
         if (data?.success && data?.stream_url) return data.stream_url as string;
+        if (Array.isArray(data?.sources)) {
+          const valid = data.sources.filter((source: any) => source?.is_embed && /^https:\/\//i.test(source.url || '')).map((source: any) => ({ name: source.source_name || 'Backup server', url: source.url }));
+          if (!cancelled && valid.length) setFallbackSources(valid);
+        }
         throw new Error('No direct stream was returned');
       })
       .then((url) => { if (!cancelled) setDirectStream(url); })
@@ -192,7 +198,7 @@ export default function CinemaPlayer({
             ref={scrollRef}
             className="flex gap-2 overflow-x-auto no-scrollbar pb-1"
           >
-            {servers.map((srv, i) => (
+            {availableServers.map((srv, i) => (
               <button
                 key={i}
                 onClick={() => { setActiveIdx(i); setShowServers(false); }}
