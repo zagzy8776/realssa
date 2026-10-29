@@ -5,28 +5,38 @@ import { X, Server, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SandboxedIframe } from './SandboxedIframe';
 
 
-// All active servers — ordered by reliability (least ads first)
+// Active embed providers — ordered by current reliability / framing allowance (Oct 2026)
+// Many older providers (autoembed.co, multiembed.mov, vidsrc.to) now set
+// X-Frame-Options: SAMEORIGIN or Cloudflare challenges that break in cross-origin iframes.
 function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: number, episode: number) {
   const isTV = mediaType === 'tv';
   return [
     {
-      name: 'Server 1 · AutoEmbed',
+      name: 'Server 1 · VidSrc.pm',
       url: isTV
-        ? `https://autoembed.co/tv/tmdb/${tmdbId}-${season}-${episode}`
-        : `https://autoembed.co/movie/tmdb/${tmdbId}`
+        ? `https://vidsrc.pm/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidsrc.pm/embed/movie/${tmdbId}`
     },
     {
-      name: 'Server 2 · MultiEmbed',
-      url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${isTV ? `&s=${season}&e=${episode}` : ''}`
-    },
-    {
-      name: 'Server 3 · VidSrc',
+      name: 'Server 2 · 2Embed',
       url: isTV
-        ? `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}`
-        : `https://vidsrc.to/embed/movie/${tmdbId}`
+        ? `https://www.2embed.skin/embedtv/${tmdbId}&s=${season}&e=${episode}`
+        : `https://www.2embed.skin/embed/${tmdbId}`
     },
     {
-      name: 'Server 4 · VidSrc.su',
+      name: 'Server 3 · VidLink',
+      url: isTV
+        ? `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidlink.pro/movie/${tmdbId}`
+    },
+    {
+      name: 'Server 4 · Nontongo',
+      url: isTV
+        ? `https://www.nontongo.win/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://www.nontongo.win/embed/movie/${tmdbId}`
+    },
+    {
+      name: 'Server 5 · VidSrc.su',
       url: isTV
         ? `https://vidsrc.su/embed/tv/${tmdbId}/${season}/${episode}`
         : `https://vidsrc.su/embed/movie/${tmdbId}`
@@ -69,7 +79,6 @@ export default function CinemaPlayer({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Embedded providers are independent of backend stream resolution.
   // Protect parent page from being redirected by iframe ads
   useEffect(() => {
     const preventRedirect = (e: BeforeUnloadEvent) => {
@@ -219,10 +228,51 @@ export default function CinemaPlayer({
       {/* ── VIDEO — direct HLS/MP4 first, provider iframe only if direct fails ── */}
       <div className="flex-1 min-h-0 relative bg-black overflow-hidden">
         <div className="absolute inset-0 bg-black">
-          <SandboxedIframe key={String(tmdbId) + '-' + mediaType + '-' + season + '-' + episode + '-' + activeIdx} src={activeServer.url} className="absolute inset-0 w-full h-full" />
-          {false && streamLoading && !directStream && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 pointer-events-none"><div className="text-center"><div className="w-8 h-8 mx-auto mb-3 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" /><p className="text-zinc-300 text-xs font-bold">Connecting to video server…</p></div></div>}
-          {!streamLoading && !directStream && <div className="absolute bottom-4 left-4 right-4 z-20 flex justify-center gap-2"><button onClick={() => { setActiveIdx(i => (i + 1) % availableServers.length); }} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-black">Try another server</button></div>}
-          {false && !streamLoading && !directStream && streamError && <div className="absolute top-3 left-3 right-3 z-20 pointer-events-none"><div className="inline-flex max-w-full rounded-lg bg-black/75 border border-white/10 px-3 py-2 text-[11px] text-zinc-300 backdrop-blur-md">Direct playback unavailable · using {activeServer.name}</div></div>}
+          {/* Prefer native HLS when the backend successfully resolves a direct stream */}
+          {directStream ? (
+            <video
+              ref={videoRef}
+              className="absolute inset-0 w-full h-full"
+              controls
+              autoPlay
+              playsInline
+              poster=""
+            />
+          ) : (
+            <SandboxedIframe
+              key={String(tmdbId) + '-' + mediaType + '-' + season + '-' + episode + '-' + activeIdx}
+              src={activeServer.url}
+              className="absolute inset-0 w-full h-full"
+            />
+          )}
+
+          {streamLoading && !directStream && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 pointer-events-none">
+              <div className="text-center">
+                <div className="w-8 h-8 mx-auto mb-3 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                <p className="text-zinc-300 text-xs font-bold">Connecting to video server…</p>
+              </div>
+            </div>
+          )}
+
+          {!streamLoading && !directStream && (
+            <div className="absolute bottom-4 left-4 right-4 z-20 flex justify-center gap-2">
+              <button
+                onClick={() => { setActiveIdx(i => (i + 1) % availableServers.length); }}
+                className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-black"
+              >
+                Try another server
+              </button>
+            </div>
+          )}
+
+          {!streamLoading && !directStream && streamError && (
+            <div className="absolute top-3 left-3 right-3 z-20 pointer-events-none">
+              <div className="inline-flex max-w-full rounded-lg bg-black/75 border border-white/10 px-3 py-2 text-[11px] text-zinc-300 backdrop-blur-md">
+                Direct playback unavailable · using {activeServer.name}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
