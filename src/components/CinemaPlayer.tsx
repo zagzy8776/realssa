@@ -83,14 +83,14 @@ export default function CinemaPlayer({
   }, []);
 
   const goNext = useCallback(() => {
-    setActiveIdx(prev => (prev + 1) % (fallbackSources.length || servers.length));
+    setActiveIdx(prev => (prev + 1) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
   }, [servers.length, fallbackSources.length]);
 
   const goPrev = useCallback(() => {
-    setActiveIdx(prev => (prev - 1 + (fallbackSources.length || servers.length)) % (fallbackSources.length || servers.length));
+    setActiveIdx(prev => (prev - 1 + (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length)) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
   }, [servers.length, fallbackSources.length]);
 
-  const availableServers = fallbackSources.length ? fallbackSources : servers;
+  const availableServers = [...servers, ...fallbackSources.filter(source => !servers.some(server => server.url === source.url))];
   const activeServer = availableServers[activeIdx % availableServers.length];
 
   useEffect(() => {
