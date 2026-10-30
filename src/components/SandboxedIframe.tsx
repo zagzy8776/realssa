@@ -14,7 +14,9 @@ export function SandboxedIframe({ src, className = "" }: SandboxedIframeProps) {
         style={{ height: '100%', minHeight: '100%' }}
         allowFullScreen
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-        referrerPolicy="strict-origin-when-cross-origin"
+        // Many free embed providers blank or refuse when they see a strict third-party referrer.
+        // no-referrer-when-downgrade is the most compatible default in 2026.
+        referrerPolicy="no-referrer-when-downgrade"
         title="RealSSA Player"
       />
     </div>
