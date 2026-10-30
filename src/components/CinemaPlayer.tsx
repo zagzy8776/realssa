@@ -5,17 +5,17 @@ import { X, Server, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SandboxedIframe } from './SandboxedIframe';
 
 
-// Active embed providers — ordered by current reliability / framing allowance (Oct 2026)
-// Many older providers (autoembed.co, multiembed.mov, vidsrc.to) now set
-// X-Frame-Options: SAMEORIGIN or Cloudflare challenges that break in cross-origin iframes.
+// Active embed providers — ordered by current reliability + framing allowance (Oct 2026)
+// Probed live. Providers that set X-Frame-Options: SAMEORIGIN or return 403/CF challenges are excluded.
+// Goal: give ~800k users multiple working paths so one dead server doesn't kill the experience.
 function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: number, episode: number) {
   const isTV = mediaType === 'tv';
   return [
     {
-      name: 'Server 1 · VidSrc.pm',
+      name: 'Server 1 · MoviesAPI',
       url: isTV
-        ? `https://vidsrc.pm/embed/tv/${tmdbId}/${season}/${episode}`
-        : `https://vidsrc.pm/embed/movie/${tmdbId}`
+        ? `https://moviesapi.to/tv/${tmdbId}/${season}/${episode}`
+        : `https://moviesapi.to/movie/${tmdbId}`
     },
     {
       name: 'Server 2 · 2Embed',
@@ -24,19 +24,25 @@ function buildServerList(tmdbId: number, mediaType: 'movie' | 'tv', season: numb
         : `https://www.2embed.skin/embed/${tmdbId}`
     },
     {
-      name: 'Server 3 · VidLink',
+      name: 'Server 3 · VidSrc.pm',
+      url: isTV
+        ? `https://vidsrc.pm/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidsrc.pm/embed/movie/${tmdbId}`
+    },
+    {
+      name: 'Server 4 · VidLink',
       url: isTV
         ? `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}`
         : `https://vidlink.pro/movie/${tmdbId}`
     },
     {
-      name: 'Server 4 · Nontongo',
+      name: 'Server 5 · VidSrc.me',
       url: isTV
-        ? `https://www.nontongo.win/embed/tv/${tmdbId}/${season}/${episode}`
-        : `https://www.nontongo.win/embed/movie/${tmdbId}`
+        ? `https://vidsrc.me/embed/tv/${tmdbId}/${season}/${episode}`
+        : `https://vidsrc.me/embed/movie/${tmdbId}`
     },
     {
-      name: 'Server 5 · VidSrc.su',
+      name: 'Server 6 · VidSrc.su',
       url: isTV
         ? `https://vidsrc.su/embed/tv/${tmdbId}/${season}/${episode}`
         : `https://vidsrc.su/embed/movie/${tmdbId}`
