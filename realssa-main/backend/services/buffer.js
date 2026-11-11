@@ -1,0 +1,353 @@
+/**
+ * Buffer Social Media Integration (GraphQL API)
+ * Auto-posts new RealSSA articles to Twitter/Facebook/Instagram via Buffer API
+ *
+ * Setup:
+ *  1. Go to https://publish.buffer.com/settings/api?tab=personal-keys → Create Personal Key
+ *  2. Get profile/channel IDs: Run the test endpoint GET /api/cron/ingest or /api/buffer/test
+ *  3. Set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS in Fly.io secrets (fly secrets set KEY=VALUE)
+ */
+
+const BUFFER_ACCESS_TOKEN = process.env.BUFFER_ACCESS_TOKEN || process.env.BUFFER_S_TOKEN || 'XgC6VYuJXL4xvvPRJolhwEdpK5iC4xwJutuSVPqf7Aw';
+const BUFFER_PROFILE_IDS  = process.env.BUFFER_PROFILE_IDS  || process.env.BUFFER_FILE_IDS || '6a5c8546e2638b94d7959a2c,6a46f43d5ab6d2f1069abed2,6a6a49004b2d03035f635405';
+
+const BUFFER_API_ENDPOINT = 'https://api.buffer.com/graphql';
+
+class BufferRateLimitError extends Error {
+  constructor() {
+    super('Buffer API rate limit reached. Try again after Buffer\'s 24-hour window resets.');
+    this.name = 'BufferRateLimitError';
+    this.code = 'BUFFER_RATE_LIMITED';
+    this.status = 429;
+  }
+}
+
+/**
+ * Check if Buffer is configured with valid credentials.
+ * @returns {boolean}
+ */
+function isBufferConfigured() {
+  return !!(BUFFER_ACCESS_TOKEN && BUFFER_PROFILE_IDS);
+}
+
+/**
+ * Fetch all connected Buffer social profiles.
+ * Useful to verify the token and discover profile IDs.
+ * @returns {Promise<Array>} List of profile objects
+ */
+async function getBufferProfiles() {
+  if (!BUFFER_ACCESS_TOKEN) throw new Error('BUFFER_ACCESS_TOKEN not set');
+
+  // Step 1: Get Organizations
+  const orgQuery = {
+    query: `
+      query GetOrganizations {
+        account {
+          organizations {
+            id
+            name
+          }
+        }
+      }
+    `
+  };
+
+  const orgRes = await fetch(BUFFER_API_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}`
+    },
+    body: JSON.stringify(orgQuery)
+  });
+
+  if (!orgRes.ok) {
+    const err = await orgRes.text();
+    throw new Error(`Buffer API error fetching organizations (${orgRes.status}): ${err}`);
+  }
+
+  const orgData = await orgRes.json();
+  if (orgData.errors) {
+    throw new Error(`Buffer GraphQL error fetching organizations: ${orgData.errors[0].message}`);
+  }
+
+  const orgs = orgData?.data?.account?.organizations || [];
+  if (orgs.length === 0) {
+    return [];
+  }
+
+  const allChannels = [];
+
+  // Step 2: Fetch channels for all organizations
+  for (const org of orgs) {
+    const channelsQuery = {
+      query: `
+        query GetChannels($orgId: OrganizationId!) {
+          channels(input: { organizationId: $orgId }) {
+            id
+            name
+            service
+          }
+        }
+      `,
+      variables: {
+        orgId: org.id
+      }
+    };
+
+    const chanRes = await fetch(BUFFER_API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify(channelsQuery)
+    });
+
+    if (chanRes.ok) {
+      const chanData = await chanRes.json();
+      if (chanData.data && chanData.data.channels) {
+        allChannels.push(...chanData.data.channels);
+      }
+    }
+  }
+
+  return allChannels;
+}
+
+/**
+ * Post a social media update to all configured Buffer profiles.
+ * Sends platform-specific text to each channel.
+ *
+ * @param {object} hooks      - { twitter, instagram, facebook } platform texts
+ * @param {string} link       - Article URL (appended to twitter/facebook only)
+ * @param {string} [imageUrl] - Optional thumbnail image URL
+ * @param {boolean} [now]     - If true, post immediately; if false, add to Buffer queue
+ * @returns {Promise<boolean>} true on success
+ */
+async function postToBuffer(hooks, link, imageUrl, now = false) {
+  if (!isBufferConfigured()) {
+    console.log('[Buffer] Not configured — skipping social post.');
+    return false;
+  }
+
+  // Support legacy callers that pass a plain string
+  if (typeof hooks === 'string') {
+    hooks = { twitter: hooks, instagram: hooks, facebook: hooks };
+  }
+
+  const profileIds = BUFFER_PROFILE_IDS.split(',').map(id => id.trim()).filter(Boolean);
+
+  // Ensure Instagram and TikTok IDs are always included
+  const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
+  const TIKTOK_ID = '6a6a49004b2d03035f635405';
+  if (!profileIds.includes(INSTAGRAM_ID)) profileIds.push(INSTAGRAM_ID);
+  if (!profileIds.includes(TIKTOK_ID)) profileIds.push(TIKTOK_ID);
+
+  if (profileIds.length === 0) {
+    console.warn('[Buffer] BUFFER_PROFILE_IDS is empty — skipping.');
+    return false;
+  }
+
+  console.log(`[Buffer] Posting to ${profileIds.length} profiles: ${profileIds.join(', ')}`);
+
+  const results = await Promise.allSettled(
+    profileIds.map(profileId => _postToProfile(profileId, hooks, link, imageUrl, now))
+  );
+
+  const succeeded = results.filter(r => r.status === 'fulfilled' && r.value).length;
+  const failed    = results.length - succeeded;
+  const rateLimitFailure = results.find(
+    result => result.status === 'rejected' && result.reason?.code === 'BUFFER_RATE_LIMITED'
+  );
+
+  if (succeeded > 0) console.log(`[Buffer] ✅ Posted to ${succeeded}/${profileIds.length} profiles.`);
+  if (failed > 0)    console.warn(`[Buffer] ⚠️ Failed for ${failed}/${profileIds.length} profiles.`);
+
+  // Do not let a caller report a successful cron run when Buffer refused every
+  // post because its API quota has been exhausted.
+  if (succeeded === 0 && rateLimitFailure) throw rateLimitFailure.reason;
+
+  return succeeded > 0;
+}
+
+/**
+ * Internal: post to a single Buffer profile with platform-aware text.
+ */
+async function _postToProfile(profileId, hooks, link, imageUrl, now) {
+  try {
+    const mode = now ? 'shareNow' : 'addToQueue';
+    const INSTAGRAM_ID = '6a5c8546e2638b94d7959a2c';
+    const TIKTOK_ID = '6a6a49004b2d03035f635405';
+    const isInstagram = profileId === INSTAGRAM_ID;
+    const isTikTok = profileId === TIKTOK_ID;
+    const isMediaPlatform = isInstagram || isTikTok;
+
+    // Instagram/TikTok always need an image — use logo as fallback rather than skipping
+    const LOGO = 'https://realssanews.com.ng/logo.png';
+    const effectiveImage = (imageUrl && imageUrl !== LOGO) ? imageUrl : LOGO;
+
+    // Pick the right text per platform
+    // Media Platforms (IG/TikTok): no link in caption (links don't work)
+    // Twitter/X: append link, enforce 280 char hard limit
+    // Facebook:  append link as attachment, use facebook text
+    let text;
+    if (isMediaPlatform) {
+      // Instagram/TikTok: no URL in caption, just the caption + hashtags
+      text = hooks.instagram || hooks.twitter;
+      // Strip any accidental URLs from caption
+      text = text.replace(/https?:\/\/\S+/g, '').trim();
+      // Caption max 2200 chars but keep it punchy
+      if (text.length > 2200) text = text.slice(0, 2197) + '…';
+    } else {
+      // Twitter/X and Facebook: append the article link
+      const isTwitter = !isMediaPlatform; // treat all non-media as needing link
+      const baseText = isTwitter ? (hooks.twitter || hooks.facebook) : (hooks.facebook || hooks.twitter);
+      text = link ? `${baseText}\n\n${link}` : baseText;
+      // Twitter hard limit: 280 chars. Link = ~23 chars + newlines = 25 reserved.
+      if (text.length > 280) text = text.slice(0, 277) + '…';
+    }
+
+    const input = {
+      channelId: profileId,
+      text,
+      schedulingType: 'automatic',
+      mode,
+      saveToDraft: false,
+    };
+
+    if (isInstagram) {
+      input.metadata = { instagram: { type: 'post', shouldShareToFeed: true } };
+    }
+
+    // Attach image — Instagram/TikTok always get one (logo fallback if needed), others only if real image
+    if (isMediaPlatform || (effectiveImage && effectiveImage !== LOGO)) {
+      input.assets = [{ image: { url: effectiveImage } }];
+    }
+
+
+    const mutation = {
+      query: `
+        mutation CreatePost($input: CreatePostInput!) {
+          createPost(input: $input) {
+            ... on PostActionSuccess { post { id dueAt } }
+            ... on MutationError { message }
+          }
+        }
+      `,
+      variables: { input }
+    };
+
+    const res = await fetch(BUFFER_API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
+      body: JSON.stringify(mutation)
+    });
+
+    if (res.status === 429) {
+      console.log(`[Buffer] ⏳ Buffer API rate limit reached (15m window). Standing by until window resets.`);
+      throw new BufferRateLimitError();
+    }
+
+    if (!res.ok) {
+      console.error(`[Buffer] API error for profile ${profileId} (${res.status}):`, await res.text());
+      return false;
+    }
+
+    const data = await res.json();
+    if (data.errors) {
+      const errMsg = JSON.stringify(data.errors);
+      if (errMsg.includes('capacity') || errMsg.includes('limit') || errMsg.includes('maximum') || errMsg.includes('full')) {
+        console.log(`[Buffer] Queue at full capacity for profile ${profileId}. Standing by for human approval on buffer.com.`);
+        return false;
+      }
+      console.error(`[Buffer] GraphQL errors for ${profileId}:`, errMsg);
+      return false;
+    }
+    if (data?.data?.createPost?.message) {
+      const msg = data.data.createPost.message;
+      if (msg.includes('limit reached') || msg.includes('capacity') || msg.includes('scheduled posts')) {
+        console.log(`[Buffer] ℹ️ Buffer Queue full (10/10 scheduled posts in buffer.com queue). Standing by until posts publish.`);
+        return false;
+      }
+      console.error(`[Buffer] Post rejected for ${profileId}:`, msg);
+      if ((msg.includes('file size limit') || msg.includes('Image could not be read') || msg.includes('image') || msg.includes('download')) && input.assets) {
+        // First retry with clean RealSSA logo
+        input.assets = { image: { url: 'https://www.realssanews.com.ng/logo.png' } };
+        console.log(`[Buffer] Retrying post with fallback RealSSA logo image for ${profileId}...`);
+        const retryRes = await fetch(BUFFER_API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
+          body: JSON.stringify({ query: mutation.query, variables: { input } })
+        });
+        const retryData = await retryRes.json();
+        if (retryData?.data?.createPost?.post?.id) {
+          console.log(`[Buffer] ✅ Retry successful with fallback image for ${profileId}`);
+          return true;
+        }
+
+        // If fallback image also rejected, retry text-only
+        delete input.assets;
+        console.log(`[Buffer] Retrying post text-only for ${profileId}...`);
+        const textOnlyRes = await fetch(BUFFER_API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BUFFER_ACCESS_TOKEN}` },
+          body: JSON.stringify({ query: mutation.query, variables: { input } })
+        });
+        const textOnlyData = await textOnlyRes.json();
+        if (textOnlyData?.data?.createPost?.post?.id) {
+          console.log(`[Buffer] ✅ Retry successful (text-only) for ${profileId}`);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error(`[Buffer] Network error for profile ${profileId}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Test the Buffer connection by fetching profiles.
+ * Called by the /api/buffer/test endpoint in server.js
+ */
+async function testBufferConnection() {
+  if (!isBufferConfigured()) {
+    return {
+      ok: false,
+      configured: false,
+      message: 'Buffer not configured. Set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS in Fly.io secrets (fly secrets set KEY=VALUE).',
+    };
+  }
+
+  try {
+    const profiles = await getBufferProfiles();
+    const profileIds = BUFFER_PROFILE_IDS.split(',').map(id => id.trim()).filter(Boolean);
+
+    return {
+      ok: true,
+      configured: true,
+      profileCount: profiles.length,
+      configuredIds: profileIds.length,
+      profiles: profiles.map(p => ({
+        id:       p.id,
+        service:  p.service,
+        handle:   p.name,
+        paused:   false,
+        connected: profileIds.includes(p.id),
+      })),
+      message: `✅ Buffer connected — ${profiles.length} social profile(s) found.`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      configured: true,
+      message: `❌ Buffer token error: ${err.message}`,
+    };
+  }
+}
+
+module.exports = { postToBuffer, testBufferConnection, getBufferProfiles, isBufferConfigured };

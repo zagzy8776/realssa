@@ -1,0 +1,814 @@
+{
+  "algeria": {
+    "name": "Algeria",
+    "continent": "Africa"
+  },
+  "angola": {
+    "name": "Angola",
+    "continent": "Africa"
+  },
+  "benin": {
+    "name": "Benin",
+    "continent": "Africa"
+  },
+  "botswana": {
+    "name": "Botswana",
+    "continent": "Africa"
+  },
+  "burkina-faso": {
+    "name": "Burkina Faso",
+    "continent": "Africa"
+  },
+  "burundi": {
+    "name": "Burundi",
+    "continent": "Africa"
+  },
+  "cabo-verde": {
+    "name": "Cabo Verde",
+    "continent": "Africa"
+  },
+  "cameroon": {
+    "name": "Cameroon",
+    "continent": "Africa"
+  },
+  "central-african-republic": {
+    "name": "Central African Republic",
+    "continent": "Africa"
+  },
+  "chad": {
+    "name": "Chad",
+    "continent": "Africa"
+  },
+  "comoros": {
+    "name": "Comoros",
+    "continent": "Africa"
+  },
+  "democratic-republic-of-the-congo": {
+    "name": "Democratic Republic of the Congo",
+    "continent": "Africa"
+  },
+  "republic-of-the-congo": {
+    "name": "Republic of the Congo",
+    "continent": "Africa"
+  },
+  "djibouti": {
+    "name": "Djibouti",
+    "continent": "Africa"
+  },
+  "egypt": {
+    "name": "Egypt",
+    "continent": "Africa"
+  },
+  "equatorial-guinea": {
+    "name": "Equatorial Guinea",
+    "continent": "Africa"
+  },
+  "eritrea": {
+    "name": "Eritrea",
+    "continent": "Africa"
+  },
+  "eswatini": {
+    "name": "Eswatini",
+    "continent": "Africa"
+  },
+  "ethiopia": {
+    "name": "Ethiopia",
+    "continent": "Africa"
+  },
+  "gabon": {
+    "name": "Gabon",
+    "continent": "Africa"
+  },
+  "gambia": {
+    "name": "Gambia",
+    "continent": "Africa"
+  },
+  "ghana": {
+    "name": "Ghana",
+    "continent": "Africa"
+  },
+  "guinea": {
+    "name": "Guinea",
+    "continent": "Africa"
+  },
+  "guinea-bissau": {
+    "name": "Guinea-Bissau",
+    "continent": "Africa"
+  },
+  "ivory-coast": {
+    "name": "Ivory Coast",
+    "continent": "Africa"
+  },
+  "kenya": {
+    "name": "Kenya",
+    "continent": "Africa"
+  },
+  "lesotho": {
+    "name": "Lesotho",
+    "continent": "Africa"
+  },
+  "liberia": {
+    "name": "Liberia",
+    "continent": "Africa"
+  },
+  "libya": {
+    "name": "Libya",
+    "continent": "Africa"
+  },
+  "madagascar": {
+    "name": "Madagascar",
+    "continent": "Africa"
+  },
+  "malawi": {
+    "name": "Malawi",
+    "continent": "Africa"
+  },
+  "mali": {
+    "name": "Mali",
+    "continent": "Africa"
+  },
+  "mauritania": {
+    "name": "Mauritania",
+    "continent": "Africa"
+  },
+  "mauritius": {
+    "name": "Mauritius",
+    "continent": "Africa"
+  },
+  "morocco": {
+    "name": "Morocco",
+    "continent": "Africa"
+  },
+  "mozambique": {
+    "name": "Mozambique",
+    "continent": "Africa"
+  },
+  "namibia": {
+    "name": "Namibia",
+    "continent": "Africa"
+  },
+  "niger": {
+    "name": "Niger",
+    "continent": "Africa"
+  },
+  "nigeria": {
+    "name": "Nigeria",
+    "continent": "Africa"
+  },
+  "rwanda": {
+    "name": "Rwanda",
+    "continent": "Africa"
+  },
+  "sao-tome-and-principe": {
+    "name": "Sao Tome and Principe",
+    "continent": "Africa"
+  },
+  "senegal": {
+    "name": "Senegal",
+    "continent": "Africa"
+  },
+  "seychelles": {
+    "name": "Seychelles",
+    "continent": "Africa"
+  },
+  "sierra-leone": {
+    "name": "Sierra Leone",
+    "continent": "Africa"
+  },
+  "somalia": {
+    "name": "Somalia",
+    "continent": "Africa"
+  },
+  "south-africa": {
+    "name": "South Africa",
+    "continent": "Africa"
+  },
+  "south-sudan": {
+    "name": "South Sudan",
+    "continent": "Africa"
+  },
+  "sudan": {
+    "name": "Sudan",
+    "continent": "Africa"
+  },
+  "tanzania": {
+    "name": "Tanzania",
+    "continent": "Africa"
+  },
+  "togo": {
+    "name": "Togo",
+    "continent": "Africa"
+  },
+  "tunisia": {
+    "name": "Tunisia",
+    "continent": "Africa"
+  },
+  "uganda": {
+    "name": "Uganda",
+    "continent": "Africa"
+  },
+  "zambia": {
+    "name": "Zambia",
+    "continent": "Africa"
+  },
+  "zimbabwe": {
+    "name": "Zimbabwe",
+    "continent": "Africa"
+  },
+  "afghanistan": {
+    "name": "Afghanistan",
+    "continent": "Asia"
+  },
+  "armenia": {
+    "name": "Armenia",
+    "continent": "Asia"
+  },
+  "azerbaijan": {
+    "name": "Azerbaijan",
+    "continent": "Asia"
+  },
+  "bahrain": {
+    "name": "Bahrain",
+    "continent": "Asia"
+  },
+  "bangladesh": {
+    "name": "Bangladesh",
+    "continent": "Asia"
+  },
+  "bhutan": {
+    "name": "Bhutan",
+    "continent": "Asia"
+  },
+  "brunei": {
+    "name": "Brunei",
+    "continent": "Asia"
+  },
+  "cambodia": {
+    "name": "Cambodia",
+    "continent": "Asia"
+  },
+  "china": {
+    "name": "China",
+    "continent": "Asia"
+  },
+  "cyprus": {
+    "name": "Cyprus",
+    "continent": "Asia"
+  },
+  "georgia": {
+    "name": "Georgia",
+    "continent": "Asia"
+  },
+  "india": {
+    "name": "India",
+    "continent": "Asia"
+  },
+  "indonesia": {
+    "name": "Indonesia",
+    "continent": "Asia"
+  },
+  "iran": {
+    "name": "Iran",
+    "continent": "Asia"
+  },
+  "iraq": {
+    "name": "Iraq",
+    "continent": "Asia"
+  },
+  "israel": {
+    "name": "Israel",
+    "continent": "Asia"
+  },
+  "japan": {
+    "name": "Japan",
+    "continent": "Asia"
+  },
+  "jordan": {
+    "name": "Jordan",
+    "continent": "Asia"
+  },
+  "kazakhstan": {
+    "name": "Kazakhstan",
+    "continent": "Asia"
+  },
+  "kuwait": {
+    "name": "Kuwait",
+    "continent": "Asia"
+  },
+  "kyrgyzstan": {
+    "name": "Kyrgyzstan",
+    "continent": "Asia"
+  },
+  "laos": {
+    "name": "Laos",
+    "continent": "Asia"
+  },
+  "lebanon": {
+    "name": "Lebanon",
+    "continent": "Asia"
+  },
+  "malaysia": {
+    "name": "Malaysia",
+    "continent": "Asia"
+  },
+  "maldives": {
+    "name": "Maldives",
+    "continent": "Asia"
+  },
+  "mongolia": {
+    "name": "Mongolia",
+    "continent": "Asia"
+  },
+  "myanmar": {
+    "name": "Myanmar",
+    "continent": "Asia"
+  },
+  "nepal": {
+    "name": "Nepal",
+    "continent": "Asia"
+  },
+  "north-korea": {
+    "name": "North Korea",
+    "continent": "Asia"
+  },
+  "oman": {
+    "name": "Oman",
+    "continent": "Asia"
+  },
+  "pakistan": {
+    "name": "Pakistan",
+    "continent": "Asia"
+  },
+  "palestine": {
+    "name": "Palestine",
+    "continent": "Asia"
+  },
+  "philippines": {
+    "name": "Philippines",
+    "continent": "Asia"
+  },
+  "qatar": {
+    "name": "Qatar",
+    "continent": "Asia"
+  },
+  "saudi-arabia": {
+    "name": "Saudi Arabia",
+    "continent": "Asia"
+  },
+  "singapore": {
+    "name": "Singapore",
+    "continent": "Asia"
+  },
+  "south-korea": {
+    "name": "South Korea",
+    "continent": "Asia"
+  },
+  "sri-lanka": {
+    "name": "Sri Lanka",
+    "continent": "Asia"
+  },
+  "syria": {
+    "name": "Syria",
+    "continent": "Asia"
+  },
+  "taiwan": {
+    "name": "Taiwan",
+    "continent": "Asia"
+  },
+  "tajikistan": {
+    "name": "Tajikistan",
+    "continent": "Asia"
+  },
+  "thailand": {
+    "name": "Thailand",
+    "continent": "Asia"
+  },
+  "timor-leste": {
+    "name": "Timor-Leste",
+    "continent": "Asia"
+  },
+  "turkey": {
+    "name": "Turkey",
+    "continent": "Asia"
+  },
+  "turkmenistan": {
+    "name": "Turkmenistan",
+    "continent": "Asia"
+  },
+  "uzbekistan": {
+    "name": "Uzbekistan",
+    "continent": "Asia"
+  },
+  "vietnam": {
+    "name": "Vietnam",
+    "continent": "Asia"
+  },
+  "yemen": {
+    "name": "Yemen",
+    "continent": "Asia"
+  },
+  "albania": {
+    "name": "Albania",
+    "continent": "Europe"
+  },
+  "andorra": {
+    "name": "Andorra",
+    "continent": "Europe"
+  },
+  "austria": {
+    "name": "Austria",
+    "continent": "Europe"
+  },
+  "belarus": {
+    "name": "Belarus",
+    "continent": "Europe"
+  },
+  "belgium": {
+    "name": "Belgium",
+    "continent": "Europe"
+  },
+  "bulgaria": {
+    "name": "Bulgaria",
+    "continent": "Europe"
+  },
+  "croatia": {
+    "name": "Croatia",
+    "continent": "Europe"
+  },
+  "czech-republic": {
+    "name": "Czech Republic",
+    "continent": "Europe"
+  },
+  "denmark": {
+    "name": "Denmark",
+    "continent": "Europe"
+  },
+  "estonia": {
+    "name": "Estonia",
+    "continent": "Europe"
+  },
+  "finland": {
+    "name": "Finland",
+    "continent": "Europe"
+  },
+  "france": {
+    "name": "France",
+    "continent": "Europe"
+  },
+  "germany": {
+    "name": "Germany",
+    "continent": "Europe"
+  },
+  "greece": {
+    "name": "Greece",
+    "continent": "Europe"
+  },
+  "hungary": {
+    "name": "Hungary",
+    "continent": "Europe"
+  },
+  "iceland": {
+    "name": "Iceland",
+    "continent": "Europe"
+  },
+  "ireland": {
+    "name": "Ireland",
+    "continent": "Europe"
+  },
+  "italy": {
+    "name": "Italy",
+    "continent": "Europe"
+  },
+  "kosovo": {
+    "name": "Kosovo",
+    "continent": "Europe"
+  },
+  "latvia": {
+    "name": "Latvia",
+    "continent": "Europe"
+  },
+  "liechtenstein": {
+    "name": "Liechtenstein",
+    "continent": "Europe"
+  },
+  "lithuania": {
+    "name": "Lithuania",
+    "continent": "Europe"
+  },
+  "luxembourg": {
+    "name": "Luxembourg",
+    "continent": "Europe"
+  },
+  "malta": {
+    "name": "Malta",
+    "continent": "Europe"
+  },
+  "moldova": {
+    "name": "Moldova",
+    "continent": "Europe"
+  },
+  "monaco": {
+    "name": "Monaco",
+    "continent": "Europe"
+  },
+  "montenegro": {
+    "name": "Montenegro",
+    "continent": "Europe"
+  },
+  "netherlands": {
+    "name": "Netherlands",
+    "continent": "Europe"
+  },
+  "north-macedonia": {
+    "name": "North Macedonia",
+    "continent": "Europe"
+  },
+  "norway": {
+    "name": "Norway",
+    "continent": "Europe"
+  },
+  "poland": {
+    "name": "Poland",
+    "continent": "Europe"
+  },
+  "portugal": {
+    "name": "Portugal",
+    "continent": "Europe"
+  },
+  "romania": {
+    "name": "Romania",
+    "continent": "Europe"
+  },
+  "russia": {
+    "name": "Russia",
+    "continent": "Europe"
+  },
+  "san-marino": {
+    "name": "San Marino",
+    "continent": "Europe"
+  },
+  "serbia": {
+    "name": "Serbia",
+    "continent": "Europe"
+  },
+  "slovakia": {
+    "name": "Slovakia",
+    "continent": "Europe"
+  },
+  "slovenia": {
+    "name": "Slovenia",
+    "continent": "Europe"
+  },
+  "spain": {
+    "name": "Spain",
+    "continent": "Europe"
+  },
+  "sweden": {
+    "name": "Sweden",
+    "continent": "Europe"
+  },
+  "switzerland": {
+    "name": "Switzerland",
+    "continent": "Europe"
+  },
+  "ukraine": {
+    "name": "Ukraine",
+    "continent": "Europe"
+  },
+  "vatican-city": {
+    "name": "Vatican City",
+    "continent": "Europe"
+  },
+  "antigua-and-barbuda": {
+    "name": "Antigua and Barbuda",
+    "continent": "North America"
+  },
+  "bahamas": {
+    "name": "Bahamas",
+    "continent": "North America"
+  },
+  "barbados": {
+    "name": "Barbados",
+    "continent": "North America"
+  },
+  "belize": {
+    "name": "Belize",
+    "continent": "North America"
+  },
+  "canada": {
+    "name": "Canada",
+    "continent": "North America"
+  },
+  "costa-rica": {
+    "name": "Costa Rica",
+    "continent": "North America"
+  },
+  "cuba": {
+    "name": "Cuba",
+    "continent": "North America"
+  },
+  "dominica": {
+    "name": "Dominica",
+    "continent": "North America"
+  },
+  "dominican-republic": {
+    "name": "Dominican Republic",
+    "continent": "North America"
+  },
+  "el-salvador": {
+    "name": "El Salvador",
+    "continent": "North America"
+  },
+  "grenada": {
+    "name": "Grenada",
+    "continent": "North America"
+  },
+  "guatemala": {
+    "name": "Guatemala",
+    "continent": "North America"
+  },
+  "haiti": {
+    "name": "Haiti",
+    "continent": "North America"
+  },
+  "honduras": {
+    "name": "Honduras",
+    "continent": "North America"
+  },
+  "jamaica": {
+    "name": "Jamaica",
+    "continent": "North America"
+  },
+  "mexico": {
+    "name": "Mexico",
+    "continent": "North America"
+  },
+  "nicaragua": {
+    "name": "Nicaragua",
+    "continent": "North America"
+  },
+  "panama": {
+    "name": "Panama",
+    "continent": "North America"
+  },
+  "saint-kitts-and-nevis": {
+    "name": "Saint Kitts and Nevis",
+    "continent": "North America"
+  },
+  "saint-lucia": {
+    "name": "Saint Lucia",
+    "continent": "North America"
+  },
+  "saint-vincent-and-the-grenadines": {
+    "name": "Saint Vincent and the Grenadines",
+    "continent": "North America"
+  },
+  "trinidad-and-tobago": {
+    "name": "Trinidad and Tobago",
+    "continent": "North America"
+  },
+  "argentina": {
+    "name": "Argentina",
+    "continent": "South America"
+  },
+  "bolivia": {
+    "name": "Bolivia",
+    "continent": "South America"
+  },
+  "brazil": {
+    "name": "Brazil",
+    "continent": "South America"
+  },
+  "chile": {
+    "name": "Chile",
+    "continent": "South America"
+  },
+  "colombia": {
+    "name": "Colombia",
+    "continent": "South America"
+  },
+  "ecuador": {
+    "name": "Ecuador",
+    "continent": "South America"
+  },
+  "guyana": {
+    "name": "Guyana",
+    "continent": "South America"
+  },
+  "paraguay": {
+    "name": "Paraguay",
+    "continent": "South America"
+  },
+  "peru": {
+    "name": "Peru",
+    "continent": "South America"
+  },
+  "suriname": {
+    "name": "Suriname",
+    "continent": "South America"
+  },
+  "uruguay": {
+    "name": "Uruguay",
+    "continent": "South America"
+  },
+  "venezuela": {
+    "name": "Venezuela",
+    "continent": "South America"
+  },
+  "australia": {
+    "name": "Australia",
+    "continent": "Oceania"
+  },
+  "fiji": {
+    "name": "Fiji",
+    "continent": "Oceania"
+  },
+  "kiribati": {
+    "name": "Kiribati",
+    "continent": "Oceania"
+  },
+  "marshall-islands": {
+    "name": "Marshall Islands",
+    "continent": "Oceania"
+  },
+  "micronesia": {
+    "name": "Micronesia",
+    "continent": "Oceania"
+  },
+  "nauru": {
+    "name": "Nauru",
+    "continent": "Oceania"
+  },
+  "new-zealand": {
+    "name": "New Zealand",
+    "continent": "Oceania"
+  },
+  "palau": {
+    "name": "Palau",
+    "continent": "Oceania"
+  },
+  "papua-new-guinea": {
+    "name": "Papua New Guinea",
+    "continent": "Oceania"
+  },
+  "samoa": {
+    "name": "Samoa",
+    "continent": "Oceania"
+  },
+  "solomon-islands": {
+    "name": "Solomon Islands",
+    "continent": "Oceania"
+  },
+  "tonga": {
+    "name": "Tonga",
+    "continent": "Oceania"
+  },
+  "tuvalu": {
+    "name": "Tuvalu",
+    "continent": "Oceania"
+  },
+  "vanuatu": {
+    "name": "Vanuatu",
+    "continent": "Oceania"
+  },
+  "cape-verde": {
+    "name": "Cabo Verde",
+    "continent": "Africa"
+  },
+  "pan-asia": {
+    "name": "Pan-Asia",
+    "continent": "Asia"
+  },
+  "uae": {
+    "name": "U.A.E.",
+    "continent": "Asia"
+  },
+  "pan-europe": {
+    "name": "Pan-Europe",
+    "continent": "Europe"
+  },
+  "bosnia": {
+    "name": "Bosnia & Herzegovina",
+    "continent": "Europe"
+  },
+  "uk": {
+    "name": "United Kingdom",
+    "continent": "Europe"
+  },
+  "vatican": {
+    "name": "Vatican City",
+    "continent": "Europe"
+  },
+  "pan-north-america": {
+    "name": "Pan-North America",
+    "continent": "North America"
+  },
+  "usa": {
+    "name": "United States",
+    "continent": "North America"
+  },
+  "pan-south-america": {
+    "name": "Pan-South America",
+    "continent": "South America"
+  }
+}

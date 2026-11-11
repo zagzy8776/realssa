@@ -1,0 +1,33 @@
+{
+  "name": "RealSSA News",
+  "short_name": "RealSSA",
+  "id": "/",
+  "description": "Your gateway to African news, entertainment, and culture from around the continent.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": [
+    "news",
+    "lifestyle",
+    "entertainment"
+  ],
+  "lang": "en",
+  "dir": "ltr"
+}

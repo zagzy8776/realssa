@@ -1,0 +1,623 @@
+/*
+ * Vercel entrypoint for RealSSA.
+ *
+ * Vercel handles request/response traffic. External cron and the persistent
+ * worker handle scheduled/background work. Keep those concerns isolated so a
+ * background service cannot take the API down during a cold start.
+ *
+ * Content protection:
+ *   - Honeypot routes (/api/v2/articles, /api/feed.json, /api/export) log by ASN.
+ *   - Fingerprint rate limiting (ja3 + ua + accept-lang + asn), not IP.
+ *   - Signed media proxy (/img/{sig}/{w}x{h}/{exp}/{b64url}).
+ */
+
+process.env.VERCEL = process.env.VERCEL || '1';
+process.env.VERCEL_ENV = process.env.VERCEL_ENV || 'production';
+
+const Module = require('module');
+const originalLoad = Module._load;
+const originalSetInterval = global.setInterval;
+
+const security = require('./security');
+
+
+const marketTs = (r) => new Date(r.updated_at || r.created_at || 0).getTime() || 0;
+const latestBy = (rows, keyFn) => {
+  const best = new Map();
+  for (const r of rows) {
+    const k = keyFn(r);
+    if (!best.has(k) || marketTs(r) > marketTs(best.get(k))) best.set(k, r);
+  }
+  return [...best.values()];
+};
+const shapeRate = (r) => ({ currency: r.currency, buy_rate: r.buy_rate, sell_rate: r.sell_rate, source: r.source, created_at: r.updated_at || r.created_at });
+const shapePrice = (r) => ({ item_name: r.item_name, price: r.price, location: r.location, unit: r.unit, created_at: r.updated_at || r.created_at });
+
+const pg = require('pg');
+const NativePool = pg.Pool;
+const poolCache = new Map();
+
+class SharedVercelPool extends NativePool {
+  constructor(config = {}) {
+    const rawConnectionString = typeof config === 'string' ? config : config.connectionString;
+    const cacheKey = rawConnectionString ? String(rawConnectionString).split('?')[0] : null;
+    if (cacheKey && poolCache.has(cacheKey)) return poolCache.get(cacheKey);
+    super(config);
+    if (cacheKey) poolCache.set(cacheKey, this);
+  }
+}
+
+pg.Pool = SharedVercelPool;
+
+const persistentOnly = {
+  streamHealthMonitor: {
+    runStreamHealthCheck: async () => ({}),
+    getServerHealthStatus: async () => ({}),
+    SERVERS: []
+  },
+  whatsappBots: {
+    initWhatsAppBots: () => {
+      console.log('[Vercel] WhatsApp background worker disabled; external/Fly worker owns it.');
+    }
+  }
+};
+
+const vercelWorker = {
+  runMigrations: async () => {
+    console.log('[Vercel] Worker migrations skipped; migrations belong to the external worker/cron path.');
+  }
+};
+
+let realAuthService;
+let authParent = null;
+const loadRealAuthService = (request, parent) => {
+  if (!realAuthService) realAuthService = originalLoad.call(Module, request, parent, false);
+  return realAuthService;
+};
+
+const lazyAuthService = {
+  registerWithEmail: (...args) => loadRealAuthService('./services/authService', authParent).registerWithEmail(...args),
+  verifyEmailToken: (...args) => loadRealAuthService('./services/authService', authParent).verifyEmailToken(...args),
+  sendPhoneOtp: (...args) => loadRealAuthService('./services/authService', authParent).sendPhoneOtp(...args),
+  verifyPhoneOtp: (...args) => loadRealAuthService('./services/authService', authParent).verifyPhoneOtp(...args),
+  loginWithEmail: (...args) => loadRealAuthService('./services/authService', authParent).loginWithEmail(...args),
+  getAllUsersAdmin: (...args) => loadRealAuthService('./services/authService', authParent).getAllUsersAdmin(...args)
+};
+
+Module._load = function patchedModuleLoad(request, parent, isMain) {
+  if (request === './services/streamHealthMonitor' || request.endsWith('/services/streamHealthMonitor')) return persistentOnly.streamHealthMonitor;
+  if (request === './services/whatsappBots' || request.endsWith('/services/whatsappBots')) return persistentOnly.whatsappBots;
+  if (request === './worker' || request.endsWith('/worker')) return vercelWorker;
+  if (request === './services/authService' || request.endsWith('/services/authService')) {
+    authParent = parent;
+    return lazyAuthService;
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+
+global.setInterval = function vercelNoStartupIntervals() {
+  return { __realssaVercelStartupTimer: true };
+};
+
+let app;
+try {
+  app = require('../backend/server.js');
+} finally {
+  global.setInterval = originalSetInterval;
+  Module._load = originalLoad;
+}
+
+app.set('trust proxy', 1);
+
+let fallbackDatabasePool = null;
+try {
+  const multiDb = require('../backend/config/multiDb');
+  fallbackDatabasePool = multiDb.pools?.[0]?.pool || null;
+} catch (error) {
+  console.warn('[Vercel] Could not resolve shared database pool:', error.message);
+}
+
+const waitForDatabasePool = async (timeoutMs = 10000) => {
+  if (!process.env.DATABASE_URL) return null;
+  if (app.get('pool')) return app.get('pool');
+  if (fallbackDatabasePool) return fallbackDatabasePool;
+  const started = Date.now();
+  while (!app.get('pool') && Date.now() - started < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  return app.get('pool') || fallbackDatabasePool || null;
+};
+
+const sendJson = (res, statusCode, payload) => {
+  if (res.headersSent) return;
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(payload));
+};
+
+const originalHandle = app.handle.bind(app);
+const { ingestCronCategory } = require('../backend/services/cronIngestionFast');
+const { ensureRssSchema } = require('../backend/services/ensureRssSchema');
+const {
+  authorizeCronRequest,
+  sendCronDenial,
+  applyCronNoStore
+} = require('../backend/services/cronAuth');
+
+const cronGuard = (req, res, parsed, task) => {
+  const result = authorizeCronRequest(req, {
+    route: parsed.pathname,
+    task,
+    parsedUrl: parsed
+  });
+  if (result.ok) return result;
+  sendCronDenial(res, result);
+  return null;
+};
+
+const EXTERNAL_ARTICLE_ID_RE = /^(?:https?:\/\/|www\.)/i;
+const SPARSE_CATEGORY_MIN = 18;
+const SPARSE_CATEGORY_COOLDOWN_MS = 2 * 60 * 1000;
+const sparseCategoryRefresh = new Map();
+const externalCommentsTableReady = new WeakMap();
+
+const isExternalArticleId = (value) => {
+  const id = String(value || '').trim();
+  if (!id) return false;
+  if (/^\d+$/.test(id)) return false;
+  if (/^rss-\d+$/.test(id)) return false;
+  return !EXTERNAL_ARTICLE_ID_RE.test(id) || id.length > 40;
+};
+
+const escapeCommentText = (value, maxLength) => String(value || '')
+  .replace(/&/g, '&')
+  .replace(/</g, '<')
+  .replace(/>/g, '>')
+  .replace(/\"/g, '"')
+  .replace(/'/g, '&#039;')
+  .slice(0, maxLength);
+
+const ensureExternalCommentsTable = async (pool) => {
+  if (!pool) return false;
+  const existing = externalCommentsTableReady.get(pool);
+  if (existing) return existing;
+  const promise = pool.query(`
+    CREATE TABLE IF NOT EXISTS external_comments (
+      id BIGSERIAL PRIMARY KEY,
+      article_id TEXT NOT NULL,
+      author_name VARCHAR(100) NOT NULL,
+      content TEXT NOT NULL,
+      parent_id BIGINT NULL,
+      likes INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_external_comments_article ON external_comments (article_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_external_comments_parent ON external_comments (parent_id);
+  `).then(() => true).catch((error) => {
+    externalCommentsTableReady.delete(pool);
+    console.warn('[Vercel Comments] Table initialization failed:', error.message);
+    return false;
+  });
+  externalCommentsTableReady.set(pool, promise);
+  return promise;
+};
+
+const mapExternalComments = (rows) => {
+  const comments = new Map();
+  for (const row of rows) {
+    comments.set(String(row.id), {
+      id: String(row.id),
+      articleId: row.article_id,
+      parentId: row.parent_id ? String(row.parent_id) : null,
+      author: row.author_name,
+      content: row.content,
+      date: new Date(row.created_at).toISOString(),
+      likes: Number(row.likes || 0),
+      replies: []
+    });
+  }
+  const roots = [];
+  for (const comment of comments.values()) {
+    if (comment.parentId && comments.has(comment.parentId)) {
+      comments.get(comment.parentId).replies.push(comment);
+    } else {
+      roots.push(comment);
+    }
+  }
+  return roots;
+};
+
+const handleExternalComments = async (parsed, req, res, pool) => {
+  if (!pool || !parsed.pathname.startsWith('/api/comments')) return false;
+  const method = req.method.toUpperCase();
+  const pathMatch = parsed.pathname.match(/^\/api\/comments(?:\/([^/]+)\/like)?\/?$/);
+  if (!pathMatch) return false;
+  if (method === 'GET' && !pathMatch[1]) {
+    const articleId = parsed.searchParams.get('articleId');
+    if (!articleId || !isExternalArticleId(articleId)) return false;
+    if (!(await ensureExternalCommentsTable(pool))) return sendJson(res, 200, []), true;
+    try {
+      const result = await pool.query(
+        'SELECT id, article_id, author_name, content, parent_id, likes, created_at FROM external_comments WHERE article_id = $1 ORDER BY created_at ASC, id ASC',
+        [String(articleId)]
+      );
+      return sendJson(res, 200, mapExternalComments(result.rows)), true;
+    } catch (error) {
+      console.warn('[Vercel Comments] External comment read failed:', error.message);
+      return sendJson(res, 200, []), true;
+    }
+  }
+  if (method === 'POST' && !pathMatch[1]) {
+    let body = req.body;
+    if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+    body = body || {};
+    const articleId = String(body.articleId || '').trim();
+    const author = String(body.author || '').trim();
+    const content = String(body.content || '').trim();
+    const parentId = body.parentId ? String(body.parentId).trim() : null;
+    if (!articleId || !author || !content) return sendJson(res, 400, { error: 'Missing required fields' }), true;
+    if (!isExternalArticleId(articleId)) return false;
+    if (author.length > 100 || content.length > 1000) return sendJson(res, 400, { error: 'Comment is too long' }), true;
+    if (parentId && !/^\d+$/.test(parentId)) return sendJson(res, 400, { error: 'Invalid parent comment' }), true;
+    if (!(await ensureExternalCommentsTable(pool))) return sendJson(res, 503, { error: 'Comments temporarily unavailable', retryable: true }), true;
+    try {
+      const safeAuthor = escapeCommentText(author, 100);
+      const safeContent = escapeCommentText(content, 1000);
+      const pId = parentId ? Number(parentId) : null;
+      if (pId) {
+        const parent = await pool.query('SELECT id FROM external_comments WHERE id = $1 AND article_id = $2', [pId, articleId]);
+        if (parent.rows.length === 0) return sendJson(res, 400, { error: 'Parent comment not found' }), true;
+      }
+      const result = await pool.query(
+        `INSERT INTO external_comments (article_id, author_name, content, parent_id) VALUES ($1, $2, $3, $4) RETURNING id, article_id, author_name, content, parent_id, likes, created_at`,
+        [articleId, safeAuthor, safeContent, pId]
+      );
+      const created = result.rows[0];
+      return sendJson(res, 201, {
+        id: String(created.id),
+        articleId: created.article_id,
+        parentId: created.parent_id ? String(created.parent_id) : null,
+        author: created.author_name,
+        content: created.content,
+        date: new Date(created.created_at).toISOString(),
+        likes: Number(created.likes || 0),
+        replies: []
+      }), true;
+    } catch (error) {
+      console.error('[Vercel Comments] External comment write failed:', error.message);
+      return sendJson(res, 500, { error: 'Failed to save comment' }), true;
+    }
+  }
+  if (method === 'POST' && pathMatch[1]) {
+    const commentId = pathMatch[1];
+    if (!/^\d+$/.test(commentId)) return false;
+    if (!(await ensureExternalCommentsTable(pool))) return false;
+    try {
+      const result = await pool.query(
+        `UPDATE external_comments SET likes = likes + 1 WHERE id = $1 RETURNING id, article_id, author_name, content, parent_id, likes, created_at`,
+        [Number(commentId)]
+      );
+      if (result.rows.length === 0) return false;
+      const updated = result.rows[0];
+      return sendJson(res, 200, {
+        id: String(updated.id),
+        articleId: updated.article_id,
+        parentId: updated.parent_id ? String(updated.parent_id) : null,
+        author: updated.author_name,
+        content: updated.content,
+        date: new Date(updated.created_at).toISOString(),
+        likes: Number(updated.likes || 0)
+      }), true;
+    } catch (error) {
+      console.warn('[Vercel Comments] External like failed:', error.message);
+      return false;
+    }
+  }
+  return false;
+};
+
+const maybeRefreshSparseCategory = async (parsed, pool) => {
+  if (!pool || parsed.pathname.split('/').length !== 4 || !parsed.pathname.startsWith('/api/news/')) return;
+  const category = decodeURIComponent(parsed.pathname.slice('/api/news/'.length)).toLowerCase();
+  const allowedCategories = new Set([
+    'nigerian', 'nigerian-news', 'ghana', 'kenya', 'south-africa', 'uk', 'usa',
+    'crypto', 'culture', 'entertainment', 'jobs', 'tech', 'business', 'science',
+    'lifestyle', 'sports'
+  ]);
+  if (!allowedCategories.has(category)) return;
+  const last = sparseCategoryRefresh.get(category) || 0;
+  if (Date.now() - last < SPARSE_CATEGORY_COOLDOWN_MS) return;
+  try {
+    const dbCategory = category === 'nigerian' ? 'nigerian-news' : category;
+    try { await ensureRssSchema(pool); } catch (schemaErr) {
+      console.warn('[Vercel Sparse Refresh] schema bootstrap failed:', schemaErr.message);
+      return;
+    }
+    const countResult = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM rss_articles WHERE LOWER(category) = LOWER($1)',
+      [dbCategory]
+    );
+    const count = Number(countResult.rows[0]?.count || 0);
+    if (count >= SPARSE_CATEGORY_MIN) return;
+    sparseCategoryRefresh.set(category, Date.now());
+    try {
+      const result = await Promise.race([
+        ingestCronCategory(dbCategory),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('sparse refresh timeout')), 5500))
+      ]);
+      console.log(`[Vercel Sparse Refresh] ${dbCategory}: ${count} stored ->`, result?.newCount || 0, 'new');
+    } catch (error) {
+      console.warn(`[Vercel Sparse Refresh] ${dbCategory} failed:`, error.message);
+    }
+  } catch (error) {
+    console.warn(`[Vercel Sparse Refresh] Count failed for ${category}:`, error.message);
+  }
+};
+
+const handleStableApi = async (parsed, req, res, pool) => {
+  if (!pool || req.method !== 'GET') return false;
+  // ── Native sports player: prefer the rich aggregating service (direct .m3u8
+  //    sources, live + upcoming). The DB table alone has no stream URLs, so
+  //    without this prod cards had nothing to play natively.
+  if (parsed.pathname === '/api/sports/match-sources') {
+    try {
+      const { getMatchSources } = require('../backend/services/sportsStreamService');
+      const q = parsed.searchParams || new URLSearchParams();
+      const result = await getMatchSources({
+        home: q.get('home'), away: q.get('away'),
+        homeCrest: q.get('homeCrest'), awayCrest: q.get('awayCrest'),
+        sport: q.get('sport'), league: q.get('league'), event: q.get('event'),
+        kickoff: q.get('kickoff'),
+        pool: await waitForDatabasePool(),
+      });
+      return sendJson(res, 200, result), true;
+    } catch (error) {
+      console.warn('[Vercel Sports] match-sources failed:', error.message);
+      return sendJson(res, 200, { directSources: [] }), true;
+    }
+  }
+  if (parsed.pathname === '/api/sports/matches') {
+    // 1) Rich native feed (Streamed + DB + ESPN merged, directSources attached)
+    try {
+      const { getMatches } = require('../backend/services/sportsStreamService');
+      const feed = await getMatches(pool);
+      if (feed?.matches?.length) return sendJson(res, 200, feed), true;
+    } catch (error) {
+      console.warn('[Vercel Sports] Native feed failed, falling back to DB:', error.message);
+    }
+    // 2) Legacy DB-only shape — keeps old clients working if the aggregators are down
+    try {
+      const result = await pool.query(`
+        SELECT match_id AS provider_match_id, COALESCE(competition, 'Other') AS competition_name,
+          COALESCE(home_team, 'Home Team') AS home_team_name, home_team_crest,
+          COALESCE(away_team, 'Away Team') AS away_team_name, away_team_crest,
+          COALESCE(status, 'scheduled') AS status, COALESCE(match_minute::text, '') AS minute,
+          COALESCE(home_score, 0) AS home_score, COALESCE(away_score, 0) AS away_score,
+          kickoff_at, updated_at, match_url
+        FROM live_matches
+        WHERE status IN ('live', 'scheduled', 'finished')
+          AND (status = 'live' OR kickoff_at > NOW() - INTERVAL '3 days')
+        ORDER BY CASE status WHEN 'live' THEN 1 WHEN 'scheduled' THEN 2 ELSE 3 END, kickoff_at ASC NULLS LAST
+        LIMIT 100`);
+      return sendJson(res, 200, { matches: Array.isArray(result.rows) ? result.rows : [] }), true;
+    } catch (error) {
+      console.warn('[Vercel Sports] Stable match query failed:', error.message);
+      return sendJson(res, 200, { matches: [] }), true;
+    }
+  }
+  if (parsed.pathname === '/api/rates') {
+    try {
+      const result = await pool.query(`SELECT * FROM parallel_rates`);
+      const rows = latestBy(result.rows || [], (r) => r.currency).map(shapeRate).sort((a, b) => String(a.currency).localeCompare(String(b.currency)));
+      return sendJson(res, 200, rows), true;
+    } catch (error) {
+      console.warn('[Vercel Market] Rates query failed:', error.message);
+      return sendJson(res, 200, []), true;
+    }
+  }
+  if (parsed.pathname === '/api/prices') {
+    try {
+      const result = await pool.query(`SELECT * FROM market_prices LIMIT 2000`);
+      const rows = latestBy(result.rows || [], (r) => `${r.item_name}|${r.location}`).map(shapePrice).sort((a, b) => String(a.item_name).localeCompare(String(b.item_name))).slice(0, 200);
+      return sendJson(res, 200, rows), true;
+    } catch (error) {
+      console.warn('[Vercel Market] Prices query failed:', error.message);
+      return sendJson(res, 200, []), true;
+    }
+  }
+  if (parsed.pathname === '/api/stocks') {
+    try {
+      const result = await pool.query(`SELECT to_regclass('public.ngx_stocks') AS table_name`);
+      if (!result.rows[0]?.table_name) return sendJson(res, 200, []), true;
+    } catch (error) {
+      console.warn('[Vercel Market] Stock table check failed:', error.message);
+      return sendJson(res, 200, []), true;
+    }
+  }
+  return false;
+};
+
+app.handle = async function realssaVercelHandle(req, res, out) {
+  let parsed;
+  try {
+    parsed = new URL(req.url || '/', 'https://realssa.internal');
+  } catch {
+    return originalHandle(req, res, out);
+  }
+
+  const isApiRequest = parsed.pathname.startsWith('/api/');
+  const isRssRequest = parsed.pathname === '/rss.xml' || parsed.pathname.startsWith('/rss/');
+  const isCinemaRequest = parsed.pathname.startsWith('/api/cinema/');
+  const isHealthRequest = parsed.pathname === '/api/health';
+  const isNotificationsRequest = parsed.pathname === '/api/notifications' || parsed.pathname.startsWith('/api/notifications/');
+  const isStreakRequest = parsed.pathname === '/api/users/streak';
+  const isReactionRequest = parsed.pathname === '/api/reactions' || parsed.pathname.startsWith('/api/reactions/');
+  const isRssArticlesRequest = parsed.pathname === '/api/rss/articles';
+  const isCronIngest = parsed.pathname === '/api/cron/ingest';
+  const isCronAudit = parsed.pathname === '/api/cron/audit' || parsed.pathname === '/api/test-cron';
+  const isCronRequest = parsed.pathname.startsWith('/api/cron/') || isCronAudit || parsed.pathname === '/api/migrate';
+
+  // ── Honeypot routes: not linked from the UI. Anything hitting them is a scraper. ──
+  const HONEYPOT_ROUTES = new Set(['/api/v2/articles', '/api/feed.json', '/api/export']);
+  if (HONEYPOT_ROUTES.has(parsed.pathname)) {
+    security.logHoneypotHit(req, parsed.pathname);
+    // Return a plausible-but-empty payload so scrapers think it worked.
+    return sendJson(res, 200, { articles: [], nextCursor: null, hasMore: false, source: 'rss-live-home-network' });
+  }
+
+  // ── Signed media proxy: /img/{sig}/{w}x{h}/{exp}/{b64url(url)} ──────────────
+  const imgMatch = parsed.pathname.match(/^\/img\/([a-f0-9]{32})\/(\d+)x(\d+)\/(\d+)\/([A-Za-z0-9_-]+)$/);
+  if (imgMatch) {
+    const [, sig, w, h, exp, encoded] = imgMatch;
+    const url = security.verifyMediaUrl(sig, Number(w), Number(h), Number(exp), encoded);
+    if (!url) return sendJson(res, 400, { error: 'Invalid or expired media signature' });
+    try {
+      const upstream = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RealSSA-News/2.2; +https://realssanews.com.ng)' },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (!upstream.ok) return sendJson(res, 502, { error: 'Upstream media unavailable' });
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=21600, stale-while-revalidate=86400');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.end(buf);
+    } catch (error) {
+      console.warn('[Media Proxy] fetch failed:', error.message);
+      return sendJson(res, 502, { error: 'Upstream media unavailable' });
+    }
+  }
+
+  // ── Fingerprint rate limiting: hash(ja3 + ua + accept-lang + asn) ──────────
+  // Applied to all /api/ requests except cron (which has its own auth) and
+  // health (must never be blocked).
+  if (isApiRequest && !isCronRequest && !isHealthRequest) {
+    const rate = security.checkRateLimit(req);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', '60');
+      res.setHeader('X-RateLimit-Remaining', '0');
+      return sendJson(res, 429, { error: 'Rate limit exceeded. Try again in 60s.' });
+    }
+  }
+
+  // Cron responses must never be cached by the CDN or an intermediate proxy.
+  if (isCronRequest) applyCronNoStore(res);
+
+  if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/migrate') {
+    if (!cronGuard(req, res, parsed, 'migration')) return;
+    try {
+      const pool = await waitForDatabasePool(8000);
+      if (!pool) return sendJson(res, 503, { error: 'Database temporarily unavailable', retryable: true });
+      const schema = await ensureRssSchema(pool);
+      const count = await pool.query('SELECT COUNT(*)::int AS count FROM rss_articles');
+      return sendJson(res, 200, {
+        success: true,
+        schema,
+        rssArticles: count.rows[0]?.count ?? 0,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('[Vercel Cron Migrate] failed:', error.message);
+      return sendJson(res, 500, { success: false, error: error.message, timestamp: new Date().toISOString() });
+    }
+  }
+
+  if ((req.method === 'GET' || req.method === 'POST') && isCronIngest) {
+    if (!cronGuard(req, res, parsed, 'rss-ingest')) return;
+    const category = parsed.searchParams.get('category');
+    if (!category) return sendJson(res, 400, { error: 'category is required' });
+    try {
+      const result = await ingestCronCategory(category);
+      return sendJson(res, 200, { success: true, completed: true, ...result, timestamp: new Date().toISOString() });
+    } catch (error) {
+      console.error('[Vercel Fast Cron] Ingestion failed:', error.message);
+      return sendJson(res, 500, {
+        success: false,
+        completed: false,
+        category,
+        error: error.message || 'Ingestion failed',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  if ((req.method === 'GET' || req.method === 'POST') && parsed.pathname === '/api/cron/summarize') {
+    if (!cronGuard(req, res, parsed, 'ai-summarize')) return;
+    try {
+      const pool = await waitForDatabasePool(8000);
+      if (pool) await ensureRssSchema(pool);
+    } catch (error) {
+      console.error('[Vercel Cron Summarize] schema bootstrap failed:', error.message);
+      return sendJson(res, 500, { success: false, error: error.message, timestamp: new Date().toISOString() });
+    }
+  }
+
+  // Health and Cinema do not require PostgreSQL. They must never be blocked by
+  // a cold/unhealthy database connection on Vercel.
+  if (isHealthRequest || isCinemaRequest || isNotificationsRequest || isStreakRequest || isReactionRequest || isRssArticlesRequest || isCronAudit) {
+    return originalHandle(req, res, out);
+  }
+
+  if (process.env.DATABASE_URL && (isApiRequest || isRssRequest)) {
+    const readyPool = await waitForDatabasePool();
+    if (!readyPool) {
+      return sendJson(res, 503, { error: 'Database temporarily unavailable', retryable: true });
+    }
+    const externalCommentsHandled = await handleExternalComments(parsed, req, res, readyPool);
+    if (externalCommentsHandled) return;
+    await maybeRefreshSparseCategory(parsed, readyPool);
+    const stableHandled = await handleStableApi(parsed, req, res, readyPool);
+    if (stableHandled) return;
+  }
+
+  return originalHandle(req, res, out);
+};
+
+// ─── Bot cron triggers (called by cron-job.org / Vercel cron) ───────────────
+// These run one bot cycle per request so bots can run without an always-on worker.
+// Auth is delegated to backend/services/cronAuth (fail closed, timing safe).
+async function requireCronAuth(req, res) {
+  const route = String(req.url || '/').split('?')[0];
+  const result = authorizeCronRequest(req, { route, task: 'bot-cron' });
+  if (result.ok) return true;
+  sendCronDenial(res, result);
+  return false;
+}
+
+app.post('/api/cron/rates', async (req, res) => {
+  if (!(await requireCronAuth(req, res))) return;
+  try {
+    const { fetchRates } = require('../backend/services/ratesBot');
+    await fetchRates();
+    sendJson(res, 200, { ok: true, bot: 'rates' });
+  } catch (err) {
+    console.error('[cron/rates]', err.message);
+    sendJson(res, 500, { error: err.message });
+  }
+});
+
+app.post('/api/cron/prices', async (req, res) => {
+  if (!(await requireCronAuth(req, res))) return;
+  try {
+    const { runPricesCheck } = require('../backend/services/pricesBot');
+    await runPricesCheck();
+    sendJson(res, 200, { ok: true, bot: 'prices' });
+  } catch (err) {
+    console.error('[cron/prices]', err.message);
+    sendJson(res, 500, { error: err.message });
+  }
+});
+
+app.post('/api/cron/discussion', async (req, res) => {
+  if (!(await requireCronAuth(req, res))) return;
+  try {
+    const { monitorAndSimulate } = require('../backend/services/discussionBot');
+    await monitorAndSimulate();
+    sendJson(res, 200, { ok: true, bot: 'discussion' });
+  } catch (err) {
+    console.error('[cron/discussion]', err.message);
+    sendJson(res, 500, { error: err.message });
+  }
+});
+
+module.exports = app;

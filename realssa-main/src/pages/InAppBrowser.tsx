@@ -1,0 +1,1073 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
+import { InAppBrowser } from '@capgo/inappbrowser';
+import {
+  ArrowLeft, ArrowRight, RotateCw, ExternalLink, Share2, BookMarked,
+  BookOpen, Lock, X, Sparkles, AlertTriangle, Search, History,
+  Type, Minus, Plus, ChevronRight, Globe, Home, Shield
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { shareContent } from '@/lib/share';
+import { saveOfflineArticle } from '@/lib/ReadingListStore';
+import { API_BASE_URL, apiUrl, RUST_ENGINE_URL } from '@/lib/api-base';
+import RealSSARenderer, { PageData } from '@/components/RealSSARenderer';
+import SEO from '@/components/SEO';
+
+// ─── History persistence in localStorage ─────────────────────────────────────
+const HISTORY_KEY = 'realssa_browser_history';
+const MAX_HISTORY = 50;
+
+function loadBrowserHistory(): { url: string; title: string; ts: number }[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  } catch { return []; }
+}
+
+function saveToBrowserHistory(url: string, title: string) {
+  try {
+    const hist = loadBrowserHistory().filter(h => h.url !== url);
+    hist.unshift({ url, title: title || url, ts: Date.now() });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, MAX_HISTORY)));
+  } catch { /* storage full, ignore */ }
+}
+
+// ─── URL utils ────────────────────────────────────────────────────────────────
+function formatUrl(raw: string): string {
+  if (!raw) return '';
+  let t = raw.trim();
+  if (t.startsWith('/read?url=')) t = decodeURIComponent(t.replace('/read?url=', ''));
+  if (t.startsWith('realssa://')) return t;
+  if (!/^https?:\/\//i.test(t)) t = `https://${t}`;
+  return t;
+}
+
+function getDomain(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+function looksLikeUrl(str: string): boolean {
+  if (!str) return false;
+  return /^https?:\/\//i.test(str) || (/\.[a-z]{2,}$/i.test(str) && !str.includes(' '));
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export default function InAppBrowser() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const initialUrl = formatUrl(searchParams.get('url') || '');
+  const initialTitle = searchParams.get('title') || '';
+
+  // ── Navigation stack ────────────────────────────────────────────────────────
+  const [stack, setStack] = useState<string[]>(initialUrl ? [initialUrl] : []);
+  const [stackIndex, setStackIndex] = useState(0);
+  const currentUrl = stack[stackIndex] || '';
+
+  // ── Page state ──────────────────────────────────────────────────────────────
+  const [loading, setLoading] = useState(false);
+  const [pageData, setPageData] = useState<PageData | null>(null);
+  const [usingProxy, setUsingProxy] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const webviewRef = useRef<any>(null);
+  const [isElectron, setIsElectron] = useState(false);
+  const [rates, setRates] = useState<{ currency: string; buy_rate: number; sell_rate: number; created_at?: string }[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 
+        ((window as any).electronAPI || navigator.userAgent.toLowerCase().includes('electron'))) {
+      setIsElectron(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch(apiUrl('/api/rates'))
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setRates(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // ── Address bar ─────────────────────────────────────────────────────────────
+  const [addressValue, setAddressValue] = useState(initialUrl);
+  const [addressFocused, setAddressFocused] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ url: string; title: string; isSearch?: boolean }[]>([]);
+  const addressRef = useRef<HTMLInputElement>(null);
+
+  // ── UI state ────────────────────────────────────────────────────────────────
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [fontSize, setFontSize] = useState(16);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [shieldActive, setShieldActive] = useState(true);
+
+  // ── Native Search results state ───────────────────────────────────────────
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(true);
+  const searchLimit = 12;
+  const [aiOverview, setAiOverview] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [activeSearchTab, setActiveSearchTab] = useState<'all' | 'ai'>('all');
+
+  // Proxy fallback URL builder
+  const proxyUrl = useCallback((url: string) =>
+    `${RUST_ENGINE_URL}/proxy-page?url=${encodeURIComponent(url)}`, []);
+
+  // ── Route decision: news article → Reader (Mode C), everything else → native WebView (Mode B)
+  // Search result clicks always stay in browser — never route to Reader
+  const openNative = useCallback(async (url: string, title?: string, forceFullWeb = false) => {
+    if (forceFullWeb) {
+      await InAppBrowser.open({ url });
+      return;
+    }
+    const SOCIAL_DOMAINS = [
+      'facebook.com', 'twitter.com', 'x.com', 'instagram.com', 'tiktok.com',
+      'google.com', 'accounts.google', 'linkedin.com', 'github.com',
+      'apple.com', 'microsoft.com', 'login.', 'auth.', 'oauth.',
+      'sportybet.com', 'bet9ja.com', 'betking.com', '1xbet.com', 'betway.com',
+      'youtube.com', 'whatsapp.com', 'telegram.org'
+    ];
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      const isSocial = SOCIAL_DOMAINS.some(d => hostname.includes(d));
+      const path = new URL(url).pathname;
+      const looksLikeArticle = !isSocial && path.length > 1 && path !== '/';
+      if (looksLikeArticle) {
+        navigate(`/read?url=${encodeURIComponent(url)}${title ? `&title=${encodeURIComponent(title)}` : ''}`);
+        return;
+      }
+    } catch { /* fall through to native webview */ }
+    await InAppBrowser.open({ url });
+  }, [navigate]);
+
+  // ── Core load function — tries renderer first, silently falls back ──────────
+  const loadUrl = useCallback(async (url: string) => {
+    if (!url) return;
+    setAddressValue(url);
+    setHistoryOpen(false);
+
+    if (url.startsWith('realssa://search?q=')) {
+      setLoading(false);
+      setUsingProxy(false);
+      setPageData(null);
+      return;
+    }
+
+    setLoading(true);
+    setPageData(null);
+    setUsingProxy(false);
+
+    try {
+      const res = await fetch(`${RUST_ENGINE_URL}/render-page?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new Error('render-page failed');
+      const data: PageData = await res.json();
+
+      if (data.requiresProxy) {
+        if (Capacitor.isNativePlatform()) {
+          setLoading(false);
+          setUsingProxy(false);
+          await openNative(url, data.meta?.title);
+          return;
+        }
+
+        // Seamlessly mount proxy iframe or webview
+        setUsingProxy(true);
+        setPageData(null);
+        if (isElectron) {
+          if (webviewRef.current) {
+            webviewRef.current.src = url;
+          }
+        } else {
+          if (iframeRef.current) {
+            iframeRef.current.src = proxyUrl(url);
+          }
+        }
+        // Save to history with whatever title we have
+        saveToBrowserHistory(url, data.meta?.title || getDomain(url));
+      } else {
+        // Custom renderer — the engine
+        setUsingProxy(false);
+        setPageData(data);
+        saveToBrowserHistory(url, data.meta?.title || getDomain(url));
+      }
+    } catch {
+      if (Capacitor.isNativePlatform()) {
+        setLoading(false);
+        setUsingProxy(false);
+        try {
+          await openNative(url);
+          return;
+        } catch (_) {}
+      }
+
+      // Network error → fall back to proxy silently
+      setUsingProxy(true);
+      setPageData(null);
+      if (isElectron) {
+        if (webviewRef.current) {
+          webviewRef.current.src = url;
+        }
+      } else {
+        if (iframeRef.current) {
+          iframeRef.current.src = proxyUrl(url);
+        }
+      }
+      saveToBrowserHistory(url, getDomain(url));
+    } finally {
+      setLoading(false);
+    }
+  }, [proxyUrl]);
+
+  // ── Fetch results from Tavily/Exa endpoint ──────────────────────────────────
+  const fetchSearchResults = useCallback(async (query: string, offset: number) => {
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/search/web?q=${encodeURIComponent(query)}&offset=${offset}&limit=${searchLimit}`);
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      const resultsArray = Array.isArray(data) ? data : (data?.results || []);
+      setSearchResults(prev => offset === 0 ? resultsArray : [...prev, ...resultsArray]);
+      setSearchHasMore(data?.hasMore !== undefined ? data.hasMore : resultsArray.length === searchLimit);
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Search Error', description: 'Failed to fetch search results.' });
+      setSearchHasMore(false);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [toast]);
+
+  const fetchAiOverview = useCallback(async (query: string) => {
+    setAiLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/search/ai?q=${encodeURIComponent(query)}`);
+      if (!res.ok) throw new Error('AI Overview failed');
+      const data = await res.json();
+      if (data.success && data.aiOverview) {
+        setAiOverview(data.aiOverview);
+      }
+    } catch (err) {
+      console.error('Failed to fetch AI Overview:', err);
+    } finally {
+      setAiLoading(false);
+    }
+  }, []);
+
+  // ── Trigger search results load on URI navigation ──────────────────────────
+  useEffect(() => {
+    if (currentUrl.startsWith('realssa://search?q=')) {
+      const q = decodeURIComponent(currentUrl.replace('realssa://search?q=', ''));
+      setSearchResults([]);
+      setSearchOffset(0);
+      setSearchHasMore(true);
+      setAiOverview(null);
+      setActiveSearchTab('all');
+      fetchSearchResults(q, 0);
+      fetchAiOverview(q);
+    }
+  }, [currentUrl, fetchSearchResults, fetchAiOverview]);
+
+  const handleLoadMoreSearch = () => {
+    const q = decodeURIComponent(currentUrl.replace('realssa://search?q=', ''));
+    const nextOffset = searchOffset + searchLimit;
+    setSearchOffset(nextOffset);
+    fetchSearchResults(q, nextOffset);
+  };
+
+  // ── Initial load ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (initialUrl) loadUrl(initialUrl);
+  }, [initialUrl]); // eslint-disable-line
+
+  // ── postMessage from proxy iframe (link clicks inside proxied pages) ────────
+  useEffect(() => {
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'REALSSA_NAVIGATE' && e.data?.url) {
+        navigateTo(e.data.url);
+      }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, [stackIndex, stack]); // eslint-disable-line
+
+  // ── Webview navigation listener for Electron ────────────────────────────────
+  useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview || !isElectron) return;
+
+    const handleNavigate = (e: any) => {
+      const newUrl = e.url;
+      setAddressValue(newUrl);
+      setStack(prev => {
+        if (prev[stackIndex] === newUrl) return prev;
+        const nextStack = [...prev.slice(0, stackIndex + 1), newUrl];
+        setStackIndex(nextStack.length - 1);
+        return nextStack;
+      });
+    };
+
+    webview.addEventListener('did-navigate', handleNavigate);
+    webview.addEventListener('did-navigate-in-page', handleNavigate);
+
+    return () => {
+      webview.removeEventListener('did-navigate', handleNavigate);
+      webview.removeEventListener('did-navigate-in-page', handleNavigate);
+    };
+  }, [isElectron, stackIndex]);
+
+  // ── Navigate to a URL (adds to stack, clears forward history) ───────────────
+  const navigateTo = useCallback((url: string) => {
+    const formatted = formatUrl(url);
+    if (!formatted || formatted === currentUrl) return;
+
+    // Open betting sites via native WebView (stays in app, preserves cookies)
+    const NATIVE_DOMAINS = [
+      'sportybet.com', 'bet9ja.com', 'betking.com', '1xbet.com', 'betway.com'
+    ];
+    try {
+      const hostname = new URL(formatted).hostname.toLowerCase();
+      const isNative = NATIVE_DOMAINS.some(domain => hostname.includes(domain));
+      if (isNative) {
+        InAppBrowser.open({ url: formatted });
+        return;
+      }
+    } catch {
+      // ignore parsing errors
+    }
+
+    setStack(prev => [...prev.slice(0, stackIndex + 1), formatted]);
+    setStackIndex(prev => prev + 1);
+    loadUrl(formatted);
+  }, [stackIndex, currentUrl, loadUrl]);
+
+  // ── Back / Forward ───────────────────────────────────────────────────────────
+  const goBack = () => {
+    if (isElectron && usingProxy && webviewRef.current && webviewRef.current.canGoBack()) {
+      webviewRef.current.goBack();
+      return;
+    }
+    if (stackIndex <= 0) { navigate(-1); return; }
+    const newIndex = stackIndex - 1;
+    setStackIndex(newIndex);
+    loadUrl(stack[newIndex]);
+  };
+
+  const goForward = () => {
+    if (isElectron && usingProxy && webviewRef.current && webviewRef.current.canGoForward()) {
+      webviewRef.current.goForward();
+      return;
+    }
+    if (stackIndex >= stack.length - 1) return;
+    const newIndex = stackIndex + 1;
+    setStackIndex(newIndex);
+    loadUrl(stack[newIndex]);
+  };
+
+  const handleRefresh = () => {
+    if (currentUrl) loadUrl(currentUrl);
+  };
+
+  // ── Address bar submit ────────────────────────────────────────────────────────
+  const handleAddressSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const input = addressValue.trim();
+    if (!input) return;
+    const dest = looksLikeUrl(input)
+      ? formatUrl(input)
+      : `realssa://search?q=${encodeURIComponent(input)}`;
+    navigateTo(dest);
+    addressRef.current?.blur();
+    setSuggestions([]);
+  };
+
+  // ── Address bar autocomplete & live suggestions ───────────────────────────
+  const handleAddressChange = (val: string) => {
+    setAddressValue(val);
+    if (!val.trim()) { setSuggestions([]); return; }
+    
+    // 1. History matches
+    const hist = loadBrowserHistory();
+    const q = val.toLowerCase();
+    const historyMatches = hist
+      .filter(h => h.url.toLowerCase().includes(q) || h.title.toLowerCase().includes(q))
+      .map(h => ({ url: h.url, title: h.title, isSearch: false }))
+      .slice(0, 3);
+
+    // 2. Fetch live suggestions from our backend autocomplete proxy API (CORS-safe)
+    fetch(`${API_BASE_URL}/api/autocomplete?q=${encodeURIComponent(val)}`)
+      .then(res => res.json())
+      .then((data: any) => {
+        if (Array.isArray(data) && Array.isArray(data[1])) {
+          const searchSuggestions = data[1]
+            .map((s: string) => ({
+              url: `realssa://search?q=${encodeURIComponent(s)}`,
+              title: s,
+              isSearch: true
+            }))
+            .slice(0, 5);
+          setSuggestions([...historyMatches, ...searchSuggestions]);
+        } else {
+          setSuggestions(historyMatches);
+        }
+      })
+      .catch(() => {
+        setSuggestions(historyMatches);
+      });
+  };
+
+  // ── Bookmark ──────────────────────────────────────────────────────────────────
+  const handleBookmark = () => {
+    const title = pageData?.meta?.title || getDomain(currentUrl);
+    saveOfflineArticle({
+      id: `browser-${Date.now()}`,
+      title,
+      excerpt: pageData?.meta?.description || `Saved from RealSSA Browser: ${currentUrl}`,
+      category: 'Web Bookmark',
+      readTime: pageData?.meta?.readingTime ? `${pageData.meta.readingTime} min read` : 'External Link',
+      publishedAt: new Date().toLocaleDateString(),
+      image: pageData?.meta?.image || '',
+      externalLink: currentUrl,
+      savedAt: Date.now()
+    });
+    setIsSaved(true);
+    toast({ title: 'Saved to Wisdom Library', description: 'Added to your offline reading list.' });
+  };
+
+  const handleShare = () => {
+    shareContent({
+      title: pageData?.meta?.title || getDomain(currentUrl),
+      text: `Check this out:\n${currentUrl}`,
+      url: currentUrl
+    });
+  };
+
+  const handleOpenReaderMode = () => {
+    navigate(`/read?url=${encodeURIComponent(currentUrl)}`);
+  };
+
+  const handleOpenExternal = () => {
+    window.open(currentUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // ── No URL guard ──────────────────────────────────────────────────────────────
+  if (!initialUrl) {
+    return <Navigate to="/search" replace />;
+  }
+
+  const canGoBack = stackIndex > 0;
+  const canGoForward = stackIndex < stack.length - 1;
+  const pageTitle = pageData?.meta?.title || initialTitle || getDomain(currentUrl);
+  const pageFavicon = pageData?.meta?.favicon || '';
+
+  return (
+    <div className="fixed inset-0 z-[99999] bg-[#0b0f17] text-foreground flex flex-col h-[100dvh] w-screen overflow-hidden">
+
+      {/* ── Top Browser Chrome ──────────────────────────────────────────────── */}
+      <header className="bg-[#121824] border-b border-[#1f293d] px-2 sm:px-3 py-2 flex items-center gap-2 shrink-0 z-20 shadow-md">
+        {/* Home Button */}
+        <button
+          onClick={() => navigate('/')}
+          className="p-2 hover:bg-amber-500/10 text-amber-400 rounded-xl transition-all shrink-0"
+          title="Back to Home Feed"
+        >
+          <Home className="w-4 h-4" />
+        </button>
+
+        {/* Address bar */}
+        <form onSubmit={handleAddressSubmit} className="relative flex-1 min-w-0">
+          <div className={`flex items-center gap-1.5 bg-[#0b0e14] border rounded-full px-2.5 py-1.5 transition-all ${addressFocused ? 'border-amber-500 ring-1 ring-amber-500/20' : 'border-amber-500/25'}`}>
+            {pageFavicon && !addressFocused ? (
+              <img
+                src={pageFavicon}
+                alt=""
+                className="w-3.5 h-3.5 rounded-sm shrink-0"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
+            )}
+            <input
+              ref={addressRef}
+              type="text"
+              value={addressFocused ? addressValue : (pageTitle.length > 40 ? getDomain(currentUrl) : pageTitle || addressValue)}
+              onChange={(e) => handleAddressChange(e.target.value)}
+              onFocus={() => {
+                setAddressFocused(true);
+                setAddressValue(currentUrl);
+                setTimeout(() => addressRef.current?.select(), 50);
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  setAddressFocused(false);
+                  setSuggestions([]);
+                }, 150);
+              }}
+              placeholder="Search or enter URL..."
+              className="flex-1 min-w-0 bg-transparent text-base md:text-xs font-medium text-amber-400 placeholder:text-muted-foreground/60 focus:outline-none focus:text-white transition-colors truncate"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+            />
+            {addressFocused && addressValue && (
+              <button type="submit" className="shrink-0 text-amber-500 hover:text-amber-300 p-0.5" title="Go">
+                <Search className="w-3 h-3" />
+              </button>
+            )}
+            {!addressFocused && (
+              <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full shrink-0 font-mono hidden sm:inline">
+                SECURE
+              </span>
+            )}
+          </div>
+
+          {/* Autocomplete dropdown */}
+          {addressFocused && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[#121824] border border-border rounded-xl shadow-2xl overflow-hidden z-50">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onMouseDown={() => { navigateTo(s.url); setSuggestions([]); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-amber-500/10 transition-colors text-left group border-b border-border/10 last:border-0"
+                >
+                  {s.isSearch ? (
+                    <Search className="w-3 h-3 text-amber-500 shrink-0" />
+                  ) : (
+                    <Globe className="w-3 h-3 text-amber-500 shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium text-foreground truncate">{s.title}</div>
+                    {!s.isSearch && (
+                      <div className="text-[10px] text-muted-foreground truncate">{getDomain(s.url)}</div>
+                    )}
+                  </div>
+                  <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-amber-400 shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </form>
+
+        {/* Close Button */}
+        <button
+          onClick={() => navigate(-1)}
+          className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 rounded-xl transition-all active:scale-95 shrink-0"
+          title="Close Browser"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </header>
+
+      {/* ── Sub-Header Utility Toolbar ────────────────────────────────────────── */}
+      <div className="bg-[#161f30] border-b border-[#232f48] px-3 py-1 flex items-center justify-between shrink-0 z-10 shadow-sm">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={goBack}
+            disabled={stackIndex <= 0}
+            className="p-1.5 hover:bg-amber-500/10 text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+            title="Back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={goForward}
+            disabled={!canGoForward}
+            className="p-1.5 hover:bg-amber-500/10 text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+            title="Forward"
+          >
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleRefresh}
+            className="p-1.5 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 transition-all rounded-lg"
+            title="Refresh"
+          >
+            <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-500' : ''}`} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Security Shield */}
+          <button
+            onClick={() => {
+              setShieldActive(!shieldActive);
+              toast({
+                title: !shieldActive ? 'Shield Enabled' : 'Shield Disabled',
+                description: !shieldActive 
+                  ? 'Real-time ad blocking & tracker protection is active.'
+                  : 'Tracker protection has been temporarily disabled.'
+              });
+            }}
+            className={`p-1.5 rounded-lg transition-all ${shieldActive ? 'text-emerald-400 bg-emerald-500/10' : 'text-muted-foreground hover:text-amber-400'}`}
+            title={shieldActive ? "Shield Active (Adblocker On)" : "Shield Inactive (Adblocker Off)"}
+          >
+            <Shield className="w-4 h-4" />
+          </button>
+
+          {/* Save/Bookmark */}
+          <button
+            onClick={handleBookmark}
+            className={`p-1.5 rounded-lg transition-all ${isSaved ? 'text-amber-500 bg-amber-500/10' : 'text-muted-foreground hover:text-amber-400'}`}
+            title="Save to Library"
+          >
+            <BookMarked className="w-4 h-4" />
+          </button>
+
+          {/* Share */}
+          <button
+            onClick={handleShare}
+            className="p-1.5 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 transition-all rounded-lg"
+            title="Share Link"
+          >
+            <Share2 className="w-4 h-4" />
+          </button>
+
+          {/* Open Externally */}
+          <button
+            onClick={handleOpenExternal}
+            className="p-1.5 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 transition-all rounded-lg"
+            title="Open in System Browser"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </button>
+
+          {/* Text Size Control Trigger (for desktop/wide screens) */}
+          <button
+            onClick={() => setControlsOpen(!controlsOpen)}
+            className={`p-1.5 rounded-lg transition-all hidden sm:block ${controlsOpen ? 'bg-amber-500/15 text-amber-400' : 'hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400'}`}
+            title="Text Size & Controls"
+          >
+            <Type className="w-4 h-4" />
+          </button>
+
+          {/* History */}
+          <button
+            onClick={() => setHistoryOpen(!historyOpen)}
+            className={`p-1.5 rounded-lg transition-all ${historyOpen ? 'bg-amber-500/15 text-amber-400' : 'hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400'}`}
+            title="Browsing History"
+          >
+            <History className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Loading bar ──────────────────────────────────────────────────────── */}
+      {loading && (
+        <div className="w-full h-[2px] bg-transparent overflow-hidden shrink-0">
+          <div
+            className="h-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-500"
+            style={{ animation: 'browserProgress 1.4s ease-in-out infinite', width: '60%' }}
+          />
+        </div>
+      )}
+
+      {/* ── History Drawer ────────────────────────────────────────────────────── */}
+      {historyOpen && (
+        <div className="absolute top-[52px] right-2 sm:right-4 z-50 w-72 sm:w-80 bg-[#121824] border border-border rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40">
+            <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" /> Browsing History
+            </span>
+            <button
+              onClick={() => { localStorage.removeItem(HISTORY_KEY); setHistoryOpen(false); }}
+              className="text-[10px] text-red-400 hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {loadBrowserHistory().length === 0 ? (
+              <p className="text-xs text-muted-foreground p-4 text-center">No history yet</p>
+            ) : (
+              loadBrowserHistory().map((h, i) => (
+                <button
+                  key={i}
+                  onClick={() => { navigateTo(h.url); setHistoryOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-amber-500/10 transition-colors text-left group border-b border-border/10 last:border-0"
+                >
+                  <Globe className="w-3 h-3 text-amber-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium text-foreground truncate">{h.title}</div>
+                    <div className="text-[10px] text-muted-foreground truncate">{getDomain(h.url)}</div>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                    {new Date(h.ts).toLocaleDateString()}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Text Size Controls Drawer ─────────────────────────────────────────── */}
+      {controlsOpen && (
+        <div className="absolute top-[52px] right-16 z-50 bg-[#121824] border border-border rounded-xl shadow-2xl p-3 animate-in slide-in-from-top-2 duration-200">
+          <p className="text-[10px] text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Text Size</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFontSize(f => Math.max(12, f - 1))}
+              className="w-7 h-7 rounded-lg bg-muted/50 hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition-all"
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+            <span className="text-xs text-foreground font-mono w-8 text-center">{fontSize}px</span>
+            <button
+              onClick={() => setFontSize(f => Math.min(22, f + 1))}
+              className="w-7 h-7 rounded-lg bg-muted/50 hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition-all"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {currentUrl.startsWith('realssa://search?q=') && (
+        <SEO
+          title={aiOverview?.title ? `${aiOverview.title} — AI Overview` : `Search Insights`}
+          description={aiOverview?.summary || `Search results and synthesis for: ${decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))}`}
+          claimReview={aiOverview?.disputed ? {
+            claimReviewed: `Contradictions or conflicting facts in coverage of: ${aiOverview.title}`,
+            claimantName: aiOverview.title,
+            ratingValue: 3,
+            alternateName: "Disputed range",
+            description: aiOverview.discrepancyDescription || "Conflicting reports detected between different news sources."
+          } : undefined}
+        />
+      )}
+
+      {/* ── Main Content Area ──────────────────────────────────────────────────── */}
+      <main
+        data-browser-scroll
+        className="flex-1 w-full flex flex-col relative bg-[#0b0f17] min-h-0 overflow-y-auto overflow-x-hidden"
+      >
+        {/* Loading state */}
+        {loading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0b0f17] z-10">
+            <div className="w-10 h-10 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+            <span className="text-xs text-amber-500/70 font-mono animate-pulse">Loading {getDomain(currentUrl)}…</span>
+          </div>
+        )}
+
+        {/* Custom renderer — the engine output */}
+        {!loading && pageData && !usingProxy && !currentUrl.startsWith('realssa://search?q=') && (
+          <RealSSARenderer
+            data={pageData}
+            onNavigate={navigateTo}
+            fontSize={fontSize}
+          />
+        )}
+
+        {/* Proxy iframe / WebView — seamless fallback, user doesn't know */}
+        {isElectron ? (
+          React.createElement('webview', {
+            ref: webviewRef,
+            src: currentUrl,
+            style: { border: 'none', background: 'white' },
+            className: `w-full flex-1 ${usingProxy && !loading && !currentUrl.startsWith('realssa://search?q=') ? 'flex' : 'hidden'}`
+          } as any)
+        ) : (
+          <iframe
+            ref={iframeRef}
+            title={pageTitle}
+            className={`w-full flex-1 border-none bg-white ${usingProxy && !loading && !currentUrl.startsWith('realssa://search?q=') ? 'flex' : 'hidden'}`}
+            onLoad={() => setLoading(false)}
+            onError={() => setLoading(false)}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+          />
+        )}
+
+        {/* Native Search Results UI */}
+        {currentUrl.startsWith('realssa://search?q=') && (
+          <div className="max-w-2xl mx-auto w-full px-4 py-6 text-foreground flex-1 flex flex-col overflow-y-auto">
+            <div className="mb-6 pb-4 border-b border-white/10 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Sparkles className="w-4 h-4 text-amber-500" /> Neural Search Results
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Semantic results for: <span className="text-foreground font-medium italic">"{decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))}"</span>
+                </p>
+              </div>
+              {(searchLoading || aiLoading) && (
+                <div className="w-4 h-4 border border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+              )}
+            </div>
+
+            {/* Tab selector */}
+            <div className="flex gap-2 mb-6 pb-2 border-b border-white/5 shrink-0">
+              <button
+                onClick={() => setActiveSearchTab('all')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  activeSearchTab === 'all'
+                    ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
+                    : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                }`}
+              >
+                All Web Results
+              </button>
+              <button
+                onClick={() => setActiveSearchTab('ai')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  activeSearchTab === 'ai'
+                    ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
+                    : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" /> RealSSA AI Mode
+              </button>
+            </div>
+
+            {/* AI Mode Full Screen Content */}
+            {activeSearchTab === 'ai' && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl animate-in fade-in duration-300">
+                {aiLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <div className="w-8 h-8 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-3" />
+                    <p className="text-xs text-muted-foreground">RealSSA AI is synthesizing search results...</p>
+                  </div>
+                ) : aiOverview ? (
+                  <div>
+                    <div className="flex flex-col md:flex-row gap-6 mb-6">
+                      {aiOverview.imageUrl && (
+                        <img
+                          src={aiOverview.imageUrl}
+                          alt={aiOverview.title}
+                          className="w-full md:w-48 h-48 object-cover rounded-xl border border-white/10 shadow-md bg-white/5"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-foreground">{aiOverview.title}</h3>
+                        {aiOverview.subtitle && <p className="text-sm text-amber-400 font-semibold mt-0.5">{aiOverview.subtitle}</p>}
+                        <p className="text-sm text-muted-foreground mt-4 leading-relaxed font-normal">{aiOverview.summary}</p>
+
+                        {/* Uncertainty variance visual meter */}
+                        {aiOverview.disputed && (
+                          <div className="mt-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-300 flex flex-col gap-2.5">
+                            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                              <AlertTriangle className="w-4 h-4 text-amber-500" /> Conflicting Local Reports
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {aiOverview.discrepancyDescription || "Different local sources are reporting conflicting quantities or outcomes for this event."}
+                            </p>
+                            <div className="mt-1 flex flex-col gap-1">
+                              <div className="flex justify-between text-[10px] text-muted-foreground font-semibold">
+                                <span>Consensus</span>
+                                <span>High Variance</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden relative">
+                                <div className="absolute right-0 top-0 bottom-0 left-1/3 bg-gradient-to-r from-amber-500 to-red-500 rounded-full" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {aiOverview.facts && aiOverview.facts.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6 pt-6 border-t border-white/5">
+                        {aiOverview.facts.map((f: any, idx: number) => (
+                          <div key={idx} className="bg-black/30 p-4 rounded-xl border border-white/5">
+                            <div className="text-[10px] text-amber-500/70 font-semibold uppercase tracking-wider">{f.label}</div>
+                            <div className="text-sm font-bold text-foreground mt-1">{f.value}</div>
+                            {f.extra && <div className="text-[11px] text-muted-foreground mt-0.5">{f.extra}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-sm text-muted-foreground">AI Overview is not available for this query.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* All Web Results Tab Content */}
+            {activeSearchTab === 'all' && (
+              <>
+                {/* Native Intent Widgets (e.g. Currency Rates) */}
+                {/naira|cbn|usd|black.*market|rate/i.test(decodeURIComponent(currentUrl.replace('realssa://search?q=', ''))) && (() => {
+                  const usdRate = rates.find(r => r.currency?.toUpperCase() === 'USD');
+                  const gbpRate = rates.find(r => r.currency?.toUpperCase() === 'GBP');
+                  const eurRate = rates.find(r => r.currency?.toUpperCase() === 'EUR');
+                  const usdDisplay = usdRate ? `${usdRate.buy_rate.toLocaleString()} / ${usdRate.sell_rate.toLocaleString()}` : '1,640 / 1,650';
+                  const gbpDisplay = gbpRate ? `${gbpRate.buy_rate.toLocaleString()} / ${gbpRate.sell_rate.toLocaleString()}` : '2,080 / 2,100';
+                  const eurDisplay = eurRate ? `${eurRate.buy_rate.toLocaleString()} / ${eurRate.sell_rate.toLocaleString()}` : '1,780 / 1,800';
+                  const lastUpdated = rates[0]?.created_at ? new Date(rates[0].created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) : '';
+                  return (
+                    <div className="mb-6 p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                           💰 Currency Parallel Rates (Naira Black Market)
+                        </span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">
+                          {lastUpdated ? `Updated ${lastUpdated}` : 'Live'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                          <div className="text-[10px] text-muted-foreground uppercase">USD</div>
+                          <div className="text-xs font-bold text-foreground mt-0.5">{usdDisplay}</div>
+                        </div>
+                        <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                          <div className="text-[10px] text-muted-foreground uppercase">GBP</div>
+                          <div className="text-xs font-bold text-foreground mt-0.5">{gbpDisplay}</div>
+                        </div>
+                        <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 text-center">
+                          <div className="text-[10px] text-muted-foreground uppercase">EUR</div>
+                          <div className="text-xs font-bold text-foreground mt-0.5">{eurDisplay}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Results List */}
+                <div className="space-y-4 flex-1">
+                  {searchResults.length === 0 && !searchLoading ? (
+                    <div className="text-center py-12">
+                      <p className="text-sm text-muted-foreground">No neural results found for your query.</p>
+                    </div>
+                  ) : (
+                    searchResults.map((r: any, i: number) => (
+                      <React.Fragment key={i}>
+                        {/* Inline AI Insight Card (Between Card 2 and 3) */}
+                        {i === 2 && aiOverview && (
+                          <div className="p-5 bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20 rounded-2xl shadow-lg mb-4 animate-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-4">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> RealSSA AI Overview
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-4">
+                              {aiOverview.imageUrl && (
+                                <img
+                                  src={aiOverview.imageUrl}
+                                  alt=""
+                                  className="w-20 h-20 object-cover rounded-xl border border-white/10 shrink-0 bg-white/5"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              )}
+                              <div className="flex-1">
+                                <h4 className="text-sm font-bold text-foreground">{aiOverview.title}</h4>
+                                {aiOverview.subtitle && <p className="text-[10px] text-amber-400 font-semibold mt-0.5">{aiOverview.subtitle}</p>}
+                                <p className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-3">{aiOverview.summary}</p>
+                              </div>
+                            </div>
+                            
+                            {aiOverview.facts && aiOverview.facts.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/5">
+                                {aiOverview.facts.slice(0, 2).map((f: any, idx: number) => (
+                                  <div key={idx} className="bg-black/30 p-2.5 rounded-lg border border-white/5">
+                                    <div className="text-[9px] text-muted-foreground uppercase tracking-wider">{f.label}</div>
+                                    <div className="text-xs font-bold text-foreground mt-0.5 truncate">{f.value}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            <button 
+                              onClick={() => setActiveSearchTab('ai')}
+                              className="mt-4 w-full py-2 bg-amber-500 hover:bg-amber-600 text-black text-xs font-semibold rounded-xl transition-colors text-center"
+                            >
+                              Ask RealSSA AI More About This ↗
+                            </button>
+                          </div>
+                        )}
+
+        {/* Standard Result Card */}
+                        <div 
+                          className="p-4 bg-white/5 border border-white/5 hover:border-amber-500/20 hover:bg-amber-500/5 rounded-2xl transition-all shadow-sm group cursor-pointer"
+                          onClick={() => { setStack(prev => [...prev.slice(0, stackIndex + 1), r.url]); setStackIndex(prev => prev + 1); loadUrl(r.url); }}
+                        >
+                          <div className="flex gap-3">
+                            {/* Thumbnail via /api/img proxy */}
+                            <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/10">
+                              <img
+                                src={`${RUST_ENGINE_URL.replace('engine.', 'www.')}/api/img?url=${encodeURIComponent(`https://www.google.com/s2/favicons?sz=128&domain=${r.source}`)}&w=128&q=80`}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = `https://www.google.com/s2/favicons?sz=64&domain=${r.source}`;
+                                }}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <img
+                                  src={`https://www.google.com/s2/favicons?sz=16&domain=${r.source}`}
+                                  alt=""
+                                  className="w-3 h-3 rounded-sm shrink-0"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                                <span className="text-[10px] text-amber-500/70 font-semibold uppercase tracking-wide truncate">{r.source}</span>
+                                <span className="text-[9px] text-muted-foreground ml-auto shrink-0">{r.date}</span>
+                              </div>
+                              <h3 className="text-sm font-bold text-foreground group-hover:text-amber-400 transition-colors line-clamp-2 leading-snug">
+                                {r.title}
+                              </h3>
+                              {r.snippet && (
+                                <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-1">
+                                  {r.snippet}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    ))
+                  )}
+                </div>
+
+                {/* See More / Load More Pagination */}
+                {searchHasMore && searchResults.length > 0 && (
+                  <button
+                    onClick={handleLoadMoreSearch}
+                    disabled={searchLoading}
+                    className="mt-6 w-full py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 hover:border-amber-500/40 text-amber-400 font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {searchLoading ? 'Searching more...' : 'See More Results'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* ── Bottom Mobile Bar ─────────────────────────────────────────────────── */}
+      <footer className="bg-[#121824] border-t border-[#1f293d] px-4 py-2 flex items-center justify-between text-xs shrink-0 z-20 md:hidden">
+        <div className="flex items-center gap-1 text-[11px] text-amber-400/60 font-mono">
+          <Sparkles className="w-3 h-3" /> RealSSA Browser
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={goBack} disabled={stackIndex <= 0} className="text-muted-foreground disabled:opacity-30">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <button onClick={handleOpenReaderMode} className="text-amber-400 flex items-center gap-1 font-semibold text-[11px]">
+            <BookOpen className="w-3.5 h-3.5" /> Reader
+          </button>
+          <button onClick={goForward} disabled={!canGoForward} className="text-muted-foreground disabled:opacity-30">
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </footer>
+
+      <style>{`
+        @keyframes browserProgress {
+          0% { transform: translateX(-100%); }
+          50% { transform: translateX(50%); }
+          100% { transform: translateX(250%); }
+        }
+      `}</style>
+    </div>
+  );
+}

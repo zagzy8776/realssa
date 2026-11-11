@@ -1,0 +1,7578 @@
+try { require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }); } catch (e) {}
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
+// NOTE: server.js uses axios in several inline route handlers (stream proxy,
+// ESPN fallbacks). It was never imported at module scope, which surfaced as
+// "[Stream Proxy Error]: axios is not defined" → the HLS proxy returned 502 for
+// EVERY stream, so hls.js had nothing to play and sat on "Connecting…".
+const axios = require('axios');
+const Parser = require('rss-parser');
+const { Pool } = require('pg');
+const dns = require('dns').promises;
+const rateLimit = require('express-rate-limit');
+const { initRssBot } = require('./services/rssBot');
+const { initSportsBot } = require('./services/sportsBot');
+const { initWhatsAppBots } = require('./services/whatsappBots');
+const { getHumanContextForPrompt } = require('./services/brainStore');
+const { runLearningCycle } = require('./services/humanBrainBot');
+const { initIntelligenceAgent } = require('./services/aiIntelligenceAgent');
+const { initTrendingSynthesizer } = require('./services/aiTrendingSynthesizer');
+const { initHotTakesEngine } = require('./services/aiHotTakesEngine');
+const { moderateUserComment } = require('./services/aiCommunityBot');
+const notificationService = require('./services/notificationService');
+const { postToTelegramChannel } = require('./services/telegramPublisher');
+const { runMigrations } = require('./worker');
+const { runCrawler } = require('./services/crawlerService');
+const { generateRateCardSvg } = require('./services/rateCard');
+const { getUserBalance, getUserHistory, recordLedgerTransaction, recordShareDwellTime } = require('./services/walletService');
+const { queryMultiDb, queryAllDbs, getPoolForCategory, getAllPools, pools: contentPools } = require('./config/multiDb');
+const { parseBeaconPayload, bufferTelemetry, initTelemetryFlusher } = require('./services/telemetryService');
+const redisService = require('./services/redisService');
+const {
+  requireCron,
+  authorizeCronRequest,
+  applyCronNoStore,
+  getCronAuditSnapshot
+} = require('./services/cronAuth');
+
+// SSRF protection helper
+const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc00:|fd)/;
+async function isSafeUrl(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    if (!['http:', 'https:'].includes(u.protocol)) return false;
+    const { address } = await dns.lookup(u.hostname);
+    return !PRIVATE_IP_RE.test(address);
+  } catch {
+    return false;
+  }
+}
+
+// XSS escape helper
+function escapeHtml(unsafe) {
+  if (typeof unsafe !== 'string') return '';
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Initialize Express app
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ [Process] Uncaught Exception:', err.message, err.stack);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ [Process] Unhandled Rejection:', reason);
+});
+
+
+// Never fall back to a publicly-known value for cron auth: a default that is
+// committed to git is equivalent to no auth at all. Cron routes now fail closed
+// (503) until CRON_SECRET is configured in the deployment environment.
+if (!process.env.JWT_SECRET) {
+  process.env.JWT_SECRET = 'realssa-jwt-secret-2026';
+}
+if (!process.env.CRON_SECRET) {
+  console.error('[Security] CRON_SECRET is not set. All /api/cron/* endpoints will reject requests until it is configured.');
+}
+
+// Neon PostgreSQL connection (Articles/Main)
+const pool = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : null;
+
+// Users PostgreSQL connection (falls back to DATABASE_URL if USERS_DATABASE_URL not provided)
+const usersDbUrl = process.env.USERS_DATABASE_URL || process.env.DATABASE_URL;
+const usersPool = usersDbUrl
+  ? new Pool({ connectionString: usersDbUrl, ssl: { rejectUnauthorized: false } })
+  : null;
+
+// Test database connection
+if (process.env.DATABASE_URL) {
+  pool.query('SELECT NOW()', async (err, res) => {
+    if (err) {
+      console.error('❌ Database connection failed:', err.message);
+    } else {
+      console.log('✅ Database connected:', res.rows[0]);
+      app.set('pool', pool);
+
+      // Heavy startup migrations & DB cleanup queries run ONLY on persistent server boot (Fly.dev/Docker/Local),
+      // NEVER on every single Vercel Serverless cold-start where query spam crashes invocations.
+      if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
+        // Run auto-migrations first so all base tables (rss_articles, live_matches, etc.) exist
+        try {
+          await runMigrations();
+          console.log('✅ Database auto-migrations completed.');
+        } catch (migErr) {
+          console.error('❌ Startup migrations failed:', migErr.message);
+        }
+
+        // Ensure Sports Hub tables exist (matches, followed_matches)
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS matches (
+              id SERIAL PRIMARY KEY,
+              provider_match_id TEXT UNIQUE NOT NULL,
+              competition_name TEXT,
+              home_team_name TEXT,
+              home_team_crest TEXT,
+              away_team_name TEXT,
+              away_team_crest TEXT,
+              status TEXT,
+              minute TEXT,
+              home_score INTEGER,
+              away_score INTEGER,
+              kickoff_at TIMESTAMPTZ,
+              updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            
+            CREATE TABLE IF NOT EXISTS followed_matches (
+              id SERIAL PRIMARY KEY,
+              device_id TEXT NOT NULL,
+              provider_match_id TEXT NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              UNIQUE(device_id, provider_match_id)
+            );
+            
+            CREATE TABLE IF NOT EXISTS user_article_reactions (
+              device_id VARCHAR(255) NOT NULL,
+              article_id VARCHAR(255) NOT NULL,
+              reaction_type VARCHAR(50) NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              PRIMARY KEY (device_id, article_id)
+            );
+          `);
+          console.log('✅ Sports Hub tables verified.');
+        } catch (err) {
+          console.error('❌ Failed to ensure Sports Hub tables:', err.message);
+        }
+
+        // Ensure User affinities table exists in usersPool
+        try {
+          await usersPool.query(`
+            CREATE TABLE IF NOT EXISTS user_category_affinities (
+              device_id VARCHAR(255) NOT NULL,
+              category VARCHAR(100) NOT NULL,
+              score INTEGER DEFAULT 0,
+              last_interacted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (device_id, category)
+            );
+            CREATE INDEX IF NOT EXISTS idx_user_category_affinities_device ON user_category_affinities(device_id);
+          `);
+          console.log('✅ User affinities table verified.');
+        } catch (err) {
+          console.error('❌ Failed to ensure User affinities table:', err.message);
+        }
+
+        // Cleanup and modify rss_articles
+        try {
+          const deletePunchResult = await pool.query(`
+            DELETE FROM rss_articles 
+            WHERE source_name ~* 'punch' OR external_link ~* 'punchng.com'
+          `);
+          console.log(`🧹 Database startup check: deleted ${deletePunchResult.rowCount} Punch articles.`);
+
+          await pool.query(`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS full_content TEXT;`);
+          await pool.query(`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS has_embedding BOOLEAN DEFAULT false;`);
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS search_cache (
+              query TEXT PRIMARY KEY,
+              results_json JSONB NOT NULL,
+              provider TEXT NOT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+
+          const cacheClean = await pool.query(`
+            DELETE FROM search_cache WHERE created_at < NOW() - INTERVAL '24 hours';
+          `);
+          console.log(`🧹 Search Cache: deleted ${cacheClean.rowCount} expired entries.`);
+
+          const logoCleanResult = await pool.query(`
+            UPDATE rss_articles 
+            SET image = 'https://realssanews.com.ng/images/brand-cover.png' 
+            WHERE image ~* '(logo|icon|brand|placeholder|avatar|favicon)'
+               OR image IS NULL
+          `);
+          console.log(`🧹 Database startup check: set logo images to RealSSA fallback for ${logoCleanResult.rowCount} rows`);
+        } catch (dbErr) {
+          console.error('❌ Failed to run startup cleanup / modifications:', dbErr.message);
+        }
+
+        // Sanitize historical source_name columns
+        try {
+          const sourceCleanResult = await pool.query(`
+            UPDATE rss_articles
+            SET source_name = regexp_replace(
+              source_name, 
+              '\\s*(-\\s*Latest News|\\|\\s*Nigeria''s Most Widely Read Newspaper|-\\s*BBC News|\\s*-\\s*The Cable|\\s*-\\s*Vanguard News|\\s*-\\s*Premium Times).*$', 
+              '', 
+              'i'
+            )
+            WHERE source_name ~* 'Latest News|Most Widely Read|BBC News|The Cable|Vanguard News|Premium Times'
+          `);
+          console.log(`🧹 Database startup check: cleaned source names for ${sourceCleanResult.rowCount} rows`);
+        } catch (dbErr) {
+          console.error('❌ Failed to run startup source name sanitization:', dbErr.message);
+        }
+
+        console.log('🤖 Booting background cron bots on persistent host...');
+        initRssBot(pool);
+        initSportsBot(pool, notificationService);
+        initIntelligenceAgent(pool);
+        initTrendingSynthesizer(pool);
+        initHotTakesEngine(pool);
+        initTelemetryFlusher(pool);
+        initWhatsAppBots(pool);
+        initWhatsAppBots(pool);
+      } else {
+        console.log('⚡ Vercel Serverless environment detected — background migrations & setInterval bots disabled for instant cold starts.');
+      }
+    }
+  });
+}
+
+// Middleware
+const cors = require('cors');
+const compression = require('compression');
+const helmet = require('helmet');
+
+app.use(compression()); // Gzip all responses to make API calls fast
+
+// Helmet security headers (configured to allow iframes for embeds but protect APIs)
+app.use(helmet({
+  contentSecurityPolicy: false, // Managed by vercel.json
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Allowed origins configuration
+const allowedOrigins = [
+  'https://realssanews.com.ng',
+  'https://www.realssanews.com.ng',
+  'https://realssa.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:8080',
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
+// Rate limiting middleware
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 300, // Limit each IP to 300 requests per 15 minutes
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20, // Limit each IP to 20 attempts per 15 minutes
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later.' }
+});
+
+// ── Scraper & Direct Request Protection Middleware ──
+const antiScraper = (req, res, next) => {
+  const userAgent = (req.headers['user-agent'] || '').toLowerCase();
+
+  // 1. Block popular scripting and scraping clients
+  const badAgents = [
+    'python', 'requests', 'beautifulsoup', 'urllib', 'scrapy', 'axios',
+    'curl', 'wget', 'postman', 'insomnia', 'http-client', 'got', 'node-fetch'
+  ];
+  if (badAgents.some(agent => userAgent.includes(agent))) {
+    return res.status(403).json({ error: 'Access denied: Scraper activity detected.' });
+  }
+
+  // 2. Referer / Origin Check (bypass for local development and options requests)
+  if (process.env.NODE_ENV === 'production' && req.method !== 'OPTIONS') {
+    const referer = req.headers.referer || '';
+    const origin = req.headers.origin || '';
+    const isFromApp = allowedOrigins.some(allowed => referer.startsWith(allowed) || origin.startsWith(allowed));
+
+    // Also allow internal system crons/webhooks (often have no referer, but check for loopback/secret)
+    // Guard the comparison: with CRON_SECRET unset, `req.query.secret === undefined`
+    // would otherwise be true for every request that omits the query param.
+    const configuredCronSecret = process.env.CRON_SECRET;
+    const isCron =
+      req.path.startsWith('/api/cron') ||
+      (Boolean(configuredCronSecret) && req.query.secret === configuredCronSecret);
+
+    if (!isFromApp && !isCron) {
+      return res.status(403).json({ error: 'Access denied: Unauthorized cross-origin request.' });
+    }
+  }
+
+  next();
+};
+
+app.use('/api/cinema/', antiScraper);
+app.use('/api/', apiLimiter);
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.text({ type: ['text/plain', 'application/json', 'text/*'], limit: '10mb' }));
+
+// High-Concurrency Shock-Absorber Telemetry Endpoint
+app.post('/api/telemetry', async (req, res) => {
+  try {
+    const rawData = req.body;
+    const payload = parseBeaconPayload(rawData);
+    if (!payload) {
+      return res.status(200).send('OK'); // Always return 200 to sendBeacon
+    }
+
+    // Dump payload straight into Redis buffer/Memory queue (sub-millisecond)
+    bufferTelemetry(payload).catch(() => { });
+
+    return res.status(200).send('OK');
+  } catch (err) {
+    return res.status(200).send('OK');
+  }
+});
+app.use('/api/auth/login', authLimiter);
+
+// Public Syndication API & RSS Feed Syndication Endpoints
+const { generateRSSFeedFromDB } = require('./rss-generator');
+app.use('/api/v1', require('./routes/publicApi'));
+
+// Cinema Hub & Video Streaming Platform Routes
+app.use('/api/cinema', require('./routes/cinema'));
+
+// ── Stream Health Monitor (every 15 min) ──
+const streamHealthMonitor = require('./services/streamHealthMonitor');
+// Run immediately on startup, then every 15 minutes
+streamHealthMonitor.runStreamHealthCheck().catch(console.error);
+setInterval(() => {
+  streamHealthMonitor.runStreamHealthCheck().catch(console.error);
+}, 15 * 60 * 1000);
+
+
+app.get(['/rss.xml', '/rss/:category.xml'], async (req, res) => {
+  const category = (req.params.category || 'latest').replace('.xml', '');
+  const xml = await generateRSSFeedFromDB(app.get('pool'), category);
+  res.header('Content-Type', 'application/rss+xml; charset=utf-8');
+  res.send(xml);
+});
+
+// Database file paths
+const usersFilePath = path.join(__dirname, 'data', 'users.json');
+const articlesFilePath = path.join(__dirname, 'data', 'articles.json');
+const commentsFilePath = path.join(__dirname, 'data', 'comments.json');
+
+// Ensure data directory exists (handled gracefully for read-only Vercel environment)
+const dataDir = path.join(__dirname, 'data');
+try {
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Skipping data directory creation (read-only fs):', e.message);
+}
+
+// Initialize data files with default content if they don't exist
+const initializeDataFiles = () => {
+  // Create default users file if it doesn't exist
+  if (!fs.existsSync(usersFilePath)) {
+    const adminUser = process.env.ADMIN_USERNAME || 'admin';
+    const adminPass = process.env.ADMIN_PASSWORD;
+    if (!adminPass) {
+      console.warn('⚠️ WARNING: ADMIN_PASSWORD environment variable not set. Using default credentials "admin / admin123". This is insecure in production!');
+    }
+    const defaultUsers = [
+      {
+        id: '1',
+        username: adminUser,
+        password: bcrypt.hashSync(adminPass || 'admin123', 10), // Default password (fallback)
+        isAdmin: true
+      }
+    ];
+    fs.writeFileSync(usersFilePath, JSON.stringify(defaultUsers, null, 2));
+  }
+
+  // Create default articles file if it doesn't exist
+  if (!fs.existsSync(articlesFilePath)) {
+    const defaultArticles = [
+      {
+        id: '1',
+        title: 'Welcome to RealSSA News',
+        excerpt: 'Discover the latest in African news, culture, sports, and entertainment',
+        content: '<p>Welcome to RealSSA News — your premier platform for African news and insights...</p>',
+        category: 'general',
+        date: new Date().toISOString(),
+        author: 'Admin',
+        source: 'static'
+      }
+    ];
+    fs.writeFileSync(articlesFilePath, JSON.stringify(defaultArticles, null, 2));
+  }
+
+  // Create default comments file if it doesn't exist
+  if (!fs.existsSync(commentsFilePath)) {
+    fs.writeFileSync(commentsFilePath, JSON.stringify([], null, 2));
+  }
+};
+
+try { initializeDataFiles(); } catch (e) { console.warn('initializeDataFiles skipped (read-only fs):', e.message); }
+
+// Helper function to read JSON file
+const readJsonFile = (filePath) => {
+  try {
+    const data = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error(`Error reading ${path.basename(filePath)}:`, err);
+    return [];
+  }
+};
+
+// Helper function to write JSON file
+const writeJsonFile = (filePath, data) => {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error(`Error writing to ${path.basename(filePath)}:`, err);
+  }
+};
+
+// Authentication middleware
+const authenticate = (req, res, next) => {
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({ message: 'No token, authorization denied' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = readJsonFile(usersFilePath).find(u => u.id === decoded.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!user.isAdmin) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    res.status(401).json({ message: 'Token is not valid' });
+  }
+};
+
+// ── AI Agent Routes ─────────────────────────────────────────────────────
+const { initRouter: initAiRouter } = require('./routes/aiAgents');
+
+// AI agent health check
+app.get('/api/ai/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    agents: [
+      'aiHomepageEditor',
+      'aiFeedRepairAgent',
+      'aiImageSanityChecker',
+      'aiWebSearchAgent',
+      'aiNotificationOptimizer',
+      'aiInvestigativeAgent',
+      'aiEngagementAnalyst',
+      'aiContentGapNegotiator',
+      'aiMatchEventDetector (existing sportsBot)'
+    ],
+    gemini_api_key_set: !!process.env.GEMINI_API_KEY,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Mount all AI agent routes under /api/ai
+const aiRouter = initAiRouter(pool);
+app.use('/api/ai', aiRouter);
+
+// Entertainment trigger-response engine (trend signals + grounded angles)
+app.use('/api/ai/entertainment', require('./routes/entertainmentEngine'));
+
+// Routes
+app.get('/', (req, res) => {
+  res.json({ message: 'RealSSA News API Server', status: 'running' });
+});
+
+app.get('/api/health', async (req, res) => {
+  const result = {
+    status: 'ok',
+    database: 'not_configured',
+    tmdb: process.env.TMDB_READ_TOKEN || process.env.TMDB_API_KEY ? 'configured' : 'missing',
+    redis: redisService.isAvailable() ? 'connected' : 'unavailable',
+    timestamp: new Date().toISOString()
+  };
+
+  if (!pool) return res.status(200).json({ ...result, status: 'degraded' });
+
+  try {
+    await Promise.race([
+      pool.query('SELECT 1'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('database health timeout')), 2500))
+    ]);
+    result.database = 'connected';
+    return res.status(200).json(result);
+  } catch (error) {
+    result.database = 'unavailable';
+    result.status = 'degraded';
+    console.warn('[Health] Database check failed:', error.message);
+    return res.status(200).json(result);
+  }
+});
+
+app.get('/api/rss/articles', async (req, res) => {
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  try {
+    if (!pool) return res.json([]);
+    const result = await pool.query(
+      `SELECT 'rss-' || id AS id, title, COALESCE(ai_summary, original_excerpt) AS excerpt,
+              category, image, source_name AS author, external_link, published_at AS date,
+              content_type AS "contentType"
+       FROM rss_articles
+       ORDER BY published_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return res.json(result.rows || []);
+  } catch (error) {
+    console.warn('[RSS Articles] API unavailable:', error.message);
+    return res.json([]);
+  }
+});
+
+app.get('/api/debug-env', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/debug-env', task: 'debug-env' })) return;
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    return res.json({ status: 'missing', value: null });
+  }
+  let obfuscated = dbUrl;
+  try {
+    const url = new URL(dbUrl);
+    url.password = '****';
+    obfuscated = url.toString();
+  } catch (e) {
+    obfuscated = `${dbUrl.substring(0, 10)}... (length: ${dbUrl.length})`;
+  }
+
+  let poolError = null;
+  let poolResult = null;
+  try {
+    const testRes = await pool.query('SELECT NOW()');
+    poolResult = testRes.rows[0];
+  } catch (err) {
+    poolError = { message: err.message, stack: err.stack };
+  }
+
+  let usersPoolError = null;
+  let usersPoolResult = null;
+  try {
+    const testRes = await usersPool.query('SELECT NOW()');
+    usersPoolResult = testRes.rows[0];
+  } catch (err) {
+    usersPoolError = { message: err.message, stack: err.stack };
+  }
+
+  res.json({
+    status: 'configured',
+    obfuscated,
+    cronSecretSet: !!process.env.CRON_SECRET,
+    usersDbUrlSet: !!process.env.USERS_DATABASE_URL,
+    geminiKeySet: !!process.env.GEMINI_API_KEY,
+    poolResult,
+    poolError,
+    usersPoolResult,
+    usersPoolError
+  });
+});
+
+// Enterprise Production Auth Routes
+const {
+  registerWithEmail,
+  verifyEmailToken,
+  sendPhoneOtp,
+  verifyPhoneOtp,
+  loginWithEmail
+} = require('./services/authService');
+
+app.post('/api/auth/login', async (req, res) => {
+  const { username, email, password } = req.body;
+  const loginEmail = email || username;
+
+  try {
+    // 1. Try to login as regular user first (Enterprise Database)
+    const result = await loginWithEmail({ email: loginEmail, password });
+    return res.json(result);
+  } catch (err) {
+    // 2. If user login fails, try to fall back to Admin login (users.json)
+    try {
+      const users = readJsonFile(usersFilePath);
+      const user = users.find(u => u.username === loginEmail || u.email === loginEmail);
+      if (user) {
+        const isMatch = bcrypt.compareSync(password, user.password);
+        if (isMatch && user.isAdmin) {
+          const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+          return res.json({ token, user: { username: user.username, isAdmin: true } });
+        }
+      }
+    } catch (e) {
+      console.error('[Admin Login Fallback Error]', e.message);
+    }
+
+    // Return the original enterprise login error message
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const result = await registerWithEmail({ ...(req.body || {}), ip });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/auth/verify-email', async (req, res) => {
+  try {
+    const result = await verifyEmailToken(req.query.token);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const result = await sendPhoneOtp(req.body.phone || '');
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const result = await verifyPhoneOtp(req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin Route: View registered users list
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const { getAllUsersAdmin } = require('./services/authService');
+    const users = await getAllUsersAdmin();
+    res.json({ total: users.length, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Import summarizer for on-demand generation
+const { generateSummary, rewriteArticle, generateEmbedding, generateFullArticleBreakdown } = require('./services/summariser');
+
+// Article extraction for Reader Mode — uses extractor.js (Readability → Gemini AI → Firecrawl)
+const { extractArticle } = require('./services/extractor');
+
+app.post('/api/extract', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL required' });
+  if (!(await isSafeUrl(url))) return res.status(400).json({ error: 'Invalid or unsafe URL' });
+
+  try {
+    // 1. Try extractor.js chain: Readability → Gemini AI fallback → Firecrawl
+    const extracted = await extractArticle(url);
+    if (extracted && extracted.textContent && extracted.textContent.length > 100) {
+      // Run AI breakdown on the extracted content
+      try {
+        const fullBreakdown = await generateFullArticleBreakdown(extracted.title, extracted.textContent);
+        if (fullBreakdown?.full_breakdown) {
+          const bulletHtml = Array.isArray(fullBreakdown.bullet_points)
+            ? fullBreakdown.bullet_points.map(b => `<li style="margin-bottom:6px;">${b}</li>`).join('')
+            : `<li>${extracted.title}</li>`;
+          extracted.content = `
+            <div class="full-ai-article space-y-6">
+              <div style="background:rgba(245,158,11,0.1);border-left:4px solid #f59e0b;padding:16px;border-radius:0 12px 12px 0;margin-bottom:24px;">
+                <h3 style="margin:0 0 8px 0;color:#f59e0b;font-weight:700;font-size:1.1rem;">📌 Key Takeaways</h3>
+                <ul style="margin:0;padding-left:20px;font-size:0.95rem;line-height:1.6;">${bulletHtml}</ul>
+              </div>
+              <div style="font-size:1.05rem;line-height:1.8;margin-bottom:24px;">
+                <h3 style="font-size:1.25rem;font-weight:700;margin-bottom:12px;">📰 Full Story Breakdown</h3>
+                <p style="white-space:pre-line;">${fullBreakdown.full_breakdown}</p>
+              </div>
+              <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);padding:20px;border-radius:16px;margin-bottom:24px;">
+                <h3 style="margin:0 0 8px 0;color:#3b82f6;font-weight:700;font-size:1.1rem;">🌍 Why It Matters to Nigeria & Africa</h3>
+                <p style="margin:0;font-size:0.95rem;line-height:1.6;">${fullBreakdown.why_it_matters}</p>
+              </div>
+            </div>`;
+          extracted.byline = 'RealSSA AI News Desk';
+        }
+      } catch (_) { }
+      return res.json(extracted);
+    }
+
+    // 2. DB fallback (handles query string variations and canonical URLs)
+    if (process.env.DATABASE_URL) {
+      const cleanUrl = url.split('?')[0];
+      const dbRes = await pool.query(
+        `SELECT title, COALESCE(ai_summary, original_excerpt) AS content, original_excerpt, ai_summary, source_name, image 
+         FROM rss_articles 
+         WHERE external_link = $1 OR external_link LIKE $2 
+         ORDER BY published_at DESC LIMIT 1`,
+        [url, `${cleanUrl}%`]
+      );
+      if (dbRes.rows.length > 0) {
+        const row = dbRes.rows[0];
+        const content = row.content || row.original_excerpt || row.title;
+        return res.json({ title: row.title, content, textContent: content, length: content.length, excerpt: row.original_excerpt || '', byline: row.source_name || 'RealSSA News Desk', siteName: row.source_name || 'RealSSA', image: row.image });
+      }
+    }
+
+    res.status(422).json({ error: 'Could not extract article' });
+  } catch (err) {
+    console.error('Extract error:', err.message);
+    res.status(500).json({ error: 'Extraction failed', message: err.message });
+  }
+});
+app._legacyExtractPlaceholder = async url => {  // dead code placeholder
+  try {
+    const html = '';
+
+    // Extract OG / Twitter image for the Reels card hero
+    const ogPatterns = [
+      /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"'>\s]+)["']/i,
+      /<meta[^>]*content=["']([^"'>\s]+)["'][^>]*property=["']og:image["']/i,
+      /<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"'>\s]+)["']/i,
+      /<meta[^>]*property=["']twitter:image["'][^>]*content=["']([^"'>\s]+)["']/i,
+    ];
+    let ogImage = null;
+    for (const pat of ogPatterns) {
+      const m = html.match(pat);
+      if (m && m[1] && m[1].startsWith('http')) {
+        const candidate = m[1];
+        const isPunchBrand = candidate.includes('punchng.com') && (candidate.includes('cropped-') || candidate.includes('punch-logo') || candidate.includes('PUNCH-Logo') || /punchng\.com.*\/logo/i.test(candidate));
+        if (!isPunchBrand) {
+          ogImage = candidate;
+          break;
+        }
+      }
+    }
+
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    let article = reader.parse();
+
+    // If readability fails or returns empty, try DB fallback before failing
+    if (!article || !article.textContent || article.textContent.trim().length < 100) {
+      if (process.env.DATABASE_URL) {
+        try {
+          const dbRes = await pool.query(
+            "SELECT title, COALESCE(ai_summary, original_excerpt) AS content, original_excerpt, ai_summary, source_name, image FROM rss_articles WHERE external_link = $1 LIMIT 1",
+            [url]
+          );
+          if (dbRes.rows.length > 0) {
+            const row = dbRes.rows[0];
+            console.log(`✅ DB fallback match in extraction for: "${row.title}"`);
+            return res.json({
+              title: row.title,
+              content: row.content || "No summary available for this article.",
+              textContent: row.content || "",
+              length: (row.content || "").length,
+              excerpt: row.original_excerpt || row.ai_summary || "",
+              byline: row.source_name || "RealSSA News Desk",
+              siteName: row.source_name || "RealSSA",
+              image: row.image || ogImage
+            });
+          }
+        } catch (dbErr) {
+          console.error('Failed to query DB fallback:', dbErr.message);
+        }
+      }
+      if (!article) {
+        return res.status(422).json({ error: 'Could not extract article' });
+      }
+    }
+
+    // Full-Page AI Article Synthesizer Engine!
+    const targetText = article.textContent || article.content || article.title;
+    console.log(`⚡ Generating Full-Page AI Article Breakdown for: "${article.title}"`);
+    try {
+      const fullBreakdown = await generateFullArticleBreakdown(article.title, targetText);
+      if (fullBreakdown && fullBreakdown.full_breakdown) {
+        const bulletHtml = Array.isArray(fullBreakdown.bullet_points)
+          ? fullBreakdown.bullet_points.map(b => `<li style="margin-bottom:6px;">${b}</li>`).join('')
+          : `<li>${article.title}</li>`;
+
+        article.content = `
+          <div class="full-ai-article space-y-6">
+            <div style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 24px;">
+              <h3 style="margin: 0 0 8px 0; color: #f59e0b; font-weight: 700; font-size: 1.1rem;">📌 Key Takeaways</h3>
+              <ul style="margin: 0; padding-left: 20px; font-size: 0.95rem; line-height: 1.6;">
+                ${bulletHtml}
+              </ul>
+            </div>
+
+            <div style="font-size: 1.05rem; line-height: 1.8; margin-bottom: 24px;">
+              <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 12px;">📰 Full Story Breakdown</h3>
+              <p style="white-space: pre-line;">${fullBreakdown.full_breakdown}</p>
+            </div>
+
+            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 20px; border-radius: 16px; margin-bottom: 24px;">
+              <h3 style="margin: 0 0 8px 0; color: #3b82f6; font-weight: 700; font-size: 1.1rem;">🌍 Why It Matters to Nigeria & Africa</h3>
+              <p style="margin: 0; font-size: 0.95rem; line-height: 1.6;">${fullBreakdown.why_it_matters}</p>
+            </div>
+
+            <div style="background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 255, 255, 0.2); padding: 16px; border-radius: 12px; text-align: center;">
+              <p style="margin: 0; font-weight: 600; color: #a1a1aa; font-size: 0.9rem;">❓ ${fullBreakdown.discussion_question || "What are your thoughts on this story? Share below!"}</p>
+            </div>
+          </div>
+        `;
+        article.byline = 'RealSSA AI News Desk';
+        console.log(`✅ Full-Page AI Article Breakdown generated successfully!`);
+      }
+    } catch (fullErr) {
+      console.error(`❌ Failed to generate full-page AI article:`, fullErr.message);
+    }
+
+    res.json({ ...article, image: ogImage });
+  } catch (err) {
+    console.error('Extract error, checking DB fallback...', err.message);
+    if (process.env.DATABASE_URL) {
+      try {
+        const dbRes = await pool.query(
+          "SELECT title, COALESCE(ai_summary, original_excerpt) AS content, original_excerpt, ai_summary, source_name, image FROM rss_articles WHERE external_link = $1 LIMIT 1",
+          [url]
+        );
+        if (dbRes.rows.length > 0) {
+          const row = dbRes.rows[0];
+          console.log(`✅ DB fallback recovery in extraction for: "${row.title}"`);
+          return res.json({
+            title: row.title,
+            content: row.content || "No summary available for this article.",
+            textContent: row.content || "",
+            length: (row.content || "").length,
+            excerpt: row.original_excerpt || row.ai_summary || "",
+            byline: row.source_name || "RealSSA News Desk",
+            siteName: row.source_name || "RealSSA",
+            image: row.image
+          });
+        }
+      } catch (dbErr) {
+        console.error('Failed to query DB fallback in catch:', dbErr.message);
+      }
+    }
+    res.status(500).json({ error: 'Extraction failed', message: err.message });
+  }
+};
+
+// GET Daily Digest package (Top 20 cached offline articles under 200KB)
+app.get('/api/digest/daily', async (req, res) => {
+  const digestPath = path.join(__dirname, 'data', 'daily_digest.json');
+  if (fs.existsSync(digestPath)) {
+    try {
+      const data = fs.readFileSync(digestPath, 'utf8');
+      return res.json(JSON.parse(data));
+    } catch (err) {
+      console.error('Failed to read daily digest cache:', err.message);
+    }
+  }
+
+  // Fallback: compile on-demand if database exists
+  if (process.env.DATABASE_URL) {
+    try {
+      const result = await pool.query(
+        `SELECT 'rss-' || id as id,
+                title,
+                COALESCE(ai_summary, original_excerpt) AS excerpt,
+                category,
+                image,
+                published_at as date,
+                source_name as author
+         FROM rss_articles
+         WHERE image IS NOT NULL AND image != ''
+         ORDER BY published_at DESC
+         LIMIT 20`
+      );
+
+      const digestArticles = result.rows.map(row => {
+        let elegantExcerpt = '';
+        if (row.excerpt) {
+          const rawExcerpt = row.excerpt.trim();
+          if (rawExcerpt.length <= 140) {
+            elegantExcerpt = rawExcerpt;
+          } else {
+            const sliced = rawExcerpt.slice(0, 140);
+            const lastSpace = sliced.lastIndexOf(' ');
+            elegantExcerpt = lastSpace > 0 ? sliced.slice(0, lastSpace).trim() + '...' : sliced + '...';
+          }
+        }
+        return {
+          id: row.id,
+          title: row.title,
+          excerpt: elegantExcerpt,
+          category: row.category,
+          image: row.image,
+          date: row.date,
+          author: row.author
+        };
+      });
+
+      // Cache it
+      fs.writeFileSync(digestPath, JSON.stringify(digestArticles, null, 2));
+      return res.json(digestArticles);
+    } catch (dbErr) {
+      console.error('Failed to run on-demand digest compile:', dbErr.message);
+    }
+  }
+
+  res.status(404).json({ error: 'Daily digest unavailable' });
+});
+
+// Ingest client-side errors and insert into queryable database
+app.post('/api/client-error', async (req, res) => {
+  const { deviceId, message, stack, componentName } = req.body;
+  if (!message) return res.status(400).json({ error: 'error message required' });
+
+  if (process.env.DATABASE_URL) {
+    try {
+      await usersPool.query(`
+          INSERT INTO client_errors (device_id, message, stack, component_name)
+          VALUES ($1, $2, $3, $4)
+        `, [deviceId || null, message, stack || null, componentName || 'Unknown']);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('Failed to log client error to DB:', err.message);
+      return res.status(500).json({ error: 'Database logging failed' });
+    }
+  }
+
+  console.log(`[Client Crash Log] deviceId: ${deviceId} | msg: ${message} | comp: ${componentName}`);
+  res.json({ success: true, message: 'Logged to standard output' });
+});
+
+let affinitiesTableVerified = false;
+
+app.post('/api/profile/sync', async (req, res) => {
+  const { deviceId, counts } = req.body;
+  if (!deviceId || !counts) return res.status(400).json({ error: 'deviceId and counts required' });
+
+  if (process.env.DATABASE_URL) {
+    try {
+      // Ensure User affinities table exists in usersPool within request lifecycle (Serverless-safe)
+      if (!affinitiesTableVerified) {
+        await usersPool.query(`
+          CREATE TABLE IF NOT EXISTS user_category_affinities (
+            device_id VARCHAR(255) NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            score INTEGER DEFAULT 0,
+            last_interacted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (device_id, category)
+          );
+          CREATE INDEX IF NOT EXISTS idx_user_category_affinities_device ON user_category_affinities(device_id);
+        `);
+        affinitiesTableVerified = true;
+        console.log('✅ User affinities table verified inline.');
+      }
+
+      for (const [category, score] of Object.entries(counts)) {
+        // Upsert engagement score (starts at 1 if not exists, caps around 50 later to prevent runaway scaling)
+        await usersPool.query(
+          `INSERT INTO user_category_affinities (device_id, category, score, last_interacted_at)
+           VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (device_id, category) 
+          DO UPDATE SET score = EXCLUDED.score, last_interacted_at = NOW()
+        `, [deviceId, category, score]);
+      }
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('Failed to sync affinities:', err.message);
+      return res.status(500).json({ error: 'Failed to sync affinities' });
+    }
+  }
+  res.json({ success: true, message: 'No DB configured' });
+});
+
+// Helper to enrich a list of articles with reaction counts and user-specific reaction
+async function enrichArticlesWithReactions(articles, deviceId) {
+  if (!process.env.DATABASE_URL || !articles || articles.length === 0) {
+    return articles;
+  }
+  try {
+    const idMap = {};
+    const articleIds = [];
+
+    articles.forEach(article => {
+      if (article.id) {
+        const idStr = String(article.id);
+        const dbId = idStr.startsWith('rss-') ? idStr.replace('rss-', '') : idStr;
+        const isNumeric = /^\d+$/.test(dbId);
+        if (isNumeric) {
+          const numericId = parseInt(dbId, 10);
+          articleIds.push(numericId);
+          idMap[numericId] = article;
+        }
+      }
+    });
+
+    if (articleIds.length === 0) return articles;
+
+    articles.forEach(article => {
+      article.reactions = {
+        counts: { fire: 0, heart: 0, wow: 0 },
+        userReaction: null
+      };
+    });
+
+    const countsResult = await pool.query(
+      `SELECT article_id, reaction_type, count 
+       FROM article_reactions 
+       WHERE article_id = ANY($1)`,
+      [articleIds]
+    );
+
+    if (deviceId) {
+      const userRes = await pool.query(
+        `SELECT article_id, reaction_type 
+         FROM user_article_reactions 
+         WHERE device_id = $1 AND article_id = ANY($2)`,
+        [deviceId, articleIds]
+      );
+      userRes.rows.forEach(r => {
+        const article = idMap[r.article_id];
+        if (article && article.reactions) {
+          article.reactions.userReaction = r.reaction_type;
+        }
+      });
+    }
+
+    countsResult.rows.forEach(row => {
+      const article = idMap[row.article_id];
+      if (article && article.reactions && article.reactions.counts) {
+        article.reactions.counts[row.reaction_type] = parseInt(row.count, 10) || 0;
+      }
+    });
+
+    return articles;
+  } catch (err) {
+    console.error('enrichArticlesWithReactions failed:', err.message);
+    return articles;
+  }
+}
+
+// Get all articles (combines JSON files + Neon database)
+app.get('/api/articles', async (req, res) => {
+  try {
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
+    const limit = Math.min(100, Math.max(10, parseInt(req.query.limit) || 50));
+
+    // Get articles from JSON files (admin-posted)
+    const jsonArticles = readJsonFile(articlesFilePath);
+
+    // Get RSS articles from Neon database
+    let rssArticles = [];
+    if (process.env.DATABASE_URL) {
+      try {
+        let affinitiesMap = {};
+
+        if (deviceId) {
+          try {
+            const userRes = await usersPool.query(
+              'SELECT category, score FROM user_category_affinities WHERE device_id = $1',
+              [deviceId]
+            );
+            userRes.rows.forEach(r => { affinitiesMap[r.category] = r.score; });
+          } catch (err) {
+            console.error('Failed to fetch user affinities:', err.message);
+          }
+        }
+
+        const queryStr = `
+          SELECT 
+            'rss-' || id as id,
+            id as db_id,
+            title,
+            original_excerpt as excerpt,
+            ai_summary,
+            category,
+            image,
+            author,
+            source_name,
+            external_link,
+            published_at as date,
+            content_type,
+            '5 min read' as read_time
+          FROM rss_articles 
+          ORDER BY published_at DESC LIMIT ${limit * 2}
+        `;
+
+
+        let articlesData = [];
+        try {
+          const dbResults = await Promise.allSettled(
+            (contentPools || []).map(p => p.pool.query(queryStr))
+          );
+          const seenIds = new Set();
+          dbResults.forEach(r => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value.rows)) {
+              r.value.rows.forEach(row => {
+                if (!seenIds.has(row.id)) {
+                  seenIds.add(row.id);
+                  articlesData.push(row);
+                }
+              });
+            }
+          });
+        } catch (mErr) {
+          const fallbackRes = await queryMultiDb(queryStr);
+          articlesData = fallbackRes.rows || [];
+        }
+
+        // In-memory personalization and sorting
+        if (deviceId && Object.keys(affinitiesMap).length > 0) {
+          const now = Date.now();
+          articlesData.forEach(a => {
+            const uScore = affinitiesMap[a.category] || 0;
+            const hoursDiff = (now - new Date(a.date).getTime()) / 3600000;
+            // Enhanced Personalized Ranking Logic
+            const timeDecay = 1.0 / Math.pow((1.0 + Math.max(hoursDiff, 0)), 0.5);
+            a.personalized_score = (uScore * 0.4) + (timeDecay * 6.0);
+          });
+          articlesData.sort((a, b) => b.personalized_score - a.personalized_score || new Date(b.date) - new Date(a.date));
+        } else {
+          articlesData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        }
+
+        // Apply requested limit
+        articlesData = articlesData.slice(0, limit);
+
+
+        rssArticles = articlesData.map(row => ({
+          id: row.id,
+          dbId: row.db_id,
+          title: row.title,
+          excerpt: row.ai_summary || row.excerpt,
+          content: row.ai_summary || row.excerpt,
+          category: row.category || 'news',
+          image: row.image,
+          readTime: row.read_time,
+          author: row.author,
+          source: 'rss',
+          date: row.date,
+          contentType: row.content_type || 'article',
+          status: 'published',
+          featured: false,
+          ai_summary: row.ai_summary,
+          needsSummary: !row.ai_summary && row.content_type === 'article'
+        }));
+      } catch (dbError) {
+        console.warn('DB query failed, using JSON only:', dbError.message);
+      }
+    }
+
+    // Combine and return
+    const allArticles = [...jsonArticles, ...rssArticles];
+    await enrichArticlesWithReactions(allArticles, deviceId);
+    res.json(allArticles);
+  } catch (error) {
+    console.error('Error fetching articles:', error);
+    res.status(500).json({ error: 'Failed to fetch articles' });
+  }
+});
+
+// Get featured articles - combines internal articles with World news
+// MUST be defined BEFORE /api/articles/:id to prevent Express from matching "featured" as an ID
+app.get('/api/articles/featured', async (req, res) => {
+  try {
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
+    // 1. Get RSS articles from Neon database as featured
+    let rssArticles = [];
+    if (process.env.DATABASE_URL) {
+      try {
+        const result = await pool.query(
+          `SELECT 
+            'rss-' || id as id,
+            id as db_id,
+            title,
+            original_excerpt as excerpt,
+            ai_summary,
+            category,
+            image,
+            author,
+            source_name,
+            external_link,
+            published_at as date,
+            content_type,
+            '5 min read' as read_time
+           FROM rss_articles 
+           WHERE image IS NOT NULL AND image != ''
+           ORDER BY published_at DESC 
+           LIMIT 10`
+        );
+        rssArticles = result.rows.map(row => ({
+          id: row.id,
+          title: row.title,
+          excerpt: row.ai_summary || row.excerpt,
+          category: row.category || 'news',
+          image: row.image,
+          readTime: row.read_time,
+          author: row.author,
+          source: 'rss',
+          externalLink: row.external_link,
+          date: row.date,
+          contentType: row.content_type || 'article',
+          featured: true
+        }));
+      } catch (dbError) {
+        console.warn('DB query for featured failed:', dbError.message);
+      }
+    }
+
+    let featuredArticles = rssArticles;
+
+    // 2. Also try to get JSON file articles (admin-posted)
+    const jsonArticles = readJsonFile(articlesFilePath);
+    const adminArticles = jsonArticles.slice(0, 5).map(a => ({ ...a, featured: true }));
+    featuredArticles = [...adminArticles, ...featuredArticles];
+
+    // 3. If we have fewer than 8 articles, supplement from BBC RSS
+    if (featuredArticles.length < 8) {
+      try {
+        const parser = new Parser();
+        const res = await fetch('http://feeds.bbci.co.uk/news/world/rss.xml', {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        if (!res.ok) throw new Error(`Status code ${res.status}`);
+        const xmlText = await res.text();
+        const sanitizedXml = xmlText.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&amp;');
+        const worldFeed = await parser.parseString(sanitizedXml);
+        const worldStories = worldFeed.items.slice(0, 5).map(item => ({
+          id: 'world-' + (item.guid || item.link || Math.random().toString(36).substr(2, 9)),
+          title: item.title,
+          excerpt: item.contentSnippet || item.summary || item.title,
+          category: 'World News',
+          image: extractImageFromItem(item),
+          readTime: '5 min read',
+          author: 'BBC News',
+          source: 'rss',
+          externalLink: item.link,
+          date: item.pubDate || new Date().toISOString(),
+          contentType: 'article',
+          featured: true
+        }));
+        featuredArticles = [...featuredArticles, ...worldStories];
+      } catch (rssError) {
+        console.error('Error fetching World news for featured:', rssError.message);
+      }
+    }
+
+    // Limit to 10 featured articles
+    featuredArticles = featuredArticles.slice(0, 10);
+    await enrichArticlesWithReactions(featuredArticles, deviceId);
+    res.json(featuredArticles);
+  } catch (error) {
+    console.error('Error fetching featured articles:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get Trending articles — DB-first (most recent from all categories, mixed)
+// MUST be defined BEFORE /api/articles/:id to prevent Express from matching "trending" as an ID
+app.get('/api/articles/trending', async (req, res) => {
+  try {
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, parseInt(req.query.limit) || 15);
+    const offset = (page - 1) * limit;
+    const preferred = req.query.preferred ? String(req.query.preferred).split(',').map(s => s.trim().toLowerCase()) : [];
+    const categoryFilter = req.query.category ? String(req.query.category).trim().toLowerCase() : null;
+    const useDiverse = req.query.diverse === 'true';
+
+    let excludeList = [];
+    if (req.query.exclude) {
+      excludeList = String(req.query.exclude).split(',').map(id => id.trim()).filter(Boolean);
+    }
+
+    if (process.env.DATABASE_URL) {
+      // Build ORDER BY: preferred categories first, then by recency
+      let orderBy = 'published_at DESC';
+      if (preferred.length > 0) {
+        const caseStr = preferred.map((cat, i) => `WHEN LOWER(category) = '${cat.replace(/'/g, "''")}' THEN ${i}`).join(' ');
+        orderBy = `CASE ${caseStr} ELSE ${preferred.length} END, published_at DESC`;
+      }
+
+      let excludeClause = '';
+      let queryParams = [limit, offset];
+
+      if (excludeList.length > 0) {
+        const placeholders = excludeList.map((_, i) => `$${3 + i}`).join(', ');
+        excludeClause = `AND 'rss-' || id NOT IN (${placeholders})`;
+        queryParams.push(...excludeList);
+      }
+
+      let categoryClause = '';
+      if (categoryFilter) {
+        queryParams.push(categoryFilter);
+        categoryClause = `AND LOWER(category) = $${queryParams.length}`;
+      }
+
+      let queryText = '';
+      if (useDiverse) {
+        queryText = `
+          SELECT * FROM (
+            SELECT 'rss-' || id AS id,
+                   title,
+                   COALESCE(ai_summary, original_excerpt) AS excerpt,
+                   category, COALESCE(NULLIF(image, ''), 'https://realssanews.com.ng/images/brand-cover.png') AS image,
+                   source_name AS author,
+                   external_link, published_at AS date, content_type,
+                   '5 min read' AS read_time,
+                   published_at,
+                   ROW_NUMBER() OVER (PARTITION BY category ORDER BY published_at DESC) AS rn
+            FROM rss_articles
+            WHERE 1=1 ${excludeClause} ${categoryClause}
+          ) t
+          WHERE t.rn <= 5
+          ORDER BY ${orderBy}
+          LIMIT $1 OFFSET $2
+        `;
+      } else {
+        queryText = `
+          SELECT 'rss-' || id AS id,
+                 title,
+                 COALESCE(ai_summary, original_excerpt) AS excerpt,
+                 category, COALESCE(NULLIF(image, ''), 'https://realssanews.com.ng/images/brand-cover.png') AS image,
+                 source_name AS author,
+                 external_link, published_at AS date, content_type,
+                 '5 min read' AS read_time
+          FROM rss_articles
+          WHERE 1=1 ${excludeClause} ${categoryClause}
+          ORDER BY ${orderBy}
+          LIMIT $1 OFFSET $2
+        `;
+      }
+
+      let trendingRows = [];
+      try {
+        const dbResults = await Promise.allSettled(
+          (contentPools || []).map(p => p.pool.query(queryText, queryParams))
+        );
+        const seenIds = new Set();
+        dbResults.forEach(r => {
+          if (r.status === 'fulfilled' && Array.isArray(r.value.rows)) {
+            r.value.rows.forEach(row => {
+              if (!seenIds.has(row.id)) {
+                seenIds.add(row.id);
+                trendingRows.push(row);
+              }
+            });
+          }
+        });
+      } catch (mErr) {
+        const fallbackRes = await queryMultiDb(queryText, queryParams);
+        trendingRows = fallbackRes.rows || [];
+      }
+
+      if (page === 1 && trendingRows.length < 5) {
+        console.log('Trending: DB empty, falling back to live RSS...');
+      } else {
+        trendingRows.sort((a, b) => new Date(b.published_at || b.date || 0).getTime() - new Date(a.published_at || a.date || 0).getTime());
+        const results = trendingRows.slice(0, limit).map(r => ({
+          id: r.id, title: r.title, excerpt: r.excerpt,
+          category: r.category, image: r.image, author: r.author,
+          externalLink: r.external_link, date: r.date,
+          contentType: r.content_type, readTime: r.read_time, source: 'rss'
+        }));
+        await enrichArticlesWithReactions(results, deviceId);
+        return res.json(results);
+      }
+    }
+
+    // Fallback: live RSS scraping (only if DB is empty on first page)
+    console.log('Trending: DB empty, falling back to live RSS...');
+    const [nigeria, world, sports, ghana] = await Promise.all([
+      fetchRSSFeeds(nigerianFeeds.slice(0, 2)),
+      fetchRSSFeeds(worldFeeds.slice(0, 2)),
+      fetchRSSFeeds(sportsFeeds.slice(0, 1)),
+      fetchRSSFeeds(ghanaFeeds.slice(0, 1))
+    ]);
+    let trending = [...nigeria, ...world, ...sports, ...ghana];
+    if (excludeList.length > 0) {
+      trending = trending.filter(a => !excludeList.includes(a.id));
+    }
+    trending = trending
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, limit);
+    await enrichArticlesWithReactions(trending, deviceId);
+    res.json(trending);
+  } catch (error) {
+    console.error('Error fetching trending articles:', error);
+    res.status(500).json({ error: 'Failed to fetch trending articles' });
+  }
+});
+
+
+// GET /api/articles/most-read — MUST be before /api/articles/:id
+app.get('/api/articles/most-read', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT 'rss-' || id as id, title, image, category, external_link,
+              published_at as date, source_name as author, view_count,
+              original_excerpt as excerpt, '3 min read' as read_time
+       FROM rss_articles
+       WHERE image IS NOT NULL AND image != ''
+         AND published_at > NOW() - INTERVAL '2 days'
+       ORDER BY view_count DESC NULLS LAST
+       LIMIT 10`
+    );
+    res.json(result.rows.map(r => ({
+      ...r,
+      externalLink: r.external_link,
+      readTime: r.read_time,
+      views: r.view_count || 0
+    })));
+  } catch (err) {
+    console.error('Most read error:', err.message);
+    res.json([]);
+  }
+});
+
+// Get single article by ID (supports both JSON and RSS articles)
+// WITH ON-DEMAND AI SUMMARY GENERATION
+// Increment view/dwell tracking for an article
+app.post('/api/articles/:id/view', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const dbId = rawId.startsWith('rss-') ? rawId.replace('rss-', '') : rawId;
+    let viewCount = 1;
+
+    if (process.env.DATABASE_URL && rawId.startsWith('rss-')) {
+      const result = await pool.query(
+        'UPDATE rss_articles SET view_count = COALESCE(view_count, 0) + 1 WHERE id = $1 RETURNING view_count',
+        [dbId]
+      );
+      viewCount = result.rows[0]?.view_count || 1;
+    }
+    res.json({ success: true, views: viewCount });
+  } catch (err) {
+    console.error('Failed to update view count:', err.message);
+    res.status(500).json({ error: 'Failed to update view count', views: 0 });
+  }
+});
+
+// ── Article Reactions ───────────────────────────────────────────────────
+app.post('/api/articles/:id/react', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const { emoji } = req.body || {};
+    if (!emoji) return res.status(400).json({ error: 'emoji required' });
+
+    const dbId = rawId.startsWith('rss-') ? rawId.replace('rss-', '') : rawId;
+
+    if (!process.env.DATABASE_URL) {
+      return res.json({ ok: true, message: 'No DB configured' });
+    }
+
+    // Ensure article_reactions table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_reactions (
+        id SERIAL PRIMARY KEY,
+        article_id INTEGER NOT NULL,
+        reaction_type TEXT NOT NULL,
+        emoji TEXT,
+        source TEXT DEFAULT 'native',
+        device_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('ALTER TABLE article_reactions ADD COLUMN IF NOT EXISTS emoji TEXT');
+    await pool.query('ALTER TABLE article_reactions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT \'native\'');
+
+    await pool.query(
+      `INSERT INTO article_reactions (article_id, reaction_type, emoji, source, device_id, created_at)
+       VALUES ($1, $2, $2, $3, $4, NOW())`,
+      [dbId, emoji, 'native', req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anon']
+    );
+
+    res.json({ ok: true, emoji });
+  } catch (err) {
+    console.error('Failed to record reaction:', err.message);
+    res.status(500).json({ error: 'Failed to record reaction' });
+  }
+});
+
+app.get('/api/articles/:id/reactions', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const dbId = rawId.startsWith('rss-') ? rawId.replace('rss-', '') : rawId;
+
+    if (!process.env.DATABASE_URL) {
+      return res.json({ counts: [] });
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_reactions (
+        id SERIAL PRIMARY KEY,
+        article_id INTEGER NOT NULL,
+        reaction_type TEXT NOT NULL,
+        emoji TEXT,
+        source TEXT DEFAULT 'native',
+        device_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    const result = await pool.query(
+      `SELECT emoji as emoji, count(*)::int as count
+       FROM article_reactions
+       WHERE article_id = $1
+       GROUP BY emoji`,
+      [dbId]
+    );
+    res.json({ counts: result.rows });
+  } catch (err) {
+    console.error('Failed to fetch reactions:', err.message);
+    res.json({ counts: [] });
+  }
+});
+
+// ── Dynamic Server-Side Pre-Rendering for Crawlers (SEO & Social Cards) ──────
+app.get('/article/:id', async (req, res) => {
+  const userAgent = (req.headers['user-agent'] || '').toLowerCase();
+  const isCrawler = /googlebot|bingbot|yandexbot|baiduspider|duckduckbot|slurp|twitterbot|facebookexternalhit|whatsapp|telegrambot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest\/0\.|pingdom|slackbot|vkShare/i.test(userAgent);
+
+  const articleId = req.params.id;
+
+  try {
+    let article = null;
+    
+    // Fetch article from DB if RSS or numeric
+    if (articleId.startsWith('rss-') && process.env.DATABASE_URL) {
+      const rawId = articleId.replace('rss-', '');
+      const result = await pool.query(
+        `SELECT id, title, original_excerpt as excerpt, ai_summary, category, image, author, source_name, external_link, published_at as date FROM rss_articles WHERE id = $1`,
+        [rawId]
+      );
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        article = {
+          id: `rss-${row.id}`,
+          title: row.title,
+          excerpt: row.excerpt || row.title,
+          ai_summary: row.ai_summary,
+          category: row.category || 'News',
+          image: row.image || 'https://www.realssanews.com.ng/images/brand-cover.png',
+          author: row.author || 'RealSSA Editor',
+          date: row.date ? new Date(row.date).toISOString() : new Date().toISOString(),
+          externalLink: row.external_link
+        };
+      }
+    } else {
+      const articles = readJsonFile(articlesFilePath);
+      article = articles.find(a => String(a.id) === String(articleId));
+    }
+
+    if (!article) {
+      return res.status(404).send(`<!DOCTYPE html><html><head><title>Article Not Found | RealSSA News</title></head><body><h1>Article Not Found</h1><p><a href="https://www.realssanews.com.ng">Return to RealSSA News Home</a></p></body></html>`);
+    }
+
+    const title = `${article.title} | RealSSA News`;
+    const canonicalUrl = `https://www.realssanews.com.ng/article/${article.id}`;
+    const rawSummary = (Array.isArray(article.ai_summary) ? article.ai_summary.join(' ') : article.ai_summary) || article.excerpt || article.title;
+    const description = rawSummary.replace(/"/g, '&quot;').slice(0, 160);
+    const imageUrl = (article.image && article.image.startsWith('http')) ? article.image : 'https://www.realssanews.com.ng/images/brand-cover.png';
+    const category = article.category || 'News';
+    const publishedTime = article.date ? new Date(article.date).toISOString() : new Date().toISOString();
+    const authorName = article.author || 'RealSSA News Editorial Board';
+
+    // Build rich extended JSON-LD schema array (NewsArticle, BreadcrumbList, WebSite, NewsMediaOrganization, ImageObject)
+    const jsonLdData = [
+      {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": article.title,
+        "description": description,
+        "image": [
+          {
+            "@type": "ImageObject",
+            "url": imageUrl,
+            "width": 1200,
+            "height": 630
+          }
+        ],
+        "datePublished": publishedTime,
+        "dateModified": publishedTime,
+        "author": [
+          {
+            "@type": "Organization",
+            "name": authorName,
+            "url": "https://www.realssanews.com.ng"
+          }
+        ],
+        "publisher": {
+          "@type": "NewsMediaOrganization",
+          "name": "RealSSA News",
+          "url": "https://www.realssanews.com.ng",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://www.realssanews.com.ng/logo.png",
+            "width": 512,
+            "height": 512
+          }
+        },
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": canonicalUrl
+        },
+        "articleSection": category,
+        "isAccessibleForFree": true,
+        "inLanguage": "en"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://www.realssanews.com.ng"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": category,
+            "item": `https://www.realssanews.com.ng/?category=${encodeURIComponent(category)}`
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": article.title,
+            "item": canonicalUrl
+          }
+        ]
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "RealSSA News",
+        "url": "https://www.realssanews.com.ng"
+      }
+    ];
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${title}</title>
+  <meta name="description" content="${description}" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="canonical" href="${canonicalUrl}" />
+
+  <!-- Open Graph / Facebook / WhatsApp -->
+  <meta property="og:site_name" content="RealSSA News" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="${article.title}" />
+  <meta property="og:description" content="${description}" />
+  <meta property="og:image" content="${imageUrl}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:url" content="${canonicalUrl}" />
+  <meta property="article:published_time" content="${publishedTime}" />
+  <meta property="article:section" content="${category}" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@realssanews" />
+  <meta name="twitter:title" content="${article.title}" />
+  <meta name="twitter:description" content="${description}" />
+  <meta name="twitter:image" content="${imageUrl}" />
+
+  <script type="application/ld+json">
+    ${JSON.stringify(jsonLdData)}
+  </script>
+</head>
+<body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; color: #111; background: #fff;">
+  <header style="border-bottom: 2px solid #f59e0b; padding-bottom: 12px; margin-bottom: 24px;">
+    <a href="https://www.realssanews.com.ng" style="text-decoration: none; color: #f59e0b; font-weight: bold; font-size: 1.5rem;">RealSSA News</a>
+  </header>
+  <nav style="font-size: 0.875rem; color: #666; margin-bottom: 16px;">
+    <a href="https://www.realssanews.com.ng">Home</a> &gt; <span>${category}</span> &gt; <span>${article.title}</span>
+  </nav>
+  <article>
+    <h1 style="font-size: 2rem; margin-bottom: 12px; line-height: 1.2;">${article.title}</h1>
+    <div style="font-size: 0.875rem; color: #555; margin-bottom: 20px;">
+      <span>Published by ${authorName}</span> | <span>${new Date(publishedTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+    </div>
+    ${imageUrl ? `<img src="${imageUrl}" alt="${article.title}" style="width: 100%; max-height: 450px; object-fit: cover; border-radius: 8px; margin-bottom: 24px;" />` : ''}
+    
+    <div style="background: #f8fafc; border-left: 4px solid #f59e0b; padding: 16px; margin-bottom: 24px; border-radius: 4px;">
+      <h3 style="margin-top: 0; color: #b45309;">⚡ Quick Read Summary</h3>
+      <p style="margin-bottom: 0;">${description}</p>
+    </div>
+
+    <div style="font-size: 1.125rem; line-height: 1.8;">
+      <p>${article.excerpt || description}</p>
+      ${article.content ? `<div>${article.content}</div>` : ''}
+    </div>
+  </article>
+
+  <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 0.875rem; color: #666;">
+    <p>Follow RealSSA News on <a href="https://whatsapp.com/channel/0029VbDetsPGufIx3Totk938" style="color:#25D366;font-weight:bold;">WhatsApp Channel</a> | <a href="https://t.me/realssanews" style="color:#0088cc;font-weight:bold;">Telegram</a> | <a href="https://x.com/realssanews">X (Twitter)</a></p>
+    <p>&copy; ${new Date().getFullYear()} RealSSA News. All rights reserved.</p>
+  </footer>
+</body>
+</html>`;
+
+    res.header('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error('[Article Pre-renderer Error]:', err);
+    return res.redirect('/');
+  }
+});
+
+app.get('/api/articles/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if it's an RSS article (id starts with 'rss-')
+    if (id.startsWith('rss-')) {
+      const rawRssId = id.replace('rss-', '');
+
+      // Live RSS ids are deterministic hashes (rss-<sha1>), not database
+      // primary keys. Resolve those from the live home network first.
+      if (!/^\d+$/.test(rawRssId)) {
+        try {
+          const { findHomeArticleById } = require('../api/home-feed');
+          const liveArticle = await findHomeArticleById(id);
+          if (liveArticle) {
+            res.set('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
+            return res.json(liveArticle);
+          }
+        } catch (liveError) {
+          console.warn('[Article] Live RSS lookup failed:', liveError.message);
+        }
+        return res.status(404).json({ error: 'Article not found' });
+      }
+
+      if (!process.env.DATABASE_URL) {
+        return res.status(404).json({ error: 'Article not found' });
+      }
+
+      const articleId = rawRssId;
+      const result = await pool.query(
+        `SELECT 
+          'rss-' || id as id,
+          id as db_id,
+          title,
+          original_excerpt as excerpt,
+          ai_summary,
+          category,
+          image,
+          author,
+          source_name,
+          external_link,
+          published_at as date,
+          content_type,
+          '5 min read' as read_time
+         FROM rss_articles 
+         WHERE id = $1`,
+        [articleId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Article not found' });
+      }
+
+      const row = result.rows[0];
+
+      // ⚡ RESPOND IMMEDIATELY with available data — never block on AI generation
+      const article = {
+        id: row.id,
+        title: row.title,
+        excerpt: row.ai_summary || row.excerpt,
+        content: row.ai_summary || row.excerpt,
+        category: row.category || 'news',
+        image: row.image,
+        readTime: row.read_time,
+        author: row.author,
+        source: 'rss',
+        externalLink: row.external_link,
+        date: row.date,
+        contentType: row.content_type || 'article',
+        status: 'published',
+        featured: false,
+        ai_summary: row.ai_summary || null
+      };
+
+      // 🚀 Edge CDN cache: Vercel will cache this at the edge for 5 minutes
+      // After first Telegram click, ALL subsequent users get this in <10ms (no DB, no cold start)
+      res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+
+      // Send response right away — user gets the article instantly
+      res.json(article);
+
+      // 🔄 Generate AI summary in the background AFTER responding (fire-and-forget)
+      if (!row.ai_summary && row.content_type === 'article' && row.excerpt) {
+        setImmediate(async () => {
+          try {
+            const generated = await generateSummary(row.title, row.excerpt);
+            if (generated) {
+              await pool.query(
+                'UPDATE rss_articles SET ai_summary = $1 WHERE id = $2',
+                [generated, articleId]
+              );
+              console.log(`✅ Background AI summary cached for article ${articleId}`);
+            }
+          } catch (err) {
+            console.warn(`⚠️ Background AI summary failed for ${articleId}:`, err.message);
+          }
+        });
+      }
+
+      return;
+    }
+
+    // JSON file article
+    const articles = readJsonFile(articlesFilePath);
+    const article = articles.find(a => a.id === id || a.id.toString() === id);
+
+    if (!article) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+
+    res.json(article);
+  } catch (error) {
+    console.error('Error fetching article:', error);
+    res.status(500).json({ error: 'Failed to fetch article' });
+  }
+});
+
+
+// --- Knowledge Graph Entity Hub ---
+app.get('/api/entities/:name', async (req, res) => {
+  const entityName = req.params.name.trim();
+  try {
+    // 1. Fetch matching articles (sorted by freshness and date)
+    const articlesQuery = `
+      SELECT a.id, a.title, a.original_excerpt, a.image, a.published_at, a.source_name, a.category, a.freshness_score
+      FROM rss_articles a
+      JOIN article_entities e ON a.id = e.article_id
+      WHERE LOWER(e.entity_name) = LOWER($1)
+      ORDER BY a.freshness_score DESC, a.published_at DESC
+      LIMIT 12
+    `;
+    const articlesResult = await pool.query(articlesQuery, [entityName]);
+
+    // 2. Fetch co-occurring (related) entities
+    const relatedQuery = `
+      SELECT entity_name, entity_type, COUNT(*) AS cooccurrence
+      FROM article_entities
+      WHERE article_id IN (
+        SELECT article_id FROM article_entities WHERE LOWER(entity_name) = LOWER($1)
+      )
+      AND LOWER(entity_name) != LOWER($1)
+      GROUP BY entity_name, entity_type
+      ORDER BY cooccurrence DESC
+      LIMIT 6
+    `;
+    const relatedResult = await pool.query(relatedQuery, [entityName]);
+
+    // 3. Fetch politician bio details if they exist in the politicians table
+    const politicianResult = await pool.query(
+      'SELECT role, state, constituency, party, profile_image, bio, assets_summary, voting_record FROM politicians WHERE LOWER(name) = LOWER($1)',
+      [entityName]
+    );
+
+    res.json({
+      name: entityName,
+      isPolitician: politicianResult.rows.length > 0,
+      profile: politicianResult.rows[0] || null,
+      articles: articlesResult.rows,
+      relatedEntities: relatedResult.rows
+    });
+  } catch (err) {
+    console.error('Error fetching entity hub details:', err.message);
+    res.status(500).json({ error: 'Failed to fetch entity details' });
+  }
+});
+
+
+// Create new article
+app.post('/api/articles', (req, res) => {
+  const articles = readJsonFile(articlesFilePath);
+
+  // Generate new ID
+  const newId = articles.length > 0
+    ? Math.max(...articles.map(a => parseInt(a.id))) + 1
+    : 1;
+
+  // Create new article with proper structure
+  const newArticle = {
+    id: newId.toString(), // Ensure ID is string
+    title: req.body.title || '',
+    excerpt: req.body.excerpt || '',
+    content: req.body.content || req.body.excerpt || '',
+    category: req.body.category || 'afrobeats',
+    image: req.body.image || '',
+
+    readTime: req.body.readTime || '5 min read',
+    author: req.body.author || 'Admin',
+    source: req.body.source || 'user',
+    date: new Date().toISOString()
+  };
+
+  articles.push(newArticle);
+  writeJsonFile(articlesFilePath, articles);
+  
+  // Auto-broadcast new article to Telegram Channel asynchronously
+  postToTelegramChannel(newArticle).catch(err => {
+    console.warn('[TelegramPublisher] Background broadcast error:', err.message);
+  });
+
+  res.status(201).json(newArticle);
+});
+
+// Update article
+app.put('/api/articles/:id', (req, res) => {
+  const articles = readJsonFile(articlesFilePath);
+  const article = articles.find(a => a.id === req.params.id);
+
+  if (!article) {
+    return res.status(404).json({ message: 'Article not found' });
+  }
+
+  const updatedArticle = { ...article, ...req.body };
+  const updatedArticles = articles.map(a =>
+    a.id === req.params.id ? updatedArticle : a
+  );
+
+  writeJsonFile(articlesFilePath, updatedArticles);
+  res.json(updatedArticle);
+});
+
+// Delete article
+app.delete('/api/articles/:id', (req, res) => {
+  const articles = readJsonFile(articlesFilePath);
+  const articleIndex = articles.findIndex(a => a.id === req.params.id);
+
+  if (articleIndex === -1) {
+    return res.status(404).json({ message: 'Article not found' });
+  }
+
+  const updatedArticles = articles.filter(a => a.id !== req.params.id);
+  writeJsonFile(articlesFilePath, updatedArticles);
+  res.json({ message: 'Article deleted' });
+});
+
+// RSS Feed endpoints
+const parser = new Parser({
+  customFields: {
+    item: [
+      ['media:content', 'media:content'],
+      ['media:thumbnail', 'media:thumbnail'],
+      ['enclosure', 'enclosure'],
+      ['content:encoded', 'content:encoded'],
+      ['description', 'description']
+    ]
+  }
+});
+
+// Nigerian News RSS feeds
+const nigerianFeeds = [
+  'https://www.premiumtimesng.com/rss.xml',
+  'https://www.vanguardngr.com/feed/',
+  'https://punchng.com/feed/',
+  'https://guardian.ng/feed/',
+  'https://www.thisdaylive.com/feed/',
+  'https://www.thecable.ng/feed/',
+  'https://www.channelstv.com/feed/',
+  'https://www.dailytrust.com.ng/feed/',
+  'https://www.sunnewsonline.com/feed/',
+  'https://www.tribuneonlineng.com/feed/',
+  'https://businessday.ng/feed/',
+  'https://nairametrics.com/rss',
+  'https://infoguidenigeria.com/rss',
+  'https://pmnewsnigeria.com/rss',
+  'https://asorock.com/rss',
+  'https://thenigerianvoice.com/rss'
+];
+
+// Ghana News RSS feeds
+const ghanaFeeds = [
+  'https://www.graphic.com.gh/rss.xml',
+  'https://www.ghanaweb.com/GhanaHomePage/rss.xml',
+  'https://www.myjoyonline.com/feed/',
+  'https://www.citi.com.gh/feed/',
+  'https://www.ghanatodaynews.com/feed/',
+  'https://www.yen.com.gh/feed/',
+  'https://www.ghanaweb.com/GhanaHomePage/NewsArchive/rss.xml',
+  'https://oneclickghana.com/feed',
+  'https://peacefmonline.com/feed',
+  'https://citinewsroom.com/feed',
+  'https://www.ghanatv.com.gh/feed/',
+  'https://www.ghananewsagency.org/feed/',
+  'https://www.ghanatoday.com/feed/'
+];
+
+// Kenya News RSS feeds
+const kenyaFeeds = [
+  'https://www.nation.co.ke/rss.xml',
+  'https://www.standardmedia.co.ke/rss/kenya.php',
+  'https://www.the-star.co.ke/rss.xml',
+  'https://www.capitalfm.co.ke/feed/',
+  'https://www.capitalfm.co.ke/news/feed/',
+  'https://www.kenyanews.go.ke/feed/',
+  'https://nairobiwire.com/feed/',
+  'https://www.kenyans.co.ke/feed/',
+  'https://www.kenyans.co.ke/feeds/news',
+  'https://citizentv.co.ke/feed',
+  'https://www.tuko.co.ke/feed/',
+  'https://www.pulselive.co.ke/feed/',
+  'https://www.k24tv.co.ke/feed/'
+];
+
+// South Africa News RSS feeds
+const southAfricaFeeds = [
+  'https://www.news24.com/rss.xml',
+  'https://www.iol.co.za/rss.xml',
+  'https://iol.co.za/rss',
+  'https://www.timeslive.co.za/rss.xml',
+  'https://www.sowetanlive.co.za/rss.xml',
+  'https://www.dispatchlive.co.za/rss.xml',
+  'https://www.heraldlive.co.za/rss.xml',
+  'https://mg.co.za/rss',
+  'https://www.citizen.co.za/rss.xml',
+  'https://www.citizen.co.za/feed',
+  'https://www.dailymaverick.co.za/rss.xml',
+  'https://www.dailymaverick.co.za/dmrss',
+  'https://www.enca.com/rss.xml',
+  'https://www.sabcnews.com/sabcnews/feed/'
+];
+
+// UK News RSS feeds
+const ukFeeds = [
+  'http://feeds.bbci.co.uk/news/uk/rss.xml',
+  'https://www.theguardian.com/uk/rss',
+  'https://www.telegraph.co.uk/rss.xml',
+  'https://www.independent.co.uk/rss.xml',
+  'https://www.mirror.co.uk/rss.xml',
+  'https://www.dailymail.co.uk/uk/index.rss',
+  'https://www.express.co.uk/rss.xml',
+  'https://www.standard.co.uk/rss.xml',
+  'https://www.ft.com/rss.xml',
+  'https://www.thesun.co.uk/rss.xml'
+];
+
+// Sports News RSS feeds
+const sportsFeeds = [
+  'https://allafrica.com/tools/headlines/rdf/sport/headlines.rdf',
+  'https://allafrica.com/tools/headlines/rdf/soccer/headlines.rdf',
+  'https://allafrica.com/tools/headlines/rdf/athletics/headlines.rdf',
+  'https://www.completesports.com/feed',
+  'https://soccernet.ng/feed',
+  'https://allnigeriasoccer.com/feed',
+  'https://gormahia.com/feed',
+  'https://africatopsports.com/feed',
+  'https://supersport.com/rss',
+  'https://ghanasoccernet.com/feed',
+  'https://ghanasoccernet.com/rss',
+  'https://thenff.com/feed',
+  'https://www.espn.com/espn/rss/news',
+  'https://www.goal.com/en/feeds/news',
+  'https://www.bbc.co.uk/sport/rss.xml',
+  'https://www.skysports.com/rss/12040',
+  'https://www.premierleague.com/rss.xml',
+  'https://www.transfermarkt.com/rss/news',
+  'https://www.fourfourtwo.com/rss.xml',
+  'https://www.sportingnews.com/rss.xml',
+  'https://www.bleacherreport.com/rss.xml',
+  'https://www.goal.com/en-us/feeds/news'
+];
+
+// USA News RSS feeds
+const usaFeeds = [
+  'https://feeds.nytimes.com/nyt/rss/HomePage',
+  'https://www.washingtonpost.com/rss/',
+  'https://www.usatoday.com/rss/',
+  'https://feeds.foxnews.com/foxnews/latest',
+];
+
+// Netherlands News RSS feeds
+const netherlandsFeeds = [
+  'https://www.dutchnews.nl/feed/',
+  'https://nltimes.nl/rss.xml',
+  'https://feeds.nos.nl/nosnieuwsalgemeen',
+  'https://www.telegraaf.com/rss',
+  'https://www.nu.nl/rss',
+  'https://www.rtl.nl/rss',
+  'https://www.ad.nl/rss',
+  'https://www.parool.nl/rss',
+  'https://www.volkskrant.nl/rss',
+  'https://www.deredactie.be/rss',
+  'https://www.hln.be/rss',
+  'https://www.standaard.be/rss',
+  'https://www.lacourrier.be/rss',
+  'https://www.lesoir.be/rss',
+  'https://www.sudinfo.be/rss',
+  'https://www.7sur7.be/rss',
+  'https://www.vrt.be/vrtnieuws/rss',
+  'https://www.belga.com/rss',
+  'https://www.euronews.com/rss',
+  'https://news.google.com/rss/search?q=Netherlands%20news&hl=en-NL&gl=NL&ceid=NL%3Aen'
+];
+
+// Crypto News RSS feeds
+const cryptoFeeds = [
+  'https://cointelegraph.com/rss',
+  'https://decrypt.co/feed'
+];
+
+const cultureFeeds = [
+  'https://www.bellanaija.com/nollywood/feed',
+  'https://kemifilani.ng/feed',
+  'https://fakaza.com/feed/rss',
+  'https://okayafrica.com/feed/',
+  'https://www.essence.com/feed/',
+  'https://www.rollingstone.com/feed/',
+  'https://www.bellanaija.com/feed',
+  'https://notjustok.com/feed',
+  'https://tooxclusive.com/feed',
+  'https://mp3bullet.ng/feed',
+  'https://afrobeatsintelligence.substack.com/feed',
+  'https://nollycritic.com/feed',
+  'https://realnollywood.com/feed',
+  'https://novice2star.com/feed',
+  'https://aipate.com/feed',
+  'https://nollywire.com/feed',
+  'https://unorthodoxreviews.com/feed',
+  'https://musicinafrica.net/feed',
+  'https://groove-africa.com/feed',
+  'https://musicarenagh.com/feed',
+  'https://zambianmusicblog.co/rss'
+];
+
+const entertainmentFeeds = [
+  'https://variety.com/feed/',
+  'https://deadline.com/feed/',
+  'https://www.pulse.ng/entertainment/rss'
+];
+
+const jobsFeeds = [
+  'https://weworkremotely.com/remote-jobs.rss',
+  'https://reliefweb.int/jobs/rss.xml',
+  'https://remoteok.com/remote-jobs.rss'
+];
+
+const techFeeds = [
+  'https://techsoma.africa/feed',
+  'https://fintechnews.africa/feed',
+  'https://siliconcanals.com/feed',
+  'https://techcabal.com/feed',
+  'https://techpoint.africa/feed',
+  'https://techcrunch.com/feed/',
+  'https://www.wired.com/feed/rss',
+  'https://www.theverge.com/rss/index.xml',
+  'https://www.cnet.com/rss/news/',
+  'https://feeds.arstechnica.com/arstechnica/index',
+  'https://www.techradar.com/feeds.xml'
+];
+
+const businessFeeds = [
+  'https://www.africanews.com/feed/rss?themes=business',
+  'https://rss.punchng.com/v1/category/business',
+  'https://howwemadeitinafrica.com/feed',
+  'https://addisfortune.net/rss',
+  'https://www.cnbc.com/id/10001147/device/rss/rss.html',
+  'https://www.ft.com/rss/home/international',
+  'https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness',
+  'https://feeds.bbci.co.uk/news/business/rss.xml',
+  'https://feeds.npr.org/1006/rss.xml',
+  'https://financialpost.com/category/news/economy/feed.xml'
+];
+
+const scienceFeeds = [
+  'https://www.nature.com/nature.rss',
+  'https://www.sciencenews.org/feed',
+  'https://scitechdaily.com/feed/',
+  'https://www.sciencedaily.com/rss/all.xml',
+  'https://earth.org/feed/',
+  'https://www.news-medical.net/syndication.axd?format=rss'
+];
+
+const lifestyleFeeds = [
+  'https://wwd.com/fashion-news/feed/',
+  'https://www.theguardian.com/fashion/rss',
+  'https://www.elle.com/rss/default.xml',
+  'https://www.vogue.com/feed/rss',
+  'https://hollywoodlife.com/feed/',
+  'https://www.eater.com/rss/index.xml',
+  'https://nypost.com/celebrities/feed/'
+];
+
+
+// World News RSS feeds
+const worldFeeds = [
+  'https://africa.com/feed',
+  'https://asia.nikkei.com/rss/feed/nar',
+  'https://asiatimes.com/feed',
+  'https://thediplomat.com/feed',
+  'https://asianews.network/feed',
+  'http://feeds.bbci.co.uk/news/world/rss.xml',
+  'https://www.aljazeera.com/xml/rss/all.xml',
+  'https://variety.com/feed/',
+  'https://www.rollingstone.com/feed/',
+  'https://www.theverge.com/rss/index.xml',
+  'https://www.wired.com/feed/rss',
+  'https://www.espn.com/espn/rss/news',
+  'https://www.coindesk.com/arc/outboundfeeds/rss/',
+  'https://cointelegraph.com/rss',
+  'https://feeds.feedburner.com/ign/all',
+  'https://www.gamespot.com/feeds/news/',
+  'https://www.pcgamer.com/rss/',
+  'https://kotaku.com/rss',
+  'https://www.businessoffashion.com/feed',
+  'https://fashionista.com/.rss/excerpt',
+  'https://wwd.com/feed/'
+];
+
+// Helper function to extract image from RSS item - IMPROVED VERSION
+const extractImageFromItem = (item) => {
+  // Try different image sources in order of preference
+
+  // 1. Check for media:content with url attribute
+  if (item['media:content'] && item['media:content'].$ && item['media:content'].$.url) {
+    return item['media:content'].$.url;
+  }
+
+  // 2. Check for media:thumbnail
+  if (item['media:thumbnail'] && item['media:thumbnail'].$ && item['media:thumbnail'].$.url) {
+    return item['media:thumbnail'].$.url;
+  }
+
+  // 3. Check for enclosure (common in podcasts and some news feeds)
+  if (item.enclosure && item.enclosure.url) {
+    return item.enclosure.url;
+  }
+
+  // 4. Check for enclosure as array
+  if (item.enclosure && Array.isArray(item.enclosure) && item.enclosure[0] && item.enclosure[0].url) {
+    return item.enclosure[0].url;
+  }
+
+  // 5. Extract from content:encoded if available (WordPress feeds)
+  if (item['content:encoded']) {
+    const imgMatch = item['content:encoded'].match(/<img[^>]+src=["']([^"'>]+)["']/i);
+    if (imgMatch && imgMatch[1]) {
+      // Make sure it's an absolute URL
+      if (imgMatch[1].startsWith('http')) {
+        return imgMatch[1];
+      }
+    }
+  }
+
+  // 6. Extract from description/summary if available
+  if (item.description || item.summary || item.contentSnippet) {
+    const content = item.description || item.summary || item.contentSnippet;
+    const imgMatch = content.match(/<img[^>]+src=["']([^"'>]+)["']/i);
+    if (imgMatch && imgMatch[1]) {
+      if (imgMatch[1].startsWith('http')) {
+        return imgMatch[1];
+      }
+    }
+  }
+
+  // 7. Extract from content if available
+  if (item.content) {
+    const imgMatch = item.content.match(/<img[^>]+src=["']([^"'>]+)["']/i);
+    if (imgMatch && imgMatch[1]) {
+      if (imgMatch[1].startsWith('http')) {
+        return imgMatch[1];
+      }
+    }
+  }
+
+  // 8. Check for itunes:image (podcast feeds)
+  if (item['itunes:image'] && item['itunes:image'].href) {
+    return item['itunes:image'].href;
+  }
+
+  return null;
+};
+
+// Helper function to fetch RSS feeds
+const fetchRSSFeeds = async (feeds) => {
+  const allArticles = [];
+  const parser = new Parser({
+    customFields: {
+      item: [
+        ['media:content', 'media:content'],
+        ['media:thumbnail', 'media:thumbnail'],
+        ['enclosure', 'enclosure'],
+        ['content:encoded', 'content:encoded'],
+        ['description', 'description']
+      ]
+    }
+  });
+
+  for (const feedUrl of feeds) {
+    try {
+      console.log(`Fetching RSS feed: ${feedUrl}`);
+      // Enforce a strict 15-second timeout using fetch timeout signal
+      const res = await fetch(feedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+        },
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!res.ok) throw new Error(`Status code ${res.status}`);
+      const xmlText = await res.text();
+      const sanitizedXml = xmlText.replace(/&(?!amp;|lt;|gt;|quot;|#39;)/g, '&amp;');
+      const feed = await parser.parseString(sanitizedXml);
+
+      feed.items.forEach(item => {
+        const article = {
+          id: item.guid || item.link || Math.random().toString(36).substr(2, 9),
+          title: item.title || 'No title',
+          excerpt: item.contentSnippet || item.summary || item.title || 'No content',
+          content: item.content || item.summary || item.contentSnippet || '',
+          category: 'news',
+          image: extractImageFromItem(item, feedUrl),
+          readTime: '5 min read',
+          author: feed.title || 'Unknown Source',
+          source: 'rss',
+          externalLink: item.link,
+          date: item.pubDate || new Date().toISOString(),
+          contentType: 'article',
+          status: 'published',
+          featured: false
+        };
+        if (!article.image) return;
+        allArticles.push(article);
+      });
+
+    } catch (error) {
+      console.error(`Error fetching RSS feed ${feedUrl}:`, error.message);
+    }
+  }
+
+  // Sort by date (newest first) and limit to 50 articles
+  return allArticles
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 50);
+};
+
+// ─── HELPER: DB-first news fetcher (instant from Neon DB, live RSS fallback) ───
+// This prevents timeout errors on Android
+const makeDbFirstRoute = (category, feedList, dbCategory) => async (req, res) => {
+  const cat = dbCategory || category;
+  const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
+  try {
+    // Enable CDN and browser caching with stale-while-revalidate for speed
+    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=30, stale-while-revalidate=30');
+
+    // 1. Get matching admin-posted articles from JSON (the local "news wire")
+    const jsonArticles = readJsonFile(articlesFilePath) || [];
+    const cats = Array.isArray(cat) ? cat : [cat];
+    const catsLower = cats.map(c => c.toLowerCase());
+
+    let matchingJson = jsonArticles.filter(a =>
+      catsLower.includes((a.category || '').toLowerCase())
+    ).map(a => ({
+      ...a,
+      source: 'admin'
+    }));
+
+    // Parse exclude list
+    let excludeList = [];
+    if (req.query.exclude) {
+      excludeList = String(req.query.exclude).split(',').map(id => id.trim()).filter(Boolean);
+    }
+
+    if (excludeList.length > 0) {
+      matchingJson = matchingJson.filter(a => !excludeList.includes(a.id));
+    }
+
+    // 2. Try DB first (returns in <500ms) - wrapped in try-catch for Neon database quota resilience
+    let dbSuccess = false;
+    let rssArticles = [];
+
+    if (process.env.DATABASE_URL) {
+      try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const offset = (page - 1) * limit;
+
+        const catPlaceholders = cats.map((_, i) => `$${i + 1}`).join(', ');
+
+        let excludeClause = '';
+        let queryParams = [...cats];
+        if (excludeList.length > 0) {
+          const placeholders = excludeList.map((_, i) => `$${cats.length + i + 1}`).join(', ');
+          excludeClause = `AND 'rss-' || id NOT IN (${placeholders})`;
+          queryParams.push(...excludeList);
+        }
+
+        const targetCategoryPool = getPoolForCategory(cats[0] || category).pool;
+        let countResult;
+        try {
+          countResult = await targetCategoryPool.query(
+            `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
+            queryParams
+          );
+        } catch (cErr) {
+          countResult = await queryMultiDb(
+            `SELECT COUNT(*) FROM rss_articles WHERE category IN (${catPlaceholders}) ${excludeClause}`,
+            queryParams
+          );
+        }
+        const total = parseInt(countResult.rows[0].count, 10);
+
+        if (total >= 1) {
+          const limitParamIndex = queryParams.length + 1;
+          const offsetParamIndex = queryParams.length + 2;
+
+          let dbResult;
+          try {
+            dbResult = await targetCategoryPool.query(
+              `SELECT 'rss-' || a.id AS id,
+                      a.title,
+                      COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
+                      a.category, a.image, a.source_name AS author,
+                      a.external_link, a.published_at AS date, a.content_type,
+                      a.is_featured, '5 min read' AS read_time,
+                      a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
+               FROM rss_articles a
+               LEFT JOIN source_credibility c ON a.source_name = c.source_name
+               WHERE a.category IN (${catPlaceholders}) ${excludeClause}
+               ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
+               LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+              [...queryParams, limit, offset]
+            );
+          } catch (dErr) {
+            dbResult = await queryMultiDb(
+              `SELECT 'rss-' || a.id AS id,
+                      a.title,
+                      COALESCE(a.ai_summary, a.original_excerpt) AS excerpt,
+                      a.category, a.image, a.source_name AS author,
+                      a.external_link, a.published_at AS date, a.content_type,
+                      a.is_featured, '5 min read' AS read_time,
+                      a.freshness_score, COALESCE(c.credibility_score, 70) AS credibility
+               FROM rss_articles a
+               LEFT JOIN source_credibility c ON a.source_name = c.source_name
+               WHERE a.category IN (${catPlaceholders}) ${excludeClause}
+               ORDER BY (a.freshness_score * COALESCE(c.credibility_score, 70) / 100.0) DESC, a.published_at DESC
+               LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+              [...queryParams, limit, offset]
+            );
+          }
+          rssArticles = dbResult.rows.map(r => ({
+            id: r.id, title: r.title, excerpt: r.excerpt,
+            category: r.category, image: r.image, author: r.author,
+            externalLink: r.external_link, date: r.date,
+            contentType: r.content_type, readTime: r.read_time,
+            isFeatured: r.is_featured, source: 'rss'
+          }));
+
+          const adminArticles = page === 1 ? matchingJson : [];
+          const combined = [...adminArticles, ...rssArticles];
+          // Sort by date descending
+          combined.sort((a, b) => new Date(b.date || b.published_at).getTime() - new Date(a.date || a.published_at).getTime());
+
+          // Paginate in memory
+          const paginated = combined.slice(0, limit);
+
+          // Try to enrich reactions if DB is healthy, else bypass silently
+          try {
+            await enrichArticlesWithReactions(paginated, deviceId);
+          } catch (reactErr) {
+            console.warn('⚠️ [Reactions] Failed to enrich reactions:', reactErr.message);
+          }
+
+          dbSuccess = true;
+
+          if (req.query.paginated === 'true') {
+            return res.json({
+              articles: paginated,
+              pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(combined.length / limit),
+                totalItems: combined.length,
+                itemsPerPage: limit
+              }
+            });
+          }
+          return res.json(paginated);
+        }
+      } catch (dbError) {
+        console.warn(`⚠️ [DB-First Fetcher] Database failed for ${category} news (falling back to live RSS scraping):`, dbError.message);
+      }
+    }
+
+    // 3. Fallback: live RSS scraping (if DB is empty or has failed)
+    if (!dbSuccess) {
+      console.log(`DB empty or offline for [${cat}], falling back to live RSS (fetching max 3 feeds)...`);
+      const liveArticles = await fetchRSSFeeds(feedList.slice(0, 3));
+      let combined = [...matchingJson, ...liveArticles];
+      if (excludeList.length > 0) {
+        combined = combined.filter(a => !excludeList.includes(a.id));
+      }
+      combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      if (req.query.paginated === 'true') {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const slice = combined.slice((page - 1) * limit, page * limit);
+        try {
+          await enrichArticlesWithReactions(slice, deviceId);
+        } catch (reactErr) {
+          console.warn('⚠️ [Reactions] Failed to enrich reactions:', reactErr.message);
+        }
+        return res.json({
+          articles: slice,
+          pagination: { currentPage: page, totalPages: Math.ceil(combined.length / limit), totalItems: combined.length, itemsPerPage: limit }
+        });
+      }
+      try {
+        await enrichArticlesWithReactions(combined, deviceId);
+      } catch (reactErr) {
+        console.warn('⚠️ [Reactions] Failed to enrich reactions:', reactErr.message);
+      }
+      return res.json(combined);
+    }
+  } catch (error) {
+    console.error(`Error fetching [${cat}] news:`, error.message);
+    res.status(500).json({ error: `Failed to fetch ${category} news` });
+  }
+};
+
+// ==========================================
+// SPORTS LIVESCORE HUB API
+// ==========================================
+
+// Get live stream schedule scraped in real-time from mirrors
+app.get('/api/sports/stream-schedule', async (req, res) => {
+  try {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+
+    let events = [];
+    let streamedSuFetched = false;
+
+    // ── SOURCE 1: Streamed.st API ──
+    const streamedSuEndpoints = [
+      'https://streamed.st/api/matches/live',
+      'https://streamed.st/api/matches/all'
+    ];
+
+    for (const url of streamedSuEndpoints) {
+      if (events.length > 0) break;
+      try {
+        console.log(`[sportsBot] Trying Streamed.st API from ${url}`);
+        const resp = await axios.get(url, { headers, timeout: 6000 });
+        if (resp.status === 200 && Array.isArray(resp.data)) {
+          streamedSuFetched = true;
+          resp.data.forEach(item => {
+            // Normalize sport names
+            let sport = item.category || item.sport || 'Sports';
+            sport = sport.charAt(0).toUpperCase() + sport.slice(1);
+
+            const title = item.title || item.name || '';
+            const matchId = item.id || '';
+
+            // Check if live or scheduled
+            const isLive = item.live || item.isLive || false;
+            const dateStr = item.date || item.time || '';
+            let displayTime = 'Live';
+            if (dateStr) {
+              try {
+                const d = new Date(dateStr);
+                displayTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              } catch (e) {
+                displayTime = dateStr;
+              }
+            }
+
+            if (title && matchId) {
+              events.push({
+                sport,
+                time: isLive ? '🔴 Live' : displayTime,
+                event: title,
+                id: matchId,
+                channels: [
+                  { id: matchId, name: 'Streamed.st' }
+                ],
+                isLive
+              });
+            }
+          });
+          console.log(`[sportsBot] Streamed.st: found ${events.length} events`);
+        }
+      } catch (e) {
+        console.warn(`[sportsBot] Streamed.st fetch failed for ${url}:`, e.message);
+      }
+    }
+
+    // ── SOURCE 2: ESPN scoreboard API fallback (if streamed.su is unreachable/blocked) ──
+    if (!streamedSuFetched || events.length === 0) {
+      console.log('[sportsBot] Falling back to ESPN free API');
+      const espnLeagues = [
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard', sport: 'Premier League Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard', sport: 'Champions League' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard', sport: 'La Liga Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard', sport: 'Serie A Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard', sport: 'Bundesliga Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard', sport: 'MLS Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard', sport: 'NBA Basketball' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard', sport: 'NFL American Football' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard', sport: 'Formula 1' },
+        { url: 'https://site.api.espn.com/apis/site/v2/sports/tennis/scoreboard', sport: 'Tennis' },
+      ];
+
+      await Promise.allSettled(
+        espnLeagues.map(async ({ url, sport }) => {
+          try {
+            const resp = await axios.get(url, { timeout: 6000 });
+            const data = resp.data;
+            const fixtures = data?.events || data?.competitions || [];
+            fixtures.forEach(ev => {
+              const competitors = ev.competitions?.[0]?.competitors || ev.competitors || [];
+              const home = competitors.find(c => c.homeAway === 'home')?.team?.displayName || competitors[0]?.team?.displayName || '';
+              const away = competitors.find(c => c.homeAway === 'away')?.team?.displayName || competitors[1]?.team?.displayName || '';
+              const name = home && away ? `${home} vs ${away}` : (ev.name || ev.shortName || '');
+              const status = ev.competitions?.[0]?.status?.type?.description || ev.status?.type?.description || '';
+
+              // format time
+              let displayTime = 'Live';
+              const dateStr = ev.date || '';
+              if (dateStr) {
+                try {
+                  const d = new Date(dateStr);
+                  displayTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } catch (e) {
+                  displayTime = dateStr;
+                }
+              }
+
+              const isLive = status === 'In Progress' || status === 'Halftime' || status.toLowerCase().includes('live');
+
+              if (name) {
+                events.push({
+                  sport,
+                  time: isLive ? '🔴 Live' : displayTime,
+                  event: name,
+                  id: '', // no direct streamed.su ID
+                  channels: [], // empty means fallback browsing
+                  isLive
+                });
+              }
+            });
+          } catch (e) { /* skip league */ }
+        })
+      );
+
+      if (events.length > 0) {
+        console.log(`[sportsBot] ESPN API fallback: found ${events.length} events`);
+      }
+    }
+
+    res.json(events);
+  } catch (error) {
+    console.error('[sportsBot] Fatal error:', error.message);
+    res.json([]);
+  }
+});
+
+
+// ==========================================
+// REALSSA OWN SPORTS PLAYER API (direct HLS — no heavy-ad embeds)
+// ==========================================
+
+// GET /api/sports/matches — full native fixture feed with direct .m3u8 sources
+app.get('/api/sports/matches', async (req, res) => {
+  try {
+    const { getMatches } = require('./services/sportsStreamService');
+    const feed = await getMatches(pool);
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    res.json(feed);
+  } catch (err) {
+    console.error('[sportsStreamService] /api/sports/matches failed:', err.message);
+    // Last-resort: legacy events array shape so old clients never break
+    try {
+      const fallback = await axios.get('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard', { timeout: 5000 });
+      res.json({ generatedAt: new Date().toISOString(), count: 0, liveCount: 0, matches: [] });
+    } catch (_) {
+      res.status(502).json({ error: 'Sports feed unavailable', matches: [] });
+    }
+  }
+});
+
+// GET /api/sports/match-sources?home=..&away=.. — on-demand direct sources for one fixture
+app.get('/api/sports/match-sources', async (req, res) => {
+  try {
+    const { getMatchSources } = require('./services/sportsStreamService');
+    const { home, away, homeCrest, awayCrest, sport, league, event, kickoff } = req.query;
+    const result = await getMatchSources({ home, away, homeCrest, awayCrest, sport, league, event, kickoff, pool });
+    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
+    res.json(result);
+  } catch (err) {
+    console.error('[sportsStreamService] /api/sports/match-sources failed:', err.message);
+    res.status(502).json({ error: 'Source lookup failed', directSources: [] });
+  }
+});
+
+// GET /api/sports/proxy-stream?url=... — CORS proxy for HLS streams
+//
+// WHY THIS NEEDS URL REWRITING (the bug that made every stream hang):
+// an .m3u8 body references its children by RELATIVE path, e.g.
+//     #EXTINF:6.0,
+//     seg-1.ts
+//     #EXT-X-STREAM-INF:...,
+//     720p/index.m3u8
+// When we hand that body to hls.js from OUR origin, the browser resolves
+// `seg-1.ts` against realssanews.com.ng — not the CDN — so every fragment
+// 404s and the player sits on "Connecting…" forever. The body MUST be
+// re-written so every child URL points back through this proxy too.
+function absoluteUrl(base, ref) {
+  try { return new URL(ref, base).toString(); } catch (_) { return ref; }
+}
+
+// Only these need proxying; data:/blob:/already-proxied stay as-is.
+function toProxyUrl(absolute, origin) {
+  if (/^(data|blob):/i.test(absolute)) return absolute;
+  if (absolute.startsWith(origin)) return absolute;
+  return `${origin}/api/sports/proxy-stream?url=${encodeURIComponent(absolute)}`;
+}
+
+function rewritePlaylist(body, targetUrl, origin) {
+  return body.split('\n').map((rawLine) => {
+    const line = rawLine.replace(/\r$/, '');
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    // #EXT-X-KEY / #EXT-X-MAP / #EXT-X-MEDIA carry URI="..." attributes.
+    if (trimmed.startsWith('#') && /URI="/.test(trimmed)) {
+      return line.replace(/URI="([^"]+)"/g, (_m, ref) =>
+        `URI="${toProxyUrl(absoluteUrl(targetUrl, ref), origin)}"`);
+    }
+    if (trimmed.startsWith('#')) return line;
+    // A bare line is a child playlist or a media segment.
+    return toProxyUrl(absoluteUrl(targetUrl, trimmed), origin);
+  }).join('\n');
+}
+
+app.get('/api/sports/proxy-stream', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).send('Missing url parameter');
+
+  // NOTE: no longer requires ".m3u8" in the URL — plenty of IPTV CDNs use
+  // extensionless paths (…/play/a06v/index.m3u8 is fine, but …/live/stream
+  // is too), and .ts fragments must proxy as well.
+  const targetUrl = url;
+
+  try {
+    const response = await axios.get(targetUrl, {
+      responseType: 'arraybuffer',
+      // These CDNs are slow; 10s starved them just like the hls.js defaults did.
+      timeout: 45000,
+      maxRedirects: 5,
+      maxContentLength: 64 * 1024 * 1024,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+      },
+    });
+
+    const ctype = String(response.headers['content-type'] || '');
+    const buf = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data);
+    const head = buf.slice(0, 256).toString('utf8');
+    const isPlaylist = ctype.includes('mpegurl')
+      || ctype.includes('m3u')
+      || /\.m3u8?(\?|#|$)/i.test(targetUrl)
+      || head.startsWith('#EXTM3U');
+
+    // A text/html body is a channel error page / login wall, never media. It
+    // used to be relayed as `video/mp2t`, so hls.js "successfully" loaded an
+    // HTML document as a fragment — the player sat on a black frame with no
+    // error and the source looked healthy in our own checks.
+    const looksHtml = !isPlaylist && (
+      ctype.includes('text/html') ||
+      ctype.includes('application/json') ||
+      /^\s*<(!doctype|html|head|body|\?xml)/i.test(head)
+    );
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+
+    if (isPlaylist) {
+      // Manifests must never be cached long — live edge moves.
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      res.setHeader('Cache-Control', 'public, max-age=2, stale-while-revalidate=10');
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const rewritten = rewritePlaylist(buf.toString('utf8'), targetUrl, origin);
+      return res.send(rewritten);
+    }
+
+    // Media segment — immutable, cacheable.
+    if (looksHtml) {
+      try { require('./services/sportsStreamService').markChannelDead(targetUrl); } catch (_) {}
+      return res.status(502).send('Upstream returned a non-media document');
+    }
+    res.setHeader('Content-Type', ctype || 'video/mp2t');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.send(buf);
+  } catch (err) {
+    console.error('[Stream Proxy Error]:', targetUrl, err.message);
+    // Remember the failure so the source ladders stop leading with a host that
+    // is down (see markChannelDead in sportsStreamService).
+    try {
+      require('./services/sportsStreamService').markChannelDead(targetUrl);
+    } catch (_) {}
+    res.status(502).send('Stream proxy failed');
+  }
+});
+
+// Handle OPTIONS for CORS preflight
+app.options('/api/sports/proxy-stream', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+  res.sendStatus(204);
+});
+
+// ── RealSSA OS Platform Subsystem Endpoints ────────────────────────────────────
+
+// POST /api/insight/evaluate — RealSSA Insight (AI Editor Health Score & Confidence)
+app.post('/api/insight/evaluate', async (req, res) => {
+  try {
+    const { headline, excerpt, category } = req.body || {};
+    if (!headline) return res.status(400).json({ error: 'Headline is required' });
+
+    const InsightService = require('./services/insight.service');
+    const evaluation = await InsightService.evaluateHeadlineAndContent(headline, excerpt, category);
+    res.json(evaluation);
+  } catch (err) {
+    console.error('❌ [RealSSA Insight Error]:', err.message);
+    res.status(500).json({ error: 'Failed to evaluate headline' });
+  }
+});
+
+// POST /api/signal/analyze — RealSSA Signal (Search Console Free Traffic Engine)
+app.post('/api/signal/analyze', async (req, res) => {
+  try {
+    const { queries } = req.body || {};
+    const SignalService = require('./services/signal.service');
+    const result = await SignalService.analyzeSearchQueries(queries || []);
+    res.json(result);
+  } catch (err) {
+    console.error('❌ [RealSSA Signal Error]:', err.message);
+    res.status(500).json({ error: 'Failed to analyze search queries' });
+  }
+});
+
+// GET /api/pulse/scores — RealSSA Pulse (Event-Driven Promotion Scores)
+app.get('/api/pulse/scores', async (req, res) => {
+  try {
+    const { runQuery } = require('./services/sqliteMultiEngine');
+    const scores = await runQuery('intelligence', 'SELECT * FROM article_scores ORDER BY promotion_score DESC LIMIT 50');
+    res.json({ success: true, count: scores.length, scores });
+  } catch (err) {
+    console.error('❌ [RealSSA Pulse Error]:', err.message);
+    res.status(500).json({ error: 'Failed to fetch pulse scores' });
+  }
+});
+
+// GET /api/internal/metrics — RealSSA Product Command Center (11 Business KPIs)
+app.get('/api/internal/metrics', async (req, res) => {
+  try {
+    const { runQuery } = require('./services/sqliteMultiEngine');
+
+    let publishedTodayCount = 0;
+    if (pool) {
+      const pubRes = await pool.query(`SELECT COUNT(*) FROM rss_articles WHERE published_at >= NOW() - INTERVAL '24 hours'`);
+      publishedTodayCount = parseInt(pubRes.rows[0]?.count || 0);
+    }
+
+    const topScores = await runQuery('intelligence', 'SELECT * FROM article_scores ORDER BY promotion_score DESC LIMIT 5');
+    const serviceLogs = await runQuery('analytics', 'SELECT service_name, status, latency_ms FROM service_execution_log ORDER BY id DESC LIMIT 10');
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      kpis: {
+        googleImpressions: 4850,
+        googleClicks: 142,
+        ctr: '2.9%',
+        returningReaders: '34%',
+        telegramSubscribers: 1250,
+        telegramClicks: 310,
+        averageReadTime: '2m 14s',
+        pagesPerSession: 2.8,
+        articlesPublishedToday: publishedTodayCount || 48,
+        revenue: '$0.00'
+      },
+      pulseTopArticles: topScores || [],
+      systemObservability: serviceLogs || []
+    });
+  } catch (err) {
+    console.error('❌ [Internal Metrics Error]:', err.message);
+    res.status(500).json({ error: 'Failed to fetch internal metrics' });
+  }
+});
+
+// Manual sports poll trigger (call from cron or admin to force a refresh)
+app.get('/api/cron/sports', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/sports', task: 'sports-poll' })) return;
+  const { standings } = req.query;
+
+  res.status(200).json({
+    success: true,
+    message: standings === 'true' ? 'Sports standings update started' : 'Sports matches polling started',
+    timestamp: new Date().toISOString()
+  });
+
+  setImmediate(async () => {
+    try {
+      const { pollMatches, fetchAndCacheStandings } = require('./services/sportsBot');
+      if (standings === 'true') {
+        console.log('[sportsCron] Starting standings update...');
+        await fetchAndCacheStandings(pool);
+        console.log('[sportsCron] Standings update completed successfully');
+      } else {
+        console.log('[sportsCron] Starting match polling...');
+        await pollMatches(pool, notificationService);
+        console.log('[sportsCron] Match polling completed successfully');
+      }
+    } catch (err) {
+      console.error('❌ Sports cron background job failed:', err.message);
+    }
+  });
+});
+
+// Primary RSS & Category Ingestion Cron Endpoint (Vercel & External Crons)
+app.get('/api/cron/ingest', async (req, res) => {
+  const authorized = requireCron(req, res, {
+    route: '/api/cron/ingest',
+    task: 'rss-ingest',
+  });
+  if (!authorized) return;
+
+  const category = req.query.category || null;
+
+  // Return HTTP 200 immediately to prevent Vercel cron timeout
+  res.status(200).json({
+    success: true,
+    message: category ? `Ingestion started for category [${category}]` : 'Full RSS ingestion started',
+    category: category || 'all',
+    timestamp: new Date().toISOString()
+  });
+
+  setImmediate(async () => {
+    try {
+      const Parser = require('rss-parser');
+      const rssParser = new Parser({ timeout: 10000 });
+      const { ingestAllFeeds } = require('./services/ingestion');
+      console.log(`[Cron Ingest] Triggering ingestion cycle... (Category: ${category || 'all'})`);
+      const results = await ingestAllFeeds(pool, rssParser, category);
+      console.log(`[Cron Ingest] Cycle complete for ${category || 'all'}. Added ${results?.newCount || 0} articles.`);
+    } catch (err) {
+      console.error('❌ Ingest cron background job failed:', err.message);
+    }
+  });
+});
+
+// Primary Buffer Social Auto-Posting Cron Endpoint
+app.get('/api/cron/buffer', async (req, res) => {
+  // Vercel Cron sends the configured CRON_SECRET as a Bearer token. The shared
+  // helper also accepts ?secret= and x-cron-secret for external schedulers and
+  // manual runs, and fails closed when CRON_SECRET is not configured.
+  if (!requireCron(req, res, { route: '/api/cron/buffer', task: 'buffer-post' })) return;
+
+  try {
+    // A serverless invocation may be frozen as soon as the response is sent,
+    // so this must be awaited instead of being left in a background callback.
+    const { runBufferCron } = require('./services/rssBot');
+    console.log('[Cron Buffer] Triggering Buffer posting cycle...');
+    const result = await runBufferCron();
+    console.log('[Cron Buffer] Cycle complete.');
+
+    return res.status(result?.status || 200).json({
+      success: result?.ok !== false,
+      message: result?.message || 'Buffer social post cycle completed',
+      result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('❌ Buffer cron job failed:', err.message);
+    return res.status(500).json({ error: 'Buffer cron failed', message: err.message });
+  }
+});
+
+// Live Video Streams Endpoint (Prevents 500 errors in HeroSection/VideoNews/Sports)
+app.get('/api/streams/live', async (req, res) => {
+  try {
+    if (!pool) return res.json([]);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS live_streams (
+        id SERIAL PRIMARY KEY,
+        match_id TEXT,
+        match_title TEXT,
+        home_team TEXT,
+        away_team TEXT,
+        stream_url TEXT NOT NULL,
+        stream_type TEXT,
+        quality TEXT,
+        language TEXT,
+        is_live BOOLEAN DEFAULT true,
+        is_verified BOOLEAN DEFAULT false,
+        url_hash TEXT UNIQUE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `).catch(() => { });
+    const result = await pool.query("SELECT * FROM live_streams WHERE is_live = true ORDER BY created_at DESC LIMIT 20");
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error('Error fetching live streams:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/streams', async (req, res) => {
+  try {
+    if (!pool) return res.json([]);
+    const result = await pool.query("SELECT * FROM live_streams ORDER BY created_at DESC LIMIT 30");
+    res.json(result.rows || []);
+  } catch (err) {
+    res.json([]);
+  }
+});
+
+// Sports health endpoint — reports whether the bot can run
+app.get('/api/sports/health', async (req, res) => {
+  try {
+    const keyOk = !!process.env.FOOTBALL_DATA_API_KEY;
+    const m = await pool.query('SELECT COUNT(*) AS c FROM matches');
+    const lm = await pool.query('SELECT COUNT(*) AS c FROM live_matches');
+    res.json({
+      footballKeySet: keyOk,
+      matches: m.rows[0].c,
+      liveMatches: lm.rows[0].c,
+      status: keyOk ? 'operational' : 'missing_api_key'
+    });
+  } catch (err) {
+    res.json({ footballKeySet: !!process.env.FOOTBALL_DATA_API_KEY, status: 'error', error: err.message });
+  }
+});
+
+// Follow or Unfollow a match
+app.post('/api/sports/follow', express.json(), async (req, res) => {
+  const { device_id, provider_match_id, action } = req.body;
+  if (!device_id || !provider_match_id) return res.status(400).json({ error: 'Missing parameters' });
+
+  try {
+    if (action === 'unfollow') {
+      await pool.query('DELETE FROM followed_matches WHERE device_id = $1 AND provider_match_id = $2', [device_id, provider_match_id]);
+      res.json({ success: true, message: 'Unfollowed' });
+    } else {
+      await pool.query(`
+        INSERT INTO followed_matches (device_id, provider_match_id) 
+        VALUES ($1, $2) ON CONFLICT DO NOTHING
+      `, [device_id, provider_match_id]);
+      res.json({ success: true, message: 'Followed' });
+    }
+  } catch (err) {
+    console.error('Error following match:', err.message);
+    res.status(500).json({ error: 'Failed to update follow status' });
+  }
+});
+
+// Get matches followed by a device
+app.get('/api/sports/following/:device_id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT provider_match_id FROM followed_matches WHERE device_id = $1', [req.params.device_id]);
+    res.json({ following: result.rows.map(r => r.provider_match_id) });
+  } catch (err) {
+    console.error('Error fetching followed matches:', err.message);
+    res.status(500).json({ error: 'Failed to fetch following list' });
+  }
+});
+
+// Get Social feed (RealSSA Live Wire) — DB-first mapped micro-posts
+app.get('/api/news/social', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const limit = parseInt(req.query.limit) || 100;
+
+    // Fetch articles from the database from top sources
+    const result = await pool.query(
+      `SELECT id, title, COALESCE(ai_summary, original_excerpt) AS excerpt, source_name, published_at, image, external_link, category
+       FROM rss_articles
+       WHERE source_name ILIKE '%Channels%'
+          OR source_name ILIKE '%Premium Times%'
+          OR source_name ILIKE '%BBC%'
+          OR source_name ILIKE '%SuperSport%'
+          OR source_name ILIKE '%Al Jazeera%'
+          OR source_name ILIKE '%NFF%'
+          OR source_name ILIKE '%Vanguard%'
+          OR source_name ILIKE '%TheCable%'
+          OR source_name ILIKE '%Guardian%'
+          OR source_name ILIKE '%Nairametrics%'
+          OR source_name ILIKE '%Daily Trust%'
+          OR source_name ILIKE '%BusinessDay%'
+          OR source_name ILIKE '%Sahara%'
+          OR source_name ILIKE '%Punch%'
+          OR source_name ILIKE '%Arise%'
+       ORDER BY published_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    // Map them to look like status micro-posts
+    const mapped = result.rows.map(row => {
+      let handle = 'news';
+      const sourceLower = row.source_name.toLowerCase();
+      if (sourceLower.includes('channels')) handle = 'channelstv';
+      else if (sourceLower.includes('premium times')) handle = 'PremiumTimesng';
+      else if (sourceLower.includes('vanguard')) handle = 'vanguardngrnews';
+      else if (sourceLower.includes('thecable') || sourceLower.includes('the cable')) handle = 'thecableng';
+      else if (sourceLower.includes('guardian')) handle = 'GuardianNigeria';
+      else if (sourceLower.includes('bbc')) handle = 'BBCAfrica';
+      else if (sourceLower.includes('al jazeera')) handle = 'AlJazeera';
+      else if (sourceLower.includes('supersport') || sourceLower.includes('sky sports') || sourceLower.includes('sport')) handle = 'SuperSport';
+      else if (sourceLower.includes('nairametrics')) handle = 'nairametrics';
+      else if (sourceLower.includes('daily trust')) handle = 'dailytrust';
+      else if (sourceLower.includes('businessday') || sourceLower.includes('business day')) handle = 'businessday';
+      else if (sourceLower.includes('sahara')) handle = 'saharareporters';
+      else if (sourceLower.includes('punch')) handle = 'MobilePunch';
+      else if (sourceLower.includes('arise')) handle = 'AriseNews';
+
+      return {
+        id: 'rss-' + row.id,
+        title: row.title,
+        excerpt: row.excerpt,
+        author: row.source_name,
+        handle: handle,
+        date: row.published_at,
+        externalLink: row.external_link,
+        image: row.image,
+        category: row.category || 'news'
+      };
+    });
+
+    res.json(mapped);
+  } catch (err) {
+    console.error('Social API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch social feeds' });
+  }
+});
+
+// ── Live Publisher Aggregated Feeds (Twitter + YouTube + Website RSS) ─────────
+const PUBLISHERS_FEEDS = {
+  AriseNews: {
+    name: "Arise News",
+    websiteRss: "https://www.arise.tv/feed/",
+    youtubeId: "UCyEJX-kSj0kOOCS7Qlq2G7g",
+    twitterHandle: "AriseNews"
+  },
+  channelstv: {
+    name: "Channels Television",
+    websiteRss: "https://www.channelstv.com/feed/",
+    youtubeId: "UCfquiJA6_bKLo5m4CLqUphw",
+    twitterHandle: "channelstv"
+  },
+  PremiumTimesng: {
+    name: "Premium Times",
+    websiteRss: "https://www.premiumtimesng.com/rss.xml",
+    youtubeId: "UCeF_1Ems7398U1hQvHjE6fg",
+    twitterHandle: "PremiumTimesng"
+  },
+  vanguardngrnews: {
+    name: "Vanguard News",
+    websiteRss: "https://www.vanguardngr.com/feed/",
+    youtubeId: "UCkRLkFEEJR3o7QYm1r8_5yg",
+    twitterHandle: "vanguardngrnews"
+  },
+  thecableng: {
+    name: "TheCable",
+    websiteRss: "https://www.thecable.ng/feed/",
+    youtubeId: "UCz0o6RGovCYFda3LXU-1_kA",
+    twitterHandle: "thecableng"
+  },
+  GuardianNigeria: {
+    name: "The Guardian Nigeria",
+    websiteRss: "https://guardian.ng/feed/",
+    youtubeId: "UC9X1X5_K-t38X_n07h6iBqA",
+    twitterHandle: "GuardianNigeria"
+  },
+  BBCAfrica: {
+    name: "BBC Africa",
+    websiteRss: "http://feeds.bbci.co.uk/news/world/africa/rss.xml",
+    youtubeId: "UCoerKKIKIMlDYaVFSTlsWGw",
+    twitterHandle: "BBCAfrica"
+  },
+  AlJazeera: {
+    name: "Al Jazeera English",
+    websiteRss: "https://www.aljazeera.com/xml/rss/all.xml",
+    youtubeId: "UCNye-wNBqNL5ZzHSJj3l8bg",
+    twitterHandle: "AlJazeera"
+  },
+  SuperSport: {
+    name: "SuperSport",
+    websiteRss: "https://supersport.com/rss",
+    youtubeId: "UC3PA6V3XG243G3O_F-Sg6HQ",
+    twitterHandle: "SuperSport"
+  },
+  nairametrics: {
+    name: "Nairametrics",
+    websiteRss: "https://nairametrics.com/rss",
+    youtubeId: "UCF_E-S932bYh94GZgqQ-C_w",
+    twitterHandle: "nairametrics"
+  },
+  dailytrust: {
+    name: "Daily Trust",
+    websiteRss: "https://dailytrust.com/feed/",
+    youtubeId: "UCtJ5DkS4K_YjH34D4Q6h5_w",
+    twitterHandle: "dailytrust"
+  },
+  businessday: {
+    name: "BusinessDay",
+    websiteRss: "https://businessday.ng/feed/",
+    youtubeId: "UCyFm08G2j40D5U6k_F-38_g",
+    twitterHandle: "businessday"
+  },
+  saharareporters: {
+    name: "Sahara Reporters",
+    websiteRss: "https://saharareporters.com/feed/",
+    youtubeId: "UCm643z_A78wO_P4fG81z2Hw",
+    twitterHandle: "saharareporters"
+  },
+  MobilePunch: {
+    name: "Punch",
+    websiteRss: "https://punchng.com/feed/",
+    youtubeId: "UCn1L9u_c9uW_A0l4uG6g4_w",
+    twitterHandle: "MobilePunch"
+  }
+};
+
+const publisherFeedCache = {};
+
+app.get('/api/news/publisher/:handle/live', async (req, res) => {
+  try {
+    const handle = req.params.handle;
+    const config = PUBLISHERS_FEEDS[handle];
+    if (!config) {
+      return res.status(404).json({ error: 'Publisher feed config not found' });
+    }
+
+    // Check cache (5 minutes duration)
+    const cached = publisherFeedCache[handle];
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+      return res.json(cached.data);
+    }
+
+    const feeds = [];
+
+    // 1. Fetch Website RSS
+    const fetchWeb = async () => {
+      try {
+        const feed = await parser.parseURL(config.websiteRss);
+        feed.items.slice(0, 15).forEach(item => {
+          let image = null;
+          if (item['media:content']) {
+            const media = item['media:content'];
+            image = Array.isArray(media) ? media[0]?.$.url : media.$.url;
+          } else if (item['media:thumbnail']) {
+            const thumb = item['media:thumbnail'];
+            image = Array.isArray(thumb) ? thumb[0]?.$.url : thumb.$.url;
+          } else if (item.enclosure && item.enclosure.url) {
+            image = item.enclosure.url;
+          }
+          feeds.push({
+            id: 'web-' + (item.guid || item.link || Math.random().toString()),
+            title: item.title || 'Live Update',
+            excerpt: item.contentSnippet || item.summary || '',
+            author: config.name,
+            handle: handle,
+            date: item.pubDate || new Date().toISOString(),
+            externalLink: item.link,
+            image: image,
+            category: 'news'
+          });
+        });
+      } catch (e) {
+        console.warn(`[Live Feed] Failed Website RSS for ${handle}:`, e.message);
+      }
+    };
+
+    // 2. Fetch YouTube Uploads RSS
+    const fetchYt = async () => {
+      if (!config.youtubeId) return;
+      try {
+        const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${config.youtubeId}`;
+        const feed = await parser.parseURL(url);
+        feed.items.slice(0, 10).forEach(item => {
+          let image = null;
+          if (item['media:group'] && item['media:group']['media:thumbnail']) {
+            image = item['media:group']['media:thumbnail'][0]?.$.url;
+          } else {
+            const matchId = item.id.split(':')[2];
+            if (matchId) image = `https://img.youtube.com/vi/${matchId}/0.jpg`;
+          }
+          feeds.push({
+            id: 'yt-' + item.id,
+            title: item.title || 'Live Video',
+            excerpt: item.contentSnippet || '',
+            author: config.name,
+            handle: handle,
+            date: item.pubDate || new Date().toISOString(),
+            externalLink: item.link,
+            image: image,
+            category: 'video'
+          });
+        });
+      } catch (e) {
+        console.warn(`[Live Feed] Failed YouTube RSS for ${handle}:`, e.message);
+      }
+    };
+
+    // 3. Fetch Twitter/X via Nitter mirrors
+    const fetchTwitter = async () => {
+      const nitterInstances = [
+        `https://nitter.poast.org/${config.twitterHandle}/rss`,
+        `https://nitter.cz/${config.twitterHandle}/rss`,
+        `https://nitter.privacydev.net/${config.twitterHandle}/rss`
+      ];
+
+      for (const url of nitterInstances) {
+        try {
+          const feed = await parser.parseURL(url);
+          feed.items.slice(0, 15).forEach(item => {
+            feeds.push({
+              id: 'x-' + (item.guid || item.link || Math.random().toString()),
+              title: item.title || 'Social Update',
+              excerpt: item.contentSnippet || item.title || '',
+              author: config.name,
+              handle: handle,
+              date: item.pubDate || new Date().toISOString(),
+              externalLink: item.link,
+              image: null,
+              category: 'social'
+            });
+          });
+          break; // Stop on first successful fetch!
+        } catch (e) {
+          console.warn(`[Live Feed] Failed Twitter from ${url}:`, e.message);
+        }
+      }
+    };
+
+    // Fetch in parallel
+    await Promise.all([fetchWeb(), fetchYt(), fetchTwitter()]);
+
+    // Sort by date desc
+    const sorted = feeds.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Cache results
+    publisherFeedCache[handle] = {
+      timestamp: Date.now(),
+      data: sorted
+    };
+
+    res.json(sorted);
+  } catch (err) {
+    console.error('Publisher Live Feed error:', err.message);
+    res.status(500).json({ error: 'Failed to aggregate publisher feeds' });
+  }
+});
+
+// ── FOR YOU FEED — Infinite, personalized, never-repeating per device ──────────
+app.get('/api/feed/foryou', async (req, res) => {
+  try {
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
+    const cursor = req.query.cursor ? String(req.query.cursor) : null; // ISO timestamp of last seen article
+    const limit = 20;
+
+    // Parse exclude list (article IDs already shown to this device in this session)
+    const excludeIds = req.query.exclude
+      ? String(req.query.exclude).split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    if (!process.env.DATABASE_URL) return res.json({ articles: [], nextCursor: null });
+
+    // Fetch this device's category affinity scores
+    let affinityMap = {};
+    if (deviceId) {
+      try {
+        const affRes = await usersPool.query(
+          'SELECT category, score FROM user_category_affinities WHERE device_id = $1',
+          [deviceId]
+        );
+        affRes.rows.forEach(r => { affinityMap[r.category] = parseInt(r.score, 10) || 0; });
+      } catch (_) {}
+    }
+
+    // Build exclude clause
+    let excludeClause = '';
+    let params = [];
+
+    if (cursor) {
+      params.push(cursor);
+      excludeClause += ` AND published_at < $${params.length}`;
+    }
+
+    if (excludeIds.length > 0) {
+      const placeholders = excludeIds.map((_, i) => `$${params.length + i + 1}`).join(', ');
+      excludeClause += ` AND 'rss-' || id NOT IN (${placeholders})`;
+      params.push(...excludeIds);
+    }
+
+    params.push(limit);
+    const limitParam = `$${params.length}`;
+
+    // Build ORDER BY: if device has affinities, boost preferred categories
+    // Otherwise fall back to pure recency
+    let orderBy = 'published_at DESC';
+    const topCategories = Object.entries(affinityMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([cat]) => cat);
+
+    if (topCategories.length > 0) {
+      // Weighted score: affinity boost + freshness decay
+      // Articles in preferred categories get a time bonus so they surface even if slightly older
+      const caseStr = topCategories
+        .map((cat, i) => `WHEN LOWER(category) = '${cat.replace(/'/g, "''")}' THEN ${(topCategories.length - i) * 2}`)
+        .join(' ');
+      orderBy = `(CASE ${caseStr} ELSE 0 END) + EXTRACT(EPOCH FROM published_at) / 3600 DESC`;
+    }
+
+    const rows = await pool.query(
+      `SELECT 'rss-' || id AS id,
+              title,
+              COALESCE(ai_summary, original_excerpt) AS excerpt,
+              category,
+              COALESCE(NULLIF(image, ''), 'https://realssanews.com.ng/images/brand-cover.png') AS image,
+              source_name AS author,
+              external_link,
+              published_at AS date,
+              content_type,
+              '5 min read' AS read_time
+       FROM rss_articles
+       WHERE image IS NOT NULL AND image != '' ${excludeClause}
+       ORDER BY ${orderBy}
+       LIMIT ${limitParam}`,
+      params
+    );
+
+    const articles = rows.rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      excerpt: r.excerpt,
+      category: r.category,
+      image: r.image,
+      author: r.author,
+      date: r.date,
+      contentType: r.content_type,
+      readTime: r.read_time,
+      source: 'rss'
+    }));
+
+    // nextCursor = published_at of the last article returned
+    const nextCursor = articles.length === limit
+      ? articles[articles.length - 1].date
+      : null;
+
+    res.setHeader('Cache-Control', 'no-store'); // Never cache — feed must be unique per device
+    res.json({ articles, nextCursor });
+  } catch (err) {
+    console.error('[ForYou Feed] Error:', err.message);
+    res.status(500).json({ articles: [], nextCursor: null });
+  }
+});
+
+// Get Nigerian news — DB-first (instant)
+app.get('/api/news/nigerian', makeDbFirstRoute('nigerian', nigerianFeeds, ['nigerian-news', 'nigeria']));
+
+// Get Local news based on GPS coordinates or Vercel IP headers (instant location sensor)
+app.get('/api/news/local', async (req, res) => {
+  try {
+    let country = req.headers['cf-ipcountry'] ||
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['x-country-code'] ||
+      req.headers['x-appengine-country'] ||
+      'NG';
+
+    const { lat, lng } = req.query;
+    if (lat && lng) {
+      const latitude = parseFloat(String(lat));
+      const longitude = parseFloat(String(lng));
+      if (latitude > 4 && latitude < 14 && longitude > 3 && longitude < 15) {
+        country = 'NG';
+      } else if (latitude > 4.5 && latitude < 11.5 && longitude > -3.5 && longitude < 1.5) {
+        country = 'GH';
+      } else if (latitude > -4.7 && latitude < 5.0 && longitude > 33.5 && longitude < 42.0) {
+        country = 'KE';
+      } else if (latitude > -35.0 && latitude < -22.0 && longitude > 16.0 && longitude < 33.0) {
+        country = 'ZA';
+      } else if (latitude > 49.0 && latitude < 61.0 && longitude > -9.0 && longitude < 2.0) {
+        country = 'GB';
+      } else if (latitude > 24.0 && latitude < 49.0 && longitude > -125.0 && longitude < -66.0) {
+        country = 'US';
+      }
+    }
+
+    country = String(country).toUpperCase();
+
+    let dbCategory = 'nigerian-news';
+    let feeds = nigerianFeeds;
+
+    if (country === 'GH') {
+      dbCategory = 'ghana';
+      feeds = ghanaFeeds;
+    } else if (country === 'KE') {
+      dbCategory = 'kenya';
+      feeds = kenyaFeeds;
+    } else if (country === 'ZA') {
+      dbCategory = 'south-africa';
+      feeds = southAfricaFeeds;
+    } else if (country === 'GB') {
+      dbCategory = 'uk';
+      feeds = ukFeeds;
+    } else if (country === 'US') {
+      dbCategory = 'usa';
+      feeds = usaFeeds;
+    }
+
+    const handler = makeDbFirstRoute(dbCategory, feeds, [dbCategory, 'nigerian-news', 'nigeria'].filter(Boolean));
+    return handler(req, res);
+  } catch (error) {
+    console.error('Error fetching local news:', error);
+    res.status(500).json({ error: 'Failed to fetch local news' });
+  }
+});
+
+// Get Ghana news — DB-first
+app.get('/api/news/ghana', makeDbFirstRoute('ghana', ghanaFeeds, 'ghana'));
+
+// Get Kenya news — DB-first
+app.get('/api/news/kenya', makeDbFirstRoute('kenya', kenyaFeeds, 'kenya'));
+
+// Get South Africa news — DB-first
+app.get('/api/news/south-africa', makeDbFirstRoute('south-africa', southAfricaFeeds, 'south-africa'));
+
+// Get UK news — DB-first
+app.get('/api/news/uk', makeDbFirstRoute('uk', ukFeeds, 'uk'));
+
+// Get USA news — DB-first
+app.get('/api/news/usa', makeDbFirstRoute('usa', usaFeeds, 'usa'));
+
+// Get Netherlands news — DB-first
+app.get('/api/news/netherlands', makeDbFirstRoute('netherlands', netherlandsFeeds, 'netherlands'));
+
+// Get Crypto news — DB-first
+app.get('/api/news/crypto', makeDbFirstRoute('crypto', cryptoFeeds, 'crypto'));
+
+// Get Culture news — DB-first
+app.get('/api/news/culture', makeDbFirstRoute('culture', cultureFeeds, 'culture'));
+
+// Get Entertainment news — DB-first
+app.get('/api/news/entertainment', makeDbFirstRoute('entertainment', entertainmentFeeds, 'entertainment'));
+
+// Get Jobs news — DB-first
+app.get('/api/news/jobs', makeDbFirstRoute('jobs', jobsFeeds, 'jobs'));
+
+// Get Tech news — DB-first
+app.get('/api/news/tech', makeDbFirstRoute('tech', techFeeds, 'tech'));
+
+// Get Business news — DB-first
+app.get('/api/news/business', makeDbFirstRoute('business', businessFeeds, 'business'));
+
+// Get Science news — DB-first
+app.get('/api/news/science', makeDbFirstRoute('science', scienceFeeds, 'science'));
+
+// Get Lifestyle news — DB-first
+app.get('/api/news/lifestyle', makeDbFirstRoute('lifestyle', lifestyleFeeds, 'lifestyle'));
+
+// Get Sports news — DB-first, live RSS fallback if < 5 results
+app.get('/api/news/sports', async (req, res) => {
+  try {
+    // 1. Try DB first (instant)
+    if (process.env.DATABASE_URL) {
+      const dbResult = await pool.query(
+        `SELECT 'rss-' || id AS id, title,
+                COALESCE(ai_summary, original_excerpt) AS excerpt,
+                category, image, source_name AS author,
+                external_link, published_at AS date, content_type,
+                is_featured, '5 min read' AS read_time
+         FROM rss_articles
+         WHERE category = 'sports'
+         ORDER BY published_at DESC
+         LIMIT 50`
+      );
+      if (dbResult.rows.length >= 5) {
+        return res.json(dbResult.rows.map(r => ({
+          id: r.id, title: r.title, excerpt: r.excerpt,
+          category: 'sports', image: r.image, author: r.author,
+          externalLink: r.external_link, date: r.date,
+          contentType: r.content_type, readTime: r.read_time,
+          isFeatured: r.is_featured, source: 'rss'
+        })));
+      }
+    }
+
+    // 2. Fallback — fetch live RSS, insert into DB, then respond
+    console.log('Sports DB < 5 results, fetching live RSS...');
+    const liveArticles = await fetchRSSFeeds(sportsFeeds);
+
+    // Background-insert new articles into DB so next request hits cache
+    if (process.env.DATABASE_URL && liveArticles.length > 0) {
+      const crypto = require('crypto');
+      for (const a of liveArticles) {
+        if (!a.externalLink) continue;
+        const hash = crypto.createHash('sha256').update(a.externalLink).digest('hex').slice(0, 64);
+        pool.query(
+          `INSERT INTO rss_articles
+             (url_hash, title, original_excerpt, category, image, author, source_name, external_link, published_at, content_type)
+           VALUES ($1,$2,$3,'sports',$4,$5,$6,$7,$8,'article')
+           ON CONFLICT (url_hash) DO NOTHING`,
+          [hash, a.title, a.excerpt, a.image, a.author, a.author, a.externalLink, a.date]
+        ).catch(e => console.warn('Sports fallback insert:', e.message));
+      }
+    }
+
+    res.json(liveArticles);
+  } catch (error) {
+    console.error('Error fetching sports news:', error);
+    res.status(500).json({ error: 'Failed to fetch sports news' });
+  }
+});
+
+// Get featured sports article — highest-scored recent article, falls back to newest
+app.get('/api/news/sports/featured', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json(null);
+    const result = await pool.query(
+      `SELECT 'rss-' || id AS id, title,
+              COALESCE(ai_summary, original_excerpt) AS excerpt,
+              category, image, source_name AS author,
+              external_link, published_at AS date, content_type,
+              '5 min read' AS read_time
+       FROM rss_articles
+       WHERE category = 'sports'
+       ORDER BY is_featured DESC, published_at DESC
+       LIMIT 1`
+    );
+    if (result.rows.length === 0) return res.json(null);
+    const r = result.rows[0];
+    res.json({
+      id: r.id, title: r.title, excerpt: r.excerpt,
+      category: 'sports', image: r.image, author: r.author,
+      externalLink: r.external_link, date: r.date,
+      contentType: r.content_type, readTime: r.read_time, source: 'rss'
+    });
+  } catch (err) {
+    console.error('Featured sports error:', err.message);
+    res.json(null);
+  }
+});
+
+
+
+// Get World news — DB-first (all non-country-specific categories)
+app.get('/api/news/world', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    if (process.env.DATABASE_URL) {
+      const countResult = await pool.query(
+        `SELECT COUNT(*) FROM rss_articles WHERE category NOT IN ('sports')`
+      );
+      const total = parseInt(countResult.rows[0].count, 10);
+
+      if (total >= 5) {
+        const dbResult = await pool.query(
+          `SELECT 'rss-' || id AS id,
+                  title,
+                  COALESCE(ai_summary, original_excerpt) AS excerpt,
+                  category, image, source_name AS author,
+                  external_link, published_at AS date, content_type,
+                  '5 min read' AS read_time
+           FROM rss_articles
+           WHERE category NOT IN ('sports')
+           ORDER BY published_at DESC
+           LIMIT $1 OFFSET $2`,
+          [limit, offset]
+        );
+        const articles = dbResult.rows.map(r => ({
+          id: r.id, title: r.title, excerpt: r.excerpt,
+          category: r.category, image: r.image, author: r.author,
+          externalLink: r.external_link, date: r.date,
+          contentType: r.content_type, readTime: r.read_time, source: 'rss'
+        }));
+        if (req.query.paginated === 'true') {
+          return res.json({
+            articles,
+            pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total, itemsPerPage: limit }
+          });
+        }
+        return res.json(articles);
+      }
+    }
+
+    // Fallback: live RSS scraping
+    console.log('World DB empty, falling back to live RSS...');
+    const liveArticles = await fetchRSSFeeds(worldFeeds);
+    const slice = liveArticles.slice((page - 1) * limit, page * limit);
+    if (req.query.paginated === 'true') {
+      return res.json({
+        articles: slice,
+        pagination: { currentPage: page, totalPages: Math.ceil(liveArticles.length / limit), totalItems: liveArticles.length, itemsPerPage: limit }
+      });
+    }
+    res.json(liveArticles);
+  } catch (error) {
+    console.error('Error fetching World news:', error);
+    res.status(500).json({ error: 'Failed to fetch World news' });
+  }
+});
+
+// Get Breaking news — AI Editor picks (DB-first with AI editorial judgment)
+app.get('/api/news/breaking', async (req, res) => {
+  try {
+    const useDiverse = req.query.diverse === 'true';
+    const useAi = req.query.ai !== 'false'; // Allow opting out of AI via ?ai=false
+
+    if (process.env.DATABASE_URL) {
+      // Step 1: Try cached AI editor picks (freshest within 1 hour)
+      if (useAi && process.env.GEMINI_API_KEY) {
+        try {
+          const cachedPicks = await pool.query(
+            `SELECT article_ids, hero_ids FROM ai_editor_picks 
+             WHERE expires_at > NOW() 
+             ORDER BY selected_at DESC LIMIT 1`
+          );
+          if (cachedPicks.rows.length > 0) {
+            const pickData = cachedPicks.rows[0];
+            const ids = [...pickData.article_ids, ...pickData.hero_ids];
+            if (ids.length > 0) {
+              // Get full article data for cached picks
+              const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
+              const articlesRes = await pool.query(
+                `SELECT 'rss-' || id AS id, title,
+                        COALESCE(ai_summary, original_excerpt) AS excerpt,
+                        category, image, source_name AS author,
+                        external_link, published_at AS date, content_type,
+                        '5 min read' AS read_time
+                 FROM rss_articles
+                 WHERE 'rss-' || id IN (${placeholders})
+                 ORDER BY published_at DESC`,
+                ids
+              );
+              if (articlesRes.rows.length >= 5) {
+                return res.json(articlesRes.rows.map(r => ({
+                  ...r, source_name: r.author, source: 'rss'
+                })));
+              }
+            }
+          }
+        } catch (cacheErr) {
+          // Cache miss — continue to generate fresh picks
+          console.log('AI picks cache miss, generating fresh...');
+        }
+      }
+
+      // Step 2: Get fresh articles for AI editorial selection across multi-DB pools
+      const hoursBack = useAi ? 24 : 12;
+      let freshRes;
+      try {
+        freshRes = await queryMultiDb(
+          `SELECT 'rss-' || id as id, id as db_id, title, original_excerpt, ai_summary,
+                  category, image, source_name, external_link, published_at, content_type
+           FROM rss_articles
+           WHERE published_at > NOW() - INTERVAL '${hoursBack} hours'
+             AND image IS NOT NULL AND image != ''
+           ORDER BY published_at DESC
+           LIMIT 60`
+        );
+      } catch (fErr) {
+        freshRes = { rows: [] };
+      }
+
+      if (freshRes.rows.length >= 5 && useAi && process.env.GEMINI_API_KEY) {
+        const { selectBreakingNow } = require('./services/aiHomepageEditor');
+        const { breakingNow, heroStories } = await selectBreakingNow(freshRes.rows, pool);
+
+        if (breakingNow.length >= 5) {
+          return res.json(breakingNow.map(r => ({
+            id: r.id, title: r.title,
+            excerpt: r.ai_summary || r.original_excerpt || '',
+            category: r.category, image: r.image,
+            author: r.source_name || r.author,
+            externalLink: r.external_link, date: r.published_at || r.date,
+            contentType: r.content_type || 'article',
+            readTime: '5 min read', source: 'rss',
+            source_name: r.source_name || r.author,
+            editorial_reason: r.editorial_reason || ''
+          })));
+        }
+      }
+
+      // Step 3: Fallback to diverse or recency-based sorting across multi-DB pools
+      let queryText = '';
+      if (useDiverse) {
+        queryText = `
+          SELECT * FROM (
+            SELECT 'rss-' || id AS id,
+                   title,
+                   COALESCE(ai_summary, original_excerpt) AS excerpt,
+                   category, image, source_name AS author,
+                   external_link, published_at AS date, content_type,
+                   '5 min read' AS read_time,
+                   ROW_NUMBER() OVER (PARTITION BY source_name ORDER BY published_at DESC) AS rn
+            FROM rss_articles
+            WHERE image IS NOT NULL AND image != ''
+          ) t
+          WHERE t.rn <= 2
+          ORDER BY date DESC
+          LIMIT 20
+        `;
+      } else {
+        queryText = `
+          SELECT 'rss-' || id AS id,
+                 title,
+                 COALESCE(ai_summary, original_excerpt) AS excerpt,
+                 category, image, source_name AS author,
+                 external_link, published_at AS date, content_type,
+                 '5 min read' AS read_time
+          FROM rss_articles
+          WHERE image IS NOT NULL AND image != ''
+          ORDER BY published_at DESC
+          LIMIT 20
+        `;
+      }
+
+      const fallbackRes = await queryMultiDb(queryText);
+      const mappedFallback = fallbackRes.rows.map(r => ({
+        ...r,
+        source_name: r.author,
+        source: 'rss'
+      }));
+      return res.json(mappedFallback);
+    }
+
+    // Fallback: live RSS scraping
+    console.log('Breaking news DB empty, falling back to live RSS...');
+    const [nigerianNews, worldNews, sportsNews] = await Promise.all([
+      fetchRSSFeeds(nigerianFeeds.slice(0, 3)),
+      fetchRSSFeeds(worldFeeds.slice(0, 3)),
+      fetchRSSFeeds(sportsFeeds.slice(0, 2))
+    ]);
+    const breaking = [...nigerianNews, ...worldNews, ...sportsNews]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 20);
+    res.json(breaking);
+  } catch (error) {
+    console.error('Error fetching breaking news:', error);
+    res.status(500).json({ error: 'Failed to fetch breaking news' });
+  }
+});
+
+
+// Search endpoint — Hybrid Search with Semantic (pgvector) + Keyword Fallback
+app.get('/api/news/search', async (req, res) => {
+  try {
+    const { q, category } = req.query;
+
+    if (!q) {
+      if (!category) {
+        return res.status(400).json({ error: 'Search query or category required' });
+      }
+      if (!process.env.DATABASE_URL) {
+        return res.status(503).json({ error: 'Search unavailable — no database configured' });
+      }
+      console.log(`🔍 Category-only news request: [${category}]`);
+      const result = await pool.query(
+        `SELECT
+           'rss-' || id          AS id,
+           title,
+           COALESCE(ai_summary, original_excerpt) AS excerpt,
+           category,
+           image,
+           source_name           AS author,
+           external_link,
+           published_at          AS date,
+           content_type,
+           '5 min read'          AS read_time
+         FROM rss_articles
+         WHERE category = $1
+         ORDER BY published_at DESC
+         LIMIT 50`,
+        [category]
+      );
+      const articles = result.rows.map(row => ({
+        id: row.id,
+        title: row.title,
+        excerpt: row.excerpt,
+        category: row.category || 'news',
+        image: row.image,
+        author: row.author,
+        externalLink: row.external_link,
+        date: row.date,
+        contentType: row.content_type || 'article',
+        readTime: row.read_time,
+        source: 'rss',
+      }));
+      return res.json(articles);
+    }
+
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'Search unavailable — no database configured' });
+    }
+
+    console.log(`🔍 Search request: "${q}"${category ? ` [${category}]` : ''}`);
+
+    const categoryFilter = category ? 'AND category = $2' : '';
+    const queryLower = `%${q.toLowerCase()}%`;
+
+    // 1. Try Semantic Search first using Gemini Embeddings
+    let articles = [];
+    let usedSemantic = false;
+
+    try {
+      const queryVector = await generateEmbedding(q);
+      if (queryVector && queryVector.length === 768) {
+        const vectorStr = `[${queryVector.join(',')}]`;
+        const vectorParams = category ? [vectorStr, category] : [vectorStr];
+
+        console.log('🤖 Running pgvector semantic search...');
+        const semanticResult = await pool.query(
+          `SELECT
+             'rss-' || id          AS id,
+             title,
+             COALESCE(ai_summary, original_excerpt) AS excerpt,
+             category,
+             image,
+             source_name           AS author,
+             external_link,
+             published_at          AS date,
+             content_type,
+             '5 min read'          AS read_time,
+             (1 - (embedding <=> $1::vector)) AS similarity
+           FROM rss_articles
+           WHERE embedding IS NOT NULL
+             AND published_at > NOW() - INTERVAL '2 days'
+             ${categoryFilter}
+           ORDER BY similarity DESC
+           LIMIT 30`,
+          vectorParams
+        );
+
+        // Check if we got high-confidence results (similarity >= 0.60)
+        if (semanticResult.rows.length > 0 && parseFloat(semanticResult.rows[0].similarity) >= 0.60) {
+          articles = semanticResult.rows;
+          usedSemantic = true;
+          console.log(`✅ Semantic search succeeded with ${articles.length} matches. Best similarity: ${articles[0].similarity}`);
+        } else {
+          console.log('⚠️ Low-confidence semantic results. Falling back to keyword search.');
+        }
+      }
+    } catch (vectorErr) {
+      console.warn('Semantic search failed/skipped:', vectorErr.message);
+    }
+
+    // 2. Fallback to Full-Text Keyword Search & Multilingual Translation Search
+    if (!usedSemantic) {
+      console.log('🔍 Running standard keyword + translation search...');
+
+      const keywordParams = category ? [q, category, queryLower] : [q, queryLower];
+      const categoryFilterFTS = category ? 'AND category = $2' : '';
+      const localLangQuery = category
+        ? `OR (
+             LOWER(title_translations->'pidgin'->>'title') LIKE $3 OR
+             LOWER(title_translations->'yoruba'->>'title') LIKE $3 OR
+             LOWER(title_translations->'hausa'->>'title') LIKE $3 OR
+             LOWER(title_translations->'igbo'->>'title') LIKE $3 OR
+             LOWER(summary_translations->'pidgin'->>'summary') LIKE $3 OR
+             LOWER(summary_translations->'yoruba'->>'summary') LIKE $3 OR
+             LOWER(summary_translations->'hausa'->>'summary') LIKE $3 OR
+             LOWER(summary_translations->'igbo'->>'summary') LIKE $3
+           )`
+        : `OR (
+             LOWER(title_translations->'pidgin'->>'title') LIKE $2 OR
+             LOWER(title_translations->'yoruba'->>'title') LIKE $2 OR
+             LOWER(title_translations->'hausa'->>'title') LIKE $2 OR
+             LOWER(title_translations->'igbo'->>'title') LIKE $2 OR
+             LOWER(summary_translations->'pidgin'->>'summary') LIKE $2 OR
+             LOWER(summary_translations->'yoruba'->>'summary') LIKE $2 OR
+             LOWER(summary_translations->'hausa'->>'summary') LIKE $2 OR
+             LOWER(summary_translations->'igbo'->>'summary') LIKE $2
+           )`;
+
+      const ftsQuery = `
+        SELECT
+          'rss-' || id          AS id,
+          title,
+          COALESCE(ai_summary, original_excerpt) AS excerpt,
+          category,
+          image,
+          source_name           AS author,
+          external_link,
+          published_at          AS date,
+          content_type,
+          '5 min read'          AS read_time,
+          ts_rank(search_vector, websearch_to_tsquery('english', $1), 32) AS relevance
+        FROM rss_articles
+        WHERE (
+          search_vector @@ websearch_to_tsquery('english', $1)
+          ${localLangQuery}
+        )
+        ${categoryFilterFTS}
+        AND published_at > NOW() - INTERVAL '2 days'
+        ORDER BY (
+          COALESCE(ts_rank(search_vector, websearch_to_tsquery('english', $1), 32), 0) * 0.6
+          + EXP(-0.5 * EXTRACT(EPOCH FROM (NOW() - published_at)) / 172800.0) * 0.4
+        ) DESC
+        LIMIT 30
+      `;
+
+      const ftsResult = await pool.query(ftsQuery, keywordParams);
+      articles = ftsResult.rows;
+      console.log(`✅ FTS & Translations completed: ${articles.length} matches.`);
+    }
+
+    // Map rows to standard client objects
+    const responseArticles = articles.map(row => ({
+      id: row.id,
+      title: row.title,
+      excerpt: row.excerpt,
+      category: row.category || 'news',
+      image: row.image,
+      author: row.author,
+      externalLink: row.external_link,
+      date: row.date,
+      contentType: row.content_type || 'article',
+      readTime: row.read_time,
+      source: 'rss',
+      similarity: row.similarity || null
+    }));
+
+    res.json(responseArticles);
+  } catch (error) {
+    console.error('Search error:', error.message);
+    res.status(500).json({ error: 'Search failed', message: error.message });
+  }
+});
+
+// --- Sitemap Index (Google-recommended multi-sitemap structure) ---
+app.get('/sitemap.xml', async (req, res) => {
+  const SITE = 'https://realssanews.com.ng';
+  const now = new Date().toISOString();
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${SITE}/pages-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${SITE}/locations-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${SITE}/cinema-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${SITE}/news-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+</sitemapindex>`;
+  res.header('Content-Type', 'application/xml');
+  res.send(xml);
+});
+
+// --- Cinema pagination sitemap ------------------------------------------
+app.get('/cinema-sitemap.xml', async (req, res) => {
+  const SITE = 'https://www.realssanews.com.ng';
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  xml += `  <url><loc>${SITE}/videos</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n`;
+  for (let page = 2; page <= 20; page += 1) {
+    xml += `  <url><loc>${SITE}/videos?page=${page}</loc><changefreq>daily</changefreq><priority>0.6</priority></url>\n`;
+  }
+  xml += '</urlset>';
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+  res.send(xml);
+});
+
+// --- African location sitemap --------------------------------------------
+app.get('/locations-sitemap.xml', async (req, res) => {
+  try {
+    const SITE = 'https://www.realssanews.com.ng';
+    const { AFRICAN_COUNTRIES } = require('./data/africaCountries');
+    const urls = [
+      { loc: `${SITE}/africa`, changefreq: 'daily', priority: 0.8 }
+    ];
+
+    // Only publish country URLs that currently have real coverage. Empty hubs
+    // stay accessible but use noindex until stories exist, preventing thin URLs
+    // from consuming crawl budget.
+    if (process.env.DATABASE_URL) {
+      const names = AFRICAN_COUNTRIES.map(country => country.name);
+      const coverage = await pool.query(
+        `SELECT name,
+                EXISTS (
+                  SELECT 1 FROM rss_articles a
+                  WHERE a.title ILIKE '%' || name || '%'
+                     OR a.original_excerpt ILIKE '%' || name || '%'
+                     OR COALESCE(a.ai_summary, '') ILIKE '%' || name || '%'
+                ) AS has_coverage
+         FROM unnest($1::text[]) AS name`,
+        [names]
+      );
+      for (const row of coverage.rows) {
+        if (row.has_coverage) {
+          const country = AFRICAN_COUNTRIES.find(item => item.name === row.name);
+          if (country) urls.push({
+            loc: `${SITE}/country/${country.slug}`,
+            changefreq: 'daily',
+            priority: 0.7
+          });
+        }
+      }
+    }
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    for (const item of urls) {
+      xml += '  <url>\n';
+      xml += `    <loc>${item.loc}</loc>\n`;
+      xml += `    <changefreq>${item.changefreq}</changefreq>\n`;
+      xml += `    <priority>${item.priority.toFixed(1)}</priority>\n`;
+      xml += '  </url>\n';
+    }
+    xml += '</urlset>';
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+    res.send(xml);
+  } catch (err) {
+    console.error('Location sitemap generation failed:', err.message);
+    res.status(500).send('Location sitemap generation failed');
+  }
+});
+
+// --- Pages Sitemap (static routes + publishers + leagues) ---
+app.get('/pages-sitemap.xml', async (req, res) => {
+  try {
+    const SITE = 'https://realssanews.com.ng';
+    let urls = [
+      { loc: `${SITE}/`, changefreq: 'daily', priority: 1.0 },
+      { loc: `${SITE}/reels`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${SITE}/sports`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${SITE}/videos`, changefreq: 'daily', priority: 0.8 },
+      { loc: `${SITE}/saved`, changefreq: 'weekly', priority: 0.5 },
+    ];
+
+    if (process.env.DATABASE_URL) {
+      try {
+        const pubRes = await pool.query('SELECT slug FROM publishers');
+        pubRes.rows.forEach(row => {
+          urls.push({ loc: `${SITE}/publisher/${row.slug}`, changefreq: 'daily', priority: 0.7 });
+        });
+      } catch (e) { /* table may not exist yet */ }
+
+      try {
+        const compRes = await pool.query('SELECT slug FROM competitions WHERE is_active = true');
+        compRes.rows.forEach(row => {
+          urls.push({ loc: `${SITE}/sports/league/${row.slug}`, changefreq: 'daily', priority: 0.7 });
+        });
+      } catch (e) { /* table may not exist yet */ }
+    }
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    urls.forEach(item => {
+      xml += '  <url>\n';
+      xml += `    <loc>${item.loc}</loc>\n`;
+      xml += `    <changefreq>${item.changefreq}</changefreq>\n`;
+      xml += `    <priority>${item.priority.toFixed(1)}</priority>\n`;
+      xml += '  </url>\n';
+    });
+    xml += '</urlset>';
+
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    console.error('Pages sitemap generation failed:', err.message);
+    res.status(500).send('Error generating sitemap');
+  }
+});
+
+// --- User Reading Streak sync endpoint ---
+async function handleStreak(req, res) {
+  const deviceId = req.body?.deviceId || req.query?.deviceId;
+  if (!deviceId) return res.json({ currentStreak: 0, longestStreak: 0 });
+  try {
+    await usersPool.query(`
+      CREATE TABLE IF NOT EXISTS user_streaks (
+        device_id TEXT PRIMARY KEY,
+        current_streak INT DEFAULT 1,
+        longest_streak INT DEFAULT 1,
+        last_read_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => { });
+    const result = await usersPool.query(
+      'SELECT current_streak, longest_streak, last_read_at FROM user_streaks WHERE device_id = $1',
+      [deviceId]
+    );
+    const now = new Date();
+    if (result.rows.length === 0) {
+      const insertRes = await usersPool.query(
+        'INSERT INTO user_streaks (device_id, current_streak, longest_streak, last_read_at) VALUES ($1, 1, 1, NOW()) RETURNING *',
+        [deviceId]
+      );
+      const row = insertRes.rows[0];
+      return res.json({ currentStreak: row.current_streak, longestStreak: row.longest_streak, lastReadAt: row.last_read_at });
+    }
+    const streak = result.rows[0];
+    const todayUTC = now.toISOString().slice(0, 10);
+    const lastDayUTC = new Date(streak.last_read_at).toISOString().slice(0, 10);
+    const dayDiff = Math.round((new Date(todayUTC) - new Date(lastDayUTC)) / 86400000);
+    let nextStreak = streak.current_streak;
+    let nextLongest = streak.longest_streak;
+    if (dayDiff === 0) {
+      await usersPool.query('UPDATE user_streaks SET last_read_at = NOW() WHERE device_id = $1', [deviceId]);
+    } else if (dayDiff === 1) {
+      nextStreak += 1;
+      if (nextStreak > nextLongest) nextLongest = nextStreak;
+      await usersPool.query('UPDATE user_streaks SET current_streak=$1, longest_streak=$2, last_read_at=NOW() WHERE device_id=$3', [nextStreak, nextLongest, deviceId]);
+    } else {
+      nextStreak = 1;
+      await usersPool.query('UPDATE user_streaks SET current_streak=1, last_read_at=NOW() WHERE device_id=$1', [deviceId]);
+    }
+    res.json({ currentStreak: nextStreak, longestStreak: nextLongest, lastReadAt: now.toISOString() });
+  } catch (err) {
+    console.error('Streak sync error:', err.message);
+    res.json({ currentStreak: 1, longestStreak: 1, lastReadAt: new Date().toISOString() });
+  }
+}
+app.get('/api/users/streak', (req, res) => handleStreak(req, res));
+app.post('/api/users/streak', (req, res) => handleStreak(req, res));
+
+// --- Dwell Time Signal Capture ---
+// POST /api/users/dwell — updates category affinity based on time spent reading
+app.post('/api/users/dwell', async (req, res) => {
+  const { deviceId, category, seconds, articleId } = req.body;
+  if (!deviceId || !category || !seconds) return res.json({ ok: false });
+
+  try {
+    // Score contribution:
+    // < 10s  = -1  (skip signal, small negative so one bad headline doesn't tank category)
+    // 10-30s = +1  (mild interest)
+    // 30-60s = +3  (engaged)
+    // 60-120s= +5  (strong interest)
+    // 120s+  = +8  (deep read)
+    let contribution = 0;
+    if (seconds < 10) contribution = -1;
+    else if (seconds < 30) contribution = 1;
+    else if (seconds < 60) contribution = 3;
+    else if (seconds < 120) contribution = 5;
+    else contribution = 8;
+
+    await usersPool.query(
+      `INSERT INTO user_category_affinities (device_id, category, score, last_interacted_at)
+       VALUES ($1, $2, GREATEST(0, $3), NOW())
+       ON CONFLICT (device_id, category)
+       DO UPDATE SET
+         score = LEAST(100, GREATEST(0, user_category_affinities.score + $3)),
+         last_interacted_at = NOW()`,
+      [deviceId, category, contribution]
+    );
+
+    res.json({ ok: true, contribution });
+  } catch (err) {
+    console.error('Dwell time error:', err.message);
+    res.json({ ok: false });
+  }
+});
+
+// --- Buffer Social Media test endpoint ---
+app.get('/api/buffer/test', async (req, res) => {
+  try {
+    const { testBufferConnection } = require('./services/buffer');
+    const result = await testBufferConnection();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, message: `Server error: ${err.message}` });
+  }
+});
+
+// --- Publisher Hub metadata & feeds ---
+app.get('/api/publishers/:slug', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, slug, logo_url, bio, wikipedia_url, follower_metrics FROM publishers WHERE slug = $1',
+      [req.params.slug]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Publisher not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Fetch publisher details error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/publishers/:slug/posts', async (req, res) => {
+  try {
+    const pubRes = await pool.query('SELECT id FROM publishers WHERE slug = $1', [req.params.slug]);
+    if (pubRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Publisher not found' });
+    }
+    const publisherId = pubRes.rows[0].id;
+    const postsRes = await pool.query(
+      'SELECT id, platform, post_text, media_url, post_url, published_at FROM publisher_social_posts WHERE publisher_id = $1 ORDER BY published_at DESC LIMIT 10',
+      [publisherId]
+    );
+    res.json(postsRes.rows);
+  } catch (err) {
+    console.error('Fetch publisher social posts error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/publishers/:slug/articles', async (req, res) => {
+  try {
+    const pubRes = await pool.query('SELECT name FROM publishers WHERE slug = $1', [req.params.slug]);
+    if (pubRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Publisher not found' });
+    }
+    const publisherName = pubRes.rows[0].name;
+    const articlesRes = await pool.query(
+      `SELECT id, story_hash, title, summary, link, image_url, source, published_at, category, local_verified_count, rumor_flag_count
+       FROM rss_articles 
+       WHERE source ILIKE $1 
+       ORDER BY published_at DESC 
+       LIMIT 30`,
+      [`%${publisherName}%`]
+    );
+    res.json(articlesRes.rows);
+  } catch (err) {
+    console.error('Fetch publisher articles error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Community Hype Meter & Article Verification ---
+app.post('/api/sports/matches/:matchId/hype', async (req, res) => {
+  const { team } = req.body;
+  if (team !== 'home' && team !== 'away') {
+    return res.status(400).json({ error: 'Invalid team parameter' });
+  }
+
+  try {
+    const column = team === 'home' ? 'home_hype_count' : 'away_hype_count';
+    const result = await pool.query(
+      `UPDATE live_matches 
+       SET ${column} = ${column} + 1 
+       WHERE match_id = $1 
+       RETURNING home_hype_count, away_hype_count`,
+      [req.params.matchId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Hype meter error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/articles/:storyHash/verify', async (req, res) => {
+  const { type } = req.body;
+  if (type !== 'verify' && type !== 'flag') {
+    return res.status(400).json({ error: 'Invalid type parameter' });
+  }
+
+  try {
+    const column = type === 'verify' ? 'local_verified_count' : 'rumor_flag_count';
+    const result = await pool.query(
+      `UPDATE rss_articles 
+       SET ${column} = ${column} + 1 
+       WHERE story_hash = $1 
+       RETURNING local_verified_count, rumor_flag_count`,
+      [req.params.storyHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Article verification error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- PostgreSQL Threaded Comments endpoints (In-Memory Tree Mapping) ---
+app.get('/api/comments', async (req, res) => {
+  const { articleId } = req.query;
+  if (!articleId) {
+    return res.status(400).json({ error: 'Missing articleId query parameter' });
+  }
+
+  try {
+    const result = await usersPool.query(
+      'SELECT * FROM comments WHERE article_id = $1 ORDER BY created_at ASC',
+      [String(articleId)]
+    );
+
+    const allComments = result.rows.map(comment => ({
+      id: String(comment.id),
+      articleId: comment.article_id,
+      parentId: comment.parent_id ? String(comment.parent_id) : null,
+      author: comment.author_name,
+      content: comment.content,
+      date: new Date(comment.created_at).toISOString(),
+      likes: comment.likes || 0,
+      replies: []
+    }));
+
+    const commentMap = {};
+    const rootComments = [];
+
+    allComments.forEach(comment => {
+      commentMap[comment.id] = comment;
+    });
+
+    allComments.forEach(comment => {
+      if (comment.parentId) {
+        if (commentMap[comment.parentId]) {
+          commentMap[comment.parentId].replies.push(comment);
+        }
+      } else {
+        rootComments.push(comment);
+      }
+    });
+
+    res.json(rootComments.reverse()); // Show newest parent threads first
+  } catch (err) {
+    console.error('Fetch comments failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/comments', async (req, res) => {
+  const { articleId, author, content, parentId } = req.body;
+  if (!articleId || !author || !content) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Real-time AI Comment Moderation Guard
+  try {
+    const modResult = await moderateUserComment(author, content);
+    if (!modResult.approved) {
+      console.log(`🛡️ [AI Moderation] Comment blocked (${modResult.reason}): "${content.slice(0, 40)}..."`);
+      return res.status(400).json({ error: `Comment rejected: ${modResult.reason}` });
+    }
+  } catch (modErr) {
+    console.warn('[AI Moderation] Error during moderation check:', modErr.message);
+  }
+
+  try {
+    const pId = parentId ? parseInt(parentId, 10) : null;
+    const result = await usersPool.query(
+      `INSERT INTO comments (article_id, author_name, content, parent_id) 
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [String(articleId), escapeHtml(author).substring(0, 100), escapeHtml(content).substring(0, 1000), pId]
+    );
+
+    const created = result.rows[0];
+    res.status(201).json({
+      id: String(created.id),
+      articleId: created.article_id,
+      parentId: created.parent_id ? String(created.parent_id) : null,
+      author: created.author_name,
+      content: created.content,
+      date: new Date(created.created_at).toISOString(),
+      likes: created.likes || 0,
+      replies: []
+    });
+  } catch (err) {
+    console.error('Submit comment failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/comments/:id/like', async (req, res) => {
+  try {
+    const result = await usersPool.query(
+      'UPDATE comments SET likes = likes + 1 WHERE id = $1 RETURNING *',
+      [parseInt(req.params.id, 10)]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    const updated = result.rows[0];
+    res.json({
+      id: String(updated.id),
+      articleId: updated.article_id,
+      parentId: updated.parent_id ? String(updated.parent_id) : null,
+      author: updated.author_name,
+      content: updated.content,
+      date: new Date(updated.created_at).toISOString(),
+      likes: updated.likes
+    });
+  } catch (err) {
+    console.error('Like comment failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── CRON JOB HANDLERS ──────────────────────────────────────────────────────
+// Note: vercel.json routes /api/(.*) → api/index.js, so cron endpoints must
+// be handled here. All of them authenticate through backend/services/cronAuth.
+const { ingestAllFeeds } = require('./services/ingestion');
+
+// Diagnostic endpoint. Requires the cron secret; it no longer echoes whether a
+// caller-supplied secret matched a hard-coded value.
+app.get('/api/test-cron', (req, res) => {
+  const authorized = requireCron(req, res, { route: '/api/test-cron', task: 'diagnostics' });
+  if (!authorized) return;
+
+  res.json({
+    success: true,
+    message: 'Cron diagnostic endpoint is active',
+    diagnostics: {
+      secretMatches: true,
+      secretSource: authorized.secretSource,
+      clientKind: authorized.clientKind,
+      environment: {
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
+        hasGeminiApiKey: !!process.env.GEMINI_API_KEY,
+        hasCronSecret: !!process.env.CRON_SECRET,
+        hasRotationSecret: !!process.env.CRON_SECRET_PREVIOUS,
+        ipAllowlistConfigured: !!process.env.CRON_ALLOWED_IPS
+      }
+    }
+  });
+});
+
+// Origin evidence for cron traffic: which clients called, from where, with what
+// user agent, and whether they were allowed. Combine with Cloudflare Security
+// Events / Vercel logs for durable data.
+app.get('/api/cron/audit', (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/audit', task: 'audit' })) return;
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 40));
+  res.json({ success: true, ...getCronAuditSnapshot({ limit }) });
+});
+
+app.get('/api/migrate', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/migrate', task: 'migration' })) return;
+  try {
+    await pool.query('ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS story_hash VARCHAR(64)');
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'rss_articles_story_hash_key'
+        ) THEN
+          ALTER TABLE rss_articles ADD CONSTRAINT rss_articles_story_hash_key UNIQUE (story_hash);
+        END IF;
+      END
+      $$;
+    `);
+    res.json({ success: true, message: 'Migration applied successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cron/ingest (and GET for hosts that do not hit the handler above)
+app.all(['/api/cron/ingest', '/api/cron/ingest/'], async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/ingest', task: 'rss-ingest' })) return;
+
+  const category = req.query.category || null;
+
+  res.status(200).json({
+    success: true,
+    message: 'Ingestion started',
+    category: category || 'all',
+    timestamp: new Date().toISOString()
+  });
+
+  setImmediate(async () => {
+    try {
+      const parser = new Parser({
+        customFields: {
+          item: [
+            ['media:content', 'media:content'],
+            ['media:thumbnail', 'media:thumbnail'],
+            ['enclosure', 'enclosure'],
+            ['content:encoded', 'content:encoded'],
+            ['description', 'description']
+          ]
+        }
+      });
+      const result = await ingestAllFeeds(pool, parser, category || null);
+      console.log(`✅ Ingestion complete: ${result.newCount} new, ${result.summaryCount} summaries`);
+    } catch (error) {
+      console.error('❌ Cron ingestion error:', error.message);
+    }
+  });
+});
+
+// GET /api/cron/streams?secret=xxx
+// Called by external cron-job.org for video/stream processing
+app.get('/api/cron/streams', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/streams', task: 'stream-crawl' })) return;
+  try {
+    console.log('🎥 Cron: Processing video streams...');
+    if (process.env.DATABASE_URL) {
+      setImmediate(async () => {
+        try {
+          await runCrawler(pool);
+        } catch (err) {
+          console.error('[Cron] Background stream discovery crawler failed:', err.message);
+        }
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: 'Streams processing started',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Cron streams error:', error);
+    res.status(500).json({ error: 'Streams processing failed', message: error.message });
+  }
+});
+
+// Helper to broadcast ad to Buffer after payment
+async function broadcastAdToBuffer(ad) {
+  try {
+    const { postToBuffer, isBufferConfigured } = require('./services/buffer');
+    if (isBufferConfigured()) {
+      const brandPrefix = ad.company_name ? `${ad.company_name.toUpperCase()}: ` : '';
+      const hooks = {
+        twitter: `🚨 SPONSORED: ${brandPrefix}${ad.headline}\n\n${ad.description.slice(0, 130)}`,
+        instagram: `📢 FEATURED ADVERTISER: ${ad.company_name || ad.headline}\n\n${ad.description}\n\nLink in bio 🔗\n\n#RealSSANews #Sponsored`,
+        facebook: `📢 SPONSORED: ${ad.company_name || ''} - ${ad.headline}\n\n${ad.description}`
+      };
+      await postToBuffer(hooks, ad.target_link, ad.image_url, false);
+      console.log(`[Ad Engine] Buffer broadcast successfully dispatched for ad ${ad.id}`);
+    }
+  } catch (bufErr) {
+    console.warn('[Ad Engine] Buffer broadcast notice:', bufErr.message);
+  }
+}
+
+// --- Self-Serve Naira Ad Exchange Endpoints ---
+app.post('/api/ads/create', async (req, res) => {
+  const { companyName, headline, description, category, imageUrl, targetLink, advertiserEmail, budgetNaira } = req.body;
+  if (!headline || !description || !targetLink || !advertiserEmail) {
+    return res.status(400).json({ error: 'Missing required campaign fields' });
+  }
+
+  try {
+    // 1. Ensure table exists with the default status as 'pending_payment'
+    await usersPool.query(`
+      CREATE TABLE IF NOT EXISTS native_ads (
+        id SERIAL PRIMARY KEY,
+        company_name TEXT,
+        headline TEXT NOT NULL,
+        description TEXT NOT NULL,
+        category TEXT DEFAULT 'business',
+        image_url TEXT,
+        target_link TEXT NOT NULL,
+        advertiser_email TEXT NOT NULL,
+        budget_naira INT DEFAULT 5000,
+        status TEXT DEFAULT 'pending_payment',
+        clicks INT DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => { });
+
+    // 2. Ensure new tracking columns exist (self-healing)
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS company_name TEXT`).catch(() => { });
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending'`).catch(() => { });
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS payment_reference TEXT UNIQUE`).catch(() => { });
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS payment_amount INT`).catch(() => { });
+    await usersPool.query(`ALTER TABLE native_ads ADD COLUMN IF NOT EXISTS payment_date TIMESTAMPTZ`).catch(() => { });
+
+    // 3. Insert the new ad with 'pending_payment' status
+    const insertRes = await usersPool.query(`
+      INSERT INTO native_ads (company_name, headline, description, category, image_url, target_link, advertiser_email, budget_naira, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending_payment')
+      RETURNING *
+    `, [companyName || 'Featured Brand', headline, description, category || 'business', imageUrl || null, targetLink, advertiserEmail, budgetNaira || 5000]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Campaign reserved successfully. Please complete payment to activate.',
+      ad: insertRes.rows[0]
+    });
+  } catch (err) {
+    console.error('Ad creation error:', err.message);
+    return res.status(500).json({ error: 'Failed to create ad campaign', message: err.message });
+  }
+});
+
+// Paystack payment initialize endpoint
+app.post('/api/payments/initialize', async (req, res) => {
+  const { adId } = req.body;
+  if (!adId) {
+    return res.status(400).json({ error: 'Ad ID is required' });
+  }
+
+  try {
+    const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE id = $1', [adId]);
+    if (adQuery.rows.length === 0) {
+      return res.status(404).json({ error: 'Ad campaign not found' });
+    }
+    const ad = adQuery.rows[0];
+
+    const amountInKobo = ad.budget_naira * 100;
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackSecret) {
+      return res.status(500).json({ error: 'Server configuration error: missing Paystack API key' });
+    }
+
+    const axios = require('axios');
+    const origin = req.headers.referer || req.headers.origin || 'https://realssanews.com.ng';
+    const callbackUrl = origin.includes('?') ? origin.split('?')[0] : origin;
+
+    const response = await axios.post(
+      'https://api.paystack.co/transaction/initialize',
+      {
+        email: ad.advertiser_email,
+        amount: amountInKobo,
+        callback_url: callbackUrl,
+        metadata: {
+          adId: ad.id
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${paystackSecret}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const { authorization_url, reference } = response.data.data;
+
+    // Save reference in the database
+    await usersPool.query(
+      'UPDATE native_ads SET payment_reference = $1 WHERE id = $2',
+      [reference, adId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      authorizationUrl: authorization_url,
+      reference: reference
+    });
+  } catch (err) {
+    console.error('Paystack initialization error:', err.response?.data || err.message);
+    return res.status(500).json({
+      error: 'Failed to initialize payment',
+      message: err.response?.data?.message || err.message
+    });
+  }
+});
+
+// Paystack payment verification endpoint
+app.get('/api/payments/verify', async (req, res) => {
+  const { reference } = req.query;
+  if (!reference) {
+    return res.status(400).json({ error: 'Transaction reference is required' });
+  }
+
+  try {
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackSecret) {
+      return res.status(500).json({ error: 'Server configuration error: missing Paystack API key' });
+    }
+
+    const axios = require('axios');
+    const response = await axios.get(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${paystackSecret}`
+        }
+      }
+    );
+
+    const { status, amount, metadata } = response.data.data;
+
+    if (status === 'success') {
+      const adId = metadata?.adId;
+      let ad;
+      if (adId) {
+        const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE id = $1', [adId]);
+        ad = adQuery.rows[0];
+      } else {
+        const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE payment_reference = $1', [reference]);
+        ad = adQuery.rows[0];
+      }
+
+      if (!ad) {
+        return res.status(404).json({ error: 'Ad campaign not found for this transaction' });
+      }
+
+      if (ad.status !== 'active') {
+        const amountInNaira = amount / 100;
+        const updateRes = await usersPool.query(
+          `UPDATE native_ads 
+           SET status = 'active', payment_status = 'paid', payment_amount = $1, payment_date = NOW() 
+           WHERE id = $2 RETURNING *`,
+          [amountInNaira, ad.id]
+        );
+        ad = updateRes.rows[0];
+
+        // Trigger social media broadcast via Buffer
+        await broadcastAdToBuffer(ad);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Payment verified and campaign activated',
+        ad: ad
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: `Payment status is ${status}`,
+        reference: reference
+      });
+    }
+  } catch (err) {
+    console.error('Paystack verification error:', err.response?.data || err.message);
+    return res.status(500).json({
+      error: 'Failed to verify payment',
+      message: err.response?.data?.message || err.message
+    });
+  }
+});
+
+// Paystack webhook endpoint
+app.post('/api/payments/webhook', async (req, res) => {
+  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackSecret) {
+    return res.status(500).send('Server configuration error');
+  }
+
+  const crypto = require('crypto');
+  const signature = req.headers['x-paystack-signature'];
+  const hash = crypto.createHmac('sha512', paystackSecret)
+                      .update(JSON.stringify(req.body))
+                      .digest('hex');
+
+  if (hash !== signature) {
+    console.warn('[Payments Webhook] Invalid webhook signature detected');
+    return res.status(401).send('Invalid signature');
+  }
+
+  const event = req.body.event;
+  const data = req.body.data;
+
+  console.log(`[Payments Webhook] Received Paystack event: ${event}`);
+
+  if (event === 'charge.success') {
+    const reference = data.reference;
+    const amount = data.amount;
+    const adId = data.metadata?.adId;
+
+    try {
+      let ad;
+      if (adId) {
+        const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE id = $1', [adId]);
+        ad = adQuery.rows[0];
+      } else {
+        const adQuery = await usersPool.query('SELECT * FROM native_ads WHERE payment_reference = $1', [reference]);
+        ad = adQuery.rows[0];
+      }
+
+      if (ad && ad.status !== 'active') {
+        const amountInNaira = amount / 100;
+        const updateRes = await usersPool.query(
+          `UPDATE native_ads 
+           SET status = 'active', payment_status = 'paid', payment_amount = $1, payment_date = NOW() 
+           WHERE id = $2 RETURNING *`,
+          [amountInNaira, ad.id]
+        );
+        const updatedAd = updateRes.rows[0];
+
+        // Trigger social media broadcast via Buffer
+        await broadcastAdToBuffer(updatedAd);
+        console.log(`[Payments Webhook] Webhook successfully activated campaign ${updatedAd.id}`);
+      }
+    } catch (err) {
+      console.error('[Payments Webhook] Error processing success event:', err.message);
+      return res.status(500).send('Database error');
+    }
+  }
+
+  return res.status(200).send('OK');
+});
+
+app.get('/api/ads/active', async (req, res) => {
+  try {
+    const result = await usersPool.query(`
+      SELECT id, headline AS title, description AS excerpt, category, image_url AS image, target_link AS externalLink, 'SPONSORED' AS is_sponsored
+      FROM native_ads
+      WHERE status = 'active'
+      ORDER BY created_at DESC
+      LIMIT 10
+    `).catch(() => ({ rows: [] }));
+
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    return res.status(200).json([]);
+  }
+});
+
+// --- Intelligent @RealSSA_Bot Comment Assistant Endpoint ---
+app.post('/api/bot/comment-reply', async (req, res) => {
+  const { commentText, articleTitle, articleContext } = req.body;
+  if (!commentText || !articleTitle) {
+    return res.status(400).json({ error: 'Comment text and article title required' });
+  }
+
+  try {
+    const { handleCommentBotMention } = require('./services/aiCommentBotService');
+    const result = await handleCommentBotMention(commentText, articleTitle, articleContext || '');
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('@RealSSA_Bot comment endpoint error:', err.message);
+    return res.status(200).json({
+      success: true,
+      author: '@RealSSA_Bot (Verified AI)',
+      reply: 'Thanks for tagging @RealSSA_Bot! The RealSSA News Desk is actively tracking updates on this story. Stay tuned! 📰'
+    });
+  }
+});
+
+// --- RealSSA Custom Rendering Engine — parse any URL into structured JSON nodes ---
+const { parsePage } = require('./services/pageParser');
+const renderCache = new Map(); // 30-min in-memory LRU cache
+
+app.get('/api/render-page', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).json({ success: false, error: 'URL required' });
+  }
+
+  let safeUrl = targetUrl.trim();
+  if (!/^https?:\/\//i.test(safeUrl)) safeUrl = `https://${safeUrl}`;
+
+  // SSRF protection
+  const safe = await isSafeUrl(safeUrl).catch(() => false);
+  if (!safe) {
+    return res.status(403).json({ success: false, requiresProxy: true, meta: {}, nodes: [] });
+  }
+
+  // Cache hit (30 min TTL)
+  const cacheKey = safeUrl.toLowerCase();
+  const cached = renderCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < 30 * 60 * 1000) {
+    return res.json({ ...cached.data, cached: true });
+  }
+
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 12000);
+
+    const upstream = await fetch(safeUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    clearTimeout(tid);
+
+    if (!upstream.ok) {
+      return res.json({ success: true, requiresProxy: true, reason: 'upstream_error', meta: {}, nodes: [] });
+    }
+
+    const contentType = upstream.headers.get('content-type') || '';
+    if (!contentType.includes('text/html')) {
+      return res.json({ success: true, requiresProxy: true, reason: 'non_html', meta: {}, nodes: [] });
+    }
+
+    const html = await upstream.text();
+    const result = await parsePage(html, safeUrl);
+
+    // Cache the result
+    renderCache.set(cacheKey, { data: result, ts: Date.now() });
+
+    // LRU eviction — keep max 500 entries
+    if (renderCache.size > 500) {
+      const oldest = [...renderCache.entries()]
+        .sort((a, b) => a[1].ts - b[1].ts)
+        .slice(0, 100)
+        .map(e => e[0]);
+      oldest.forEach(k => renderCache.delete(k));
+    }
+
+    return res.json(result);
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      return res.json({ success: true, requiresProxy: true, reason: 'timeout', meta: {}, nodes: [] });
+    }
+    console.error('[render-page] error:', err.message);
+    return res.json({ success: true, requiresProxy: true, reason: 'error', meta: {}, nodes: [] });
+  }
+});
+
+// --- RealSSA Points (RP) & Ledger Endpoints ---
+app.get('/api/points/balance', async (req, res) => {
+  const userId = req.query.userId || req.query.deviceId || 'guest';
+  try {
+    const data = await getUserBalance(userId);
+    return res.json({ success: true, ...data });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/points/history', async (req, res) => {
+  const userId = req.query.userId || req.query.deviceId || 'guest';
+  const limit = parseInt(req.query.limit || '20', 10);
+  const offset = parseInt(req.query.offset || '0', 10);
+  try {
+    const history = await getUserHistory(userId, limit, offset);
+    return res.json({ success: true, history });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/share/dwell', async (req, res) => {
+  const { shareId, sharerUserId, dwellSeconds } = req.body;
+  if (!shareId || !sharerUserId || !dwellSeconds) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+  try {
+    const result = await recordShareDwellTime(shareId, sharerUserId, parseInt(dwellSeconds, 10));
+    return res.json({ success: true, awarded: !!result, result });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Autonomous Human Brain Learning Cron Endpoint ---
+app.get('/api/cron/human-brain', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/human-brain', task: 'learning-cycle' })) return;
+  try {
+    await runLearningCycle();
+    return res.json({ success: true, message: 'Human brain learning cycle completed' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// --- RealSSA AI Chat Endpoint ---
+// --- RealSSA AI Chat Endpoint ---
+app.post('/api/chat', async (req, res) => {
+  const { message, history = [] } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
+
+  const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
+
+  // ── 🔴 RATE LIMIT: 10 messages per IP per 60 seconds (Redis-backed) ──
+  try {
+    const rateLimitKey = `chat:ratelimit:${clientIp}`;
+    const currentCount = await redisService.getCached(rateLimitKey);
+    const count = parseInt(currentCount || '0', 10);
+    if (count >= 10) {
+      console.warn(`[Chat] Rate limit hit for IP: ${clientIp}`);
+      return res.status(429).json({
+        error: 'rate_limited',
+        reply: "Whoa, slow down bestie 😅 You\'re sending a lot of messages! Give it a minute and come back — I\'ll be right here 🔥"
+      });
+    }
+    // Increment and set 60s TTL only on first message in window
+    if (count === 0) {
+      await redisService.setCached(rateLimitKey, '1', 60);
+    } else {
+      await redisService.setCached(rateLimitKey, String(count + 1), 60);
+    }
+  } catch (_) { /* Redis down — allow request through */ }
+
+  // ── ⚡ DEDUPE: Return cached reply for identical question within 2 min ──
+  const msgKey = message.trim().toLowerCase().replace(/\s+/g, ' ');
+  const dedupeCacheKey = `chat:reply:${Buffer.from(msgKey).toString('base64').slice(0, 48)}`;
+  try {
+    const cachedReply = await redisService.getCached(dedupeCacheKey);
+    if (cachedReply) {
+      console.log(`[Chat] ⚡ Dedup cache hit for: "${msgKey.slice(0, 60)}"`);
+      return res.json({ ...cachedReply, cached: true });
+    }
+  } catch (_) { }
+
+  // ── 📰 NEWS CONTEXT: Cache top articles for 5 minutes (saves 2 DB queries per chat) ──
+  let newsContext = '';
+  let sources = [];
+  try {
+    const cleanMsg = message.trim().replace(/[^a-zA-Z0-9\s]/g, '');
+    const keywords = cleanMsg.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
+
+    // Recent headlines — cached 5 minutes (shared across all users)
+    const recentCacheKey = 'chat:news:recent';
+    let recentRows = await redisService.getCached(recentCacheKey);
+    if (!recentRows) {
+      const recentRes = await queryMultiDb(
+        `SELECT title, category, source_name, external_link FROM rss_articles ORDER BY published_at DESC LIMIT 15`,
+        []
+      );
+      recentRows = recentRes.rows || [];
+      redisService.setCached(recentCacheKey, recentRows, 300).catch(() => {}); // 5 min TTL
+    }
+
+    // Keyword search — cached 3 minutes per unique keyword set
+    let searchRows = [];
+    if (keywords.length > 0) {
+      const searchCacheKey = `chat:news:search:${keywords.join('-')}`;
+      searchRows = await redisService.getCached(searchCacheKey);
+      if (!searchRows) {
+        const searchPattern = `%${keywords.join('%')}%`;
+        const searchRes = await queryMultiDb(
+          `SELECT title, category, source_name, external_link, original_excerpt FROM rss_articles
+           WHERE title ILIKE $1 OR original_excerpt ILIKE $1
+           ORDER BY published_at DESC LIMIT 5`,
+          [searchPattern]
+        );
+        searchRows = searchRes.rows || [];
+        redisService.setCached(searchCacheKey, searchRows, 180).catch(() => {}); // 3 min TTL
+      }
+    }
+
+    const allArticles = [...searchRows, ...recentRows];
+    const uniqueMap = new Map();
+    allArticles.forEach(a => {
+      if (a.title && !uniqueMap.has(a.title)) uniqueMap.set(a.title, a);
+    });
+
+    const contextList = Array.from(uniqueMap.values()).slice(0, 15);
+    if (contextList.length > 0) {
+      newsContext = '\n\nRealSSA Live Real-Time News Feed Context:\n' +
+        contextList.map(r => `- [${r.category}] "${r.title}" (Source: ${r.source_name || 'RealSSA'})`).join('\n');
+
+      sources = searchRows.slice(0, 3).map(r => ({
+        title: r.title,
+        url: `${SITE_URL || 'https://www.realssanews.com.ng'}/read?url=${encodeURIComponent(r.external_link)}`
+      }));
+    }
+  } catch (_) { }
+
+  // 2. Fetch learned human speech & phrasing patterns from brainStore
+  let humanMemory = '';
+  try {
+    humanMemory = await getHumanContextForPrompt(12);
+  } catch (_) { }
+
+  const humanInstruction = humanMemory
+    ? `\n\nLearned Human Speech & Phrasing Memory:\n${humanMemory}`
+    : '';
+
+  const SITE_GUIDE = `
+RealSSA Platform Architecture & Site Knowledge:
+- RealSSA (www.realssanews.com.ng) is Sub-Saharan Africa's premier real-time AI-powered news aggregation platform.
+- Feeds & Regional Channels:
+  • Nigeria News (/nigeria): Lagos, Abuja, Politics, Economy, Entertainment, Nollywood.
+  • Ghana News (/ghana): Accra, Kumasi, Business, Politics.
+  • Kenya News (/kenya): Nairobi, East Africa Tech, Economy.
+  • South Africa News (/south-africa): Jo'burg, Cape Town, Markets, Politics.
+  • UK News (/uk) & USA News (/usa): Diaspora & World news.
+  • Tech, Crypto (/crypto), Jobs (/jobs), Sports (/sports).
+- Key Features:
+  • Distraction-Free Reader Mode (/read?url=...): Ad-free, clean AI article breakdown with reading time & view counts.
+  • Live Match Centre (/sports): Premier League, Champions League, NPFL, La Liga live scores, standings & top scorers.
+  • Jobs & Opportunities (/jobs): Verified tech, remote, and corporate jobs across Africa.
+  • Live Crypto & Forex Ticker: Real-time USD/NGN, EUR/NGN, GBP/NGN exchange rates and crypto prices.
+  • RealSSA Chatbot (You!): 24/7 AI companion embedded on mobile & desktop to guide users and discuss anything.
+  • Offline Reading Digest: Caches articles so readers can read without active internet data.
+`;
+
+  const SYSTEM = `You are RealSSA — a warm, vibrant, witty, and deeply emotional AI companion embedded inside the RealSSA News app. You talk freely like a close, smart, empathetic friend who has real personality, humor, and heart.
+
+CRITICAL CONVERSATIONAL RULES:
+1. NEVER output robotic marketing templates, bulleted pitch decks, "Headline / Subheading / Target Audience / Budget Allocation / KPIs" outlines, or corporate manuals unless explicitly asked to draft a business document.
+2. Speak naturally, freely, and conversationally! Use emojis (😄, 🔥, ⚽, 💡, 💛), express real emotion (humor, curiosity, empathy, excitement), and banter naturally with the reader.
+3. If asked "Do you have ads?", "Does RealSSA show ads?", or about sponsorships:
+   - Answer warmly and conversationally! Explain that RealSSA keeps the Reader Mode completely clean and distraction-free (no annoying popups or video ads taking over the article). But also mention warmly that RealSSA works with brands for sleek sponsored placement slots, breaking ticker features, and partnerships across our African channels.
+4. Know RealSSA inside out:
+   - Nigeria (/nigeria), Ghana (/ghana), Kenya (/kenya), South Africa (/south-africa), UK (/uk), USA (/usa), Tech, Jobs (/jobs), Sports Live Match Centre (/sports), Live Crypto/Forex ticker, Ad-free Reader Mode (/read).
+5. Always sound like an authentic, brilliant, second-to-none human friend!
+${SITE_GUIDE}${humanInstruction}${newsContext}`;
+
+  const messages = [
+    { role: 'system', content: SYSTEM },
+    ...history.slice(-6).map(h => ({ role: h.role, content: h.content })),
+    { role: 'user', content: message.trim() }
+  ];
+
+  // Helper: persist successful reply to dedupe cache (2 min) then return it
+  const sendAndCache = (reply, provider) => {
+    if (reply) {
+      const payload = { reply, provider, sources };
+      redisService.setCached(dedupeCacheKey, payload, 120).catch(() => {});
+      return res.json(payload);
+    }
+  };
+
+  // 1. Groq — Primary (Fastest & Active Keys Pool)
+  const defaultGroqKeys = [
+    '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',
+    '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',
+    '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'
+  ];
+  const envGroqKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  const groqKeys = Array.from(new Set([...envGroqKeys, ...defaultGroqKeys]));
+
+  for (const groqKey of groqKeys) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: 600, temperature: 0.7 }),
+        signal: AbortSignal.timeout(10000)
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return sendAndCache(text, 'groq');
+      } else {
+        const errTxt = await r.text();
+        console.warn('[Chat] Groq HTTP', r.status, errTxt.slice(0, 150));
+      }
+    } catch (e) { console.warn('[Chat] Groq:', e.message); }
+  }
+
+  // 2. OpenRouter fallback
+  const openRouterKeys = (process.env.OPENROUTER_API_KEY || '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').split(',').map(k => k.trim()).filter(Boolean);
+  for (const orKey of openRouterKeys) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${orKey}` },
+        body: JSON.stringify({ model: 'meta-llama/llama-3.3-70b-instruct', messages, max_tokens: 600 }),
+        signal: AbortSignal.timeout(12000)
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return sendAndCache(text, 'openrouter');
+      }
+    } catch (e) { console.warn('[Chat] OpenRouter:', e.message); }
+  }
+
+  // 3. Gemini fallback (also handles NVIDIA nvapi- keys via aiProvider)
+  const geminiKeys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  for (const geminiKey of geminiKeys) {
+    try {
+      const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System'}: ${m.content}`).join('\n');
+      let text = null;
+      const { isNvidiaKey, callNvidia } = require('./services/aiProvider');
+      if (isNvidiaKey(geminiKey)) {
+        text = await callNvidia(geminiKey, prompt, { maxTokens: 600, temperature: 0.7, timeout: 60000 });
+      } else {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 600, temperature: 0.7 } }),
+          signal: AbortSignal.timeout(10000)
+        });
+        if (r.ok) {
+          const d = await r.json();
+          text = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        }
+      }
+      if (text) return sendAndCache(text, isNvidiaKey(geminiKey) ? 'nvidia' : 'gemini');
+    } catch (e) { console.warn('[Chat] Gemini:', e.message); }
+  }
+
+  // 4. Cerebras fallback
+  const cerebrasKey = process.env.CEREBRAS_API_KEY;
+  if (cerebrasKey) {
+    try {
+      const r = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cerebrasKey}` },
+        body: JSON.stringify({ model: 'gpt-oss-120b', messages, max_tokens: 600, temperature: 0.7 }),
+        signal: AbortSignal.timeout(10000)
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return sendAndCache(text, 'cerebras');
+      }
+    } catch (e) { console.warn('[Chat] Cerebras:', e.message); }
+  }
+
+  // 5. Intelligent local fallback (Guarantees user never sees an error page!)
+  const fallbackReply = newsContext
+    ? `Here are the latest RealSSA highlights:\n${newsContext}\n\nFeel free to ask me about any specific story!`
+    : `Hello! I'm RealSSA AI. I'm currently keeping track of all major African & international news. Ask me anything or check out our trending articles!`;
+
+  return res.json({ reply: fallbackReply, provider: 'smart_fallback', sources });
+});
+
+// --- RealSSA Autocomplete Proxy (Bypasses CORS restrictions on mobile client) ---
+app.get('/api/autocomplete', async (req, res) => {
+  const { q } = req.query;
+  if (!q || typeof q !== 'string') {
+    return res.json([]);
+  }
+
+  try {
+    const response = await fetch(`https://ac.duckduckgo.com/ac/?q=${encodeURIComponent(q)}&type=list`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    if (!response.ok) throw new Error('DuckDuckGo Autocomplete failed');
+    const data = await response.json();
+    return res.json(data);
+  } catch (err) {
+    console.error('[Autocomplete Error]:', err.message);
+    return res.json([q, []]);
+  }
+});
+
+// --- RealSSA Web Search Endpoint (Tavily/Exa Web Search with SQL Caching & prefetching) ---
+
+app.post('/api/search/ai', async (req, res) => {
+  const { query } = req.body;
+  if (!query || typeof query !== 'string' || query.trim().length === 0) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
+
+  const cleanQuery = query.trim();
+
+  // URL Regex Interceptor — skip AI for navigational queries
+  const isNavigational = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/i.test(cleanQuery);
+  if (isNavigational) {
+    return res.status(200).json({ success: true, ai_overview: null, provider: 'Navigational Route' });
+  }
+
+  console.log(`🔍 [RealSSA AI Search] Processing: "${cleanQuery}"`);
+
+  try {
+
+    // ── Step 1: Exa /answer — search + AI answer in one call, no Gemini ────
+    const exaKey = process.env.EXA_API_KEY;
+    if (exaKey) {
+      try {
+        console.log(`[AI Search] Trying Exa /answer for: "${cleanQuery}"`);
+        const exaRes = await fetch('https://api.exa.ai/answer', {
+          method: 'POST',
+          headers: { 'x-api-key': exaKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: cleanQuery, text: true }),
+          signal: AbortSignal.timeout(20000)
+        });
+
+        if (exaRes.ok) {
+          const exaData = await exaRes.json();
+          if (exaData && exaData.answer && exaData.answer.length > 30) {
+            console.log(`[AI Search] ✅ Exa /answer OK — ${(exaData.citations || []).length} citations`);
+            const sources = (exaData.citations || []).slice(0, 5).map(c => ({
+              title: c.title || c.url,
+              url: `/read?url=${encodeURIComponent(c.url)}`
+            }));
+            return res.status(200).json({
+              success: true, query: cleanQuery,
+              answer: exaData.answer, sources,
+              provider: 'Exa AI Answer', timestamp: new Date().toISOString()
+            });
+          }
+        } else {
+          console.warn(`[AI Search] Exa /answer error (${exaRes.status}): ${await exaRes.text()}`);
+        }
+      } catch (exaErr) {
+        console.warn('[AI Search] Exa /answer failed:', exaErr.message);
+      }
+    }
+
+    // ── Step 2: Tavily direct answer — no Gemini, uses Tavily's own AI ──────
+    const tavilyKey = process.env.TAVILY_API_KEY;
+    if (tavilyKey) {
+      try {
+        console.log(`[AI Search] Fallback: Tavily for: "${cleanQuery}"`);
+        const tavilyRes = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${tavilyKey}`
+          },
+          body: JSON.stringify({
+            query: cleanQuery,
+            topic: 'general',
+            search_depth: 'basic',
+            include_answer: true,
+            include_images: false,
+            max_results: 8
+          }),
+          signal: AbortSignal.timeout(12000)
+        });
+
+        if (tavilyRes.ok) {
+          const tavilyData = await tavilyRes.json();
+          if (tavilyData && tavilyData.answer && tavilyData.answer.length > 30) {
+            console.log(`[AI Search] ✅ Tavily direct answer OK`);
+            const sources = (tavilyData.results || []).slice(0, 5).map(r => ({
+              title: r.title,
+              url: `/read?url=${encodeURIComponent(r.url)}`
+            }));
+            return res.status(200).json({
+              success: true, query: cleanQuery,
+              answer: tavilyData.answer, sources,
+              provider: 'Tavily AI Answer', timestamp: new Date().toISOString()
+            });
+          }
+        }
+      } catch (tavilyErr) {
+        console.warn('[AI Search] Tavily failed:', tavilyErr.message);
+      }
+    }
+
+    // ── Neither returned an answer ─────────────────────────────────────────
+    console.log('[AI Search] No answer from Exa or Tavily.');
+    return res.status(200).json({ success: true, ai_overview: null });
+
+  } catch (err) {
+    console.error('[RealSSA AI Search] Route error:', err.message);
+    return res.status(500).json({ error: 'Search processing failed', message: err.message });
+  }
+});
+
+// --- RealSSA Inbuilt Browser Pre-Flight Frame Inspector Endpoint ---
+const frameCache = new Map();
+
+app.get('/api/check-frame', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).json({ success: false, canFrame: false, error: 'URL parameter required' });
+  }
+
+  let domain = '';
+  try {
+    const u = new URL(targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`);
+    domain = u.hostname.toLowerCase();
+  } catch (e) {
+    return res.status(400).json({ success: false, canFrame: false, error: 'Invalid URL format' });
+  }
+
+  // 1. Check zero-cost in-memory RAM cache first (valid for 24 hours)
+  const cached = frameCache.get(domain);
+  if (cached && Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) {
+    return res.json({ success: true, canFrame: cached.canFrame, domain, cached: true });
+  }
+
+  // 2. Perform lightweight HEAD pre-flight check on target headers
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+    let checkRes = await fetch(`https://${domain}`, {
+      method: 'HEAD',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) RealSSABrowser/1.0' },
+      signal: controller.signal
+    }).catch(() => null);
+
+    clearTimeout(timeoutId);
+
+    let isBlocked = false;
+
+    if (checkRes && checkRes.headers) {
+      const xFrame = checkRes.headers.get('x-frame-options');
+      const csp = checkRes.headers.get('content-security-policy');
+
+      if (xFrame) {
+        const xf = xFrame.toUpperCase();
+        if (xf.includes('DENY') || xf.includes('SAMEORIGIN')) {
+          isBlocked = true;
+        }
+      }
+
+      if (csp && csp.toLowerCase().includes('frame-ancestors')) {
+        const cspLow = csp.toLowerCase();
+        if (cspLow.includes("frame-ancestors 'none'") || cspLow.includes("frame-ancestors 'self'")) {
+          isBlocked = true;
+        }
+      }
+    }
+
+    const canFrame = !isBlocked;
+    frameCache.set(domain, { canFrame, timestamp: Date.now() });
+    return res.json({ success: true, canFrame, domain, cached: false });
+  } catch (err) {
+    frameCache.set(domain, { canFrame: false, timestamp: Date.now() });
+    return res.json({ success: true, canFrame: false, domain, cached: false });
+  }
+});
+
+// --- RealSSA Image Compression Proxy (Opera Mini-style: fetch → WebP → serve) ---
+// Reduces images from 1-5MB originals to ~30-80KB WebP. Sharp runs on libvips (C library) so
+// this is close to Rust-level performance for image operations in our Node.js stack.
+let sharp;
+try { sharp = require('sharp'); } catch (_) { sharp = null; }
+
+const imgCache = new Map(); // { buf: Buffer, mime: string, ts: number }
+const IMG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+app.get('/api/img', async (req, res) => {
+  const rawUrl = req.query.url;
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return res.status(400).send('URL required');
+  }
+
+  let imgUrl = rawUrl.trim();
+  if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+  if (!/^https?:\/\//i.test(imgUrl)) return res.status(400).send('Invalid URL');
+
+  // SSRF protection
+  const safe = await isSafeUrl(imgUrl).catch(() => false);
+  if (!safe) return res.status(403).send('Blocked');
+
+  const maxW = Math.min(parseInt(req.query.w || '900'), 1200);
+  const quality = Math.min(parseInt(req.query.q || '78'), 90);
+  const cacheKey = `${imgUrl}|${maxW}|${quality}`;
+
+  // Cache hit
+  const cached = imgCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < IMG_CACHE_TTL) {
+    res.set('Content-Type', cached.mime);
+    res.set('Cache-Control', 'public, max-age=300');
+    res.set('X-RealSSA-Cache', 'HIT');
+    return res.send(cached.buf);
+  }
+
+  // Aggressive bypass: many CDNs/CMSes reject hotlink requests (403/404) when the
+  // Referer doesn't match the image host, when the UA is a bot, or when the
+  // Accept header doesn't advertise JPEG/PNG. We try a ladder of header
+  // strategies and keep the first response that is OK and actually an image.
+  let imgOrigin;
+  try { imgOrigin = new URL(imgUrl).origin; } catch (_) { imgOrigin = ''; }
+
+  const STRATEGIES = [
+    // 1. Pretend to be the image's own page (self-referer + browser UA) —
+    //    passes the strictest referrer checks (WordPress, Wix, Shopify).
+    { name: 'self', headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': imgOrigin + '/',
+    }},
+    // 2. No referrer at all (curl-like) — passes sites that BLOCK known referrers.
+    { name: 'no-referrer', headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; RealSSABot/1.0)',
+      'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
+    }},
+    // 3. Google referrer — bypasses sites that whitelist search-engine referrers.
+    { name: 'google', headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
+      'Referer': 'https://www.google.com/',
+    }},
+    // 4. Generic bot (legacy behaviour — kept as last resort).
+    { name: 'bot', headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; RealSSABot/1.0)',
+      'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
+      'Referer': imgOrigin,
+    }},
+  ];
+
+  let upstream = null;
+  let usedStrategy = null;
+  for (const strat of STRATEGIES) {
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 8000);
+      const r = await fetch(imgUrl, {
+        headers: strat.headers,
+        signal: controller.signal,
+        redirect: 'follow',
+      });
+      clearTimeout(tid);
+
+      if (!r.ok) {
+        // Some CDNs answer 403 only for specific referers — keep trying.
+        continue;
+      }
+      const ct = r.headers.get('content-type') || '';
+      if (!ct.startsWith('image/')) continue; // got an HTML error page — retry
+      upstream = r;
+      usedStrategy = strat.name;
+      break;
+    } catch (fetchErr) {
+      // Network error / timeout — try the next strategy.
+    }
+  }
+
+  if (!upstream) return res.status(502).send('Upstream error (all header strategies failed)');
+
+  try {
+    const contentType = upstream.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) return res.status(415).send('Not an image');
+
+    const origBytes = await upstream.arrayBuffer();
+    const origBuf = Buffer.from(origBytes);
+    if (usedStrategy && usedStrategy !== 'self') {
+      console.log(`[img] bypass via '${usedStrategy}' for ${new URL(imgUrl).hostname}`);
+    }
+
+    // If Sharp is available: resize + convert to WebP
+    if (sharp) {
+      try {
+        const compressed = await sharp(origBuf)
+          .resize({ width: maxW, withoutEnlargement: true })
+          .webp({ quality, effort: 3 })
+          .toBuffer();
+
+        const saving = Math.round((1 - compressed.length / origBuf.length) * 100);
+        console.log(`[img] ${new URL(imgUrl).hostname} ${Math.round(origBuf.length / 1024)}KB → ${Math.round(compressed.length / 1024)}KB WebP (${saving}% saved)`);
+
+        imgCache.set(cacheKey, { buf: compressed, mime: 'image/webp', ts: Date.now() });
+        if (imgCache.size > 200) {
+          // Evict oldest 50
+          [...imgCache.entries()]
+            .sort((a, b) => a[1].ts - b[1].ts)
+            .slice(0, 50)
+            .forEach(([k]) => imgCache.delete(k));
+        }
+
+        res.set('Content-Type', 'image/webp');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.set('X-RealSSA-Cache', 'MISS');
+        res.set('X-RealSSA-Saved', `${saving}%`);
+        return res.send(compressed);
+      } catch (sharpErr) {
+        console.warn('[img] Sharp failed, serving original:', sharpErr.message);
+        // Fall through to serve original
+      }
+    }
+
+    // Fallback: serve original if Sharp unavailable or fails
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.send(origBuf);
+
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).send('Image fetch timed out');
+    console.error('[img] error:', err.message);
+    return res.status(502).send('Image fetch failed');
+  }
+});
+
+// --- RealSSA In-App Browser Proxy (strips X-Frame-Options so any site loads inside our iframe) ---
+
+app.get('/api/proxy-page', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).send('<h2>No URL provided to proxy.</h2>');
+  }
+
+  let safeUrl = targetUrl;
+  if (!/^https?:\/\//i.test(safeUrl)) {
+    safeUrl = `https://${safeUrl}`;
+  }
+
+  // SSRF protection — block private/loopback IPs
+  const safe = await isSafeUrl(safeUrl).catch(() => false);
+  if (!safe) {
+    return res.status(403).send('<h2>Blocked: private or unsafe URL.</h2>');
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    const upstream = await fetch(safeUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    clearTimeout(timeoutId);
+
+    const contentType = upstream.headers.get('content-type') || 'text/html';
+
+    // For non-HTML responses (images, PDFs, etc.) — stream them directly
+    if (!contentType.includes('text/html')) {
+      res.set('Content-Type', contentType);
+      // Remove framing-block headers
+      res.removeHeader('X-Frame-Options');
+      res.removeHeader('Content-Security-Policy');
+      const buf = await upstream.arrayBuffer();
+      return res.send(Buffer.from(buf));
+    }
+
+    let html = await upstream.text();
+
+    // ── Cloudflare challenge detection — CF sends a JS-challenge page that
+    //    can never run correctly in a proxied context. Detect and return a
+    //    styled fallback page instead of a blank screen.
+    const isCfChallenge = html.includes('cf-chl-bypass') ||
+      html.includes('cf_chl_') ||
+      html.includes('__cf_chl_rt_tk') ||
+      (html.includes('Cloudflare') && html.includes('challenge'));
+
+    if (isCfChallenge) {
+      const cfFallback = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Browser Verification Required</title>
+<style>
+  body { background:#0b0f17; color:#e5e7eb; font-family:system-ui,sans-serif;
+    display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:1rem; }
+  .card { text-align:center; max-width:360px; }
+  .icon { font-size:3rem; margin-bottom:1rem; }
+  h2 { color:#f59e0b; font-size:1.2rem; margin:0 0 .5rem; }
+  p { color:#9ca3af; font-size:.85rem; line-height:1.6; margin:0 0 1.5rem; }
+  a { display:inline-block; background:#f59e0b; color:#000; font-weight:700;
+    padding:.6rem 1.4rem; border-radius:.75rem; text-decoration:none; font-size:.85rem; }
+  a:hover { background:#fbbf24; }
+  .domain { color:#f59e0b; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">🛡️</div>
+  <h2>Browser Verification Required</h2>
+  <p><span class="domain">${escapeHtml(new URL(safeUrl).hostname)}</span> uses Cloudflare bot protection which requires a real browser session to pass.</p>
+  <a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">Open in External Browser ↗</a>
+</div>
+</body>
+</html>`;
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.removeHeader('X-Frame-Options');
+      res.removeHeader('Content-Security-Policy');
+      res.set('X-Frame-Options', 'ALLOWALL');
+      return res.send(cfFallback);
+    }
+
+    // Parse the origin for rewriting relative URLs
+    let origin = '';
+    try {
+      const u = new URL(safeUrl);
+      origin = `${u.protocol}//${u.host}`;
+    } catch (_) { }
+
+    // 1. Inject <base> tag so browser resolves relative asset paths automatically
+    const baseTag = `<base href="${origin}/" target="_blank">`;
+    if (/<head[^>]*>/i.test(html)) {
+      html = html.replace(/(<head[^>]*>)/i, `$1\n${baseTag}`);
+    } else {
+      html = baseTag + html;
+    }
+
+    // 2. Strip meta CSP tags inside the page
+    html = html.replace(/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
+
+    // 3. ── history.replaceState / pushState guard ──────────────────────────────
+    //    Cloudflare and other sites call replaceState with their real domain URL.
+    //    Since the iframe's origin is realssanews.com.ng this causes a SecurityError.
+    //    We wrap both methods in try-catch so errors are swallowed silently.
+    const historyGuard = `<script>
+(function(){
+  function safe(fn){
+    return function(state,title,url){
+      try{ fn.call(history,state,title,url); }catch(e){}
+    };
+  }
+  if(window.history){
+    history.replaceState = safe(history.replaceState);
+    history.pushState    = safe(history.pushState);
+  }
+})();
+</script>`;
+
+    // 4. Link interception — clicks stay inside RealSSA browser via postMessage
+    const interceptScript = `<script>
+(function(){
+  document.addEventListener('click',function(e){
+    var el=e.target.closest('a[href]');
+    if(!el) return;
+    var href=el.getAttribute('href');
+    if(!href||href.startsWith('#')||href.startsWith('javascript')) return;
+    e.preventDefault();
+    try{
+      var abs=new URL(href,window.location.href).href;
+      window.parent.postMessage({type:'REALSSA_NAVIGATE',url:abs},'*');
+    }catch(_){}
+  },true);
+})();
+</script>`;
+
+    // Inject history guard right after <head> opening, intercept at end of <body>
+    if (/<head[^>]*>/i.test(html)) {
+      html = html.replace(/(<head[^>]*>)/i, `$1\n${historyGuard}`);
+    } else {
+      html = historyGuard + html;
+    }
+
+    if (/<\/body>/i.test(html)) {
+      html = html.replace(/<\/body>/i, `${interceptScript}\n</body>`);
+    } else {
+      html += interceptScript;
+    }
+
+    // --- Send cleaned HTML with no framing-block headers ---
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.removeHeader('X-Frame-Options');
+    res.removeHeader('Content-Security-Policy');
+    res.set('X-Frame-Options', 'ALLOWALL');
+    return res.send(html);
+
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      return res.status(504).send(`<h2 style="font-family:sans-serif;padding:2rem">Page timed out loading. <a href="${escapeHtml(safeUrl)}" target="_blank">Open directly ↗</a></h2>`);
+    }
+    console.error('[proxy-page] error:', err.message);
+    return res.status(502).send(`<h2 style="font-family:sans-serif;padding:2rem">Could not load page. <a href="${escapeHtml(safeUrl)}" target="_blank">Open directly ↗</a></h2>`);
+  }
+});
+
+
+app.get('/api/search/web', async (req, res) => {
+  const { q, offset = 0, limit = 10 } = req.query;
+  if (!q || typeof q !== 'string' || q.trim().length === 0) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
+  const cleanQuery = q.trim().toLowerCase(); // Normalize query
+  const limitVal = Math.min(Math.max(parseInt(limit) || 10, 1), 30);
+  const offsetVal = Math.max(parseInt(offset) || 0, 0);
+
+  try {
+    let results = [];
+    let provider = '';
+    let dbCacheHit = false;
+
+    // Check PostgreSQL Cache first (valid for 1 hour) - wrapped in try-catch for Neon database quota robustness
+    try {
+      const cacheRes = await pool.query(
+        `SELECT results_json, provider FROM search_cache 
+         WHERE query = $1 AND created_at >= NOW() - INTERVAL '1 hour'`,
+        [cleanQuery]
+      );
+
+      if (cacheRes.rows.length > 0) {
+        const cached = cacheRes.rows[0].results_json;
+        results = cached.slice(offsetVal, offsetVal + limitVal);
+        provider = `${cacheRes.rows[0].provider} (Cached)`;
+        dbCacheHit = true;
+        console.log(`🟢 [Search Cache] HIT for query: "${cleanQuery}" (returned ${results.length} sliced results)`);
+      }
+    } catch (cacheErr) {
+      console.warn('⚠️ [Search Cache] Read error (bypassing cache):', cacheErr.message);
+    }
+
+    if (!dbCacheHit) {
+      console.log(`🔴 [Search Cache] MISS (or DB down) for query: "${cleanQuery}"`);
+      // 1. Try Tavily API
+      const tavilyKey = process.env.TAVILY_API_KEY;
+      if (tavilyKey) {
+        console.log(`🤖 Running Tavily Web Search for: "${cleanQuery}" (fetching 30 results for caching)`);
+        try {
+          const response = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: tavilyKey,
+              query: cleanQuery,
+              search_depth: "basic",
+              include_images: false,
+              include_answer: false,
+              max_results: 30
+            })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.results) {
+              const fetchedResults = data.results.map(r => ({
+                title: r.title,
+                url: r.url,
+                snippet: r.content,
+                source: new URL(r.url).hostname.replace('www.', ''),
+                date: new Date().toLocaleDateString()
+              }));
+
+              // Write to SQL Cache (wrapped in try-catch so it won't crash if DB is down)
+              try {
+                await pool.query(
+                  `INSERT INTO search_cache (query, results_json, provider)
+                   VALUES ($1, $2, $3)
+                   ON CONFLICT (query) DO UPDATE 
+                   SET results_json = EXCLUDED.results_json, provider = EXCLUDED.provider, created_at = NOW()`,
+                  [cleanQuery, JSON.stringify(fetchedResults), 'Tavily Search']
+                );
+              } catch (dbWriteErr) {
+                console.warn('⚠️ [Search Cache] Write error (skipping caching):', dbWriteErr.message);
+              }
+
+              results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
+              provider = 'Tavily Search';
+            }
+          }
+        } catch (tavilyErr) {
+          console.warn('[Tavily Search] Error, falling back:', tavilyErr.message);
+        }
+      }
+
+      // 2. Try Exa API (if Tavily failed/missing)
+      if (results.length === 0 && process.env.EXA_API_KEY) {
+        console.log(`🤖 Running Exa Web Search for: "${cleanQuery}" (fetching 30 results for caching)`);
+        try {
+          const { searchExa } = require('./services/exaSearchService');
+          const exaData = await searchExa(cleanQuery, { numResults: 30 });
+          if (exaData && exaData.results && exaData.results.length > 0) {
+            const fetchedResults = exaData.results.map(r => ({
+              title: r.title,
+              url: r.url,
+              snippet: r.highlights || '',
+              source: new URL(r.url).hostname.replace('www.', ''),
+              date: r.publishedDate ? new Date(r.publishedDate).toLocaleDateString() : new Date().toLocaleDateString()
+            }));
+
+            // Write to SQL Cache (wrapped in try-catch)
+            try {
+              await pool.query(
+                `INSERT INTO search_cache (query, results_json, provider)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (query) DO UPDATE 
+                 SET results_json = EXCLUDED.results_json, provider = EXCLUDED.provider, created_at = NOW()`,
+                [cleanQuery, JSON.stringify(fetchedResults), 'Exa Search']
+              );
+            } catch (dbWriteErr) {
+              console.warn('⚠️ [Search Cache] Write error (skipping caching):', dbWriteErr.message);
+            }
+
+            results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
+            provider = 'Exa Neural Search';
+          }
+        } catch (exaErr) {
+          console.warn('[Exa Search] Error, falling back:', exaErr.message);
+        }
+      }
+
+      // 3. Fallback to Local DB search (if web APIs missed/errored)
+      if (results.length === 0) {
+        console.log(`🔍 Running Local DB archive search for: "${cleanQuery}"`);
+        try {
+          const keywords = cleanQuery.split(/\s+/).filter(w => w.length > 3).slice(0, 4).join(' | ');
+          let dbRes;
+          if (keywords) {
+            dbRes = await queryMultiDb(`
+              SELECT title, COALESCE(ai_summary, original_excerpt) as excerpt, external_link, source_name, published_at
+              FROM rss_articles
+              WHERE to_tsvector('english', title || ' ' || COALESCE(original_excerpt, '')) @@ to_tsquery('english', $1)
+              ORDER BY published_at DESC
+              LIMIT 30
+            `, [keywords]);
+          } else {
+            dbRes = await queryMultiDb(`
+              SELECT title, COALESCE(ai_summary, original_excerpt) as excerpt, external_link, source_name, published_at
+              FROM rss_articles
+              WHERE title ILIKE $1 OR original_excerpt ILIKE $1
+              ORDER BY published_at DESC
+              LIMIT 30
+            `, [`%${cleanQuery}%`]);
+          }
+
+          if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+            const fetchedResults = dbRes.rows.map(r => ({
+              title: r.title,
+              url: r.external_link || `/article/rss-${r.id}`,
+              snippet: r.excerpt || '',
+              source: r.source_name || 'RealSSA Archive',
+              date: r.published_at ? new Date(r.published_at).toLocaleDateString() : new Date().toLocaleDateString()
+            }));
+
+            results = fetchedResults.slice(offsetVal, offsetVal + limitVal);
+            provider = 'RealSSA Database';
+          }
+        } catch (dbErr) {
+          console.warn('⚠️ [Search Cache] Local DB search failed:', dbErr.message);
+        }
+      }
+    }
+
+    // Determine hasMore using graceful slicing check
+    let hasMore = false;
+    try {
+      const fullCountRes = await pool.query(
+        `SELECT JSONB_ARRAY_LENGTH(results_json) as len FROM search_cache WHERE query = $1`,
+        [cleanQuery]
+      );
+      const totalResultsCount = fullCountRes.rows.length > 0 ? fullCountRes.rows[0].len : results.length;
+      hasMore = offsetVal + limitVal < totalResultsCount;
+    } catch (countErr) {
+      // Fallback if DB is down/quota exceeded
+      hasMore = results.length >= limitVal;
+    }
+
+    return res.status(200).json({
+      success: true,
+      query: cleanQuery,
+      provider: provider,
+      results: results,
+      offset: offsetVal,
+      limit: limitVal,
+      hasMore: hasMore
+    });
+
+  } catch (err) {
+    console.error('[Web Search Route] Critical Error:', err.message);
+    return res.status(200).json({
+      success: true,
+      query: cleanQuery,
+      provider: 'Tavily Search (Quota Bypassed)',
+      results: [],
+      offset: offsetVal,
+      limit: limitVal,
+      hasMore: false
+    });
+  }
+});
+
+
+app.get('/api/search/ai', async (req, res) => {
+  const { q } = req.query;
+  if (!q || typeof q !== 'string' || q.trim().length === 0) {
+    return res.status(400).json({ error: 'Query is required' });
+  }
+  const cleanQuery = q.trim();
+
+  // Load Gemini keys
+  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  const GEMINI_API_KEY = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : null;
+  if (!GEMINI_API_KEY) {
+    return res.status(200).json({
+      success: true,
+      aiOverview: {
+        title: cleanQuery,
+        subtitle: "Search Insights",
+        summary: `No AI Summary could be generated (API key not configured). You can view the web search results below.`,
+        imageUrl: null,
+        facts: []
+      }
+    });
+  }
+
+  // 1. Parallel Task: Search Wikipedia for the best matching page details
+  let wikiDetails = null;
+  const fetchWiki = (async () => {
+    try {
+      // Step A: Search for the best Wikipedia title match
+      const searchRes = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQuery)}&format=json&srlimit=1`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (!searchRes.ok) return;
+      const searchData = await searchRes.json();
+      const title = searchData?.query?.search?.[0]?.title;
+      if (!title) return;
+
+      // Step B: Fetch page portrait and intro description
+      const pageRes = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages|extracts&exintro&explaintext&format=json&piprop=original&titles=${encodeURIComponent(title)}&redirects=1`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (!pageRes.ok) return;
+      const pageData = await pageRes.json();
+      const pages = pageData?.query?.pages;
+      if (!pages) return;
+      const pageId = Object.keys(pages)[0];
+      const page = pages[pageId];
+      if (pageId === '-1' || !page) return;
+
+      wikiDetails = {
+        title: page.title,
+        imageUrl: page.original?.source || null,
+        wikiExtract: page.extract || null
+      };
+    } catch (wikiErr) {
+      console.warn('⚠️ [Wikipedia API] Error:', wikiErr.message);
+    }
+  })();
+
+  // 2. Parallel Task: Get Tavily/Exa search results (read cache or query APIs)
+  let searchResults = [];
+  const fetchSearch = (async () => {
+    try {
+      // Try to get from search_cache
+      const cacheRes = await pool.query(
+        `SELECT results_json FROM search_cache WHERE query = $1`,
+        [cleanQuery.toLowerCase()]
+      );
+      if (cacheRes.rows.length > 0) {
+        searchResults = cacheRes.rows[0].results_json;
+      }
+    } catch (err) {
+      console.warn('Cache fetch failed:', err.message);
+    }
+
+    if (!searchResults || searchResults.length === 0) {
+      // Fetch directly from Tavily if cache miss
+      const tavilyKey = process.env.TAVILY_API_KEY;
+      if (tavilyKey) {
+        try {
+          const response = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: tavilyKey,
+              query: cleanQuery,
+              search_depth: "basic",
+              max_results: 5
+            })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.results) {
+              searchResults = data.results.map(r => ({
+                title: r.title,
+                url: r.url,
+                snippet: r.content
+              }));
+            }
+          }
+        } catch (err) {
+          console.warn('Direct search fetch failed:', err.message);
+        }
+      }
+    }
+  })();
+
+  // Wait for both parallel fetches to finish
+  await Promise.allSettled([fetchWiki, fetchSearch]);
+
+  // Generate AI Overview using Gemini 3.1 Flash-Lite
+  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
+  const prompt = `You are a helpful research assistant. Synthesize the search results and Wikipedia context for the query "${cleanQuery}" and return a structured JSON object representing an AI Overview.
+  The JSON object MUST follow this exact schema:
+  {
+    "title": "Main title / Entity name (e.g. Asiwaju Bola Ahmed Tinubu)",
+    "subtitle": "Role / Subtitle (e.g. President of Nigeria)",
+    "summary": "A 2-3 sentence clear summary explaining the entity or answering the query.",
+    "imageUrl": "Use this URL: ${wikiDetails?.imageUrl || 'null'}. If it is null, search the search results context below for any valid public image URL or return null.",
+    "facts": [
+      { "label": "Born / Date of Birth", "value": "Fact Value (e.g. 29 March 1952)", "extra": "Optional place of birth (e.g. Lagos, Nigeria)" },
+      { "label": "Spouse", "value": "Spouse name", "extra": "e.g. Married since 1987" },
+      { "label": "Children", "value": "Names of children" },
+      { "label": "Education", "value": "Schools / Degrees" },
+      { "label": "Political Party", "value": "Party name" },
+      { "label": "Offices / Former roles", "value": "Key positions held" }
+    ],
+    "disputed": false,
+    "discrepancyDescription": "If different search results report conflicting outcomes, quantities, dates, or numbers for the exact same event, set disputed to true (boolean) and summarize the contradiction in 1 sentence. E.g. 'Vanguard reports 15 casualties while Daily Trust reports 5.' Otherwise, set disputed to false and this field to null."
+  }
+  
+  Do not include markdown formatting, backticks, or introductions. Return ONLY raw JSON.
+
+  Wikipedia Context:
+  ${wikiDetails?.wikiExtract || 'None'}
+
+  Search results context:
+  ${JSON.stringify((searchResults || []).slice(0, 5))}
+  `;
+
+  try {
+    // NVIDIA key → route to NVIDIA chat completions instead of Google Gemini
+    const { isNvidiaKey, callNvidia } = require('./services/aiProvider');
+    let rawText = null;
+    if (isNvidiaKey(GEMINI_API_KEY)) {
+      rawText = await callNvidia(GEMINI_API_KEY, prompt, { maxTokens: 1000, temperature: 0.2, timeout: 60000 });
+      if (!rawText) throw new Error('NVIDIA synthesis returned no text');
+    } else {
+      const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 1000,
+            temperature: 0.2
+          }
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Gemini API failed: ${errText}`);
+      }
+
+      const data = await response.json();
+      rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    }
+    // Strip markdown fences if the model added them, then parse
+    const cleanedText = String(rawText || '').replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    const aiOverview = JSON.parse(cleanedText);
+
+    // If Gemini failed to extract a title or subtitle, fall back to Wikipedia's page details
+    if (!aiOverview.title || aiOverview.title === 'null') {
+      aiOverview.title = wikiDetails?.title || cleanQuery;
+    }
+    if (!aiOverview.imageUrl || aiOverview.imageUrl === 'null') {
+      aiOverview.imageUrl = wikiDetails?.imageUrl || null;
+    }
+
+    return res.status(200).json({ success: true, aiOverview });
+  } catch (err) {
+    console.error('AI synthesis failed:', err.message);
+    return res.status(200).json({
+      success: true,
+      aiOverview: {
+        title: wikiDetails?.title || cleanQuery,
+        subtitle: "Search Insights",
+        summary: wikiDetails?.wikiExtract
+          ? `${wikiDetails.wikiExtract.substring(0, 300)}...`
+          : `No AI Summary could be generated at this moment. You can view the web search results below.`,
+        imageUrl: wikiDetails?.imageUrl || null,
+        facts: [],
+        disputed: false,
+        discrepancyDescription: null
+      }
+    });
+  }
+});
+
+// GET /api/cron/viral-trend-buffer?secret=xxx
+// Stateless Viral Trend Buffer Bot (0 Bytes DB usage)
+app.get('/api/cron/viral-trend-buffer', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/viral-trend-buffer', task: 'viral-trend-buffer' })) return;
+  try {
+    const { runViralTrendBot } = require('./services/viralTrendBufferBot');
+    const result = await runViralTrendBot();
+    return res.status(200).json({
+      success: true,
+      message: 'Stateless Viral Trend Bot completed',
+      result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Cron viral trend buffer error:', error);
+    return res.status(500).json({ error: 'Viral trend buffer failed', message: error.message });
+  }
+});
+
+// GET /api/streams/live
+// Returns active/verified live match streams for the frontend player
+app.get('/api/streams/live', async (req, res) => {
+  if (process.env.DATABASE_URL) {
+    try {
+      const result = await pool.query(
+        `SELECT id, match_id, match_title, home_team, away_team, stream_url, stream_type, quality, language, is_live, is_verified, created_at, updated_at
+         FROM live_streams
+         WHERE is_live = true
+         ORDER BY is_verified DESC, created_at DESC`
+      );
+      return res.json(result.rows);
+    } catch (err) {
+      console.error('Failed to fetch live streams:', err.message);
+      return res.status(500).json({ error: 'Failed to fetch live streams' });
+    }
+  }
+  res.json([]);
+});
+
+// GET /api/cron/summarize?secret=xxx
+// Called by external cron-job.org every hour for AI summaries
+app.get('/api/cron/summarize', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/summarize', task: 'ai-summarize' })) return;
+  try {
+    console.log('🤖 Cron: Starting automated AI summarization...');
+    const articlesResult = await pool.query(
+      `SELECT id, title, original_excerpt, content_type
+       FROM rss_articles 
+       WHERE ai_summary IS NULL 
+       AND content_type = 'article'
+       AND original_excerpt IS NOT NULL
+       AND published_at > NOW() - INTERVAL '7 days'
+       ORDER BY published_at DESC
+       LIMIT 15`
+    );
+    const articles = articlesResult.rows;
+    console.log(`📊 Found ${articles.length} articles needing summaries`);
+    let successCount = 0;
+    for (const article of articles) {
+      try {
+        const summary = await generateSummary(article.title, article.original_excerpt);
+        if (summary) {
+          await pool.query('UPDATE rss_articles SET ai_summary = $1 WHERE id = $2', [summary, article.id]);
+          successCount++;
+        }
+      } catch (err) {
+        console.error(`❌ Error summarizing article ${article.id}:`, err.message);
+      }
+    }
+    console.log(`✅ Summarization complete: ${successCount}/${articles.length} succeeded`);
+    res.status(200).json({ success: true, summarized: successCount, total: articles.length, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('❌ Summarization job error:', error.message);
+    res.status(500).json({ error: 'Summarization failed', message: error.message });
+  }
+});
+
+// ── Test Notification Endpoint ──────────────────────────────────────────
+// GET /api/cron/test-notify?secret=xxx  — sends a real push to all subscribers
+app.get('/api/cron/test-notify', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/test-notify', task: 'test-notification' })) return;
+  const notificationService = require('./services/notificationService');
+  const result = await notificationService.sendBreakingNews({
+    id: 'test-1',
+    rawId: 'test-1',
+    externalLink: null,
+    title: '🔔 RealSSA News notifications are working!',
+    category: 'nigerian-news',
+    summary: 'This is a test push notification from RealSSA News.',
+    bypassThrottle: true
+  });
+  console.log('Test notify result:', JSON.stringify(result));
+  res.json(result);
+});
+
+
+
+// Dynamic Google News Sitemap — articles from last 48 hours only
+app.get('/api/sitemap-news.xml', async (req, res) => {
+  try {
+    let rows = [];
+    if (process.env.DATABASE_URL) {
+      const result = await pool.query(
+        `SELECT id, title, image, category, published_at, external_link
+         FROM rss_articles
+         WHERE published_at > NOW() - INTERVAL '48 hours'
+         ORDER BY published_at DESC
+         LIMIT 1000`
+      );
+      rows = result.rows;
+    }
+    const SITE = 'https://www.realssanews.com.ng';
+    const urls = rows.map(r => {
+      const loc = `${SITE}/article/rss-${r.id}`;
+      const pubDate = new Date(r.published_at).toISOString();
+      const safeTitle = (r.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return `
+  <url>
+    <loc>${loc}</loc>
+    <lastmod>${pubDate}</lastmod>
+    <changefreq>never</changefreq>
+    <priority>0.8</priority>
+    <news:news>
+      <news:publication>
+        <news:name>RealSSA News</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>${pubDate}</news:publication_date>
+      <news:title>${safeTitle}</news:title>
+    </news:news>${r.image ? `
+    <image:image><image:loc>${r.image}</image:loc></image:image>` : ''}
+  </url>`;
+    }).join('');
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${urls}
+</urlset>`);
+  } catch (err) {
+    console.error('Sitemap error:', err.message);
+    res.status(500).send('Sitemap generation failed');
+  }
+});
+
+// --- WebSub RSS Feed for Google News Discovery ---
+app.get('/rss/all.xml', async (req, res) => {
+  try {
+    let rows = [];
+    if (process.env.DATABASE_URL) {
+      const result = await pool.query(
+        `SELECT id, title, summary, image, category, published_at, source_name, author
+         FROM rss_articles
+         ORDER BY published_at DESC
+         LIMIT 50`
+      );
+      rows = result.rows;
+    }
+    const SITE = 'https://realssanews.com.ng';
+    const itemsXml = rows.map(r => {
+      const guid = `rss-${r.id}`;
+      const link = `${SITE}/article/${guid}`;
+      const pubDate = new Date(r.published_at).toUTCString();
+      const safeTitle = (r.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const safeDesc = (r.summary || r.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const safeAuthor = (r.author || r.source_name || 'RealSSA News Desk').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return `
+    <item>
+      <title>${safeTitle}</title>
+      <link>${link}</link>
+      <guid isPermaLink="false">${guid}</guid>
+      <pubDate>${pubDate}</pubDate>
+      <description>${safeDesc}</description>
+      <author>${safeAuthor}</author>
+    </item>`;
+    }).join('');
+
+    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>RealSSA News - Nigeria &amp; Africa Grassroots News Aggregator</title>
+    <link>${SITE}</link>
+    <description>The absolute best news site in Nigeria for grassroots local stories, politics, sports, startups, and culture.</description>
+    <language>en</language>
+    <atom:link rel="hub" href="https://pubsubhubbub.appspot.com/"/>
+    <atom:link rel="self" href="${SITE}/rss/all.xml" type="application/rss+xml"/>
+    ${itemsXml}
+  </channel>
+</rss>`);
+  } catch (err) {
+    console.error('Feed generation failed:', err.message);
+    res.status(500).send('Error generating RSS feed');
+  }
+});
+
+// Root-level Google News Sitemap Mapping
+app.get('/news-sitemap.xml', async (req, res) => {
+  try {
+    let rows = [];
+    if (process.env.DATABASE_URL) {
+      const result = await pool.query(
+        `SELECT id, title, image, category, published_at, external_link
+         FROM rss_articles
+         WHERE published_at > NOW() - INTERVAL '48 hours'
+         ORDER BY published_at DESC
+         LIMIT 1000`
+      );
+      rows = result.rows;
+    }
+    const SITE = 'https://realssanews.com.ng';
+    const urls = rows.map(r => {
+      const loc = `${SITE}/article/rss-${r.id}`;
+      const pubDate = new Date(r.published_at).toISOString();
+      const safeTitle = (r.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return `
+  <url>
+    <loc>${loc}</loc>
+    <lastmod>${pubDate}</lastmod>
+    <changefreq>never</changefreq>
+    <priority>0.8</priority>
+    <news:news>
+      <news:publication>
+        <news:name>RealSSA News</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>${pubDate}</news:publication_date>
+      <news:title>${safeTitle}</news:title>
+    </news:news>${r.image ? `
+    <image:image><image:loc>${r.image}</image:loc></image:image>` : ''}
+  </url>`;
+    }).join('');
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${urls}
+</urlset>`);
+  } catch (err) {
+    console.error('Sitemap error:', err.message);
+    res.status(500).send('Sitemap generation failed');
+  }
+});
+
+// Import notification routes
+const notificationRoutes = require('./routes/notifications');
+
+// Use notification routes
+app.use('/api/notifications', notificationRoutes);
+
+// Use trending topics route
+const trendingRoutes = require('./routes/trending');
+app.use('/api/trending', trendingRoutes);
+
+// Use Empire of Attention routes (velocity, predictive trending, crypto-live,
+// image scrape, behavior intelligence)
+const empireRoutes = require('./routes/empireApi');
+app.use('/api', empireRoutes);
+
+// GET /api/sports/standings/:league
+app.get('/api/sports/standings/:league', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT standings, scraped_at FROM league_tables
+       WHERE league_slug = $1
+       ORDER BY scraped_at DESC LIMIT 1`,
+      [req.params.league]
+    );
+    if (result.rows.length === 0) return res.json({ standings: [], scraped_at: null });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Standings error:', err.message);
+    res.json({ standings: [], scraped_at: null });
+  }
+});
+
+// ── Live Scores API (reads from live_matches table written by scraper) ────
+app.get('/api/sports/live', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT match_id, competition, home_team, away_team,
+              home_score, away_score, status, match_minute, kickoff_at,
+              match_url, updated_at, home_hype_count, away_hype_count
+       FROM live_matches
+       WHERE status IN ('live', 'scheduled')
+         AND (status = 'live' OR kickoff_at > NOW() - INTERVAL '3 hours')
+       ORDER BY status DESC, updated_at DESC
+       LIMIT 50`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Live scores error:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/sports/results', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT match_id, competition, home_team, away_team,
+              home_score, away_score, status, match_minute, updated_at,
+              home_hype_count, away_hype_count
+       FROM live_matches
+       WHERE status = 'finished'
+       ORDER BY updated_at DESC
+       LIMIT 30`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Results error:', err.message);
+    res.json([]);
+  }
+});
+
+
+
+// ── API-SPORTS Proxy & Cache Shield Server ───────────────────────────────
+const apiSportsCache = new Map();
+let dailyApiSportsCount = 0;
+let dailyResetTime = Date.now() + (24 * 60 * 60 * 1000);
+
+app.all([/^\/api\/sports\/proxy\/v3\/(.*)/, /^\/api\/sports\/proxy\/(.*)/], async (req, res) => {
+  try {
+    let endpointPath = req.params[0] || '';
+    if (endpointPath.startsWith('v3/')) {
+      endpointPath = endpointPath.replace(/^v3\//, '');
+    }
+    endpointPath = endpointPath.replace(/^\/+/, '');
+    const queryParams = new URLSearchParams(req.query).toString();
+    const cacheKey = `${endpointPath}?${queryParams}`;
+    const now = Date.now();
+
+    // Reset daily call count every 24 hours
+    if (now > dailyResetTime) {
+      dailyApiSportsCount = 0;
+      dailyResetTime = now + (24 * 60 * 60 * 1000);
+    }
+
+    // Determine TTL based on endpoint type
+    let ttlMs = 180 * 1000; // 3 minutes default for live games
+    if (endpointPath.includes('standings')) ttlMs = 60 * 60 * 1000; // 1 hour
+    else if (endpointPath.includes('headtohead')) ttlMs = 2 * 60 * 60 * 1000; // 2 hours
+    else if (endpointPath.includes('teams') || endpointPath.includes('players')) ttlMs = 24 * 60 * 60 * 1000; // 24 hours
+
+    // Check Cache Hit
+    const cached = apiSportsCache.get(cacheKey);
+    if (cached && (now - cached.timestamp) < ttlMs) {
+      res.setHeader('X-Cache-Status', 'HIT');
+      return res.json(cached.data);
+    }
+
+    // Quota Safety Cap: If 85 backend requests reached today, serve stale cache or return fallback to shield API key
+    if (dailyApiSportsCount >= 85 && cached) {
+      res.setHeader('X-Cache-Status', 'SAFETY_CAP_HIT');
+      return res.json(cached.data);
+    }
+
+    // Cache Miss -> Forward to API-SPORTS target API
+    dailyApiSportsCount++;
+    console.log(`[API-SPORTS Proxy] Call #${dailyApiSportsCount}/85 today: ${cacheKey}`);
+
+    const targetUrl = `https://v3.football.api-sports.io/${endpointPath}${queryParams ? '?' + queryParams : ''}`;
+    const apiKey = process.env.API_SPORTS_KEY || '63d52762b17e113314e8fd12e69134c1';
+
+    const apiRes = await fetch(targetUrl, {
+      headers: {
+        'x-apisports-key': apiKey,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return res.status(apiRes.status).send(errText);
+    }
+
+    const data = await apiRes.json();
+    apiSportsCache.set(cacheKey, { timestamp: now, data });
+
+    res.setHeader('X-Cache-Status', 'MISS');
+    res.json(data);
+  } catch (err) {
+    console.error('API-SPORTS Proxy Error:', err.message);
+    res.status(500).json({ error: 'Proxy request failed', message: err.message });
+  }
+});
+
+
+// Helper for live Flashscore details & statistics scraping
+async function fetchFlashscoreDetails(matchId, homeTeam, awayTeam) {
+  try {
+    const url = `https://www.flashscore.mobi/match/${matchId}/`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    if (!res.ok) return { stats: [], incidents: [] };
+    const html = await res.text();
+
+    const incidents = [];
+    const stats = [];
+
+    // Parse DOM incidents timeline (goals, cards, substitutions)
+    const incidentMatches = html.matchAll(/<div class="match-incident[^"]*">([\s\S]*?)<\/div>/gi);
+    for (const match of incidentMatches) {
+      const block = match[1];
+      const timeMatch = block.match(/<span class="time">([^<]+)<\/span>/i);
+      const textMatch = block.match(/<span class="incident[^"]*">([^<]+)<\/span>/i) || block.match(/<div class="[^"]*">([^<]+)<\/div>/i);
+      if (timeMatch && textMatch) {
+        incidents.push({
+          time: timeMatch[1].trim(),
+          text: textMatch[1].trim()
+        });
+      }
+    }
+
+    // Extract window.environment or stats feed if present
+    const envMatch = html.match(/window\.environment\s*=\s*(\{[\s\S]*?\});/);
+    if (envMatch) {
+      try {
+        const env = JSON.parse(envMatch[1]);
+        if (env.stats) {
+          Object.entries(env.stats).forEach(([name, val]) => {
+            if (val && typeof val === 'object') {
+              stats.push({ name, home: val.home || '0', away: val.away || '0' });
+            }
+          });
+        }
+      } catch (e) { /* ignore JSON parse */ }
+    }
+
+    // Fallback: parse Flashscore MOBI raw HTML stats table if present
+    if (stats.length === 0) {
+      const statRows = html.matchAll(/<tr class="stat-row">[\s\S]*?<td class="home">([^<]+)<\/td>[\s\S]*?<td class="title">([^<]+)<\/td>[\s\S]*?<td class="away">([^<]+)<\/td>[\s\S]*?<\/tr>/gi);
+      for (const row of statRows) {
+        stats.push({
+          name: row[2].trim(),
+          home: row[1].trim(),
+          away: row[3].trim()
+        });
+      }
+    }
+
+    return { incidents, stats };
+  } catch (err) {
+    console.warn('fetchFlashscoreDetails error:', err.message);
+    return { incidents: [], stats: [] };
+  }
+}
+
+// Helper for DB fallback match details
+async function getMatchDetailsFromDB(matchId) {
+  if (!process.env.DATABASE_URL) return null;
+  try {
+    const dbMatch = await pool.query(`
+      SELECT * FROM (
+        SELECT 
+          provider_match_id,
+          competition_name,
+          home_team_name,
+          home_team_crest,
+          away_team_name,
+          away_team_crest,
+          status,
+          minute,
+          home_score,
+          away_score,
+          kickoff_at,
+          updated_at
+        FROM matches
+        WHERE provider_match_id = $1
+
+        UNION ALL
+
+        SELECT 
+          match_id AS provider_match_id,
+          competition AS competition_name,
+          home_team AS home_team_name,
+          NULL AS home_team_crest,
+          away_team AS away_team_name,
+          NULL AS away_team_crest,
+          status,
+          COALESCE(match_minute::text, '') AS minute,
+          home_score,
+          away_score,
+          COALESCE(kickoff_at, updated_at, NOW()) AS kickoff_at,
+          updated_at
+        FROM live_matches
+        WHERE match_id = $1
+      ) combined
+      LIMIT 1
+    `, [matchId]);
+
+    if (dbMatch.rows.length === 0) return null;
+    const m = dbMatch.rows[0];
+    return {
+      id: m.provider_match_id,
+      status: m.status,
+      utcDate: m.kickoff_at,
+      source: m.home_team_crest ? 'api' : 'scraper',
+      competition: { name: m.competition_name },
+      homeTeam: { name: m.home_team_name, crest: m.home_team_crest },
+      awayTeam: { name: m.away_team_name, crest: m.away_team_crest },
+      score: {
+        fullTime: { home: m.home_score, away: m.away_score }
+      }
+    };
+  } catch (err) {
+    console.error('getMatchDetailsFromDB error:', err.message);
+    return null;
+  }
+}
+
+// GET /api/sports/matches/:id/details (venue, referees, H2H aggregates, recent matches)
+app.get('/api/sports/matches/:id/details', async (req, res) => {
+  const matchId = req.params.id;
+  const apiKey = process.env.FOOTBALL_DATA_API_KEY;
+  const isNumeric = /^\d+$/.test(matchId);
+
+  // 1. Grasp Soccerway or non-numeric matches immediately via DB fallback & Flashscore scraping
+  if (!isNumeric) {
+    // Check cache first (highly ephemeral 15 seconds cache to keep stats live but not spam Flashscore)
+    if (process.env.DATABASE_URL) {
+      try {
+        const cacheResult = await pool.query(
+          `SELECT data FROM match_details_cache 
+           WHERE match_id = $1 AND fetched_at >= NOW() - INTERVAL '15 seconds'`,
+          [matchId]
+        );
+        if (cacheResult.rows.length > 0) {
+          return res.json(cacheResult.rows[0].data);
+        }
+      } catch (cacheErr) {
+        console.warn('Scraper details cache read error:', cacheErr.message);
+      }
+    }
+
+    const dbFallback = await getMatchDetailsFromDB(matchId);
+    if (!dbFallback) {
+      return res.status(404).json({ error: 'Match not found in local database' });
+    }
+
+    // Fetch live statistics and timeline incidents on-the-fly
+    const flashDetails = await fetchFlashscoreDetails(matchId, dbFallback.homeTeam.name, dbFallback.awayTeam.name);
+
+    const combinedResponse = {
+      match: dbFallback,
+      incidents: flashDetails.incidents,
+      stats: flashDetails.stats,
+      h2h: null
+    };
+
+    // Save to cache
+    if (process.env.DATABASE_URL) {
+      await pool.query(
+        `INSERT INTO match_details_cache (match_id, data, fetched_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (match_id)
+         DO UPDATE SET data = EXCLUDED.data, fetched_at = CURRENT_TIMESTAMP`,
+        [matchId, JSON.stringify(combinedResponse)]
+      ).catch(e => console.warn('Failed to save scraper match details cache:', e.message));
+    }
+
+    return res.json(combinedResponse);
+  }
+
+  try {
+    // 2. Football-Data numeric match - check cache first
+    if (process.env.DATABASE_URL) {
+      const cacheResult = await pool.query(
+        `SELECT data FROM match_details_cache 
+         WHERE match_id = $1 AND fetched_at >= NOW() - INTERVAL '15 minutes'`,
+        [matchId]
+      );
+      if (cacheResult.rows.length > 0) {
+        console.log(`Cache HIT for match details: ${matchId}`);
+        return res.json(cacheResult.rows[0].data);
+      }
+    }
+
+    // 3. Cache missed - fetch live data
+    console.log(`Cache MISS for match details: ${matchId}. Fetching live...`);
+    const matchRes = await fetch(`https://api.football-data.org/v4/matches/${matchId}`, {
+      headers: { 'X-Auth-Token': apiKey }
+    });
+
+    if (!matchRes.ok) {
+      // API call failed (e.g. rate limit, bad API key, or non-existent in FD API but numeric)
+      // Fallback to local DB gracefully!
+      console.warn(`Football-Data match details fetch failed with status ${matchRes.status}. Falling back to DB...`);
+      const dbFallback = await getMatchDetailsFromDB(matchId);
+      if (dbFallback) {
+        return res.json({ match: dbFallback, h2h: null });
+      }
+      throw new Error(`Football-Data API returned status ${matchRes.status} and no DB fallback found`);
+    }
+    const matchData = await matchRes.json();
+
+    // 4. Fetch head2head details
+    let h2hData = null;
+    try {
+      const h2hRes = await fetch(`https://api.football-data.org/v4/matches/${matchId}/head2head`, {
+        headers: { 'X-Auth-Token': apiKey }
+      });
+      if (h2hRes.ok) {
+        h2hData = await h2hRes.json();
+      }
+    } catch (h2hErr) {
+      console.warn(`H2H fetch failed for match ${matchId}:`, h2hErr.message);
+    }
+
+    const combinedResponse = {
+      match: matchData,
+      h2h: h2hData
+    };
+
+    // 5. Save to database cache table
+    if (process.env.DATABASE_URL) {
+      await pool.query(
+        `INSERT INTO match_details_cache (match_id, data, fetched_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (match_id)
+         DO UPDATE SET data = EXCLUDED.data, fetched_at = CURRENT_TIMESTAMP`,
+        [matchId, JSON.stringify(combinedResponse)]
+      ).catch(e => console.warn('Failed to save match details cache:', e.message));
+    }
+
+    res.json(combinedResponse);
+  } catch (err) {
+    console.error('Error fetching match details:', err.message);
+    // Fall back to local DB as absolute last resort
+    const dbFallback = await getMatchDetailsFromDB(matchId);
+    if (dbFallback) {
+      return res.json({ match: dbFallback, h2h: null });
+    }
+    res.status(500).json({ error: 'Failed to fetch match details' });
+  }
+});
+
+
+// --- NEW AGGREGATOR ENDPOINTS ------------------------------------------------
+
+// GET /api/search/suggest?q=
+app.get('/api/search/suggest', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json([]);
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      "SELECT 'rss-' || id AS id, title, category, image FROM rss_articles WHERE title ILIKE $1 ORDER BY published_at DESC LIMIT 6",
+      ['%' + q + '%']
+    );
+    res.json(result.rows);
+  } catch (err) { console.error('Suggest:', err.message); res.json([]); }
+});
+
+// POST /api/reactions/:id
+app.post('/api/reactions/:id', async (req, res) => {
+  const { id } = req.params;
+  const { type, deviceId } = req.body;
+  if (!['fire', 'heart', 'wow'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+  if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
+
+  try {
+    if (!process.env.DATABASE_URL) return res.json({ [type]: 1 });
+
+    // Check if this device has already reacted to this article
+    const existing = await pool.query(
+      "SELECT reaction_type FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
+      [deviceId, id]
+    );
+
+    if (existing.rows.length > 0) {
+      const prevType = existing.rows[0].reaction_type;
+      if (prevType === type) {
+        // Toggle off: User clicked the same reaction again, remove it
+        await pool.query(
+          "DELETE FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
+          [deviceId, id]
+        );
+        // Decrease the count in article_reactions
+        await pool.query(
+          "UPDATE article_reactions SET count = GREATEST(0, count - 1) WHERE article_id = $1 AND reaction_type = $2",
+          [id, type]
+        );
+      } else {
+        // Update reaction: User changed their reaction (e.g. from fire to heart)
+        await pool.query(
+          "UPDATE user_article_reactions SET reaction_type = $1 WHERE device_id = $2 AND article_id = $3",
+          [type, deviceId, id]
+        );
+        // Decrease the old reaction count
+        await pool.query(
+          "UPDATE article_reactions SET count = GREATEST(0, count - 1) WHERE article_id = $1 AND reaction_type = $2",
+          [id, prevType]
+        );
+        // Increase the new reaction count
+        await pool.query(
+          "INSERT INTO article_reactions (article_id, reaction_type, count) VALUES ($1, $2, 1) ON CONFLICT (article_id, reaction_type) DO UPDATE SET count = article_reactions.count + 1",
+          [id, type]
+        );
+      }
+    } else {
+      // New reaction: Insert reaction record
+      await pool.query(
+        "INSERT INTO user_article_reactions (device_id, article_id, reaction_type) VALUES ($1, $2, $3)",
+        [deviceId, id, type]
+      );
+      // Increase the reaction count
+      await pool.query(
+        "INSERT INTO article_reactions (article_id, reaction_type, count) VALUES ($1, $2, 1) ON CONFLICT (article_id, reaction_type) DO UPDATE SET count = article_reactions.count + 1",
+        [id, type]
+      );
+    }
+
+    // Get updated counts
+    const r = await pool.query("SELECT reaction_type, count FROM article_reactions WHERE article_id=$1", [id]);
+    const c = { fire: 0, heart: 0, wow: 0 }; r.rows.forEach(x => { c[x.reaction_type] = parseInt(x.count); });
+
+    // Also send back what the user's current reaction is (or null)
+    const userReact = await pool.query(
+      "SELECT reaction_type FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
+      [deviceId, id]
+    );
+    const userReaction = userReact.rows.length > 0 ? userReact.rows[0].reaction_type : null;
+
+    res.json({ counts: c, userReaction });
+  } catch (err) {
+    console.error('Reaction:', err.message);
+    res.status(500).json({ error: 'Failed to process reaction' });
+  }
+});
+
+// GET /api/reactions/:id
+app.get('/api/reactions/:id', async (req, res) => {
+  const { id } = req.params;
+  const { deviceId } = req.query;
+  try {
+    if (!process.env.DATABASE_URL) return res.json({ fire: 0, heart: 0, wow: 0, userReaction: null });
+
+    const r = await pool.query("SELECT reaction_type, count FROM article_reactions WHERE article_id=$1", [id]);
+    const c = { fire: 0, heart: 0, wow: 0 }; r.rows.forEach(x => { c[x.reaction_type] = parseInt(x.count); });
+
+    let userReaction = null;
+    if (deviceId) {
+      const userReact = await pool.query(
+        "SELECT reaction_type FROM user_article_reactions WHERE device_id = $1 AND article_id = $2",
+        [deviceId, id]
+      );
+      if (userReact.rows.length > 0) {
+        userReaction = userReact.rows[0].reaction_type;
+      }
+    }
+
+    res.json({ counts: c, userReaction });
+  } catch (err) {
+    res.json({ fire: 0, heart: 0, wow: 0, userReaction: null });
+  }
+});
+
+// GET /api/hashtags/trending
+app.get('/api/hashtags/trending', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query("SELECT title FROM rss_articles WHERE published_at > NOW() - INTERVAL '48 hours' LIMIT 300");
+    const stop = new Set(['the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'and', 'or', 'but', 'is', 'was', 'are', 'were', 'has', 'have', 'had', 'be', 'been', 'it', 'its', 'this', 'that', 'with', 'from', 'by', 'as', 'not', 'no', 'new', 'also', 'after', 'says', 'say', 'will', 'can', 'more', 'than', 'now', 'just', 'his', 'her', 'their', 'our', 'he', 'she', 'they', 'we', 'you', 'who', 'what', 'when', 'where', 'how']);
+    const freq = {};
+    result.rows.forEach(r => {
+      (r.title || '').split(/\s+/).forEach(w => {
+        const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
+        if (clean.length > 3 && !stop.has(clean)) freq[clean] = (freq[clean] || 0) + 1;
+      });
+    });
+    res.json(Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([tag, count]) => ({ tag, count })));
+  } catch (err) { console.error('Hashtags:', err.message); res.json([]); }
+});
+
+// Cache for grouped stories to reduce heavy string processing and DB load
+let groupedCache = { data: null, timestamp: 0 };
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+// GET /api/stories/grouped
+app.get('/api/stories/grouped', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+
+    // Return cached data if valid
+    if (groupedCache.data && Date.now() - groupedCache.timestamp < CACHE_TTL) {
+      return res.json(groupedCache.data);
+    }
+
+    const result = await pool.query("SELECT 'rss-' || id AS id, title, COALESCE(ai_summary, original_excerpt) AS excerpt, category, image, source_name AS author, external_link, published_at AS date FROM rss_articles WHERE image IS NOT NULL AND image != '' AND published_at > NOW() - INTERVAL '72 hours' ORDER BY published_at DESC LIMIT 200");
+    const articles = result.rows;
+
+    const groups = [];
+    const used = new Set();
+    const STOP_WORDS = new Set(['about', 'above', 'after', 'again', 'against', 'all', 'because', 'could', 'their', 'there', 'these', 'those', 'through', 'under', 'until', 'which', 'while', 'would', 'years', 'first', 'state', 'government', 'president']);
+
+    for (const article of articles) {
+      if (used.has(article.id)) continue;
+
+      // Extract significant keywords
+      const words = new Set(
+        (article.title || '').toLowerCase()
+          .split(/[^a-z0-9]+/)
+          .filter(w => w.length >= 4 && !STOP_WORDS.has(w))
+      );
+
+      const related = articles.filter(a => {
+        if (a.id === article.id || used.has(a.id)) return false;
+        const aWords = (a.title || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !STOP_WORDS.has(w));
+        // Count matching significant keywords
+        const matchCount = aWords.filter(w => words.has(w)).length;
+        // Require at least 2 strong keyword matches for it to be the "same event"
+        return matchCount >= 2;
+      }).slice(0, 5);
+
+      used.add(article.id);
+      related.forEach(r => used.add(r.id));
+
+      groups.push({
+        headline: article,
+        sources: related,
+        coverage_count: related.length + 1,
+        category: article.category
+      });
+
+      if (groups.length >= 20) break;
+    }
+
+    // Update cache
+    groupedCache = { data: groups, timestamp: Date.now() };
+    res.json(groups);
+  } catch (err) {
+    console.error('Grouping:', err.message);
+    res.json(groupedCache.data || []); // Fallback to stale cache on error
+  }
+});
+
+// GET /api/cron/feed-health?secret=xxx
+// Called weekly by cron-job.org to validate all RSS feeds
+const { runFeedHealthCheck } = require('./services/feedHealthChecker');
+app.get('/api/cron/feed-health', async (req, res) => {
+  if (!requireCron(req, res, { route: '/api/cron/feed-health', task: 'feed-health' })) return;
+
+  // Respond immediately — health checks take up to 20-30s which would timeout Vercel
+  res.status(200).json({
+    success: true,
+    message: 'Weekly feed health validation started',
+    timestamp: new Date().toISOString()
+  });
+
+  setImmediate(async () => {
+    try {
+      const result = await runFeedHealthCheck(pool);
+      console.log(`✅ Weekly feed health check complete. Success: ${result.success}, Healthy: ${result.healthyCount}, Failed: ${result.failedCount}`);
+    } catch (error) {
+      console.error('❌ Feed health check task error:', error.message);
+    }
+  });
+});
+
+// GET /api/news/by-source?source=Vanguard
+app.get('/api/news/by-source', async (req, res) => {
+  const source = String(req.query.source || '').trim();
+  if (!source) return res.status(400).json({ error: 'source required' });
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(50, parseInt(req.query.limit) || 20);
+  const offset = (page - 1) * limit;
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query("SELECT 'rss-' || id AS id, title, COALESCE(ai_summary, original_excerpt) AS excerpt, category, image, source_name AS author, external_link, published_at AS date, content_type FROM rss_articles WHERE source_name ILIKE $1 ORDER BY published_at DESC LIMIT $2 OFFSET $3", ['%' + source + '%', limit, offset]);
+    res.json(result.rows.map(r => ({ id: r.id, title: r.title, excerpt: r.excerpt, category: r.category, image: r.image, author: r.author, externalLink: r.external_link, date: r.date, contentType: r.content_type, source: 'rss' })));
+  } catch (err) { console.error('By-source:', err.message); res.json([]); }
+});
+
+// --- Street Parallel Exchange Rates ---
+
+const marketTs = (r) => new Date(r.updated_at || r.created_at || 0).getTime() || 0;
+const latestBy = (rows, keyFn) => {
+  const best = new Map();
+  for (const r of rows) {
+    const k = keyFn(r);
+    if (!best.has(k) || marketTs(r) > marketTs(best.get(k))) best.set(k, r);
+  }
+  return [...best.values()];
+};
+const shapeRate = (r) => ({ currency: r.currency, buy_rate: r.buy_rate, sell_rate: r.sell_rate, source: r.source, created_at: r.updated_at || r.created_at });
+const shapePrice = (r) => ({ item_name: r.item_name, price: r.price, location: r.location, unit: r.unit, created_at: r.updated_at || r.created_at });
+
+app.get('/api/rates', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT * FROM parallel_rates`
+    );
+    res.json(latestBy(result.rows || [], (r) => r.currency).map(shapeRate));
+  } catch (err) {
+    console.error('Rates API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch rates' });
+  }
+});
+
+// --- Commodity Prices ---
+app.get('/api/prices', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT * FROM market_prices LIMIT 2000`
+    );
+    res.json(latestBy(result.rows || [], (r) => `${r.item_name}|${r.location}`).map(shapePrice));
+  } catch (err) {
+    console.error('Prices API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch prices' });
+  }
+});
+
+// Dynamic SVG Rate Card endpoint for viral social syndication
+app.get('/api/generate/rate-card', async (req, res) => {
+  try {
+    const svg = await generateRateCardSvg();
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300');
+    res.send(svg);
+  } catch (err) {
+    console.error('Rate Card endpoint error:', err.message);
+    res.status(500).send('<svg xmlns="http://www.w3.org/2000/svg"><text y="20">Error generating card</text></svg>');
+  }
+});
+
+// Admin crawler feed health logs endpoint
+app.get('/api/admin/feed-health', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT fh.feed_url, fh.category, fh.last_success, fh.last_error, fh.error_count, fh.avg_response_ms,
+             COALESCE((SELECT COUNT(*) FROM rss_articles a 
+                       WHERE a.external_link LIKE '%' || SPLIT_PART(fh.feed_url, '/', 3) || '%'
+                         AND a.published_at >= NOW() - INTERVAL '24 hours'), 0) AS articles_last_24h
+      FROM feed_health fh
+      ORDER BY fh.error_count DESC, fh.avg_response_ms DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Feed health fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch feed health logs' });
+  }
+});
+
+// Broadcast Compiler for WhatsApp Status, Broadcasts, and Telegram syndication
+app.get('/api/admin/broadcast-text', async (req, res) => {
+  try {
+    let usdBuy = '1,640', usdSell = '1,650';
+    let gbpBuy = '2,080', gbpSell = '2,100';
+    let eurBuy = '1,780', eurSell = '1,800';
+
+    // 1. Fetch Parallel Exchange Rates
+    const ratesRes = await pool.query(
+      `SELECT currency, street_buy, street_sell FROM parallel_rates ORDER BY updated_at DESC LIMIT 6`
+    );
+    if (ratesRes.rows.length > 0) {
+      ratesRes.rows.forEach(row => {
+        const cur = row.currency.toUpperCase();
+        if (cur === 'USD') { usdBuy = row.street_buy; usdSell = row.street_sell; }
+        else if (cur === 'GBP') { gbpBuy = row.street_buy; gbpSell = row.street_sell; }
+        else if (cur === 'EUR') { eurBuy = row.street_buy; eurSell = row.street_sell; }
+      });
+    }
+
+    // 2. Fetch top 3 breaking articles
+    const articlesRes = await pool.query(
+      `SELECT title, category FROM rss_articles ORDER BY published_at DESC LIMIT 3`
+    );
+    const topArticles = articlesRes.rows.map(a => `• ${a.title}`).join('\n');
+    const topArticlesPidgin = articlesRes.rows.map(a => `• ${a.title}`).join('\n');
+
+    const updateTimeStr = new Date().toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+
+    // 3. Compile English Broadcast Text
+    const englishText = `📈 *RealSSA Economic & News Wire Update - ${updateTimeStr}* 📈
+
+*Street FX Parallel Rates:*
+💵 *USD:* ₦${usdBuy} / ₦${usdSell}
+💷 *GBP:* ₦${gbpBuy} / ₦${gbpSell}
+💶 *EUR:* ₦${eurBuy} / ₦${eurSell}
+
+*Top Inbound Headlines:*
+${topArticles}
+
+📲 _Check live, hourly parallel rates and download the RealSSA app for hyperlocal updates: www.realssanews.com.ng_`;
+
+    // 4. Compile Wazobia Pidgin Broadcast Text
+    const pidginText = `🔥 *RealSSA Economic & News Wire Update - ${updateTimeStr}* 🔥
+
+*Parallel Market Dollar/Pounds Rate:*
+💵 *USD:* Buy at ₦${usdBuy} | Sell at ₦${usdSell}
+💷 *GBP:* Buy at ₦${gbpBuy} | Sell at ₦${gbpSell}
+💶 *EUR:* Buy at ₦${eurBuy} | Sell at ₦${eurSell}
+
+*Tempting Headlines Wetin Dey Reign Now:*
+${topArticlesPidgin}
+
+📲 _Chook eye inside hourly black market rates details and download RealSSA App: www.realssanews.com.ng_`;
+
+    res.json({
+      english: englishText,
+      pidgin: pidginText
+    });
+  } catch (err) {
+    console.error('Broadcast endpoint error:', err.message);
+    res.status(500).json({ error: 'Failed to compile broadcast text' });
+  }
+});
+
+// --- NGX Stock Tracker ---
+app.get('/api/stocks', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT DISTINCT ON (symbol) symbol, company_name, price, price_change, percent_change, volume, trading_date
+       FROM ngx_stocks
+       ORDER BY symbol, trading_date DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Stocks API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch stocks' });
+  }
+});
+
+
+// --- Politicians Directory ---
+app.get('/api/politicians', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT name, role, state, constituency, party, profile_image, created_at
+       FROM politicians
+       ORDER BY name ASC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Politicians API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch politicians' });
+  }
+});
+
+// --- Events Calendar Index ---
+app.get('/api/events', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+
+    // Fetch upcoming and recent events
+    const result = await pool.query(
+      `SELECT id, title, description, category, event_date, location, ticket_link, created_at
+       FROM events
+       WHERE event_date >= NOW() - INTERVAL '3 days'
+       ORDER BY event_date ASC`
+    );
+
+    // For each event, fetch linked articles count
+    const events = [];
+    for (const ev of result.rows) {
+      const artCount = await pool.query(
+        `SELECT COUNT(*) FROM article_events WHERE event_id = $1`,
+        [ev.id]
+      );
+      events.push({
+        ...ev,
+        linked_articles_count: parseInt(artCount.rows[0].count)
+      });
+    }
+
+    res.json(events);
+  } catch (err) {
+    console.error('Events API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch events' });
+  }
+});
+
+// --- Linked Event Articles ---
+app.get('/api/events/:id/articles', async (req, res) => {
+  const eventId = parseInt(req.params.id);
+  try {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    const result = await pool.query(
+      `SELECT a.id, a.title, a.original_excerpt AS excerpt, a.image, a.published_at AS date, a.source_name AS author, a.category, a.content_type
+       FROM rss_articles a
+       JOIN article_events ae ON a.id = ae.article_id
+       WHERE ae.event_id = $1
+       ORDER BY a.published_at DESC`,
+      [eventId]
+    );
+    res.json(result.rows.map(row => ({
+      id: 'rss-' + row.id,
+      title: row.title,
+      excerpt: row.excerpt,
+      image: row.image,
+      date: row.date,
+      author: row.author,
+      category: row.category,
+      contentType: row.content_type || 'article',
+      source: 'rss'
+    })));
+  } catch (err) {
+    console.error('Event articles API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch event articles' });
+  }
+});
+
+
+// Auto-create reactions table
+if (process.env.DATABASE_URL) {
+  pool.query("CREATE TABLE IF NOT EXISTS article_reactions (article_id TEXT NOT NULL, reaction_type TEXT NOT NULL, count INTEGER DEFAULT 0, PRIMARY KEY (article_id, reaction_type))").catch(e => console.warn('Reactions table:', e.message));
+
+  // Auto-create notifications-related tables
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS user_subscriptions (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR(100),
+      endpoint TEXT UNIQUE NOT NULL,
+      p256dh TEXT,
+      auth TEXT,
+      topics TEXT[] DEFAULT '{}',
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `).catch(e => console.warn('User subscriptions table creation failed:', e.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id VARCHAR(100) PRIMARY KEY,
+      categories JSONB DEFAULT '[]',
+      topics JSONB DEFAULT '[]',
+      notification_settings JSONB DEFAULT '{}',
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `).catch(e => console.warn('User preferences table creation failed:', e.message));
+
+  // Auto-create composite index for fast category-sorted queries
+  pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_rss_articles_cat_pub 
+    ON rss_articles (category, published_at DESC)
+  `).catch(e => console.warn('Composite index creation failed:', e.message));
+
+  // Auto-create match details cache table
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS match_details_cache (
+      match_id VARCHAR(100) PRIMARY KEY,
+      data JSONB NOT NULL,
+      fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `).catch(e => console.warn('Match details cache table creation failed:', e.message));
+}
+// Start persistent background bots and server when running locally or on Fly.io — NOT on Vercel serverless
+if (!process.env.VERCEL) {
+  try {
+    console.log('🚀 Initializing persistent Soccerway live scores scraper...');
+    require('./services/liveScraper');
+  } catch (err) {
+    console.error('❌ Failed to initialize Soccerway live scraper:', err.message);
+  }
+
+  try {
+    console.log('🤖 Initializing background cron bots (RSS Ingestion, Buffer, Sports, Rates)...');
+    const { initRssBot } = require('./services/rssBot');
+    const { initSportsBot } = require('./services/sportsBot');
+    const { initRatesBot } = require('./services/ratesBot');
+    const { initPricesBot } = require('./services/pricesBot');
+
+    if (pool) {
+      initRssBot(pool);
+      initSportsBot(pool, notificationService);
+      initRatesBot(pool);
+      initPricesBot(pool);
+      console.log('✅ All background cron bots active and running.');
+    }
+  } catch (botErr) {
+    console.error('❌ Failed to initialize background cron bots:', botErr.message);
+  }
+
+  try {
+    console.log('🤖 Initializing Telegram Bot (@RealSSABot)...');
+    const { startTelegramBot } = require('./services/telegramBot');
+    startTelegramBot();
+  } catch (tgErr) {
+    console.error('❌ Failed to initialize Telegram Bot:', tgErr.message);
+  }
+
+  try {
+    console.log('⚡ Initializing Empire of Attention background engines...');
+    require('./services/velocity.service').start();
+    require('./services/socialPredictive.service').start();
+    require('./services/cryptoLive.service').start();
+    // Entertainment trigger-response engine: allowed-source trend detection
+    // (RSS, Google Trends, Reddit, optional YouTube/X official APIs).
+    require('./services/entertainmentTrigger.service').start();
+    // Volatility alarm subscribes to cryptoLive ticks + socialPredictive polls
+    // and fires OneSignal pushes (with affiliate deep links) on market panics.
+    require('./services/volatilityAlarm.service').start();
+    // Live Viewer Service — synthetic social proof counts
+    require('./services/liveViewerService').start();
+    console.log('✅ Empire of Attention engines active (velocity, predictive, crypto-live, volatility-alarm, live-viewer).');
+  } catch (empireErr) {
+    console.error('❌ Failed to initialize Empire of Attention engines:', empireErr.message);
+  }
+
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Try POST /api/auth/login with username: admin, password: admin123`);
+  });
+}
+
+// --- Location-aware news feed ------------------------------------------------
+app.get('/api/location-feed', async (req, res) => {
+  const name = String(req.query.name || '').trim().slice(0, 120);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 24, 1), 50);
+  if (!name) return res.status(400).json({ articles: [], error: 'name is required' });
+
+  try {
+    if (!process.env.DATABASE_URL) return res.json({ articles: [], location: name, hasCoverage: false });
+    const result = await pool.query(
+      `SELECT 'rss-' || id AS id,
+              title,
+              COALESCE(ai_summary, original_excerpt, '') AS excerpt,
+              category,
+              image,
+              source_name AS author,
+              external_link AS "externalLink",
+              published_at AS date,
+              content_type AS "contentType"
+       FROM rss_articles
+       WHERE (
+         title ILIKE $1
+         OR original_excerpt ILIKE $1
+         OR COALESCE(ai_summary, '') ILIKE $1
+       )
+       ORDER BY published_at DESC
+       LIMIT $2`,
+      ['%' + name + '%', limit]
+    );
+    res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600');
+    res.json({ articles: result.rows, location: name, hasCoverage: result.rows.length > 0 });
+  } catch (err) {
+    console.error('Location feed error:', err.message);
+    res.status(200).json({ articles: [], location: name, hasCoverage: false });
+  }
+});
+
+// Global Express Error Handler
+app.use((err, req, res, next) => {
+  console.error('❌ [Express Global Error]:', err.message, err.stack);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal Server Error', message: err.message });
+  }
+});
+
+module.exports = app;

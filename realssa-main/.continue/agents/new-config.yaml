@@ -1,0 +1,25 @@
+name: Local Config
+version: 1.0.0
+schema: v1
+
+models:
+  - title: Qwen 1.5B
+    provider: ollama
+    model: qwen2.5-coder:1.5b
+    roles:
+      - chat
+      - edit
+      - apply
+      - summarize
+
+  - title: Qwen Autocomplete
+    provider: ollama
+    model: qwen2.5-coder:1.5b
+    roles:
+      - autocomplete
+
+  - title: Nomic Embed
+    provider: ollama
+    model: nomic-embed-text
+    roles:
+      - embed
