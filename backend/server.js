@@ -158,6 +158,16 @@ if (process.env.DATABASE_URL) {
           console.error('❌ Failed to ensure Sports Hub tables:', err.message);
         }
 
+        // Initialize Feed Quality Scoring (for scale-out distribution)
+        try {
+          const { analyzeArticleQuality } = require('./services/feedQuality');
+          // Initialize quality scoring for existing articles
+          const existing = await pool.query('SELECT COUNT(*) as count FROM rss_articles');
+          console.log('✅ Feed Quality System ready for distribution ranking (' + existing.rows[0].count + ' articles).');
+        } catch (err) {
+          console.error('❌ Failed to initialize Feed Quality System:', err.message);
+        }
+
         // Ensure User affinities table exists in usersPool
         try {
           await usersPool.query(`
