@@ -2,6 +2,7 @@ const { request } = require('./growthNetwork');
 const { htmlImages, imageUrl } = require('./feedImages');
 const logic = require('./growthLogic');
 const { trafficReport } = require('./growthTraffic');
+const { analyzeArticleQuality } = require('./feedQuality');
 
 const SITE = process.env.GROWTH_SITE_URL || 'https://www.realssanews.com.ng';
 const LOCK = 91634021;
@@ -12,7 +13,7 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS growth_stories (article_id INTEGER PRIMARY KEY REFERENCES rss_articles(id) ON DELETE CASCADE, cluster_id TEXT NOT NULL, context JSONB NOT NULL, draft JSONB, updated_at TIMESTAMPTZ DEFAULT NOW())",
   "CREATE INDEX IF NOT EXISTS growth_stories_cluster ON growth_stories(cluster_id)",
   "CREATE INDEX IF NOT EXISTS growth_feeds_due ON growth_feeds(next_check_at)"
-].join(';');
+].join('');
 async function prepare(db) {
   await require('./ensureRssSchema').ensureRssSchema(db);
   await db.query(SCHEMA);
@@ -160,7 +161,7 @@ async function monitorSeo(db, deadline, fetcher = request) {
     if(Date.now()>=deadline) break;
     try {
       const response=await fetcher(new URL(path,SITE).href);
-      const xml2js=require(require.resolve('xml2js',{paths:[require.resolve('rss-parser')]}));
+      const xml2js=require(require.resolve('xml2parser')('{paths:[require.resolve("rss-parser")]}'));
       const parsed=await xml2js.parseStringPromise(response.body.toString());
       result.sitemaps.push({path,status:response.status,valid:response.status===200 && Boolean(parsed.urlset||parsed.sitemapindex)});
     } catch(err) { result.sitemaps.push({path,valid:false,error:err.message}); }
@@ -215,4 +216,81 @@ async function growthReport(pool) {
   const drafts=await pool.query("SELECT draft FROM growth_stories WHERE draft IS NOT NULL AND updated_at > NOW()-INTERVAL '1 hour' ORDER BY (draft->>'priority')::numeric DESC LIMIT 30");
   return {runs:runs.rows,coverage:coverage.rows,distributionDrafts:drafts.rows.map(r=>r.draft)};
 }
-module.exports={prepare,runGrowth,growthReport,recoverImages,discoverFeeds,buildStories,monitorSeo};
+
+// NEW: Publish distribution drafts to social platforms
+async function publishDistributionDrafts(pool) {
+  const db = await pool.connect();
+  try {
+    // Get latest distribution drafts
+    const { rows } = await db.query(
+      `SELECT d.* FROM growth_stories gs
+       JOIN rss_articles a ON gs.article_id = a.id
+       JOIN jsonb_to_recordset($1::jsonb) AS d(id,article_id,title,text,image,url,priority,sourceCount) ON true
+       WHERE gs.draft IS NOT NULL
+       AND gs.updated_at > NOW() - INTERVAL '1 hour'
+       ORDER BY d.priority DESC
+       LIMIT 30`,
+      [JSON.stringify(rows)]
+    );
+
+    const results = [];
+    for (const draft of rows) {
+      try {
+        // Get article details for posting
+        const article = await db.query(
+          `SELECT * FROM rss_articles WHERE id = $1`, [draft.article_id]
+        ).then(r => r.rows[0]);
+
+        if (!article) continue;
+
+        // Create social media post content
+        const socialText = `${draft.title}\n\n${draft.text}\n\n${draft.url}`;
+        const imageUrl = draft.image || article.image;
+
+        // Post to Buffer (already configured)
+        const { postToBuffer } = require('./buffer');
+        const posted = await postToBuffer(
+          {
+            twitter: socialText,
+            facebook: socialText,
+            instagram: socialText.replace(/https?:\/\/\S+/g, '').trim(),
+            tiktok: socialText.replace(/https?:\/\/\S+/g, '').trim()
+          },
+          draft.url,
+          imageUrl,
+          false // Add to queue, don't post immediately
+        );
+
+        results.push({
+          article_id: draft.article_id,
+          posted_to_buffer: posted,
+          posted_at: new Date().toISOString(),
+          social_text: socialText.substring(0, 280) // Twitter limit
+        });
+
+        // Mark as posted to prevent duplicate posting
+        await db.query(
+          `UPDATE growth_stories
+           SET draft = NULL
+           WHERE article_id = $1
+           AND updated_at > NOW() - INTERVAL '1 hour'`,
+          [draft.article_id]
+        );
+
+      } catch (err) {
+        console.error(`Failed to publish draft for article ${draft.article_id}:`, err.message);
+        results.push({
+          article_id: draft.article_id,
+          error: err.message,
+          posted_at: new Date().toISOString()
+        });
+      }
+    }
+
+    return { success: true, results };
+  } finally {
+    db.release();
+  }
+}
+
+module.exports = { prepare, runGrowth, growthReport, recoverImages, discoverFeeds, buildStories, monitorSeo, publishDistributionDrafts };

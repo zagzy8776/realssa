@@ -16,6 +16,8 @@ const notificationService = require('./notificationService');
 const { postToBuffer } = require('./buffer');
 const { extractArticle } = require('./extractor');
 const { scrapeAndRehost } = require('./imagePipeline');
+const { analyzeArticleQuality } = require('./feedQuality');
+const { validateDiscoveredFeeds, updateFeedHealthMetrics } = require('./feedDiscovery');
 
 const SITE_URL = 'https://realssanews.com.ng';
 
@@ -637,7 +639,7 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
 
   // Healthy publisher-discovered feeds join the existing country rotation.
   try {
-    const discovered = await pool.query("SELECT url,country FROM growth_feeds WHERE origin='discovered' AND healthy=true AND checked_at > NOW()-INTERVAL '7 days'");
+    const discovered = await pool.query("SELECT url,country FROM feed_discoveries WHERE validated = true AND (discovered_via IS NULL OR discovered_via != 'manual') AND url NOT IN (SELECT feed_url FROM feed_health) ORDER BY discovered_at DESC LIMIT 20");
     allCategories = allCategories.map(c => ({ ...c, feeds: [...(c.feeds || [])] }));
     for (const row of discovered.rows) {
       let category = allCategories.find(c => c.category === row.country);
@@ -781,7 +783,18 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
   }
 
 
-  // 4. Wait for all feeds to fetch in parallel and process them immediately to prevent OOM
+  // 4. Discover and validate new feeds continuously
+  setImmediate(async () => {
+    try {
+      const { validateDiscoveredFeeds, updateFeedHealthMetrics } = require('./feedDiscovery');
+      await validateDiscoveredFeeds(pool);
+      await updateFeedHealthMetrics(pool);
+    } catch (err) {
+      console.error('[Feed Discovery]', err.message);
+    }
+  });
+
+  // 5. Wait for all feeds to fetch in parallel and process them immediately to prevent OOM
   const BATCH_SIZE = 10;
   for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
     const batch = allUrls.slice(i, i + BATCH_SIZE);

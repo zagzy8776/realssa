@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('node:crypto');
-const { runGrowth, growthReport } = require('../services/growthWorker');
+const { runGrowth, growthReport, publishDistributionDrafts } = require('../services/growthWorker');
 module.exports = function growthRoutes(pool) {
   const router = express.Router();
   router.use((req,res,next) => {
@@ -17,7 +17,15 @@ module.exports = function growthRoutes(pool) {
     catch(err) { console.error('[Growth report]',err.message); res.status(500).json({error:'Growth report failed'}); }
   });
   router.post('/run',async (_req,res)=>{
-    try { res.json(await runGrowth(pool)); }
+    try {
+      const result = await runGrowth(pool);
+      // After successful growth run, publish distribution drafts
+      if (result?.runId) {
+        const publishResult = await publishDistributionDrafts(pool);
+        result.draftPublishing = publishResult;
+      }
+      res.json(result);
+    }
     catch(err) { console.error('[Growth run]',err.message); res.status(500).json({error:'Growth run failed'}); }
   });
   return router;

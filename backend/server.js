@@ -109,6 +109,15 @@ if (process.env.DATABASE_URL) {
           console.error('❌ Startup migrations failed:', migErr.message);
         }
 
+        // Initialize Growth Services (create growth tables)
+        try {
+          const { initGrowthServices } = require('./services/growthWorkerInit');
+          await initGrowthServices();
+          console.log('✅ Growth Services initialized.');
+        } catch (err) {
+          console.error('❌ Failed to initialize Growth Services:', err.message);
+        }
+
         // Ensure Sports Hub tables exist (matches, followed_matches)
         try {
           await pool.query(`
@@ -127,7 +136,7 @@ if (process.env.DATABASE_URL) {
               kickoff_at TIMESTAMPTZ,
               updated_at TIMESTAMPTZ DEFAULT NOW()
             );
-            
+
             CREATE TABLE IF NOT EXISTS followed_matches (
               id SERIAL PRIMARY KEY,
               device_id TEXT NOT NULL,
@@ -135,7 +144,7 @@ if (process.env.DATABASE_URL) {
               created_at TIMESTAMPTZ DEFAULT NOW(),
               UNIQUE(device_id, provider_match_id)
             );
-            
+
             CREATE TABLE IF NOT EXISTS user_article_reactions (
               device_id VARCHAR(255) NOT NULL,
               article_id VARCHAR(255) NOT NULL,
@@ -3460,7 +3469,74 @@ app.get('/api/feed/foryou', async (req, res) => {
   }
 });
 
-// Get Nigerian news — DB-first (instant)
+// Distribution Engine — traffic-first ranking with velocity + predicted trends + user affinities
+app.get('/api/distribute', async (req, res) => {
+  const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+  try {
+    // Load user affinities if available
+    const affinities = {};
+    if (deviceId) {
+      try {
+        const affRes = await usersPool.query(
+          'SELECT category, score FROM user_category_affinities WHERE device_id = $1',
+          [deviceId]
+        );
+        affRes.rows.forEach(r => { affinities[r.category] = parseInt(r.score, 10) || 0; });
+      } catch (_) {}
+    }
+
+    // Pull a larger pool of recent articles to score
+    const rawRows = await pgSelect(`
+      SELECT 
+        \'rss-\' || id AS id,
+        title,
+        COALESCE(ai_summary, original_excerpt) AS excerpt,
+        category,
+        COALESCE(NULLIF(image, \'\'), \'https://realssanews.com.ng/logo.png\') AS image,
+        source_name AS author,
+        external_link,
+        published_at AS date,
+        content_type,
+        velocity_score,
+        predicted_trend_score
+      FROM rss_articles
+      WHERE image IS NOT NULL AND image != \'\'
+      ORDER BY published_at DESC
+      LIMIT \$1
+    ", [limit * 5]); // fetch extra for scoring
+
+    const scored = rawRows.map(row => {
+      const affScore = affinities[row.category] || 0;
+      const vel = parseFloat(row.velocity_score) || 0;
+      const pred = parseFloat(row.predicted_trend_score) || 0;
+      // Weighted combination – tweak coefficients as needed for traffic-first distribution
+      const distScore = (affScore * 2) + (vel * 1.5) + (pred * 1.2);
+      return { ...row, distScore };
+    });
+
+    scored.sort((a, b) => b.distScore - a.distScore);
+    const selected = scored.slice(0, limit);
+
+    const articles = selected.map(r => ({
+      id: r.id,
+      title: r.title,
+      excerpt: r.excerpt,
+      category: r.category,
+      image: r.image,
+      author: r.author,
+      externalLink: r.external_link,
+      date: r.date,
+      contentType: r.content_type,
+      source: \'rss\',
+    }));
+
+    res.json({ articles });
+  } catch (e) {
+    console.error('[Distribution] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});// Get Nigerian news — DB-first (instant)
 app.get('/api/news/nigerian', makeDbFirstRoute('nigerian', nigerianFeeds, ['nigerian-news', 'nigeria']));
 
 // Get Local news based on GPS coordinates or Vercel IP headers (instant location sensor)
