@@ -121,8 +121,9 @@ const parser = new Parser({
   timeout: FEED_TIMEOUT_MS,
   customFields: {
     item: [
-      ['media:content', 'media:content'],
-      ['media:thumbnail', 'media:thumbnail'],
+      ['media:content', 'media:content', { keepArray: true }],
+      ['media:group', 'media:group', { keepArray: true }],
+      ['media:thumbnail', 'media:thumbnail', { keepArray: true }],
       ['enclosure', 'enclosure']
     ]
   }
@@ -132,29 +133,8 @@ function hash(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function pickImage(item) {
-  const media = item['media:content'];
-  const mediaItems = Array.isArray(media) ? media : media ? [media] : [];
-  for (const entry of mediaItems) {
-    const url = entry?.$?.url || entry?.url;
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url;
-  }
-
-  const thumb = item['media:thumbnail'];
-  const thumbs = Array.isArray(thumb) ? thumb : thumb ? [thumb] : [];
-  for (const entry of thumbs) {
-    const url = entry?.$?.url || entry?.url;
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url;
-  }
-
-  if (item.enclosure?.url && /^https?:\/\//i.test(item.enclosure.url)) {
-    return item.enclosure.url;
-  }
-
-  const html = item.content || item['content:encoded'] || item.description || '';
-  const match = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
-  return match?.[1] || 'https://www.realssanews.com.ng/logo.png';
-}
+const { feedImages } = require('./feedImages');
+function pickImage(item) { return feedImages(item)[0] || 'https://www.realssanews.com.ng/logo.png'; }
 
 function cleanText(value) {
   return String(value || '')

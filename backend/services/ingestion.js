@@ -377,34 +377,8 @@ function isLikelyStoryImage(url) {
   return true;
 }
 
-function extractImage(item) {
-  const mc = item['media:content'];
-  if (mc) {
-    const arr = Array.isArray(mc) ? mc : [mc];
-    for (const m of arr) {
-      const u = (m.$ && m.$.url) || m.url;
-      if (isLikelyStoryImage(u)) return u;
-    }
-  }
-  const mt = item['media:thumbnail'];
-  if (mt) {
-    const arr = Array.isArray(mt) ? mt : [mt];
-    for (const m of arr) {
-      const u = (m.$ && m.$.url) || m.url;
-      if (isLikelyStoryImage(u)) return u;
-    }
-  }
-  if (item.enclosure && isLikelyStoryImage(item.enclosure.url)) return item.enclosure.url;
-  const ce = item['content:encoded'] || item.content || item.description || item.summary || '';
-  const imgMatch = ce.match(/<img[^>]+src=["']([^"'>\s]+)["']/i);
-  if (imgMatch && isLikelyStoryImage(imgMatch[1])) return imgMatch[1];
-
-  // NOTE: item.image.url is intentionally excluded — it is the publication
-  // logo (feed-level), never an article photo. Returning null triggers the
-  // OG-image fetch below which gets the real story image.
-  return null;
-}
-
+const { feedImages, htmlImages } = require('./feedImages');
+function extractImage(item) { return feedImages(item)[0] || null; }
 
 // SSRF protection — block private/loopback IP ranges
 const dns = require('dns').promises;
@@ -431,33 +405,8 @@ async function fetchOgImage(url) {
     });
     const html = await res.text();
 
-    // Try multiple OG image patterns
-    const patterns = [
-      /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"'>]+)["']/i,
-      /<meta[^>]*content=["']([^"'>]+)["'][^>]*property=["']og:image["']/i,
-      /<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"'>]+)["']/i,
-      /<meta[^>]*property=["']twitter:image["'][^>]*content=["']([^"'>]+)["']/i
-    ];
-
-    for (const pattern of patterns) {
-      const match = html.match(pattern);
-      if (match && match[1]) {
-        let imgUrl = match[1];
-        // Handle relative URLs
-        if (imgUrl.startsWith('http')) {
-          // Keep as is
-        } else if (imgUrl.startsWith('//')) {
-          imgUrl = 'https:' + imgUrl;
-        } else if (imgUrl.startsWith('/')) {
-          const urlObj = new URL(url);
-          imgUrl = urlObj.origin + imgUrl;
-        }
-
-        if (isLikelyStoryImage(imgUrl)) {
-          return imgUrl;
-        }
-      }
-    }
+    if (!res.ok) return null;
+    return htmlImages(html, res.url || url)[0] || null;
   } catch (e) {
     // Ignore timeouts or blocked requests - this is expected for some sites
   }
@@ -684,6 +633,22 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
     }
   } catch (err) {
     console.error('Error loading world_feeds.json:', err.message);
+  }
+
+  // Healthy publisher-discovered feeds join the existing country rotation.
+  try {
+    const discovered = await pool.query("SELECT url,country FROM growth_feeds WHERE origin='discovered' AND healthy=true AND checked_at > NOW()-INTERVAL '7 days'");
+    allCategories = allCategories.map(c => ({ ...c, feeds: [...(c.feeds || [])] }));
+    for (const row of discovered.rows) {
+      let category = allCategories.find(c => c.category === row.country);
+      if (!category) {
+        category = { category: row.country, feeds: [], videoFeeds: [] };
+        allCategories.push(category);
+      }
+      if (!category.feeds.includes(row.url)) category.feeds.push(row.url);
+    }
+  } catch (err) {
+    if (err.code !== '42P01') console.warn('[Growth feeds]', err.message);
   }
 
   // 'social' runs every cycle alongside core categories — tweets go stale fast

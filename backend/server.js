@@ -1610,9 +1610,9 @@ app.get('/article/:id', async (req, res) => {
     }
 
     const title = `${article.title} | RealSSA News`;
-    const canonicalUrl = `https://www.realssanews.com.ng/article/${article.id}`;
+    const canonicalUrl = `https://www.realssanews.com.ng/article/${encodeURIComponent(article.id)}`;
     const rawSummary = (Array.isArray(article.ai_summary) ? article.ai_summary.join(' ') : article.ai_summary) || article.excerpt || article.title;
-    const description = rawSummary.replace(/"/g, '&quot;').slice(0, 160);
+    const description = String(rawSummary).slice(0, 160);
     const imageUrl = (article.image && article.image.startsWith('http')) ? article.image : 'https://www.realssanews.com.ng/logo.png';
     const category = article.category || 'News';
     const publishedTime = article.date ? new Date(article.date).toISOString() : new Date().toISOString();
@@ -1628,9 +1628,7 @@ app.get('/article/:id', async (req, res) => {
         "image": [
           {
             "@type": "ImageObject",
-            "url": imageUrl,
-            "width": 1200,
-            "height": 630
+            "url": imageUrl
           }
         ],
         "datePublished": publishedTime,
@@ -1693,37 +1691,58 @@ app.get('/article/:id', async (req, res) => {
       }
     ];
 
+    const escapeHtml = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    let growthContextHtml = '';
+    if (/^rss-\d+$/.test(String(article.id))) {
+      try {
+        const result = await pool.query('SELECT context FROM growth_stories WHERE article_id=$1', [String(article.id).slice(4)]);
+        const context = result.rows[0]?.context;
+        if (context?.timeline?.length > 1) {
+          const items = context.timeline.slice(0, 8).map(entry => {
+            let link;
+            try { link = new URL(entry.url); } catch { return ''; }
+            if (!['http:', 'https:'].includes(link.protocol)) return '';
+            return '<li><a href="' + escapeHtml(link.href) + '" rel="noopener noreferrer">' +
+              escapeHtml(entry.headline) + '</a> — ' + escapeHtml(entry.source) +
+              ' (' + escapeHtml(entry.publishedAt) + ')</li>';
+          }).join('');
+          growthContextHtml = '<section><h2>Related reporting and timeline</h2><ul>' + items +
+            '</ul><p>Dates reflect publication times. Read each publisher for its full reporting.</p></section>';
+        }
+      } catch (err) {
+        if (err.code !== '42P01') console.warn('[Growth context]', err.message);
+      }
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${title}</title>
-  <meta name="description" content="${description}" />
+  <title>${escapeHtml(title)}</title>
+  <meta name="description" content="${escapeHtml(description)}" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   <link rel="canonical" href="${canonicalUrl}" />
 
   <!-- Open Graph / Facebook / WhatsApp -->
   <meta property="og:site_name" content="RealSSA News" />
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="${article.title}" />
-  <meta property="og:description" content="${description}" />
-  <meta property="og:image" content="${imageUrl}" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
+  <meta property="og:title" content="${escapeHtml(article.title)}" />
+  <meta property="og:description" content="${escapeHtml(description)}" />
+  <meta property="og:image" content="${escapeHtml(imageUrl)}" />
   <meta property="og:url" content="${canonicalUrl}" />
   <meta property="article:published_time" content="${publishedTime}" />
-  <meta property="article:section" content="${category}" />
+  <meta property="article:section" content="${escapeHtml(category)}" />
 
   <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@realssanews" />
-  <meta name="twitter:title" content="${article.title}" />
-  <meta name="twitter:description" content="${description}" />
-  <meta name="twitter:image" content="${imageUrl}" />
+  <meta name="twitter:title" content="${escapeHtml(article.title)}" />
+  <meta name="twitter:description" content="${escapeHtml(description)}" />
+  <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
 
   <script type="application/ld+json">
-    ${JSON.stringify(jsonLdData)}
+    ${JSON.stringify(jsonLdData).replace(/</g, '\\u003c')}
   </script>
 </head>
 <body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; color: #111; background: #fff;">
@@ -1731,24 +1750,25 @@ app.get('/article/:id', async (req, res) => {
     <a href="https://www.realssanews.com.ng" style="text-decoration: none; color: #f59e0b; font-weight: bold; font-size: 1.5rem;">RealSSA News</a>
   </header>
   <nav style="font-size: 0.875rem; color: #666; margin-bottom: 16px;">
-    <a href="https://www.realssanews.com.ng">Home</a> &gt; <span>${category}</span> &gt; <span>${article.title}</span>
+    <a href="https://www.realssanews.com.ng">Home</a> &gt; <span>${escapeHtml(category)}</span> &gt; <span>${escapeHtml(article.title)}</span>
   </nav>
   <article>
-    <h1 style="font-size: 2rem; margin-bottom: 12px; line-height: 1.2;">${article.title}</h1>
+    <h1 style="font-size: 2rem; margin-bottom: 12px; line-height: 1.2;">${escapeHtml(article.title)}</h1>
     <div style="font-size: 0.875rem; color: #555; margin-bottom: 20px;">
-      <span>Published by ${authorName}</span> | <span>${new Date(publishedTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+      <span>Published by ${escapeHtml(authorName)}</span> | <span>${new Date(publishedTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
     </div>
-    ${imageUrl ? `<img src="${imageUrl}" alt="${article.title}" style="width: 100%; max-height: 450px; object-fit: cover; border-radius: 8px; margin-bottom: 24px;" />` : ''}
+    ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(article.title)}" style="width: 100%; max-height: 450px; object-fit: cover; border-radius: 8px; margin-bottom: 24px;" />` : ''}
     
     <div style="background: #f8fafc; border-left: 4px solid #f59e0b; padding: 16px; margin-bottom: 24px; border-radius: 4px;">
       <h3 style="margin-top: 0; color: #b45309;">⚡ Quick Read Summary</h3>
-      <p style="margin-bottom: 0;">${description}</p>
+      <p style="margin-bottom: 0;">${escapeHtml(description)}</p>
     </div>
 
     <div style="font-size: 1.125rem; line-height: 1.8;">
-      <p>${article.excerpt || description}</p>
-      ${article.content ? `<div>${article.content}</div>` : ''}
+      <p>${escapeHtml(article.excerpt || description)}</p>
+      ${article.content ? `<div>${escapeHtml(article.content)}</div>` : ''}
     </div>
+    ${growthContextHtml}
   </article>
 
   <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 0.875rem; color: #666;">
@@ -2230,68 +2250,7 @@ const worldFeeds = [
 ];
 
 // Helper function to extract image from RSS item - IMPROVED VERSION
-const extractImageFromItem = (item) => {
-  // Try different image sources in order of preference
-
-  // 1. Check for media:content with url attribute
-  if (item['media:content'] && item['media:content'].$ && item['media:content'].$.url) {
-    return item['media:content'].$.url;
-  }
-
-  // 2. Check for media:thumbnail
-  if (item['media:thumbnail'] && item['media:thumbnail'].$ && item['media:thumbnail'].$.url) {
-    return item['media:thumbnail'].$.url;
-  }
-
-  // 3. Check for enclosure (common in podcasts and some news feeds)
-  if (item.enclosure && item.enclosure.url) {
-    return item.enclosure.url;
-  }
-
-  // 4. Check for enclosure as array
-  if (item.enclosure && Array.isArray(item.enclosure) && item.enclosure[0] && item.enclosure[0].url) {
-    return item.enclosure[0].url;
-  }
-
-  // 5. Extract from content:encoded if available (WordPress feeds)
-  if (item['content:encoded']) {
-    const imgMatch = item['content:encoded'].match(/<img[^>]+src=["']([^"'>]+)["']/i);
-    if (imgMatch && imgMatch[1]) {
-      // Make sure it's an absolute URL
-      if (imgMatch[1].startsWith('http')) {
-        return imgMatch[1];
-      }
-    }
-  }
-
-  // 6. Extract from description/summary if available
-  if (item.description || item.summary || item.contentSnippet) {
-    const content = item.description || item.summary || item.contentSnippet;
-    const imgMatch = content.match(/<img[^>]+src=["']([^"'>]+)["']/i);
-    if (imgMatch && imgMatch[1]) {
-      if (imgMatch[1].startsWith('http')) {
-        return imgMatch[1];
-      }
-    }
-  }
-
-  // 7. Extract from content if available
-  if (item.content) {
-    const imgMatch = item.content.match(/<img[^>]+src=["']([^"'>]+)["']/i);
-    if (imgMatch && imgMatch[1]) {
-      if (imgMatch[1].startsWith('http')) {
-        return imgMatch[1];
-      }
-    }
-  }
-
-  // 8. Check for itunes:image (podcast feeds)
-  if (item['itunes:image'] && item['itunes:image'].href) {
-    return item['itunes:image'].href;
-  }
-
-  return null;
-};
+const extractImageFromItem = (item, base) => require('./services/feedImages').feedImages(item, item.link || base)[0] || null;
 
 // Helper function to fetch RSS feeds
 const fetchRSSFeeds = async (feeds) => {
@@ -6401,7 +6360,7 @@ app.get('/api/sitemap-news.xml', async (req, res) => {
       <news:publication_date>${pubDate}</news:publication_date>
       <news:title>${safeTitle}</news:title>
     </news:news>${r.image ? `
-    <image:image><image:loc>${r.image}</image:loc></image:image>` : ''}
+    <image:image><image:loc>${String(r.image).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</image:loc></image:image>` : ''}
   </url>`;
     }).join('');
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
@@ -6501,7 +6460,7 @@ app.get('/news-sitemap.xml', async (req, res) => {
       <news:publication_date>${pubDate}</news:publication_date>
       <news:title>${safeTitle}</news:title>
     </news:news>${r.image ? `
-    <image:image><image:loc>${r.image}</image:loc></image:image>` : ''}
+    <image:image><image:loc>${String(r.image).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</image:loc></image:image>` : ''}
   </url>`;
     }).join('');
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
@@ -6531,6 +6490,7 @@ app.use('/api/trending', trendingRoutes);
 // image scrape, behavior intelligence)
 const empireRoutes = require('./routes/empireApi');
 app.use('/api', empireRoutes);
+app.use('/api/growth', require('./routes/growth')(pool));
 
 // GET /api/sports/standings/:league
 app.get('/api/sports/standings/:league', async (req, res) => {

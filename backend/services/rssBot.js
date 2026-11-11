@@ -12,6 +12,7 @@ const rssParser = new Parser({
   timeout: 10000,
   customFields: {
     item: [
+      ['media:group', 'media:group', { keepArray: true }],
       ['media:content', 'media:content', { keepArray: true }],
       ['media:thumbnail', 'media:thumbnail', { keepArray: true }],
       ['content:encoded', 'content:encoded'],
@@ -23,42 +24,16 @@ const rssParser = new Parser({
 
 let pool;
 
-// The 48-Hour Auto-Delete Garbage Collector across ALL 5 Databases
+// Apply the shared configurable news retention policy.
 async function cleanOldArticles() {
   try {
-    console.log(`[${new Date().toISOString()}] 🧹 Running 48-Hour Garbage Collector across all 5 databases...`);
     const { getAllPools } = require('../config/multiDb');
-    const allPools = getAllPools();
-    let totalPurged = 0;
-    for (const item of allPools) {
-      try {
-        // Stage 1: Free up space by clearing out heavy columns older than 24 hours
-        await item.pool.query(
-          `UPDATE rss_articles 
-           SET full_content = NULL, 
-               embedding = NULL, 
-               title_translations = NULL, 
-               summary_translations = NULL 
-           WHERE published_at < NOW() - INTERVAL '24 hours'`
-        );
-
-        // Clean out full rows older than 24 hours (1 day retention)
-        const result = await item.pool.query(
-          `DELETE FROM rss_articles WHERE published_at < NOW() - INTERVAL '24 hours'`
-        );
-        totalPurged += result.rowCount || 0;
-        if (result.rowCount > 0) {
-          console.log(`[${new Date().toISOString()}] 🗑️ Garbage Collector removed ${result.rowCount} articles older than 24 hours from ${item.name}.`);
-        }
-      } catch (pErr) {
-        console.warn(`[Garbage Collector Warning on ${item.name}]: ${pErr.message}`);
-      }
+    const { enforceNewsRetention } = require('./newsRetention');
+    for (const item of getAllPools()) {
+      try { await enforceNewsRetention(item.pool); }
+      catch (err) { console.warn('[Retention]', err.message); }
     }
-    console.log(`[${new Date().toISOString()}] 🗑️ Total 24-Hour Garbage Collection complete: ${totalPurged} old articles removed.`);
-  } catch (err) {
-
-    console.error('❌ Garbage Collector failed:', err.message);
-  }
+  } catch (err) { console.error('[Retention]', err.message); }
 }
 
 // Compile Daily Digest package (Top 20 stories under 200KB)
@@ -380,7 +355,17 @@ async function runBufferCron() {
 }
 
 
+let growthScheduleStarted = false;
+function startGrowthSchedule(sharedPool) {
+  if (growthScheduleStarted || process.env.GROWTH_WORKER_ENABLED === 'false') return;
+  growthScheduleStarted = true;
+  cron.schedule('3-59/10 * * * *', () => {
+    require('./growthWorker').runGrowth(sharedPool).catch(err => console.error('[Growth]', err.message));
+  });
+}
+
 function initRssBot(sharedPool) {
+  startGrowthSchedule(sharedPool);
   pool = sharedPool;
   console.log('🤖 RSS Aggregation Bot initialized. Running on Fly.io...');
 
