@@ -1,0 +1,2381 @@
+{
+  "algeria": {
+    "name": "Algeria",
+    "continent": "Africa",
+    "urls": [
+      "https://www.echoroukonline.com/feed",
+      "https://news.echoroukonline.com/feed",
+      "https://www.ennaharonline.com/feed",
+      "https://www.elbilad.net/feed",
+      "https://www.elkhabar.com/press/rss",
+      "https://www.aps.dz/en/algerie/feed/rss",
+      "https://www.aps.dz/fr/algerie/feed/rss",
+      "https://www.aps.dz/ar/algerie/feed/rss",
+      "https://www.tsa-algerie.com/feed",
+      "https://www.algerie360.com/feed",
+      "https://algerie-aujourdhui.dz/feed",
+      "https://www.interlignes.com/feed",
+      "https://www.observalgerie.com/feed",
+      "https://www.dzairdaily.com/feed",
+      "https://www.algerie-eco.com/feed",
+      "https://lapatrienews.dz/feed",
+      "https://dia-algerie.com/feed",
+      "https://www.elmoudjahid.dz/fr/feed",
+      "https://www.elmoudjahid.dz/ar/feed",
+      "https://www.lesoirdalgerie.com/rss",
+      "https://www.lexpressiondz.com/feed",
+      "https://www.el-massa.com/dz/feed",
+      "https://courrierdalgerie.com/feed",
+      "https://reporters.dz/feed",
+      "https://algeriepresse.com/feed",
+      "https://www.dzfoot.com/feed",
+      "https://www.lebuteur.com/rss",
+      "https://www.elheddaf.com/rss",
+      "https://www.faf.dz/feed",
+      "https://www.dzairauto.com/feed",
+      "https://news.google.com/rss/search?q=Algeria+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "angola": {
+    "name": "Angola",
+    "continent": "Africa",
+    "urls": [
+      "https://www.angop.ao/rss/",
+      "https://www.angop.ao/rss/politica/",
+      "https://www.angop.ao/rss/economia/",
+      "https://www.angop.ao/rss/sociedade/",
+      "https://www.angop.ao/rss/desporto/",
+      "https://www.angop.ao/rss/africa/",
+      "https://www.angop.ao/rss/mundo/",
+      "https://www.angop.ao/rss/ambiente/",
+      "https://www.angop.ao/rss/trasnporte/",
+      "https://www.angop.ao/en/rss/",
+      "https://www.angop.ao/en/rss/economia/",
+      "https://www.angop.ao/fr/rss/",
+      "https://www.jornaldeangola.ao/rss",
+      "https://www.jornaldeangola.ao/rss/politica",
+      "https://www.jornaldeangola.ao/rss/economia",
+      "https://www.verangola.net/va/en/rss",
+      "https://www.verangola.net/va/pt/rss",
+      "https://opais.ao/feed",
+      "https://www.novojornal.co.ao/feed",
+      "https://jornaleconomia.sapo.ao/rss",
+      "https://www.club-k.net/feed",
+      "https://www.angonoticias.com/rss",
+      "https://angola24horas.com/feed",
+      "https://www.makaangola.org/feed",
+      "https://correiodakianda.info/feed",
+      "https://camundanews.com/feed",
+      "https://platinaline.com/feed",
+      "https://arrenegado.com/feed",
+      "https://valoreconomico.co.ao/feed",
+      "https://luandapost.com/feed",
+      "https://news.google.com/rss/search?q=Angola+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "benin": {
+    "name": "Benin",
+    "continent": "Africa",
+    "urls": [
+      "https://www.ortb.bj/feed/",
+      "https://www.ortb.bj/category/info/feed/",
+      "https://lanation.bj/feed",
+      "https://www.abp.bj/rss",
+      "https://www.gouv.bj/actualites/feed/",
+      "https://www.golfegroupe.com/feed/",
+      "https://canal3benin.com/feed/",
+      "https://e-tele.bj/feed/",
+      "https://edentv.bj/feed/",
+      "https://tvcbenin.com/feed/",
+      "https://agrotvbenin.com/feed/",
+      "https://www.banouto.bj/feed",
+      "https://lanouvelletribune.info/feed/",
+      "https://beninwebtv.com/feed/",
+      "https://lespharaons.com/feed/",
+      "https://matinlibre.com/feed/",
+      "https://levenementprecis.com/feed/",
+      "https://cotonouboy.com/feed/",
+      "https://legrandregard.com/feed/",
+      "https://www.24haubenin.info/feed/",
+      "https://lematinal.bj/feed/",
+      "https://www.fraternitebj.info/feed/",
+      "https://laboussole.bj/feed/",
+      "https://lepotentiel.bj/feed/",
+      "https://linvestigateur.info/feed/",
+      "https://lechasseurinfo.com/feed/",
+      "https://laperruche.bj/feed/",
+      "https://beninintelligent.com/feed/",
+      "https://leradar.bj/feed/",
+      "https://news.google.com/rss/search?q=Benin+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCY7OpxY0Fv08fW8Z9fB6I5w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UClp67hG8Wf3tVAnx4Mmsybg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_4nQp8zD-8I_K16rS464A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC0L8lW9I90v-b67kZ3v_vZw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCFp-u9Y8bNOf7w-S0v3_wYQ",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCb9Kj1Gv673pE865_1t_r3A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCy1-bB230z4T7jR_W4WbQ-w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCUfR_oWfS9E9_LpY4-v8Ciw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCy_9p8N-R8g7z4q6_B2p0tA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCiL7gA-O4-fK_pYV1_H_Cjg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCkXN8yF6-Uf0FwS84h7Z7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UChL7Wl3wQnC3-Y7P4wH-v2w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCs8N0Eonj6rY8p7mU-7P4Aw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCp8U_K-4N2S-C_68F8w2Kmg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCP_C-T2w5pZ7LzN1W88W-7w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_0p8YF6_S0v4hW4k7b_7w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9_X_8S4U_Y8v4W4k8b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC7XwY_Z8_S0V4hW8k7b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw_0P8YF6_S0v4hW4k7b_7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_8X_8S4U_Y8v4W4k8b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCWp9_8YF6_S0v4hW4k7b_7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8_X_8S4U_Y8v4W4k8b_5wA"
+    ]
+  },
+  "botswana": {
+    "name": "Botswana",
+    "continent": "Africa",
+    "urls": [
+      "https://www.dailynews.gov.bw/feed/",
+      "https://www.gov.bw/news/feed",
+      "https://nowtv.co.bw/feed/",
+      "https://ytv.co.bw/feed/",
+      "https://dumafm.co.bw/feed/",
+      "https://yaronafm.co.bw/feed/",
+      "https://gabzfm.co.bw/feed/",
+      "https://www.mmegi.bw/rss",
+      "https://thevoicebw.com/feed",
+      "https://sundaystandard.info/feed",
+      "https://www.sundaystandard.info/feed",
+      "https://guardiansun.co.bw/rssFeed/48",
+      "https://thepatriot.co.bw/feed/",
+      "https://businessweekly.co.bw/feed",
+      "https://botswanaunplugged.com/feed",
+      "https://yourbotswana.com/feed",
+      "https://tswanatimes.com/feed",
+      "https://inbusiness.co.bw/feed",
+      "https://thegazette.news/feed/",
+      "https://argusonline.co.bw/feed",
+      "https://weekendpost.co.bw/feed",
+      "https://www.bankofbotswana.bw/rss/",
+      "https://www.bse.co.bw/feed",
+      "https://www.botswanayouth.com/feed",
+      "https://bwmining.com/feed",
+      "https://echobw.com/feed",
+      "https://news.google.com/rss/search?q=Botswana+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC6_S_84h7Z7wA9p_K6_D9wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCp8U_K-4N2S-C_68F8w2Kmg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCY7OpxY0Fv08fW8Z9fB6I5w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCV09bH8gW4T7fVmsX8h6qSw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8_X_8S4U_Y8v4W4k8b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCy1-bB230z4T7jR_W4WbQ-w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UClp67hG8Wf3tVAnx4Mmsybg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCb9Kj1Gv673pE865_1t_r3A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCUfR_oWfS9E9_LpY4-v8Ciw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCy_9p8N-R8g7z4q6_B2p0tA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UChL7Wl3wQnC3-Y7P4wH-v2w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCs8N0Eonj6rY8p7mU-7P4Aw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_4nQp8zD-8I_K16rS464A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC0L8lW9I90v-b67kZ3v_vZw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCFp-u9Y8bNOf7w-S0v3_wYQ",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCiL7gA-O4-fK_pYV1_H_Cjg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_0p8YF6_S0v4hW4k7b_7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCkXN8yF6-Uf0FwS84h7Z7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9_X_8S4U_Y8v4W4k8b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC7XwY_Z8_S0V4hW8k7b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_8X_8S4U_Y8v4W4k8b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw_0P8YF6_S0v4hW4k7b_7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCP_C-T2w5pZ7LzN1W88W-7w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8H-Z6V96x6fkvqbe9Z_8Dw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCf63bWp_8D690P6v38Cj7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_69N-Zg_6mAtwEAsf8mYFw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCn4CshXg_X5f8_E2Zf7-YpQ",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv7fX_6nS7v7Lox7p_C9X2A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC38l_cMym-Y9G0hVwR8363w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv67BszEa77h53_69jXv5QA"
+    ]
+  },
+  "burkina-faso": {
+    "name": "Burkina Faso",
+    "continent": "Africa",
+    "urls": [
+      "https://www.rtb.bf/feed/",
+      "https://www.omegamedias.info/feed/",
+      "https://lefaso.net/spip.php?page=backend",
+      "https://burkina24.com/feed/",
+      "https://www.sidwaya.info/feed/",
+      "https://news.google.com/rss/search?q=Burkina%20Faso+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC0rDNG2L_uIms_B4p0dY7_A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCp8U_K-4N2S-C_68F8w2Kmg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCs8N0Eonj6rY8p7mU-7P4Aw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_4nQp8zD-8I_K16rS464A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC0L8lW9I90v-b67kZ3v_vZw"
+    ]
+  },
+  "burundi": {
+    "name": "Burundi",
+    "continent": "Africa",
+    "urls": [
+      "http://www.rtnb.bi/fr/rss.php",
+      "https://www.iwacu-burundi.org/feed/",
+      "https://burundi-eco.com/feed/",
+      "http://abp.info.bi/feed/",
+      "https://www.jimbere.org/feed/",
+      "https://news.google.com/rss/search?q=Burundi+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCy1-bB230z4T7jR_W4WbQ-w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UClp67hG8Wf3tVAnx4Mmsybg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCb9Kj1Gv673pE865_1t_r3A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCUfR_oWfS9E9_LpY4-v8Ciw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCy_9p8N-R8g7z4q6_B2p0tA"
+    ]
+  },
+  "cabo-verde": {
+    "name": "Cabo Verde",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Cabo%20Verde+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "cameroon": {
+    "name": "Cameroon",
+    "continent": "Africa",
+    "urls": [
+      "https://www.crtv.cm/feed/",
+      "https://www.canal2international.net/feed/",
+      "https://www.equinoxetv.com/feed/",
+      "https://actucameroun.com/feed/",
+      "https://www.cameroonintelligencereport.com/feed/",
+      "https://news.google.com/rss/search?q=Cameroon+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_8X_8S4U_Y8v4W4k8b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw_0P8YF6_S0v4hW4k7b_7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCP_C-T2w5pZ7LzN1W88W-7w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8H-Z6V96x6fkvqbe9Z_8Dw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCf63bWp_8D690P6v38Cj7wA"
+    ]
+  },
+  "central-african-republic": {
+    "name": "Central African Republic",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Central%20African%20Republic+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "chad": {
+    "name": "Chad",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Chad+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "comoros": {
+    "name": "Comoros",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Comoros+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "democratic-republic-of-the-congo": {
+    "name": "Democratic Republic of the Congo",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Democratic%20Republic%20of%20the%20Congo+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "republic-of-the-congo": {
+    "name": "Republic of the Congo",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Republic%20of%20the%20Congo+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "djibouti": {
+    "name": "Djibouti",
+    "continent": "Africa",
+    "urls": [
+      "http://www.rtd.dj/feed/",
+      "http://www.lanation.dj/feed/",
+      "https://djiboutipost.com/feed/",
+      "https://www.adi.dj/feed/",
+      "https://news.google.com/rss/search?q=Djibouti+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_69N-Zg_6mAtwEAsf8mYFw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCn4CshXg_X5f8_E2Zf7-YpQ",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv7fX_6nS7v7Lox7p_C9X2A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC38l_cMym-Y9G0hVwR8363w"
+    ]
+  },
+  "egypt": {
+    "name": "Egypt",
+    "continent": "Africa",
+    "urls": [
+      "https://alqaheranews.net/feed",
+      "http://nile.eg/feed/",
+      "https://english.ahram.org.eg/rss/",
+      "https://www.youm7.com/rss/",
+      "https://www.masrawy.com/rss/",
+      "https://news.google.com/rss/search?q=Egypt+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv67BszEa77h53_69jXv5QA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCEK1t6tWjS33I-tZ6YFfL2A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC2A0P1xW8tC6b4y3hL1i19Q",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCh6v6u8R-t67W88I9rP1mKg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCFmF2YlB6yQzH2YfL7k5WFA"
+    ]
+  },
+  "equatorial-guinea": {
+    "name": "Equatorial Guinea",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Equatorial%20Guinea+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "eritrea": {
+    "name": "Eritrea",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Eritrea+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "eswatini": {
+    "name": "Eswatini",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Eswatini+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "ethiopia": {
+    "name": "Ethiopia",
+    "continent": "Africa",
+    "urls": [
+      "https://www.ebc.et/feed/",
+      "https://www.fanabc.com/english/feed/",
+      "https://addisstandard.com/feed/",
+      "https://waltainfo.com/feed/",
+      "https://borkena.com/feed/",
+      "https://news.google.com/rss/search?q=Ethiopia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC896_P7t1P-kH_wP7Ym5b6g",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCmN67eWpY298S9W5m6yYAnw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCTbVpE9S-70X5C5pXQy5_mw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_69N-Zg_6mAtwEAsf8mYFw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCn4CshXg_X5f8_E2Zf7-YpQ"
+    ]
+  },
+  "gabon": {
+    "name": "Gabon",
+    "continent": "Africa",
+    "urls": [
+      "https://www.gabonpremiere.ga/feed/",
+      "http://gabon24.ga/feed/",
+      "https://www.gabonactu.com/feed/",
+      "https://www.gabonreview.com/feed/",
+      "https://news.google.com/rss/search?q=Gabon+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv7fX_6nS7v7Lox7p_C9X2A",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC38l_cMym-Y9G0hVwR8363w",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv67BszEa77h53_69jXv5QA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCEK1t6tWjS33I-tZ6YFfL2A"
+    ]
+  },
+  "gambia": {
+    "name": "Gambia",
+    "continent": "Africa",
+    "urls": [
+      "https://grts.gm/feed/",
+      "https://qtv.gm/feed/",
+      "https://thepoint.gm/feed",
+      "https://foroyaa.net/feed/",
+      "https://www.kerrfatou.com/feed/",
+      "https://news.google.com/rss/search?q=Gambia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC2A0P1xW8tC6b4y3hL1i19Q",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCh6v6u8R-t67W88I9rP1mKg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCFmF2YlB6yQzH2YfL7k5WFA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC896_P7t1P-kH_wP7Ym5b6g",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCmN67eWpY298S9W5m6yYAnw"
+    ]
+  },
+  "ghana": {
+    "name": "Ghana",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Ghana+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "guinea": {
+    "name": "Guinea",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Guinea+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "guinea-bissau": {
+    "name": "Guinea-Bissau",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Guinea-Bissau+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "ivory-coast": {
+    "name": "Ivory Coast",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Ivory%20Coast+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "kenya": {
+    "name": "Kenya",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Kenya+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "lesotho": {
+    "name": "Lesotho",
+    "continent": "Africa",
+    "urls": [
+      "http://www.lnbs.org.ls/feed/",
+      "https://lestimes.com/feed/",
+      "https://www.thereporter.co.ls/feed/",
+      "https://www.informativenews.co.ls/feed/",
+      "https://news.google.com/rss/search?q=Lesotho+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCTbVpE9S-70X5C5pXQy5_mw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_69N-Zg_6mAtwEAsf8mYFw",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCn4CshXg_X5f8_E2Zf7-YpQ",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv7fX_6nS7v7Lox7p_C9X2A"
+    ]
+  },
+  "liberia": {
+    "name": "Liberia",
+    "continent": "Africa",
+    "urls": [
+      "https://frontpageafricaonline.com/feed/",
+      "https://news.google.com/rss/search?q=Liberia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "libya": {
+    "name": "Libya",
+    "continent": "Africa",
+    "urls": [
+      "https://libyaherald.com/rss",
+      "https://libyaherald.com/rss/business-investment",
+      "https://libyaherald.com/category/business-investment/feed",
+      "https://libyaherald.com/category/politics-security/feed",
+      "https://libyaherald.com/category/economy/feed",
+      "https://libyaupdate.com/feed/",
+      "https://news.google.com/rss/search?q=Libya+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "madagascar": {
+    "name": "Madagascar",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Madagascar+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "malawi": {
+    "name": "Malawi",
+    "continent": "Africa",
+    "urls": [
+      "https://www.nyasatimes.com/feed/",
+      "https://news.google.com/rss/search?q=Malawi+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "mali": {
+    "name": "Mali",
+    "continent": "Africa",
+    "urls": [
+      "https://www.maliweb.net/feed",
+      "https://news.google.com/rss/search?q=Mali+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "mauritania": {
+    "name": "Mauritania",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Mauritania+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "mauritius": {
+    "name": "Mauritius",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Mauritius+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "morocco": {
+    "name": "Morocco",
+    "continent": "Africa",
+    "urls": [
+      "https://www.mapnews.ma/en/rss.xml",
+      "https://www.mapnews.ma/en/activites-economiques/rss.xml",
+      "https://www.mapnews.ma/en/culture-et-medias/rss.xml",
+      "https://www.moroccoworldnews.com/category/politics/feed",
+      "https://www.moroccoworldnews.com/category/economy/feed",
+      "https://www.moroccoworldnews.com/category/north-africa/feed",
+      "https://en.hespress.com/feed",
+      "https://news.google.com/rss/search?q=Morocco+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "mozambique": {
+    "name": "Mozambique",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Mozambique+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "namibia": {
+    "name": "Namibia",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Namibia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "niger": {
+    "name": "Niger",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Niger+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "nigeria": {
+    "name": "Nigeria",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Nigeria+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "rwanda": {
+    "name": "Rwanda",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Rwanda+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "sao-tome-and-principe": {
+    "name": "Sao Tome and Principe",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Sao%20Tome%20and%20Principe+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "senegal": {
+    "name": "Senegal",
+    "continent": "Africa",
+    "urls": [
+      "https://www.seneweb.com/news/rss.xml",
+      "https://www.seneweb.com/news/Societe/rss.xml",
+      "https://www.seneweb.com/news/Economie/rss.xml",
+      "https://www.dakaractu.com/xml/syndication.rss",
+      "https://www.pressafrik.com/xml/syndication.rss",
+      "https://news.google.com/rss/search?q=Senegal+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "seychelles": {
+    "name": "Seychelles",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Seychelles+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "sierra-leone": {
+    "name": "Sierra Leone",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Sierra%20Leone+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "somalia": {
+    "name": "Somalia",
+    "continent": "Africa",
+    "urls": [
+      "https://www.garoweonline.com/en?format=feed&type=rss",
+      "https://news.google.com/rss/search?q=Somalia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "south-africa": {
+    "name": "South Africa",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=South%20Africa+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "south-sudan": {
+    "name": "South Sudan",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=South%20Sudan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "sudan": {
+    "name": "Sudan",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Sudan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "tanzania": {
+    "name": "Tanzania",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Tanzania+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "togo": {
+    "name": "Togo",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Togo+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "tunisia": {
+    "name": "Tunisia",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Tunisia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "uganda": {
+    "name": "Uganda",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Uganda+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "zambia": {
+    "name": "Zambia",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Zambia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "zimbabwe": {
+    "name": "Zimbabwe",
+    "continent": "Africa",
+    "urls": [
+      "https://news.google.com/rss/search?q=Zimbabwe+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "afghanistan": {
+    "name": "Afghanistan",
+    "continent": "Asia",
+    "urls": [
+      "https://tolonews.com/rss",
+      "https://news.google.com/rss/search?q=Afghanistan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCgN8N0vYwIeFNoS4S99Bq2A"
+    ]
+  },
+  "armenia": {
+    "name": "Armenia",
+    "continent": "Asia",
+    "urls": [
+      "https://armenpress.am/eng/rss/",
+      "https://news.google.com/rss/search?q=Armenia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCdMepY_w7-F7I-VzF3N3X4Q"
+    ]
+  },
+  "azerbaijan": {
+    "name": "Azerbaijan",
+    "continent": "Asia",
+    "urls": [
+      "https://en.trend.az/rss/",
+      "https://news.google.com/rss/search?q=Azerbaijan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw9S4nUf87qC45Y26p-Q_iw"
+    ]
+  },
+  "bahrain": {
+    "name": "Bahrain",
+    "continent": "Asia",
+    "urls": [
+      "https://www.bna.bh/en/rss.aspx",
+      "https://news.google.com/rss/search?q=Bahrain+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC-U9989Yp76NfN-Iq7m2v8A"
+    ]
+  },
+  "bangladesh": {
+    "name": "Bangladesh",
+    "continent": "Asia",
+    "urls": [
+      "https://www.thedailystar.net/rss.xml",
+      "https://news.google.com/rss/search?q=Bangladesh+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC78_W0Tid4bK6N7vR7D49Xw"
+    ]
+  },
+  "bhutan": {
+    "name": "Bhutan",
+    "continent": "Asia",
+    "urls": [
+      "https://kuenselonline.com/feed/",
+      "https://news.google.com/rss/search?q=Bhutan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCg137_fF7D93T-T5W4qg-Jw"
+    ]
+  },
+  "brunei": {
+    "name": "Brunei",
+    "continent": "Asia",
+    "urls": [
+      "https://borneobulletin.com.bn/feed/",
+      "https://news.google.com/rss/search?q=Brunei+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCc62Z8wG4p7fV9uX1Nf_4Sg"
+    ]
+  },
+  "cambodia": {
+    "name": "Cambodia",
+    "continent": "Asia",
+    "urls": [
+      "https://www.khmertimeskh.com/feed/",
+      "https://www.phnompenhpost.com/feed",
+      "https://news.google.com/rss/search?q=Cambodia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC28Xp8E5F6L8T76u89w8C4g"
+    ]
+  },
+  "china": {
+    "name": "China",
+    "continent": "Asia",
+    "urls": [
+      "https://www.cgtn.com/rss/news.xml",
+      "https://www.cgtn.com/rss/business.xml",
+      "https://www.cgtn.com/rss/tech.xml",
+      "http://www.xinhuanet.com/english/rss/china.xml",
+      "http://www.xinhuanet.com/english/rss/world.xml",
+      "https://news.google.com/rss/search?q=China+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCwXmrdwV6g7_CgVzD1vO8vA"
+    ]
+  },
+  "cyprus": {
+    "name": "Cyprus",
+    "continent": "Asia",
+    "urls": [
+      "https://cyprus-mail.com/feed/",
+      "https://news.google.com/rss/search?q=Cyprus+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv87v9B7T2V9yX6w4X9Q9wA"
+    ]
+  },
+  "georgia": {
+    "name": "Georgia",
+    "continent": "Asia",
+    "urls": [
+      "https://agenda.ge/en/rss",
+      "https://news.google.com/rss/search?q=Georgia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC-fB4n0pU5M7D7pS9x8V6wA"
+    ]
+  },
+  "india": {
+    "name": "India",
+    "continent": "Asia",
+    "urls": [
+      "https://feeds.feedburner.com/ndtvnews-top-stories",
+      "https://feeds.feedburner.com/ndtvnews-latest",
+      "https://feeds.feedburner.com/ndtvprofit-latest",
+      "https://feeds.feedburner.com/gadgets360-latest",
+      "https://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms",
+      "https://timesofindia.indiatimes.com/rssfeeds/296589292.cms",
+      "https://timesofindia.indiatimes.com/rssfeeds/1898055.cms",
+      "https://www.thehindu.com/news/national/feeder/default.rss",
+      "https://www.thehindu.com/news/international/feeder/default.rss",
+      "https://www.indiatoday.in/rss/1206578",
+      "http://www.business-standard.com/rss/home_page_top_stories.rss",
+      "http://www.livemint.com/rss/homepage",
+      "http://feeds.feedburner.com/NDTV-Business?format=xml",
+      "http://zeenews.india.com/rss/business.xml",
+      "https://feeds.feedburner.com/ScrollinArticles.rss",
+      "https://www.businesstoday.in/rss/homepage",
+      "https://news.google.com/rss/search?q=India+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCgR9fA_X_1Wdf163mkw_Tew"
+    ]
+  },
+  "indonesia": {
+    "name": "Indonesia",
+    "continent": "Asia",
+    "urls": [
+      "https://www.antaranews.com/rss/top-news.xml",
+      "https://news.google.com/rss/search?q=Indonesia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC1y_b1Vd88w2wN8S-A3zG6w"
+    ]
+  },
+  "iran": {
+    "name": "Iran",
+    "continent": "Asia",
+    "urls": [
+      "https://www.presstv.ir/rss",
+      "https://news.google.com/rss/search?q=Iran+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_G7Ew7Z6p_Y_t1X2A38j7A"
+    ]
+  },
+  "iraq": {
+    "name": "Iraq",
+    "continent": "Asia",
+    "urls": [
+      "https://www.rudaw.net/english/rss",
+      "https://news.google.com/rss/search?q=Iraq+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC89p9V7XwP4D8p1fS_R2fDw"
+    ]
+  },
+  "israel": {
+    "name": "Israel",
+    "continent": "Asia",
+    "urls": [
+      "https://www.jpost.com/rss",
+      "https://news.google.com/rss/search?q=Israel+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC4_4V9w7V4W-4_W5v8w4w8A"
+    ]
+  },
+  "japan": {
+    "name": "Japan",
+    "continent": "Asia",
+    "urls": [
+      "https://www3.nhk.or.jp/nhkworld/en/news/rss/all.xml",
+      "https://www3.nhk.or.jp/nhkworld/en/news/rss/business.xml",
+      "https://www3.nhk.or.jp/nhkworld/en/news/rss/sci_tech.xml",
+      "https://www.japantimes.co.jp/news/feed/",
+      "https://www.japantimes.co.jp/business/feed/",
+      "https://japantoday.com/feed/atom",
+      "https://feeds.cnn.co.jp/rss/cnn/cnn.rdf",
+      "https://soranews24.com/feed",
+      "https://news.google.com/rss/search?q=Japan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCvXv6X4W2fG6C7d9vA-pX7w"
+    ]
+  },
+  "jordan": {
+    "name": "Jordan",
+    "continent": "Asia",
+    "urls": [
+      "https://petra.gov.jo/Include/RssEn.xml",
+      "https://news.google.com/rss/search?q=Jordan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC87_V48w8Ww7w-v7y7v7w8A"
+    ]
+  },
+  "kazakhstan": {
+    "name": "Kazakhstan",
+    "continent": "Asia",
+    "urls": [
+      "https://www.inform.kz/rss/eng.xml",
+      "https://news.google.com/rss/search?q=Kazakhstan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC86_XW8V4W7w4w7_v9w_V7A"
+    ]
+  },
+  "kuwait": {
+    "name": "Kuwait",
+    "continent": "Asia",
+    "urls": [
+      "https://www.kuna.net.kw/RssFeeds.aspx?Language=en",
+      "https://news.google.com/rss/search?q=Kuwait+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w9_W7w8W_V8A3p8w8w7_A"
+    ]
+  },
+  "kyrgyzstan": {
+    "name": "Kyrgyzstan",
+    "continent": "Asia",
+    "urls": [
+      "https://24.kg/rss/",
+      "https://news.google.com/rss/search?q=Kyrgyzstan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8_W7w9v4W7w8V7w8v8w7_A"
+    ]
+  },
+  "laos": {
+    "name": "Laos",
+    "continent": "Asia",
+    "urls": [
+      "https://www.vientianetimes.org.la/feed/",
+      "https://news.google.com/rss/search?q=Laos+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw9w7_V8w7w8v9w7_V8w7_A"
+    ]
+  },
+  "lebanon": {
+    "name": "Lebanon",
+    "continent": "Asia",
+    "urls": [
+      "https://today.lorientlejour.com/rss",
+      "https://news.google.com/rss/search?q=Lebanon+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w8V7w8v7w8V8w7_w8V7_A"
+    ]
+  },
+  "malaysia": {
+    "name": "Malaysia",
+    "continent": "Asia",
+    "urls": [
+      "https://www.thestar.com.my/rss/news/nation/",
+      "https://news.google.com/rss/search?q=Malaysia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_A"
+    ]
+  },
+  "maldives": {
+    "name": "Maldives",
+    "continent": "Asia",
+    "urls": [
+      "https://edition.mv/rss",
+      "https://news.google.com/rss/search?q=Maldives+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_A"
+    ]
+  },
+  "mongolia": {
+    "name": "Mongolia",
+    "continent": "Asia",
+    "urls": [
+      "https://montsame.mn/en/rss",
+      "https://news.google.com/rss/search?q=Mongolia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w7w9v8W7w8v9w7_V8w7_A"
+    ]
+  },
+  "myanmar": {
+    "name": "Myanmar",
+    "continent": "Asia",
+    "urls": [
+      "http://www.mizzima.com/rss.xml",
+      "https://news.google.com/rss/search?q=Myanmar+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_A"
+    ]
+  },
+  "nepal": {
+    "name": "Nepal",
+    "continent": "Asia",
+    "urls": [
+      "https://kathmandupost.com/rss",
+      "https://news.google.com/rss/search?q=Nepal+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_A"
+    ]
+  },
+  "north-korea": {
+    "name": "North Korea",
+    "continent": "Asia",
+    "urls": [
+      "https://www.kcna.kp/en/rss",
+      "https://news.google.com/rss/search?q=North%20Korea+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_B"
+    ]
+  },
+  "oman": {
+    "name": "Oman",
+    "continent": "Asia",
+    "urls": [
+      "https://omannews.gov.om/rss",
+      "https://news.google.com/rss/search?q=Oman+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_B"
+    ]
+  },
+  "pakistan": {
+    "name": "Pakistan",
+    "continent": "Asia",
+    "urls": [
+      "https://www.dawn.com/feeds/home/",
+      "https://news.google.com/rss/search?q=Pakistan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_B"
+    ]
+  },
+  "palestine": {
+    "name": "Palestine",
+    "continent": "Asia",
+    "urls": [
+      "https://english.wafa.ps/rss",
+      "https://news.google.com/rss/search?q=Palestine+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_B"
+    ]
+  },
+  "philippines": {
+    "name": "Philippines",
+    "continent": "Asia",
+    "urls": [
+      "https://www.rappler.com/feed/",
+      "https://inquirer.net/fullfeed",
+      "https://rappler.com/feed",
+      "https://news.google.com/rss/search?q=Philippines+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_C"
+    ]
+  },
+  "qatar": {
+    "name": "Qatar",
+    "continent": "Asia",
+    "urls": [
+      "https://www.gulf-times.com/rss",
+      "https://news.google.com/rss/search?q=Qatar+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_C"
+    ]
+  },
+  "saudi-arabia": {
+    "name": "Saudi Arabia",
+    "continent": "Asia",
+    "urls": [
+      "https://www.arabnews.com/cat/1/rss.xml",
+      "https://news.google.com/rss/search?q=Saudi%20Arabia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_C"
+    ]
+  },
+  "singapore": {
+    "name": "Singapore",
+    "continent": "Asia",
+    "urls": [
+      "https://www.straitstimes.com/news/latest/rss.xml",
+      "https://news.google.com/rss/search?q=Singapore+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_D"
+    ]
+  },
+  "south-korea": {
+    "name": "South Korea",
+    "continent": "Asia",
+    "urls": [
+      "https://en.yna.co.kr/RSS/index.xml",
+      "https://m.koreaherald.com/rss",
+      "https://koreatimes.co.kr/www2/common/rss.asp",
+      "https://news.google.com/rss/search?q=South%20Korea+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_D"
+    ]
+  },
+  "sri-lanka": {
+    "name": "Sri Lanka",
+    "continent": "Asia",
+    "urls": [
+      "http://www.dailymirror.lk/rss/online",
+      "https://news.google.com/rss/search?q=Sri%20Lanka+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_C"
+    ]
+  },
+  "syria": {
+    "name": "Syria",
+    "continent": "Asia",
+    "urls": [
+      "https://sana.sy/en/?feed=rss2",
+      "https://news.google.com/rss/search?q=Syria+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_D"
+    ]
+  },
+  "taiwan": {
+    "name": "Taiwan",
+    "continent": "Asia",
+    "urls": [
+      "https://focustaiwan.tw/rss/cnaeng.xml",
+      "https://feeds.feedburner.com/TheNewsLens",
+      "https://news.google.com/rss/search?q=Taiwan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_E"
+    ]
+  },
+  "tajikistan": {
+    "name": "Tajikistan",
+    "continent": "Asia",
+    "urls": [
+      "https://khovar.tj/en/feed/",
+      "https://news.google.com/rss/search?q=Tajikistan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_D"
+    ]
+  },
+  "thailand": {
+    "name": "Thailand",
+    "continent": "Asia",
+    "urls": [
+      "https://www.bangkokpost.com/rss/data/topstories.xml",
+      "https://news.google.com/rss/search?q=Thailand+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_E"
+    ]
+  },
+  "timor-leste": {
+    "name": "Timor-Leste",
+    "continent": "Asia",
+    "urls": [
+      "https://www.tatoli.tl/en/feed/",
+      "https://news.google.com/rss/search?q=Timor-Leste+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_E"
+    ]
+  },
+  "turkey": {
+    "name": "Turkey",
+    "continent": "Asia",
+    "urls": [
+      "https://www.aa.com.tr/en/rss/default?cat=concept",
+      "https://news.google.com/rss/search?q=Turkey+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_F"
+    ]
+  },
+  "turkmenistan": {
+    "name": "Turkmenistan",
+    "continent": "Asia",
+    "urls": [
+      "https://turkmenportal.com/en/rss",
+      "https://news.google.com/rss/search?q=Turkmenistan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_E"
+    ]
+  },
+  "uzbekistan": {
+    "name": "Uzbekistan",
+    "continent": "Asia",
+    "urls": [
+      "https://kun.uz/en/news/rss",
+      "https://news.google.com/rss/search?q=Uzbekistan+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_F"
+    ]
+  },
+  "vietnam": {
+    "name": "Vietnam",
+    "continent": "Asia",
+    "urls": [
+      "https://vietnamnews.vn/rss",
+      "https://news.google.com/rss/search?q=Vietnam+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_G"
+    ]
+  },
+  "yemen": {
+    "name": "Yemen",
+    "continent": "Asia",
+    "urls": [
+      "https://www.saba.yam.net/en/rss",
+      "https://news.google.com/rss/search?q=Yemen+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_F"
+    ]
+  },
+  "albania": {
+    "name": "Albania",
+    "continent": "Europe",
+    "urls": [
+      "https://news24.al/feed/",
+      "https://news.google.com/rss/search?q=Albania+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCgG2G1G7H_X_3X-7W7t-Q4A"
+    ]
+  },
+  "andorra": {
+    "name": "Andorra",
+    "continent": "Europe",
+    "urls": [
+      "https://www.diariandorra.ad/rss/",
+      "https://news.google.com/rss/search?q=Andorra+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCvX6W7V4W7w4w_W5v8w4w8A"
+    ]
+  },
+  "austria": {
+    "name": "Austria",
+    "continent": "Europe",
+    "urls": [
+      "https://rss.orf.at/news.xml",
+      "https://news.google.com/rss/search?q=Austria+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv-wN8w7pX3Z5zHSJj3l8Bg"
+    ]
+  },
+  "belarus": {
+    "name": "Belarus",
+    "continent": "Europe",
+    "urls": [
+      "https://eng.belta.by/rss/",
+      "https://news.google.com/rss/search?q=Belarus+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCwXmrdwV6g7_CgVzD1vO8vB"
+    ]
+  },
+  "belgium": {
+    "name": "Belgium",
+    "continent": "Europe",
+    "urls": [
+      "https://vrtnws.be/vrtnws.rss.xml",
+      "https://news.google.com/rss/search?q=Belgium+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC83jt4dlz1Gjl58fzQrrKZg"
+    ]
+  },
+  "bulgaria": {
+    "name": "Bulgaria",
+    "continent": "Europe",
+    "urls": [
+      "https://www.bta.bg/en/rss.xml",
+      "https://news.google.com/rss/search?q=Bulgaria+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC78_W0Tid4bK6N7vR7D49Xw"
+    ]
+  },
+  "croatia": {
+    "name": "Croatia",
+    "continent": "Europe",
+    "urls": [
+      "https://www.index.hr/rss",
+      "https://news.google.com/rss/search?q=Croatia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw9S4nUf87qC45Y26p-Q_iw"
+    ]
+  },
+  "czech-republic": {
+    "name": "Czech Republic",
+    "continent": "Europe",
+    "urls": [
+      "https://www.ceskenoviny.cz/sluzby/rss/zpravy.php",
+      "https://news.google.com/rss/search?q=Czech%20Republic+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCg137_fF7D93T-T5W4qg-Jw"
+    ]
+  },
+  "denmark": {
+    "name": "Denmark",
+    "continent": "Europe",
+    "urls": [
+      "https://www.dr.dk/nyheder/service/feeds/allenyheder",
+      "https://news.google.com/rss/search?q=Denmark+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCc62Z8wG4p7fV9uX1Nf_4Sg"
+    ]
+  },
+  "estonia": {
+    "name": "Estonia",
+    "continent": "Europe",
+    "urls": [
+      "https://news.err.ee/rss",
+      "https://news.google.com/rss/search?q=Estonia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC28Xp8E5F6L8T76u89w8C4g"
+    ]
+  },
+  "finland": {
+    "name": "Finland",
+    "continent": "Europe",
+    "urls": [
+      "https://news.yle.fi/rss/v1/news.rss",
+      "https://news.google.com/rss/search?q=Finland+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv87v9B7T2V9yX6w4X9Q9wA"
+    ]
+  },
+  "france": {
+    "name": "France",
+    "continent": "Europe",
+    "urls": [
+      "https://www.france24.com/en/rss",
+      "https://news.google.com/rss/search?q=France+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC6PAxflbtoNPPc6_uEDwM0A"
+    ]
+  },
+  "germany": {
+    "name": "Germany",
+    "continent": "Europe",
+    "urls": [
+      "https://rss.dw.com/xml/rss-en-all",
+      "https://rss.dw.com/xml/rss-en-eu",
+      "https://rss.dw.com/xml/rss-en-bus",
+      "https://rss.dw.com/xml/rss-en-sci",
+      "https://www.spiegel.de/international/index.rss",
+      "https://news.google.com/rss/search?q=Germany+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCwXmrdwV6g7_CgVzD1vO8vC"
+    ]
+  },
+  "greece": {
+    "name": "Greece",
+    "continent": "Europe",
+    "urls": [
+      "https://www.amna.gr/en/feed",
+      "https://news.google.com/rss/search?q=Greece+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCgR9fA_X_1Wdf163mkw_Tew"
+    ]
+  },
+  "hungary": {
+    "name": "Hungary",
+    "continent": "Europe",
+    "urls": [
+      "https://telex.hu/rss",
+      "https://news.google.com/rss/search?q=Hungary+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC1y_b1Vd88w2wN8S-A3zG6w"
+    ]
+  },
+  "iceland": {
+    "name": "Iceland",
+    "continent": "Europe",
+    "urls": [
+      "https://www.ruv.is/rss/frettir",
+      "https://news.google.com/rss/search?q=Iceland+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_G7Ew7Z6p_Y_t1X2A38j7A"
+    ]
+  },
+  "ireland": {
+    "name": "Ireland",
+    "continent": "Europe",
+    "urls": [
+      "https://www.rte.ie/news/rss/news-headlines.xml",
+      "https://news.google.com/rss/search?q=Ireland+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC89p9V7XwP4D8p1fS_R2fDw"
+    ]
+  },
+  "italy": {
+    "name": "Italy",
+    "continent": "Europe",
+    "urls": [
+      "https://www.ansa.it/sito/ansait_rss.xml",
+      "https://news.google.com/rss/search?q=Italy+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCvXv6X4W2fG6C7d9vA-pX7w"
+    ]
+  },
+  "kosovo": {
+    "name": "Kosovo",
+    "continent": "Europe",
+    "urls": [
+      "https://www.koha.net/rss/",
+      "https://news.google.com/rss/search?q=Kosovo+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC87_V48w8Ww7w-v7y7v7w8A"
+    ]
+  },
+  "latvia": {
+    "name": "Latvia",
+    "continent": "Europe",
+    "urls": [
+      "https://eng.lsm.lv/rss/",
+      "https://news.google.com/rss/search?q=Latvia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC86_XW8V4W7w4w7_v9w_V7A"
+    ]
+  },
+  "liechtenstein": {
+    "name": "Liechtenstein",
+    "continent": "Europe",
+    "urls": [
+      "https://www.vaterland.li/storage/rss/rss.xml",
+      "https://news.google.com/rss/search?q=Liechtenstein+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w9_W7w8W_V8A3p8w8w7_A"
+    ]
+  },
+  "lithuania": {
+    "name": "Lithuania",
+    "continent": "Europe",
+    "urls": [
+      "https://www.lrt.lt/en/rss",
+      "https://news.google.com/rss/search?q=Lithuania+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8_W7w9v4W7w8V7w8v8w7_A"
+    ]
+  },
+  "luxembourg": {
+    "name": "Luxembourg",
+    "continent": "Europe",
+    "urls": [
+      "https://today.rtl.lu/rss/luxembourg",
+      "https://news.google.com/rss/search?q=Luxembourg+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw9w7_V8w7w8v9w7_V8w7_A"
+    ]
+  },
+  "malta": {
+    "name": "Malta",
+    "continent": "Europe",
+    "urls": [
+      "https://timesofmalta.com/rss/news",
+      "https://news.google.com/rss/search?q=Malta+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w8V7w8v7w8V8w7_w8V7_A"
+    ]
+  },
+  "moldova": {
+    "name": "Moldova",
+    "continent": "Europe",
+    "urls": [
+      "https://www.moldpres.md/en/rss",
+      "https://news.google.com/rss/search?q=Moldova+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_A"
+    ]
+  },
+  "monaco": {
+    "name": "Monaco",
+    "continent": "Europe",
+    "urls": [
+      "https://www.monacotribune.com/en/feed/",
+      "https://news.google.com/rss/search?q=Monaco+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_A"
+    ]
+  },
+  "montenegro": {
+    "name": "Montenegro",
+    "continent": "Europe",
+    "urls": [
+      "https://www.vijesti.me/rss",
+      "https://news.google.com/rss/search?q=Montenegro+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w7w9v8W7w8v9w7_V8w7_A"
+    ]
+  },
+  "netherlands": {
+    "name": "Netherlands",
+    "continent": "Europe",
+    "urls": [
+      "https://feeds.nos.nl/nosnieuwsalgemeen",
+      "https://news.google.com/rss/search?q=Netherlands+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_A"
+    ]
+  },
+  "north-macedonia": {
+    "name": "North Macedonia",
+    "continent": "Europe",
+    "urls": [
+      "https://mia.mk/en/rss",
+      "https://news.google.com/rss/search?q=North%20Macedonia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_A"
+    ]
+  },
+  "norway": {
+    "name": "Norway",
+    "continent": "Europe",
+    "urls": [
+      "https://www.nrk.no/toppsaker.rss",
+      "https://news.google.com/rss/search?q=Norway+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_B"
+    ]
+  },
+  "poland": {
+    "name": "Poland",
+    "continent": "Europe",
+    "urls": [
+      "https://tvn24.pl/najnowsze.xml",
+      "https://news.google.com/rss/search?q=Poland+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_B"
+    ]
+  },
+  "portugal": {
+    "name": "Portugal",
+    "continent": "Europe",
+    "urls": [
+      "https://www.publico.pt/feed",
+      "https://news.google.com/rss/search?q=Portugal+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_B"
+    ]
+  },
+  "romania": {
+    "name": "Romania",
+    "continent": "Europe",
+    "urls": [
+      "https://www.hotnews.ro/rss",
+      "https://news.google.com/rss/search?q=Romania+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_B"
+    ]
+  },
+  "russia": {
+    "name": "Russia",
+    "continent": "Europe",
+    "urls": [
+      "https://tass.com/rss/v2.xml",
+      "https://news.google.com/rss/search?q=Russia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_C"
+    ]
+  },
+  "san-marino": {
+    "name": "San Marino",
+    "continent": "Europe",
+    "urls": [
+      "https://www.sanmarinortv.sm/rss/",
+      "https://news.google.com/rss/search?q=San%20Marino+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_C"
+    ]
+  },
+  "serbia": {
+    "name": "Serbia",
+    "continent": "Europe",
+    "urls": [
+      "https://www.b92.net/info/rss/b92.xml",
+      "https://news.google.com/rss/search?q=Serbia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_C"
+    ]
+  },
+  "slovakia": {
+    "name": "Slovakia",
+    "continent": "Europe",
+    "urls": [
+      "https://domov.sme.sk/rss",
+      "https://news.google.com/rss/search?q=Slovakia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_D"
+    ]
+  },
+  "slovenia": {
+    "name": "Slovenia",
+    "continent": "Europe",
+    "urls": [
+      "https://www.rtvslo.si/feeds/00.xml",
+      "https://news.google.com/rss/search?q=Slovenia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_D"
+    ]
+  },
+  "spain": {
+    "name": "Spain",
+    "continent": "Europe",
+    "urls": [
+      "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/espana/portada",
+      "https://news.google.com/rss/search?q=Spain+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_C"
+    ]
+  },
+  "sweden": {
+    "name": "Sweden",
+    "continent": "Europe",
+    "urls": [
+      "https://www.svt.se/nyheter/rss.xml",
+      "https://news.google.com/rss/search?q=Sweden+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_D"
+    ]
+  },
+  "switzerland": {
+    "name": "Switzerland",
+    "continent": "Europe",
+    "urls": [
+      "https://www.swissinfo.ch/eng/rss",
+      "https://news.google.com/rss/search?q=Switzerland+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_E"
+    ]
+  },
+  "ukraine": {
+    "name": "Ukraine",
+    "continent": "Europe",
+    "urls": [
+      "https://www.ukrinform.net/block-lastnews",
+      "https://news.google.com/rss/search?q=Ukraine+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w8V7w9v7w8V8w7_w8V7_D"
+    ]
+  },
+  "vatican-city": {
+    "name": "Vatican City",
+    "continent": "Europe",
+    "urls": [
+      "https://news.google.com/rss/search?q=Vatican%20City+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "antigua-and-barbuda": {
+    "name": "Antigua and Barbuda",
+    "continent": "North America",
+    "urls": [
+      "https://wicnews.com/feed/",
+      "https://news.google.com/rss/search?q=Antigua%20and%20Barbuda+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCg137_fF7D93T-T5W4qg-Jw"
+    ]
+  },
+  "bahamas": {
+    "name": "Bahamas",
+    "continent": "North America",
+    "urls": [
+      "http://www.tribune242.com/rss/headlines/",
+      "https://news.google.com/rss/search?q=Bahamas+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCc62Z8wG4p7fV9uX1Nf_4Sg"
+    ]
+  },
+  "barbados": {
+    "name": "Barbados",
+    "continent": "North America",
+    "urls": [
+      "https://barbadostoday.bb/feed/",
+      "https://news.google.com/rss/search?q=Barbados+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC28Xp8E5F6L8T76u89w8C4g"
+    ]
+  },
+  "belize": {
+    "name": "Belize",
+    "continent": "North America",
+    "urls": [
+      "https://amandala.com.bz/news/feed/",
+      "https://news.google.com/rss/search?q=Belize+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCv87v9B7T2V9yX6w4X9Q9wA"
+    ]
+  },
+  "canada": {
+    "name": "Canada",
+    "continent": "North America",
+    "urls": [
+      "https://www.cbc.ca/cctoc/rss/news-topstories",
+      "https://www.cbc.ca/cctoc/rss/news-world",
+      "https://www.cbc.ca/cctoc/rss/news-business",
+      "https://www.cbc.ca/cctoc/rss/news-technology",
+      "https://news.google.com/rss/search?q=Canada+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCuGoqp7ddX5XM1v6Y_X-N_A"
+    ]
+  },
+  "costa-rica": {
+    "name": "Costa Rica",
+    "continent": "North America",
+    "urls": [
+      "https://ticotimes.net/feed",
+      "https://news.google.com/rss/search?q=Costa%20Rica+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCwXmrdwV6g7_CgVzD1vO8vD"
+    ]
+  },
+  "cuba": {
+    "name": "Cuba",
+    "continent": "North America",
+    "urls": [
+      "https://www.granma.cu/feed",
+      "https://news.google.com/rss/search?q=Cuba+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCgR9fA_X_1Wdf163mkw_Tew"
+    ]
+  },
+  "dominica": {
+    "name": "Dominica",
+    "continent": "North America",
+    "urls": [
+      "https://dominicanewsonline.com/news/feed/",
+      "https://news.google.com/rss/search?q=Dominica+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC1y_b1Vd88w2wN8S-A3zG6w"
+    ]
+  },
+  "dominican-republic": {
+    "name": "Dominican Republic",
+    "continent": "North America",
+    "urls": [
+      "https://dominicantoday.com/feed/",
+      "https://news.google.com/rss/search?q=Dominican%20Republic+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_G7Ew7Z6p_Y_t1X2A38j7A"
+    ]
+  },
+  "el-salvador": {
+    "name": "El Salvador",
+    "continent": "North America",
+    "urls": [
+      "https://elfaro.net/es/rss",
+      "https://news.google.com/rss/search?q=El%20Salvador+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC89p9V7XwP4D8p1fS_R2fDw"
+    ]
+  },
+  "grenada": {
+    "name": "Grenada",
+    "continent": "North America",
+    "urls": [
+      "https://nowgrenada.com/feed/",
+      "https://news.google.com/rss/search?q=Grenada+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCvXv6X4W2fG6C7d9vA-pX7w"
+    ]
+  },
+  "guatemala": {
+    "name": "Guatemala",
+    "continent": "North America",
+    "urls": [
+      "https://www.prensalibre.com/feed/",
+      "https://news.google.com/rss/search?q=Guatemala+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC87_V48w8Ww7w-v7y7v7w8A"
+    ]
+  },
+  "haiti": {
+    "name": "Haiti",
+    "continent": "North America",
+    "urls": [
+      "https://lenouvelliste.com/feed",
+      "https://news.google.com/rss/search?q=Haiti+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC86_XW8V4W7w4w7_v9w_V7A"
+    ]
+  },
+  "honduras": {
+    "name": "Honduras",
+    "continent": "North America",
+    "urls": [
+      "https://www.laprensa.hn/rss",
+      "https://news.google.com/rss/search?q=Honduras+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w9_W7w8W_V8A3p8w8w7_A"
+    ]
+  },
+  "jamaica": {
+    "name": "Jamaica",
+    "continent": "North America",
+    "urls": [
+      "https://jamaica-gleaner.com/feed/news.xml",
+      "https://news.google.com/rss/search?q=Jamaica+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC78_W0Tid4bK6N7vR7D49Xw"
+    ]
+  },
+  "mexico": {
+    "name": "Mexico",
+    "continent": "North America",
+    "urls": [
+      "https://www.eluniversal.com.mx/rss.xml",
+      "https://news.google.com/rss/search?q=Mexico+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCwXmrdwV6g7_CgVzD1vO8vE"
+    ]
+  },
+  "nicaragua": {
+    "name": "Nicaragua",
+    "continent": "North America",
+    "urls": [
+      "https://www.confidencial.digital/feed/",
+      "https://news.google.com/rss/search?q=Nicaragua+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8_W7w9v4W7w8V7w8v8w7_A"
+    ]
+  },
+  "panama": {
+    "name": "Panama",
+    "continent": "North America",
+    "urls": [
+      "https://www.prensa.com/rss/",
+      "https://news.google.com/rss/search?q=Panama+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw9w7_V8w7w8v9w7_V8w7_A"
+    ]
+  },
+  "saint-kitts-and-nevis": {
+    "name": "Saint Kitts and Nevis",
+    "continent": "North America",
+    "urls": [
+      "https://www.thestkittsnevisobserver.com/feed/",
+      "https://news.google.com/rss/search?q=Saint%20Kitts%20and%20Nevis+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w8V7w8v7w8V8w7_w8V7_A"
+    ]
+  },
+  "saint-lucia": {
+    "name": "Saint Lucia",
+    "continent": "North America",
+    "urls": [
+      "https://thevoiceslu.com/feed/",
+      "https://news.google.com/rss/search?q=Saint%20Lucia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w8V7w8v9w7_V8w7_A"
+    ]
+  },
+  "saint-vincent-and-the-grenadines": {
+    "name": "Saint Vincent and the Grenadines",
+    "continent": "North America",
+    "urls": [
+      "https://searchlight.vc/feed/",
+      "https://news.google.com/rss/search?q=Saint%20Vincent%20and%20the%20Grenadines+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w7_V8w8w7v8w97_V8w7_A"
+    ]
+  },
+  "trinidad-and-tobago": {
+    "name": "Trinidad and Tobago",
+    "continent": "North America",
+    "urls": [
+      "https://www.guardian.co.th/feed",
+      "https://news.google.com/rss/search?q=Trinidad%20and%20Tobago+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC8w7w9v8W7w8v9w7_V8w7_A"
+    ]
+  },
+  "argentina": {
+    "name": "Argentina",
+    "continent": "South America",
+    "urls": [
+      "https://www.batimes.com.ar/feed",
+      "https://news.google.com/rss/search?q=Argentina+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC78_W0Tid4bK6N7vR7D49Xw"
+    ]
+  },
+  "bolivia": {
+    "name": "Bolivia",
+    "continent": "South America",
+    "urls": [
+      "https://abi.bo/index.php?format=feed&type=rss",
+      "https://news.google.com/rss/search?q=Bolivia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCg137_fF7D93T-T5W4qg-Jw"
+    ]
+  },
+  "brazil": {
+    "name": "Brazil",
+    "continent": "South America",
+    "urls": [
+      "https://agenciabrasil.ebc.com.br/rss/ultimas-noticias/feed.xml",
+      "https://agenciabrasil.ebc.com.br/rss/economia/feed.xml",
+      "https://agenciabrasil.ebc.com.br/rss/direitos-humanos/feed.xml",
+      "https://g1.globo.com/dinamico/rss2/g1.xml",
+      "https://news.google.com/rss/search?q=Brazil+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCuGoqp7ddX5XM1v6Y_X-N_A"
+    ]
+  },
+  "chile": {
+    "name": "Chile",
+    "continent": "South America",
+    "urls": [
+      "https://www.biobiochile.cl/lista/categorias/nacional?format=rss",
+      "https://news.google.com/rss/search?q=Chile+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCwXmrdwV6g7_CgVzD1vO8vD"
+    ]
+  },
+  "colombia": {
+    "name": "Colombia",
+    "continent": "South America",
+    "urls": [
+      "https://www.eltiempo.com/rss/colombia.xml",
+      "https://news.google.com/rss/search?q=Colombia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCgR9fA_X_1Wdf163mkw_Tew"
+    ]
+  },
+  "ecuador": {
+    "name": "Ecuador",
+    "continent": "South America",
+    "urls": [
+      "https://www.eluniverso.com/arc/outboundfeeds/rss/",
+      "https://news.google.com/rss/search?q=Ecuador+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC1y_b1Vd88w2wN8S-A3zG6w"
+    ]
+  },
+  "guyana": {
+    "name": "Guyana",
+    "continent": "South America",
+    "urls": [
+      "https://www.stabroeknews.com/feed/",
+      "https://news.google.com/rss/search?q=Guyana+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_G7Ew7Z6p_Y_t1X2A38j7A"
+    ]
+  },
+  "paraguay": {
+    "name": "Paraguay",
+    "continent": "South America",
+    "urls": [
+      "https://www.ip.gov.py/ip/feed/",
+      "https://news.google.com/rss/search?q=Paraguay+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC89p9V7XwP4D8p1fS_R2fDw"
+    ]
+  },
+  "peru": {
+    "name": "Peru",
+    "continent": "South America",
+    "urls": [
+      "https://andina.pe/ingles/rss.aspx",
+      "https://news.google.com/rss/search?q=Peru+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCvXv6X4W2fG6C7d9vA-pX7w"
+    ]
+  },
+  "suriname": {
+    "name": "Suriname",
+    "continent": "South America",
+    "urls": [
+      "https://www.waterkant.net/suriname/feed/",
+      "https://news.google.com/rss/search?q=Suriname+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC87_V48w8Ww7w-v7y7v7w8A"
+    ]
+  },
+  "uruguay": {
+    "name": "Uruguay",
+    "continent": "South America",
+    "urls": [
+      "https://www.elpais.com.uy/rss",
+      "https://news.google.com/rss/search?q=Uruguay+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC86_XW8V4W7w4w7_v9w_V7A"
+    ]
+  },
+  "venezuela": {
+    "name": "Venezuela",
+    "continent": "South America",
+    "urls": [
+      "https://efectococuyo.com/feed/",
+      "https://news.google.com/rss/search?q=Venezuela+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9w9_W7w8W_V8A3p8w8w7_A"
+    ]
+  },
+  "australia": {
+    "name": "Australia",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Australia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "fiji": {
+    "name": "Fiji",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Fiji+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "kiribati": {
+    "name": "Kiribati",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Kiribati+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "marshall-islands": {
+    "name": "Marshall Islands",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Marshall%20Islands+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "micronesia": {
+    "name": "Micronesia",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Micronesia+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "nauru": {
+    "name": "Nauru",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Nauru+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "new-zealand": {
+    "name": "New Zealand",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=New%20Zealand+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "palau": {
+    "name": "Palau",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Palau+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "papua-new-guinea": {
+    "name": "Papua New Guinea",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Papua%20New%20Guinea+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "samoa": {
+    "name": "Samoa",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Samoa+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "solomon-islands": {
+    "name": "Solomon Islands",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Solomon%20Islands+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "tonga": {
+    "name": "Tonga",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Tonga+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "tuvalu": {
+    "name": "Tuvalu",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Tuvalu+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "vanuatu": {
+    "name": "Vanuatu",
+    "continent": "Oceania",
+    "urls": [
+      "https://news.google.com/rss/search?q=Vanuatu+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": []
+  },
+  "cape-verde": {
+    "name": "Cabo Verde",
+    "continent": "Africa",
+    "urls": [
+      "https://www.rtc.cv/rss/",
+      "https://inforpress.cv/feed/",
+      "https://www.anacao.cv/feed/",
+      "https://expressodasilhas.cv/rss",
+      "https://balai.cv/feed/"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCiL7gA-O4-fK_pYV1_H_Cjg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_0p8YF6_S0v4hW4k7b_7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCkXN8yF6-Uf0FwS84h7Z7wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC9_X_8S4U_Y8v4W4k8b_5wA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC7XwY_Z8_S0V4hW8k7b_5wA"
+    ]
+  },
+  "pan-asia": {
+    "name": "Pan-Asia",
+    "continent": "Asia",
+    "urls": [
+      "https://www.aljazeera.com/xml/rss/all.xml",
+      "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCNye-wNBqNL5ZzHSJj3l8Bg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC83jt4dlz1Gjl58fzQrrKZg"
+    ]
+  },
+  "uae": {
+    "name": "U.A.E.",
+    "continent": "Asia",
+    "urls": [
+      "https://www.khaleejtimes.com/rss/",
+      "https://news.google.com/rss/search?q=United%20Arab%20Emirates+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_F"
+    ]
+  },
+  "pan-europe": {
+    "name": "Pan-Europe",
+    "continent": "Europe",
+    "urls": [
+      "https://www.euronews.com/rss?level=theme&name=news",
+      "https://www.reutersagency.com/feed/",
+      "https://www.politico.eu/feed/"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCSrZ3KfBFvZvZg6274S4G6g",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UChqUTb7kYAs-q99_Y0TdbFA",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC6YIteEw6_M27_vXsbvI39w"
+    ]
+  },
+  "bosnia": {
+    "name": "Bosnia & Herzegovina",
+    "continent": "Europe",
+    "urls": [
+      "https://www.klix.ba/rss",
+      "https://news.google.com/rss/search?q=Bosnia%20and%20Herzegovina+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC-fB4n0pU5M7D7pS9x8V6wA"
+    ]
+  },
+  "uk": {
+    "name": "United Kingdom",
+    "continent": "Europe",
+    "urls": [
+      "http://feeds.bbci.co.uk/news/rss.xml",
+      "http://feeds.bbci.co.uk/news/world/rss.xml",
+      "http://feeds.bbci.co.uk/news/uk/rss.xml",
+      "http://feeds.bbci.co.uk/news/business/rss.xml",
+      "http://feeds.bbci.co.uk/news/technology/rss.xml",
+      "http://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+      "http://feeds.skynews.com/feeds/rss/home.xml",
+      "http://feeds.skynews.com/feeds/rss/business.xml",
+      "http://feeds.skynews.com/feeds/rss/technology.xml",
+      "https://news.google.com/rss/search?q=United%20Kingdom+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA"
+    ]
+  },
+  "vatican": {
+    "name": "Vatican City",
+    "continent": "Europe",
+    "urls": [
+      "https://www.vaticannews.va/en.rss.xml"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCw8v8w9v7W8w8V7w8v8w7_E"
+    ]
+  },
+  "pan-north-america": {
+    "name": "Pan-North America",
+    "continent": "North America",
+    "urls": [
+      "https://newsatme.com/feed/",
+      "https://caribbeannewsglobal.com/feed/"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC52X5wxOL_s5d0oTWuvVtcg",
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC6P7iZpS8RbeH7VAb38j7gB"
+    ]
+  },
+  "usa": {
+    "name": "United States",
+    "continent": "North America",
+    "urls": [
+      "https://www.npr.org/rss/rss.php?id=1001",
+      "https://www.npr.org/rss/rss.php?id=1014",
+      "https://www.npr.org/rss/rss.php?id=1006",
+      "https://www.npr.org/rss/rss.php?id=1019",
+      "https://www.npr.org/rss/rss.php?id=1007",
+      "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
+      "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+      "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+      "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
+      "https://news.google.com/rss/search?q=United%20States+News&hl=en-US&gl=US&ceid=US:en"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UCbi2mr544bLI1Mc907d_G6w"
+    ]
+  },
+  "pan-south-america": {
+    "name": "Pan-South America",
+    "continent": "South America",
+    "urls": [
+      "https://en.mercopress.com/rss/",
+      "http://rss.cnn.com/rss/cnne_latinoamerica.rss"
+    ],
+    "youtube_urls": [
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC_lEiu6917L7_UM9P9642Ww"
+    ]
+  }
+}

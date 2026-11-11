@@ -1,0 +1,119 @@
+/* Editorial dark redesign. Only applies when <html> has .ui-v2 */
+html.ui-v2 {
+  --background: 240 6% 4%;
+  --foreground: 40 12% 93%;
+  --card: 240 5% 7%;
+  --card-foreground: 40 12% 93%;
+  --popover: 240 5% 7%;
+  --popover-foreground: 40 12% 93%;
+  --primary: 38 92% 50%;
+  --primary-foreground: 240 6% 6%;
+  --secondary: 240 4% 12%;
+  --secondary-foreground: 40 10% 90%;
+  --muted: 240 4% 11%;
+  --muted-foreground: 40 6% 62%;
+  --accent: 38 92% 50%;
+  --accent-foreground: 240 6% 6%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 4% 16%;
+  --input: 240 4% 16%;
+  --ring: 38 92% 50%;
+  --radius: 0.375rem;
+  --shadow-glow: none;
+  --shadow-card: 0 1px 0 hsl(0 0% 100% / 0.04), 0 12px 32px hsl(0 0% 0% / 0.35);
+  --gradient-hero: linear-gradient(180deg, transparent 30%, hsl(240 6% 4% / 0.92) 100%);
+  --gradient-card: linear-gradient(180deg, transparent 40%, hsl(240 6% 4% / 0.88) 100%);
+  --sidebar-background: 240 6% 4%;
+  --sidebar-foreground: 40 12% 93%;
+  --sidebar-primary: 38 92% 50%;
+  --sidebar-primary-foreground: 240 6% 6%;
+  --sidebar-accent: 240 4% 11%;
+  --sidebar-accent-foreground: 40 12% 93%;
+  --sidebar-border: 240 4% 16%;
+  --sidebar-ring: 38 92% 50%;
+}
+
+html.ui-v2,
+html.ui-v2 body {
+  background-color: hsl(240 6% 4%);
+  background-image: none;
+  color: hsl(40 12% 93%);
+}
+
+html.ui-v2 body {
+  font-family: Inter, system-ui, sans-serif;
+  letter-spacing: -0.011em;
+}
+
+html.ui-v2 h1,
+html.ui-v2 h2,
+html.ui-v2 h3,
+html.ui-v2 h4 {
+  font-family: Newsreader, "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+html.ui-v2 .glass,
+html.ui-v2 .glass-card,
+html.ui-v2 .glass-nav,
+html.ui-v2 .glass-dropdown {
+  background: hsl(240 5% 7% / 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid hsl(240 4% 16%);
+  box-shadow: 0 1px 0 hsl(0 0% 100% / 0.04);
+}
+
+html.ui-v2 .glass-card:hover {
+  border-color: hsl(38 92% 50% / 0.35);
+  box-shadow: 0 8px 28px hsl(0 0% 0% / 0.35);
+}
+
+html.ui-v2 .glass-nav,
+html.ui-v2 .glass-nav-fill {
+  background: hsl(240 6% 4% / 0.92);
+  border-color: hsl(240 4% 16%);
+  box-shadow: none;
+}
+
+html.ui-v2 .glass-search {
+  background: hsl(240 4% 11%);
+  border: 1px solid hsl(240 4% 18%);
+  border-radius: 9999px;
+}
+
+html.ui-v2 .glass-search:focus-within {
+  border-color: hsl(38 92% 50% / 0.7);
+  box-shadow: 0 0 0 3px hsl(38 92% 50% / 0.12);
+}
+
+html.ui-v2 .glow-amber,
+html.ui-v2 .glow-amber-sm,
+html.ui-v2 .glow-amber-ring {
+  box-shadow: none;
+}
+
+html.ui-v2 .text-gradient-gold {
+  background: none;
+  -webkit-text-fill-color: hsl(38 92% 50%);
+  color: hsl(38 92% 50%);
+}
+
+html.ui-v2 header {
+  border-bottom: 1px solid hsl(240 4% 16%);
+}
+
+html.ui-v2 article h1,
+html.ui-v2 .article-title,
+html.ui-v2 [data-article-title] {
+  font-family: Newsreader, Georgia, serif;
+}
+
+@media (max-width: 768px) {
+  html.ui-v2 {
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,26 @@
+app = "realssa-scraper"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "5000"
+
+[processes]
+  web = "node --max-old-space-size=450 server.js"
+  worker = "node --max-old-space-size=450 worker.js"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[http_service]
+  internal_port = 5000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["web"]
+
