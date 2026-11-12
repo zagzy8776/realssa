@@ -104,7 +104,7 @@ module.exports = async function handler(req, res) {
           article = { ...article, textContent: analysis.summary,
             htmlContent: analysis.summary.split(/\n\s*\n/).map(p => `<p>${escapeHtml(p)}</p>`).join('') };
         }
-        await saveEnrichment(target.toString(), { source: source.slice(0, 24000), summary: analysis.generated ? analysis.summary : null, image: article.image || fallbackImage });
+        await saveEnrichment(target.toString(), { title: article.title || fallbackTitle, source: source.slice(0, 24000), summary: analysis.generated ? analysis.summary : null, image: article.image || fallbackImage });
       } catch (error) { console.warn('[Reader] Enrichment unavailable:', error.code || error.name); }
     }
     const text = article.textContent.trim();

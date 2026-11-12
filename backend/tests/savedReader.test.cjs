@@ -29,3 +29,12 @@ for (const full of [true, false]) {
     assert.equal(payload.partial, !full);
   });
 }
+
+test('feed-only stories reuse a bounded warm cache when no database row exists',async()=>{
+  const {saveEnrichment,findSavedArticle}=require('../services/savedReader.cjs');
+  const url='https://example.test/cache-only';
+  await saveEnrichment(url,{title:'Library opens',source:'Full confirmed source text.',summary:'A full sourced report.',image:null});
+  const row=await findSavedArticle(url);
+  assert.equal(row.title,'Library opens');
+  assert.equal(row.ai_summary,'A full sourced report.');
+});
