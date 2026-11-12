@@ -75,3 +75,13 @@ test('JSON-LD articleBody is recovered without AI or teaser padding',async()=>{
  try{const result=await require('../services/extractor').extractArticle('https://example.test/structured');assert.equal(result.textContent.trim(),body.trim());assert.equal(result.title,'Library opens');}
  finally{dns.lookup=originalLookup;global.fetch=original;}
 });
+
+test('main API and reader load normally under deployed CommonJS package scopes',()=>{
+ const {spawnSync}=require('node:child_process');
+ const result=spawnSync(process.execPath,['-e',"require('./api/extract.js'); require('./api/index.js'); console.log('HANDLERS_OK'); process.exit(0)"],{
+  cwd:require('node:path').resolve(__dirname,'../..'),
+  env:{PATH:process.env.PATH,VERCEL:'1',NODE_ENV:'test'},encoding:'utf8',timeout:10000
+ });
+ assert.equal(result.status,0,result.stderr);
+ assert.ok(result.stdout.includes('HANDLERS_OK'));
+});
