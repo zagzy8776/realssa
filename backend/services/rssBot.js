@@ -306,7 +306,7 @@ async function runBufferCron() {
 
         // Prefer the extracted article body so social copy is grounded in more
         // than an RSS teaser; fall back safely for feeds without full content.
-        const excerpt = article.full_content || article.ai_summary || article.original_excerpt || '';
+        const excerpt = [article.full_content, article.original_excerpt].filter(text => text && text.trim()).join('\n\n') || article.ai_summary || '';
         const hooks = await generateSocialHooks(article.title, excerpt);
 
         const link = `${SITE_URL}/read?url=${encodeURIComponent(article.external_link)}`;

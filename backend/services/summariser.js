@@ -21,16 +21,10 @@ const getGeminiKey = () => {
   return keys[(_gi++) % keys.length];
 };
 
-const DEFAULT_GROQ_KEYS = [
-  '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',
-  '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',
-  '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'
-];
-
 let _qi = 0;
 const getGroqKey = () => {
   const envKeys = (process.env.GROQ_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
-  const keys = Array.from(new Set([...envKeys, ...DEFAULT_GROQ_KEYS]));
+  const keys = Array.from(new Set(envKeys));
   if (!keys.length) return null;
   return keys[(_qi++) % keys.length];
 };
@@ -45,7 +39,7 @@ const WATERFALL_MODEL  = () => process.env.WATERFALL_MODEL || 'auto';
 
 // ── Provider URLs ─────────────────────────────────────────────────────────
 
-const GEMINI_URL       = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_URL = () => `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(process.env.GEMINI_MODEL || 'gemini-3.8-flash')}:generateContent`;
 const GEMINI_EMBED_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent';
 const GROQ_URL         = 'https://api.groq.com/openai/v1/chat/completions';
 const CEREBRAS_URL     = 'https://api.cerebras.ai/v1/chat/completions';
@@ -69,13 +63,13 @@ async function callGemini(prompt, { maxOutputTokens = 800, temperature = 0.3, ti
     }
     const config = { maxOutputTokens, temperature, topP: 0.9 };
     if (responseMimeType) config.responseMimeType = responseMimeType;
-    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+    const res = await fetch(`${GEMINI_URL()}?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: config }),
       signal: AbortSignal.timeout(timeout),
     });
-    if (!res.ok) { console.warn(`[Gemini] ${res.status} — key prefix: ${key.slice(0, 8)}`); return null; }
+    if (!res.ok) { console.warn(`[Gemini] request failed: HTTP ${res.status} (model: ${process.env.GEMINI_MODEL || 'gemini-3.8-flash'})`); return null; }
     const data = await res.json();
     return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
   } catch (err) { console.warn(`[Gemini] ${err.message}`); return null; }
@@ -88,7 +82,7 @@ async function callGroq(prompt, { maxTokens = 800, temperature = 0.3 } = {}) {
     const res = await fetch(GROQ_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature }),
+      body: JSON.stringify({ model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant', messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature }),
       signal: AbortSignal.timeout(10000),
     });
     const data = await res.json();
@@ -104,7 +98,7 @@ async function callCerebras(prompt, { maxTokens = 800, temperature = 0.3 } = {})
     const res = await fetch(CEREBRAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: 'gpt-oss-120b', messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature }),
+      body: JSON.stringify({ model: process.env.CEREBRAS_MODEL || 'gpt-oss-120b', messages: [{ role: 'user', content: prompt }], max_tokens: Math.max(maxTokens, 2048), temperature }),
       signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
@@ -296,24 +290,6 @@ const { cleanSocialText, sourceSummary, formatSocialCaption } = require('./socia
 const SOCIAL_GROUNDING_RULE =
   'Use ONLY facts stated in the supplied title and context. Never invent names, numbers, quotes, causes, dates, or background. If context is thin, write a careful, factual caption using only the confirmed detail.';
 
-const TWITTER_PROMPT = (title, cleanText) => [
-  'You are a senior digital news editor for RealSSA News on Twitter/X.',
-  'Write a high-impact, direct news summary tweet for this story.',
-  SOCIAL_GROUNDING_RULE,
-  'STRICT EDITORIAL RULES:',
-  '- DO NOT ask any questions! Zero question marks allowed (no "?" in text).',
-  '- State the core news facts directly, concisely, and authoritatively.',
-  '- Start with a strong headline statement or key fact.',
-  '- NEVER use robotic filler like "Check out", "This article discusses", "Here is", or "What do you think".',
-  '- Strict character limit: total length MUST be under 220 characters.',
-  '- Use 1 or 2 strategic emojis (e.g. 🚨, 🇳🇬, ⚽, 💡, 📈).',
-  '- Do not include hashtags or calls to action; the publisher adds these.',
-  '- Do NOT include any URL or link.',
-  `Story Title: "${title}"`,
-  `Story Context: "${cleanText}"`,
-  'Return ONLY the raw tweet text. No quotes or introductory text.'
-].join('\n');
-
 const STORY_PROMPT = (platform, title, cleanText) => [
   `You are a news storyteller for RealSSA News on ${platform}.`,
   'Write a natural, engaging spoken-style story summary, as a human news presenter explaining the news to a reader.',
@@ -360,16 +336,15 @@ async function generateSocialHooks(title, excerpt) {
   // facts, while keeping the prompt small enough for a fast cron execution.
   const cleanText = cleanSocialText(excerpt || title).slice(0, 6000);
   const fallback = sourceSummary(title, cleanText);
-  const [twitter, instagram, facebook] = await Promise.all([
-    _callWithFallbacks(TWITTER_PROMPT(title, cleanText), 100, 'Twitter'),
-    _callWithFallbacks(STORY_PROMPT('Instagram and TikTok', title, cleanText), 450, 'Instagram'),
-    _callWithFallbacks(STORY_PROMPT('Facebook', title, cleanText), 450, 'Facebook'),
-  ]);
-
+  // One editorial request per story avoids tripling quota use across platforms.
+  const story = await _callWithFallbacks(
+    STORY_PROMPT('social media', title, cleanText), 600, 'SocialStory');
+  if (!story) console.warn('[SocialStory] All configured providers failed or returned empty content; using source extract. Check provider HTTP status logs and configured credentials.');
+  const summary = story || fallback;
   return {
-    twitter: formatSocialCaption(twitter || fallback, { maxLength: 255 }),
-    instagram: formatSocialCaption(instagram || fallback),
-    facebook: formatSocialCaption(facebook || fallback),
+    twitter: formatSocialCaption(summary, { maxLength: 255 }),
+    instagram: formatSocialCaption(summary),
+    facebook: formatSocialCaption(summary),
   };
 }
 

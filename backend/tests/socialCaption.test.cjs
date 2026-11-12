@@ -9,8 +9,15 @@ const { resolve } = require('node:path');
 const servicePath = resolve(__dirname, '../services/summariser.js');
 const serviceModule = { exports: {} };
 new Function('require', 'module', 'exports', readFileSync(servicePath, 'utf8'))(
-  createRequire(servicePath), serviceModule, serviceModule.exports);
+  (request) => {
+    if (request !== './aiProvider') return createRequire(servicePath)(request);
+    const providerModule = { exports: {} };
+    new Function('require', 'module', 'exports', readFileSync(resolve(__dirname, '../services/aiProvider.js'), 'utf8'))(
+      createRequire(servicePath), providerModule, providerModule.exports);
+    return providerModule.exports;
+  }, serviceModule, serviceModule.exports);
 const { generateSocialHooks } = serviceModule.exports;
+process.env.GROQ_API_KEY = 'test-only-key';
 
 test('normalizes legacy media captions to one hashtag and one bio ending', () => {
   const text = formatSocialCaption('A story. #News #Africa\nRead the full story on RealSSA.\nLink in bio 🔗 https://example.test');
@@ -44,17 +51,42 @@ test('provider failures use source summary instead of title-only caption', async
     }
   } finally { global.fetch = originalFetch; }
 });
-test('parallel provider results remain assigned to their own platform', async () => {
+test('one editorial request feeds all platforms without tripling quota', async () => {
   const originalFetch = global.fetch;
+  let calls = 0;
   global.fetch = async (_url, options) => {
+    calls++;
     const data = JSON.parse(options.body);
-    const prompt = data.messages?.[0]?.content || data.contents?.[0]?.parts?.[0]?.text;
-    const platform = prompt.includes('Instagram and TikTok') ? 'Instagram' : prompt.includes('on Facebook') ? 'Facebook' : 'Twitter';
-    await new Promise(resolve => setTimeout(resolve, platform === 'Instagram' ? 10 : 1));
-    return { ok: true, json: async () => ({ choices: [{ message: { content: `${platform} verified story with enough detail for readers. #Extra #Tags` } }] }) };
+    assert.ok(data.messages[0].content.includes('source data'));
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'The council opened its new library. It contains 200 books. #Extra #Tags' } }] }) };
   };
   try {
     const hooks = await generateSocialHooks('Council opens library', 'The building contains 200 books.');
-    for (const [platform, text] of Object.entries(hooks)) assert.ok(text.toLowerCase().startsWith(platform));
+    assert.equal(calls, 1);
+    assert.equal(hooks.instagram, hooks.facebook);
+    assert.ok(hooks.instagram.includes('200 books'));
   } finally { global.fetch = originalFetch; }
+});
+
+test('Gemini uses current configurable model and falls back after HTTP failure', async () => {
+  const originalFetch = global.fetch;
+  const oldKey = process.env.GEMINI_API_KEY;
+  const oldModel = process.env.GEMINI_MODEL;
+  process.env.GEMINI_API_KEY = 'test-google-key';
+  process.env.GEMINI_MODEL = 'test-model';
+  const urls = [];
+  global.fetch = async (url) => {
+    urls.push(url);
+    if (url.includes('googleapis')) return { ok: false, status: 404 };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'A verified source summary explaining the library opening and its 200 books.' } }] }) };
+  };
+  try {
+    const hooks = await generateSocialHooks('Council opens library', 'It contains 200 books.');
+    assert.ok(urls.some(url => url.includes('/test-model:generateContent')));
+    assert.ok(hooks.instagram.includes('200 books'));
+  } finally {
+    global.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = oldKey;
+    if (oldModel === undefined) delete process.env.GEMINI_MODEL; else process.env.GEMINI_MODEL = oldModel;
+  }
 });
