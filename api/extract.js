@@ -1,4 +1,5 @@
 const { extractArticle } = require('../backend/services/extractor');
+const { findSavedArticle, savedArticleResponse } = require('../backend/services/savedReader.cjs');
 
 function sendJson(res, status, payload) {
   res.status(status);
@@ -33,9 +34,9 @@ module.exports = async function handler(req, res) {
 
   const body = normalizeBody(req.body);
   const rawUrl = String(body.url || '').trim();
-  const fallbackText = String(body.fallbackText || body.excerpt || '').trim();
-  const fallbackImage = body.fallbackImage || body.image || null;
-  const fallbackTitle = body.fallbackTitle || body.title || null;
+  let fallbackText = String(body.fallbackText || body.excerpt || '').trim();
+  let fallbackImage = body.fallbackImage || body.image || null;
+  let fallbackTitle = body.fallbackTitle || body.title || null;
 
   if (!rawUrl) {
     return sendJson(res, 400, { error: 'url is required' });
@@ -48,6 +49,13 @@ module.exports = async function handler(req, res) {
   } catch {
     return sendJson(res, 400, { error: 'Invalid article URL' });
   }
+
+  const saved = await findSavedArticle(target.toString());
+  const savedResponse = savedArticleResponse(saved, target.toString());
+  if (savedResponse && saved.full_content) return sendJson(res, 200, savedResponse);
+  fallbackText = fallbackText || savedResponse?.textContent || '';
+  fallbackImage = fallbackImage || saved?.image || null;
+  fallbackTitle = fallbackTitle || saved?.title || null;
 
   try {
     const article = await extractArticle(target.toString(), {

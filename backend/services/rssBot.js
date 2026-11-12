@@ -309,7 +309,12 @@ async function runBufferCron() {
         const excerpt = [article.full_content, article.original_excerpt].filter(text => text && text.trim()).join('\n\n') || article.ai_summary || '';
         const hooks = await generateSocialHooks(article.title, excerpt);
 
-        const link = `${SITE_URL}/read?url=${encodeURIComponent(article.external_link)}`;
+        const readerParams = new URLSearchParams({ url: article.external_link, title: article.title });
+        const readerExcerpt = article.original_excerpt || article.ai_summary || '';
+        if (readerExcerpt) readerParams.set('excerpt', readerExcerpt.replace(/<[^>]+>/g, ' ').slice(0, 1200));
+        if (article.image) readerParams.set('image', article.image);
+        if (article.category) readerParams.set('category', article.category);
+        const link = `${SITE_URL}/read?${readerParams}`;
         const success = await postToBuffer(hooks, link, article.image, false);
 
         if (success) {
