@@ -1,3 +1,4 @@
+const { formatSocialCaption } = require('./socialCaption.cjs');
 /**
  * Buffer Social Media Integration (GraphQL API)
  * Auto-posts new RealSSA articles to Twitter/Facebook/Instagram via Buffer API
@@ -193,12 +194,8 @@ async function _postToProfile(profileId, hooks, link, imageUrl, now) {
     // Facebook:  append link as attachment, use facebook text
     let text;
     if (isMediaPlatform) {
-      // Instagram/TikTok: no URL in caption, just the caption + hashtags
-      text = hooks.instagram || hooks.twitter;
-      // Strip any accidental URLs from caption
-      text = text.replace(/https?:\/\/\S+/g, '').trim();
-      // Caption max 2200 chars but keep it punchy
-      if (text.length > 2200) text = text.slice(0, 2197) + '…';
+      // Enforce the ending here too, including legacy and trend-bot callers.
+      text = formatSocialCaption(hooks.instagram || hooks.twitter || hooks.facebook);
     } else {
       // Twitter/X and Facebook: append the article link
       const isTwitter = !isMediaPlatform; // treat all non-media as needing link
