@@ -7,6 +7,11 @@ export async function logCategoryPreference(category: string, weight = 1) {
   try {
     const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
     const counts = prefs.counts || {};
+    const now = Date.now();
+    const ageDays = Math.max(0, (now - (prefs.updatedAt || now)) / 86400000);
+    for (const key of Object.keys(counts)) {
+      counts[key] = Number.isFinite(counts[key]) ? Math.min(100, counts[key] * Math.pow(0.5, ageDays / 14)) : 0;
+    }
     
     // Increment the category score by weight
     counts[category] = (counts[category] || 0) + weight;
@@ -24,7 +29,8 @@ export async function logCategoryPreference(category: string, weight = 1) {
     localStorage.setItem('realssa_preferences', JSON.stringify({
       ...prefs,
       counts,
-      topCategory
+      topCategory,
+      updatedAt: now
     }));
 
     // Trigger background sync to Neon DB
@@ -49,6 +55,11 @@ export function getPreferredCategories(): string[] {
   try {
     const prefs = JSON.parse(localStorage.getItem('realssa_preferences') || '{}');
     const counts = prefs.counts || {};
+    const now = Date.now();
+    const ageDays = Math.max(0, (now - (prefs.updatedAt || now)) / 86400000);
+    for (const key of Object.keys(counts)) {
+      counts[key] = Number.isFinite(counts[key]) ? Math.min(100, counts[key] * Math.pow(0.5, ageDays / 14)) : 0;
+    }
     return Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
   } catch {
     return [];

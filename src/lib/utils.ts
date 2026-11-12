@@ -6,26 +6,17 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function decodeHTMLEntities(text: string): string {
-  if (!text) return "";
-  if (typeof window === "undefined") {
-    // Server-side fallback: basic regex mapping for common entities
-    return text
-      .replace(/&#8216;/g, "‘")
-      .replace(/&#8217;/g, "’")
-      .replace(/&#8211;/g, "–")
-      .replace(/&#8212;/g, "—")
-      .replace(/&amp;/g, "&")
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">");
+  let decoded = String(text || '');
+  for (let pass = 0; pass < 3; pass++) {
+    const previous = decoded;
+    decoded = decoded.replace(/&#(x[\da-f]+|\d+);/gi, (_, raw) => {
+      const code = raw[0].toLowerCase() === 'x' ? parseInt(raw.slice(1), 16) : Number(raw);
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
+    }).replace(/&(amp|quot|apos|lt|gt|nbsp|lsquo|rsquo|ldquo|rdquo|ndash|mdash);/gi, (_, name) =>
+      ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', ndash: '–', mdash: '—' })[name.toLowerCase()]);
+    if (decoded === previous) break;
   }
-  try {
-    const doc = new DOMParser().parseFromString(text, 'text/html');
-    return doc.documentElement.textContent || text;
-  } catch (e) {
-    return text;
-  }
+  return decoded;
 }
 
 export function safeLocalStorageSet(key: string, value: string): void {

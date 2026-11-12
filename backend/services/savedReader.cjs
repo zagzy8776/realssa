@@ -1,4 +1,5 @@
 // Recover published source material without another AI call or publisher fetch.
+const { cleanArticleText } = require('./articleContent.cjs');
 const { cleanSocialText } = require('./socialCaption.cjs');
 let pool;
 const recent = new Map();
@@ -30,7 +31,7 @@ async function findSavedArticle(url) {
 }
 function savedArticleResponse(row, url) {
   if (!row) return null;
-  const text = cleanSocialText(row.ai_summary || row.full_content || row.original_excerpt || '');
+  const text = cleanArticleText(row.ai_summary || row.full_content || row.original_excerpt || '');
   if (!text) return null;
   const escape = value => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return { articleId: row.id ? `rss-${row.id}` : undefined, title: row.title, content: text.split(/\n\s*\n/).map(p => `<p>${escape(p)}</p>`).join(''),

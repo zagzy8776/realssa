@@ -1,3 +1,4 @@
+import { rankFeed, getReaderProfile } from '@/lib/feedRanking';
 import { apiUrl } from '@/lib/api-base';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -41,7 +42,7 @@ const ForYou: React.FC = () => {
       // Build exclude list from already-seen IDs (cap at 100 to keep URL short)
       const excludeList = Array.from(seenIds.current).slice(-100).join(',');
 
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ candidates: '1', limit: '100' });
       if (deviceId) params.set('deviceId', deviceId);
       if (cursor) params.set('cursor', cursor);
       if (excludeList) params.set('exclude', excludeList);
@@ -56,7 +57,8 @@ const ForYou: React.FC = () => {
         return true;
       });
 
-      setArticles(prev => reset ? incoming : [...prev, ...incoming]);
+      const ranked = rankFeed(incoming, getReaderProfile());
+      setArticles(prev => reset ? ranked : [...prev, ...ranked]);
       setNextCursor(data.nextCursor || null);
       setHasMore(!!data.nextCursor && incoming.length > 0);
     } catch (err) {

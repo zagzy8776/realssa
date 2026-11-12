@@ -8,6 +8,9 @@
 import { ArrowRight, Clock, Wifi } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { decodeHTMLEntities } from '@/lib/utils';
+import { rankFeed, getReaderProfile, rememberStory } from '@/lib/feedRanking';
+import { logCategoryPreference } from '@/lib/preferences';
 import { apiUrl } from "@/lib/api-base";
 
 interface HeroArticle {
@@ -16,6 +19,7 @@ interface HeroArticle {
   category: string;
   date?: string; // API serializes published_at as 'date'
   image?: string;
+  excerpt?: string;
   externalLink?: string; // API serializes external_link as 'externalLink'
 }
 
@@ -63,6 +67,7 @@ const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
   const [loaded, setLoaded] = useState(false);
 
   const article = propArticle || fetchedArticle;
+  useEffect(() => { setImgError(false); }, [article?.id]);
 
   useEffect(() => {
     if (propArticle) {
@@ -72,7 +77,7 @@ const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
 
     const fetchHero = async () => {
       try {
-        const res = await fetch(apiUrl("/api/articles?limit=5&sort=latest"), {
+        const res = await fetch(apiUrl("/api/articles?limit=100&candidates=1"), {
           signal: AbortSignal.timeout(6000),
         });
         if (!res.ok) throw new Error("fetch failed");
@@ -82,8 +87,9 @@ const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
           : data.articles || data.data || [];
 
         // Pick first article that has an image
-        const picked = articles.find(a => a.image && !/(logo|icon|brand|favicon)/i.test(a.image))
-          || articles[0];
+        const ranked = rankFeed(articles, getReaderProfile());
+        const picked = ranked.find(a => a.image && !/(logo|icon|brand|favicon)/i.test(a.image))
+          || ranked[0];
         if (picked) {
           setFetchedArticle(picked);
           setTimeout(() => setLoaded(true), 80);
@@ -107,6 +113,7 @@ const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
     if (propArticle) {
       setLoaded(true);
     }
+    setImgError(false);
   }, [propArticle]);
 
   const resolveImage = () => {
@@ -117,7 +124,7 @@ const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
   };
 
   const linkTo = article?.externalLink
-    ? `/read?url=${encodeURIComponent(article.externalLink)}&id=${encodeURIComponent(article.id || "")}`
+    ? `/read?url=${encodeURIComponent(article.externalLink)}&id=${encodeURIComponent(article.id || "")}&title=${encodeURIComponent(decodeHTMLEntities(article.title))}&category=${encodeURIComponent(article.category)}&image=${encodeURIComponent(article.image || "")}&excerpt=${encodeURIComponent(article.excerpt || "")}`
     : article?.id ? `/article/${article.id}` : "#";
 
   const breaking = isBreaking(article?.date);
@@ -125,7 +132,9 @@ const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
 
   return (
     <section className="relative w-full px-3 sm:px-4 pt-2 pb-0">
-      <Link to={linkTo} className="block group">
+      <Link to={linkTo} className="block group" onClick={() => {
+        if (article) { rememberStory(article, 'read'); logCategoryPreference(article.category, 1); }
+      }}>
         <div
           className="nr-hero-card overflow-hidden"
           style={{
@@ -137,7 +146,7 @@ const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
           <div className="absolute inset-0 z-0">
             <img
               src={imgSrc}
-              alt={article?.title || ""}
+              alt={decodeHTMLEntities(article?.title || "")}
               onError={() => setImgError(true)}
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
               style={{ opacity: loaded ? 0.72 : 0, transition: "opacity 0.5s ease, transform 0.7s ease" }}
@@ -215,7 +224,7 @@ const HeroSection = ({ article: propArticle }: HeroSectionProps) => {
               className="nr-headline-xl mb-3 line-clamp-3 sm:line-clamp-2"
               style={{ textShadow: "0 2px 12px rgba(0,0,0,0.7)" }}
             >
-              {article?.title || "Loading latest news…"}
+              {decodeHTMLEntities(article?.title || "Loading latest news…")}
             </h1>
 
             {/* Read more CTA */}

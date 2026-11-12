@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { rankFeed, getReaderProfile } from '@/lib/feedRanking';
 import { apiUrl } from '@/lib/api-base';
 import NewsCard from './NewsCard';
 
@@ -22,16 +23,20 @@ export default function BreakingNowRail({ excludeIds = [], onLoaded }: BreakingN
   const [articles, setArticles] = useState<BreakingArticle[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const excludeKey = excludeIds.join(',');
+  const onLoadedRef = useRef(onLoaded);
+  useEffect(() => { onLoadedRef.current = onLoaded; }, [onLoaded]);
   useEffect(() => {
+    const excluded = new Set(excludeKey.split(','));
     fetch(apiUrl('/api/news/breaking?diverse=true'))
       .then(r => r.ok ? r.json() : [])
       .then(data => {
         if (Array.isArray(data)) {
-          const filtered = data.filter(a => !excludeIds.includes(a.id));
-          const top = filtered.slice(0, 5);
+          const filtered = data.filter(a => !excluded.has(a.id));
+          const top = rankFeed(filtered, getReaderProfile()).slice(0, 5);
           setArticles(top);
-          if (onLoaded && top.length > 0) {
-            onLoaded(top.map(a => a.id));
+          if (onLoadedRef.current && top.length > 0) {
+            onLoadedRef.current(top.map(a => a.id));
           }
         } else {
           setArticles([]);
@@ -39,7 +44,7 @@ export default function BreakingNowRail({ excludeIds = [], onLoaded }: BreakingN
       })
       .catch(() => setArticles([]))
       .finally(() => setLoading(false));
-  }, [excludeIds]);
+  }, [excludeKey]);
 
   if (loading || articles.length === 0) return null;
 

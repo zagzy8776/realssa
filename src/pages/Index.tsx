@@ -1,4 +1,5 @@
 import { apiUrl } from '@/lib/api-base';
+import { rankFeed, getReaderProfile, rememberStory } from '@/lib/feedRanking';
 import Header from "@/components/Header";
 import SocialButtons from "@/components/SocialButtons";
 import HeroSection from "@/components/HeroSection";
@@ -32,6 +33,8 @@ let initialLoadDone = true; // Always true — HTML skeleton replaces this
 const Index = () => {
   const navigate = useNavigate();
   const lastSyncTimeRef = useRef(0);
+  const [initialProfile] = useState(getReaderProfile);
+  const profileRef = useRef(initialProfile);
   const seenFeedIds = useRef<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState('all');
   const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
@@ -45,7 +48,7 @@ const Index = () => {
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [initialLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
   const [error, setError] = useState(null);
   // cursor-based infinite scroll for homepage feed
   const [feedCursor, setFeedCursor] = useState<string | null>(null);
@@ -133,6 +136,7 @@ const Index = () => {
   const fetchStories = async (isRefresh = false) => {
     try {
       setError(null);
+      profileRef.current = getReaderProfile();
       if (isRefresh) {
         setRefreshing(true);
         seenFeedIds.current.clear();
@@ -171,7 +175,7 @@ const Index = () => {
       try {
         const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
         if (cached && ts - cached.ts < CACHE_TTL && Array.isArray(cached.articles) && cached.articles.length > 0) {
-          setAllArticles(cached.articles);
+          setAllArticles(rankFeed(cached.articles, profileRef.current));
           if (Array.isArray(cached.stories)) setStories(cached.stories);
           setLoading(false);
           servedFromCache = true;
@@ -185,7 +189,7 @@ const Index = () => {
       // Stage 1: Load critical above-the-fold content immediately (reduced to 20 articles for speed)
       const [featuredRes, articlesRes, groupsRes] = await Promise.allSettled([
         fetch(apiUrl(`/api/articles/featured?t=${ts}`)),
-        fetch(apiUrl(`/api/articles?t=${ts}${deviceParam}&limit=20`)),
+        fetch(apiUrl(`/api/articles?t=${ts}${deviceParam}&limit=240&candidates=1`)),
         fetch(apiUrl(`/api/stories/grouped?t=${ts}`))
       ]);
 
@@ -213,18 +217,11 @@ const Index = () => {
       // Reset error state on successful fetch
       setError(null);
 
-      // Sort strictly by recency timestamp (newest articles ALWAYS on top)
-      initialFiltered.sort((a: any, b: any) => {
-        const timeA = new Date(a.date || a.created_at || a.published_at || 0).getTime();
-        const timeB = new Date(b.date || b.created_at || b.published_at || 0).getTime();
-        return timeB - timeA;
-      });
+      const initialUnique = rankFeed(initialFiltered, profileRef.current);
+      setFeedCursor(String(initialNews.length));
+      setFeedHasMore(initialNews.length >= 240);
 
-      const initialUnique = initialFiltered.filter((v: any, i: number, a: any[]) =>
-        a.findIndex(t => t.title === v.title) === i
-      );
-
-      // Set fresh timestamp-sorted articles
+      // Keep the reader-specific order stable while scrolling
       // register seen IDs so cursor-based loadMore won't repeat them
       initialUnique.forEach((a: any) => { if (a.id) seenFeedIds.current.add(a.id); });
       setAllArticles(initialUnique);
@@ -235,7 +232,7 @@ const Index = () => {
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           ts: Date.now(),
-          articles: initialUnique.slice(0, 40), // Cap at 40 items to keep localStorage lean
+          articles: initialFiltered.slice(0, 240), // Keep the reusable candidate pool for local ranking
           stories: loadedStories.slice(0, 5),
         }));
       } catch (cacheWriteErr) { }
@@ -278,7 +275,7 @@ const Index = () => {
         if (offlineData) {
           const { articles: cachedArticles, timestamp } = JSON.parse(offlineData);
           if (Array.isArray(cachedArticles) && cachedArticles.length > 0) {
-            setAllArticles(cachedArticles);
+            setAllArticles(rankFeed(cachedArticles, profileRef.current));
             setStories(cachedArticles.slice(0, 2));
             setTrendingArticles(cachedArticles.slice(2, 7));
             loadedFromCache = true;
@@ -311,7 +308,7 @@ const Index = () => {
     try {
       const deviceId = localStorage.getItem('realssa_device_uuid') || '';
       const excludeList = Array.from(seenFeedIds.current).slice(-100).join(',');
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ limit: '100', candidates: '1' });
       if (deviceId) params.set('deviceId', deviceId);
       if (feedCursor) params.set('cursor', feedCursor);
       if (excludeList) params.set('exclude', excludeList);
@@ -323,7 +320,9 @@ const Index = () => {
         seenFeedIds.current.add(a.id);
         return true;
       });
-      setAllArticles(prev => [...prev, ...incoming]);
+      // Preserve the existing order while ranking the next unseen batch.
+      const ranked = rankFeed(incoming, getReaderProfile());
+      setAllArticles(prev => [...prev, ...ranked]);
       setFeedCursor(data.nextCursor || null);
       setFeedHasMore(!!data.nextCursor && incoming.length > 0);
     } catch (_) {
@@ -350,7 +349,14 @@ const Index = () => {
 
   const filteredArticles = getFilteredArticles();
   const heroArticle = allArticles.find((art: any) => art.image && !/(placeholder|logo|icon|favicon)/i.test(art.image)) || allArticles[0];
-  const visibleArticles = filteredArticles.slice(0, visibleCount);
+  const discoverArticles = filteredArticles.filter((article: any) => article.id !== heroArticle?.id);
+  const visibleArticles = discoverArticles.slice(0, visibleCount);
+
+  useEffect(() => {
+    if (!heroArticle || loading) return;
+    const timer = window.setTimeout(() => rememberStory(heroArticle, 'impression'), 2000);
+    return () => window.clearTimeout(timer);
+  }, [heroArticle?.id, loading]);
 
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -360,7 +366,7 @@ const Index = () => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
-        if (visibleCount < allArticles.length) {
+        if (visibleCount < discoverArticles.length) {
           setVisibleCount(prev => prev + 6);
         } else if (feedHasMore && !feedLoadingMore) {
           // exhausted local slice — fetch next page from server
@@ -371,7 +377,7 @@ const Index = () => {
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loading, visibleCount, allArticles.length, feedHasMore, feedLoadingMore, loadMoreFeed]);
+  }, [loading, visibleCount, discoverArticles.length, feedHasMore, feedLoadingMore, loadMoreFeed]);
 
 
   return (
@@ -395,7 +401,7 @@ const Index = () => {
 
       {/* Breaking rail still runs but doesn't eat layout above the fold */}
       <div className="hidden">
-        <BreakingNowRail excludeIds={stories.map((s: any) => s.id)} onLoaded={(ids) => setBreakingIds(ids)} />
+        <BreakingNowRail excludeIds={[...stories.map((s: any) => s.id), ...(heroArticle ? [heroArticle.id] : [])]} onLoaded={(ids) => setBreakingIds(ids)} />
         <LocalNewsRail excludeIds={[...stories.map((s: any) => s.id), ...breakingIds]} />
       </div>
       <SocialButtons />
@@ -568,7 +574,7 @@ const Index = () => {
                   </div>
 
                   <div ref={loadMoreRef} className="py-8 text-center">
-                    {(visibleCount < allArticles.length || feedLoadingMore) && (
+                    {(visibleCount < discoverArticles.length || feedLoadingMore) && (
                       <div
                         className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-r-transparent"
                         style={{ borderColor: "var(--nr-amber) transparent var(--nr-amber) transparent" }}

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { cleanSocialText } = require('../backend/services/socialCaption.cjs');
 
 // Resilient homepage read path. It does not depend on PostgreSQL being populated.
 // Aiven remains the persistence/analytics store, while this endpoint can always
@@ -118,7 +119,7 @@ const MAX_ARTICLE_AGE_MS = 30 * 24 * 60 * 60 * 1000; // drop stale/frozen-feed i
 const FEED_TIMEOUT = 5000;
 
 function cleanText(value, max = 1200) {
-  return String(value || '')
+  return cleanSocialText(cleanSocialText(String(value || '')))
     .replace(/<!\[CDATA\[/gi, '')
     .replace(/\]\]>/g, '')
     .replace(/<[^>]*>/g, ' ')
@@ -253,6 +254,20 @@ async function getHomeArticles() {
   return refreshCache();
 }
 
+function balancedCandidates(articles) {
+  const groups = new Map();
+  for (const article of articles) {
+    const key = article.category || 'news';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(article);
+  }
+  const result = [];
+  for (let offset = 0; result.length < articles.length; offset++) {
+    for (const group of groups.values()) if (group[offset]) result.push(group[offset]);
+  }
+  return result;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -260,7 +275,8 @@ module.exports = async function handler(req, res) {
     const all = await getHomeArticles();
     const rawPath = String(req.url || '').split('?')[0];
     const isForYou = rawPath.startsWith('/api/feed/foryou');
-    const limit = Math.min(Math.max(parseInt(req.query?.limit, 10) || (isForYou ? 20 : 20), 1), 100);
+    const candidates = String(req.query?.candidates || '') === '1';
+    const limit = Math.min(Math.max(parseInt(req.query?.limit, 10) || (isForYou ? 20 : 20), 1), candidates ? 240 : 100);
     const cursor = req.query?.cursor ? new Date(String(req.query.cursor)) : null;
     const exclude = new Set(String(req.query?.exclude || '').split(',').filter(Boolean));
 
@@ -269,8 +285,12 @@ module.exports = async function handler(req, res) {
       filtered = filtered.filter(a => new Date(a.date).getTime() < cursor.getTime());
     }
 
-    const page = filtered.slice(0, limit);
-    const nextCursor = page.length === limit && filtered.length > limit ? page[page.length - 1].date : null;
+    const offset = candidates ? Math.max(0, parseInt(String(req.query?.cursor || '0'), 10) || 0) : 0;
+    const pool = candidates ? balancedCandidates(all) : filtered;
+    const page = pool.slice(offset, offset + limit).filter(a => !exclude.has(a.id));
+    const nextCursor = candidates
+      ? (offset + limit < pool.length ? String(offset + limit) : null)
+      : (page.length === limit && filtered.length > limit ? page[page.length - 1].date : null);
 
     res.setHeader('Cache-Control', isForYou ? 'private, no-store' : 'public, s-maxage=30, stale-while-revalidate=60');
     if (isForYou) {
@@ -295,3 +315,5 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.getHomeArticles = getHomeArticles;
+module.exports.balancedCandidates = balancedCandidates;
+module.exports.cleanText = cleanText;

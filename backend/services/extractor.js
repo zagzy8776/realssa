@@ -1,3 +1,4 @@
+const { cleanArticleHtml, removeArticleChrome } = require('./articleContent.cjs');
 const { JSDOM } = require('jsdom');
 const { Readability } = require('@mozilla/readability');
 const dns = require('dns').promises;
@@ -106,7 +107,7 @@ function extractBySelectors(document) {
   for (const sel of selectors) {
     const node = document.querySelector(sel);
     if (!node) continue;
-    const clone = node.cloneNode(true);
+    const clone = removeArticleChrome(node.cloneNode(true));
     clone.querySelectorAll('script, style, noscript, iframe, aside, nav, .ad, .ads, .share, .social').forEach((n) => n.remove());
     const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
     if (text.length >= 200) {
@@ -267,7 +268,7 @@ async function extractArticle(rawUrl, options = {}) {
       heroImage = extractMetaImage(document, finalUrl) || fallbackImage;
 
       try {
-        const reader = new Readability(document.cloneNode(true));
+        const reader = new Readability(removeArticleChrome(document.cloneNode(true)));
         const article = reader.parse();
         if (article?.textContent && article.textContent.trim().length >= 150) {
           result = {
@@ -383,6 +384,9 @@ async function extractArticle(rawUrl, options = {}) {
 
   if (!result.image) result.image = heroImage || fallbackImage || null;
   result.sourceUrl = finalUrl;
+  const cleaned = cleanArticleHtml(result.htmlContent || `<p>${String(result.textContent).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`);
+  if (cleaned.textContent.length < 40) return null;
+  result = { ...result, ...cleaned, length: cleaned.textContent.length, excerpt: cleaned.textContent.slice(0, 240) };
   return result;
 }
 

@@ -1,9 +1,10 @@
 import { Bookmark, BookmarkCheck, Flame, Heart, Image } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl, reactionKey } from "@/lib/api-base";
 import { useStreak } from "@/hooks/useStreak";
+import { rememberStory } from '@/lib/feedRanking';
 import { logCategoryPreference } from "@/lib/preferences";
 import { decodeHTMLEntities } from "@/lib/utils";
 
@@ -206,6 +207,7 @@ const NewsCard = ({
       setShowHeartPopup(true);
       setTimeout(() => setShowHeartPopup(false), 800);
     } else {
+      rememberStory({ id, title, category, externalLink }, 'read');
       logCategoryPreference(category, 1);
       if (!externalLink && onRead && id) onRead(id);
     }
@@ -244,7 +246,27 @@ const NewsCard = ({
     : `https://realssanews.com.ng${href || ''}`;
   const whatsappText = encodeURIComponent(`${title} — Read on RealSSA: ${whatsappShareUrl}`);
 
+  const cardRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const node = cardRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let recorded = false;
+    const observer = new IntersectionObserver(entries => {
+      if (timer) clearTimeout(timer);
+      if (!recorded && entries[0]?.isIntersecting && entries[0].intersectionRatio >= 0.6) {
+        timer = setTimeout(() => {
+          rememberStory({ id, title, category, externalLink }, 'impression');
+          recorded = true;
+        }, 2000);
+      }
+    }, { threshold: 0.6 });
+    observer.observe(node);
+    return () => { observer.disconnect(); if (timer) clearTimeout(timer); };
+  }, [id, title, category, externalLink]);
+
   const handleClick = () => {
+    rememberStory({ id, title, category, externalLink }, 'read');
     logCategoryPreference(category, 1);
     recordRead();
     if (!externalLink && onRead && id) onRead(id);
@@ -323,6 +345,7 @@ const NewsCard = ({
 
   return (
     <article
+      ref={cardRef}
       className="group nr-card overflow-hidden w-full relative"
       style={{ borderRadius: 'var(--nr-radius-card)', touchAction: 'manipulation', contentVisibility: 'auto', containIntrinsicSize: '420px' }}
     >

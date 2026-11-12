@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { logCategoryPreference } from '@/lib/preferences';
 import { apiUrl } from '@/lib/api-base';
 
 /**
@@ -15,6 +16,7 @@ export function useDwellTime(category: string | undefined, articleId?: string) {
   const sendDwell = (seconds: number) => {
     if (sentRef.current || !category || seconds < 3) return;
     sentRef.current = true;
+    logCategoryPreference(category, Math.min(5, seconds / 30));
 
     const deviceId = localStorage.getItem('realssa_device_uuid') || '';
     if (!deviceId) return;

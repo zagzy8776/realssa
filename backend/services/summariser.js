@@ -12,6 +12,7 @@
  * null and the existing provider chain is used unchanged.
  */
 
+const { cleanArticleText } = require('./articleContent.cjs');
 const { runAI } = require('./aiRouter.cjs');
 const { cleanSocialText, sourceSummary, formatSocialCaption } = require('./socialCaption.cjs');
 
@@ -33,7 +34,7 @@ function narrativePrompt(title, context) {
   ].join('\n');
 }
 async function generateAIAnalysis(title, excerpt) {
-  const context = cleanSocialText(excerpt || ' ').slice(0, 24000);
+  const context = cleanArticleText(excerpt || ' ').slice(0, 24000);
   // An RSS teaser cannot support a full report. Preserve it and retry extraction later.
   if (context.split(/\s+/).length < 80) return { summary: context || title, entities: [], translations: {}, generated: false };
   const minimum = Math.min(220, Math.floor(context.length * 0.35));
