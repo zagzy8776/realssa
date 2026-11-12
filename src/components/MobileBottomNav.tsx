@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Film, Home, Sparkles, TrendingUp, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,12 +23,13 @@ const MobileBottomNav = () => {
     location.pathname.startsWith('/reels')
   ) return null;
 
-  return (
+  // Keep fixed navigation outside application scroll and animation containers.
+  return createPortal(
     <>
       <RealSSAChat isOpen={chatOpen} onClose={() => setChatOpen(false)} />
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-[9998] border-t border-border bg-background md:hidden"
+        className="mobile-bottom-nav border-t border-border bg-background"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-label="Mobile navigation"
       >
@@ -84,7 +86,8 @@ const MobileBottomNav = () => {
           })}
         </div>
       </nav>
-    </>
+    </>,
+    document.body
   );
 };
 

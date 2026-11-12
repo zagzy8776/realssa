@@ -1,3 +1,17 @@
+/* Viewport anchoring is independent of Tailwind utility generation and app layout. */
+.mobile-bottom-nav {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  z-index: 9998;
+  margin: 0;
+  transform: none;
+}
+
+@media (min-width: 768px) {
+  .mobile-bottom-nav { display: none; }
+}
+
 /* RealSSA mobile navigation: a clean, solid side drawer + restrained bottom bar. */
 @media (max-width: 1023px) {
   header {
