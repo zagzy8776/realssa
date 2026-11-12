@@ -50,9 +50,10 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 400, { error: 'Invalid article URL' });
   }
 
+  const sourceThread = 'rss-' + require('crypto').createHash('sha1').update(rawUrl.split('#')[0]).digest('hex').slice(0, 16);
   const saved = await findSavedArticle(target.toString());
   const savedResponse = savedArticleResponse(saved, target.toString());
-  if (savedResponse && saved.ai_summary && saved.ai_summary.length >= 800) return sendJson(res, 200, savedResponse);
+  if (savedResponse && saved.ai_summary && saved.ai_summary.length >= 800) return sendJson(res, 200, { ...savedResponse, articleId: savedResponse.articleId || sourceThread });
   fallbackText = savedResponse?.textContent || fallbackText || '';
   fallbackImage = fallbackImage || saved?.image || null;
   fallbackTitle = fallbackTitle || saved?.title || null;
@@ -71,7 +72,7 @@ module.exports = async function handler(req, res) {
       const rescue = fallbackText.length >= 15 ? fallbackText : (fallbackTitle || '');
       if (rescue.length >= 15) {
         return sendJson(res, 200, {
-          articleId: saved?.id ? `rss-${saved.id}` : undefined,
+          articleId: saved?.id ? `rss-${saved.id}` : sourceThread,
           title: fallbackTitle || target.hostname,
           content: `<p>${escapeHtml(rescue)}</p>`,
           textContent: rescue,
@@ -109,7 +110,7 @@ module.exports = async function handler(req, res) {
     }
     const text = article.textContent.trim();
     return sendJson(res, 200, {
-      articleId: saved?.id ? `rss-${saved.id}` : undefined,
+      articleId: saved?.id ? `rss-${saved.id}` : sourceThread,
       title: article.title || fallbackTitle || target.hostname,
       content: article.htmlContent || `<p>${escapeHtml(text)}</p>`,
       textContent: text,
@@ -129,7 +130,7 @@ module.exports = async function handler(req, res) {
     const rescue = fallbackText.length >= 15 ? fallbackText : (fallbackTitle || '');
     if (rescue.length >= 15) {
       return sendJson(res, 200, {
-        articleId: saved?.id ? `rss-${saved.id}` : undefined,
+        articleId: saved?.id ? `rss-${saved.id}` : sourceThread,
         title: fallbackTitle || target.hostname,
         content: `<p>${escapeHtml(rescue)}</p>`,
         textContent: rescue,

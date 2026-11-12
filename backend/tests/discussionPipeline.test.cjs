@@ -17,7 +17,7 @@ test('discussion cron initializes schema, uses primary article IDs, and writes t
   if(sql.includes('INSERT INTO external_comments'))return{rows:[{id:9}]};
   return{rows:[]};
  },connect:async()=>({...db,release(){}})};
- const service=load('../services/discussionBot.js', request=>request==='pg'?{Pool:function(){return db;}}:{runAI:async()=> 'Which part of the library plan matters most to residents?'});
+ const service=load('../services/discussionBot.js', request=>request.includes('multiDb')?{pools:[{pool:db}]}:request.includes('aiRouter')?{runAI:async()=> 'Which part of the library plan matters most to residents?'}:request.includes('home-feed')?{getHomeArticles:async()=>[]}:require(request));
  const result=await service.monitorAndSimulate();
  assert.equal(result.created,1);
  assert.ok(calls[0].sql.includes('CREATE TABLE IF NOT EXISTS external_comments'));
@@ -42,4 +42,49 @@ test('canonical reader thread includes existing feed hash comments',async()=>{
  const queried=calls.find(c=>c.sql.includes('FROM external_comments'));
  assert.equal(queried.args[0].length,2);
  assert.ok(queried.args[0].includes('rss-7'));
+});
+
+test('reader request creates one official prompt for a trusted feed-only article and skips duplicates',async()=>{
+ const article={id:'rss-abcdef0123456789',title:'Library opens',excerpt:'The library contains 200 books.',category:'culture',externalLink:'https://example.test/library'};
+ const writes=[];let generations=0;let exists=false;
+ const db={query:async(sql,args)=>{
+  if(sql.includes('pg_try_advisory_lock'))return{rows:[{locked:true}]};
+  if(sql.includes('COUNT(*)'))return{rows:[{count:0}]};
+  if(sql.includes('FROM rss_articles'))return{rows:[]};
+  if(sql.includes('SELECT id FROM external_comments'))return{rows:exists?[{id:7}]:[]};
+  if(sql.includes('INSERT INTO external_comments')){writes.push(args);exists=true;return{rows:[{id:7}]};}
+  return{rows:[]};
+ },connect:async()=>({...db,release(){}})};
+ const service=load('../services/discussionBot.js',request=>
+  request.includes('multiDb')?{pools:[{pool:db}]}:
+  request.includes('aiRouter')?{runAI:async(_job,prompt)=>{generations++;assert.ok(prompt.includes('200 books'));return'How could free access benefit residents?';}}:
+  request.includes('home-feed')?{getHomeArticles:async()=>[article]}:require(request));
+ const first=await service.ensureArticlePrompt(article.id,article.externalLink);
+ const second=await service.ensureArticlePrompt(article.id,article.externalLink);
+ assert.equal(first.created,1);assert.equal(second.created,0);assert.equal(generations,1);
+ assert.equal(writes[0][0],article.id);assert.equal(writes[0][1],'RealSSA Community Bot 🤖');
+});
+test('daily prompt limit prevents generation and database writes',async()=>{
+ let generated=false;
+ const db={query:async(sql)=>{
+  if(sql.includes('pg_try_advisory_lock'))return{rows:[{locked:true}]};
+  if(sql.includes('COUNT(*)'))return{rows:[{count:30}]};
+  if(sql.includes('INSERT'))throw Error('No insert after quota');
+  return{rows:[]};
+ },connect:async()=>({...db,release(){}})};
+ const service=load('../services/discussionBot.js',request=>request.includes('multiDb')?{pools:[{pool:db}]}:request.includes('aiRouter')?{runAI:async()=>{generated=true;}}:require(request));
+ assert.equal((await service.ensureArticlePrompt('rss-7')).skipped,'daily_limit');assert.equal(generated,false);
+});
+test('unknown or mismatched article cannot generate a public prompt from client-supplied text',async()=>{
+ let generated=false;
+ const db={query:async(sql)=>{
+  if(sql.includes('pg_try_advisory_lock'))return{rows:[{locked:true}]};
+  if(sql.includes('COUNT(*)'))return{rows:[{count:0}]};
+  return{rows:[]};
+ },connect:async()=>({...db,release(){}})};
+ const service=load('../services/discussionBot.js',request=>request.includes('multiDb')?{pools:[{pool:db}]}:
+  request.includes('aiRouter')?{runAI:async()=>{generated=true;}}:
+  request.includes('home-feed')?{getHomeArticles:async()=>[{id:'rss-aaaaaaaaaaaaaaaa',title:'Different article',externalLink:'https://example.test/other'}]}:require(request));
+ const result=await service.ensureArticlePrompt('rss-bbbbbbbbbbbbbbbb','https://example.test/unknown');
+ assert.equal(result.skipped,'unknown_article');assert.equal(generated,false);
 });

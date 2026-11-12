@@ -250,6 +250,7 @@ const ReaderMode = () => {
         {(article.articleId || articleId) && <ExternalArticleComments
           articleId={article.articleId || articleId!}
           articleTitle={article.title}
+          articleUrl={url || undefined}
           articleContext={article.textContent || article.excerpt}
         />}
 

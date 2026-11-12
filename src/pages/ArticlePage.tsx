@@ -699,6 +699,7 @@ const ArticlePage = () => {
             <ExternalArticleComments
               articleId={article.id}
               articleTitle={article.title}
+              articleUrl={article.externalLink}
               articleContext={readerContent?.replace(/<[^>]+>/g, ' ') || article.content || article.excerpt || ''}
               onCommentPosted={() => {
                 // Refresh comments after posting

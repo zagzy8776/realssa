@@ -12,7 +12,8 @@
     "api/trending.js": {"maxDuration":20},
     "api/chat.js": {"maxDuration":30},
     "api/chat-current.js": {"maxDuration":30},
-    "api/extract.js": {"maxDuration":120}
+    "api/extract.js": {"maxDuration":120},
+    "api/external-comments.js": {"maxDuration":60}
   },
   "headers": [
     {"source":"/assets/(.*)","headers":[{"key":"Cache-Control","value":"public, max-age=31536000, immutable"}]},

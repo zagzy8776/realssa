@@ -44,11 +44,18 @@ const normalize = (row, source) => ({
   replies: []
 });
 
-const getComments = async (articleId) => {
+const getComments = async (articleId, articleUrl) => {
   const aliases = [articleId];
   if (/^rss-\d+$/.test(articleId)) {
     const row = (await pool.query('SELECT external_link FROM rss_articles WHERE id = $1', [articleId.slice(4)])).rows[0];
     if (row?.external_link) aliases.push('rss-' + require('crypto').createHash('sha1').update(row.external_link.split('#')[0]).digest('hex').slice(0, 16));
+  }
+  if (articleUrl && /^rss-[a-f0-9]{16}$/.test(articleId)) {
+    const expected = 'rss-' + require('crypto').createHash('sha1').update(articleUrl.split('#')[0]).digest('hex').slice(0, 16);
+    if (expected === articleId) {
+      const row = (await pool.query('SELECT id FROM rss_articles WHERE external_link = $1 LIMIT 1', [articleUrl])).rows[0];
+      if (row) aliases.push(`rss-${row.id}`);
+    }
   }
   const external = await pool.query(
     `SELECT id, article_id, author_name, content, parent_id, likes, is_bot, bot_key, created_at
@@ -96,12 +103,19 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET' && !match[1]) {
       const articleId = String(url.searchParams.get('articleId') || '').trim();
       if (!articleId || articleId.length > 255) return send(res, 400, { error: 'Invalid articleId' });
-      return send(res, 200, await getComments(articleId));
+      return send(res, 200, await getComments(articleId, url.searchParams.get('articleUrl')));
     }
 
     if (req.method === 'POST' && !match[1]) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       const articleId = String(body.articleId || '').trim();
+      if (body.action === 'ensure-community-prompt') {
+        if (!articleId || articleId.length > 255) return send(res, 400, { error: 'Invalid articleId' });
+        const articleUrl = typeof body.articleUrl === 'string' && body.articleUrl.length <= 2000 ? body.articleUrl : null;
+        const { ensureArticlePrompt } = require('../backend/services/discussionBot');
+        return send(res, 200, await ensureArticlePrompt(articleId, articleUrl));
+      }
+
       const author = String(body.author || '').trim();
       const content = String(body.content || '').trim();
       const parentId = body.parentId ? String(body.parentId).trim() : null;

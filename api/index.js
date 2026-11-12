@@ -500,7 +500,7 @@ app.handle = async function realssaVercelHandle(req, res, out) {
 
   // Health and Cinema do not require PostgreSQL. They must never be blocked by
   // a cold/unhealthy database connection on Vercel.
-  if ((parsed.pathname === '/api/bot/comment-reply' && req.method === 'POST') || isHealthRequest || isCinemaRequest || isNotificationsRequest || isStreakRequest || isReactionRequest || isRssArticlesRequest) {
+  if (parsed.pathname === '/api/cron/discussion' || (parsed.pathname === '/api/bot/comment-reply' && req.method === 'POST') || isHealthRequest || isCinemaRequest || isNotificationsRequest || isStreakRequest || isReactionRequest || isRssArticlesRequest) {
     return originalHandle(req, res, out);
   }
 
@@ -523,10 +523,8 @@ app.handle = async function realssaVercelHandle(req, res, out) {
 // These run one bot cycle per request so bots can run without an always-on worker.
 // Each endpoint requires: Authorization: Bearer $CRON_SECRET
 async function requireCronAuth(req, res) {
-  const secret = process.env.CRON_SECRET || '23235567';
-  const header = req.headers['authorization'] || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  if (token !== secret) {
+  const parsed = new URL(req.url, 'https://www.realssanews.com.ng');
+  if (!isAuthorizedCron(req, parsed)) {
     sendJson(res, 401, { error: 'Invalid cron secret' });
     return false;
   }

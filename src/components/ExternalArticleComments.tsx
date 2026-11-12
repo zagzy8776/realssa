@@ -23,12 +23,13 @@ interface ExternalArticleCommentsProps {
   articleId: string;
   articleTitle: string;
   articleContext?: string;
+  articleUrl?: string;
   onCommentPosted?: () => void;
 }
 
 const COMMENTS_API = '/api/external-comments';
 
-const ExternalArticleComments = ({ articleId, articleTitle, articleContext = '', onCommentPosted }: ExternalArticleCommentsProps) => {
+const ExternalArticleComments = ({ articleId, articleTitle, articleContext = '', articleUrl, onCommentPosted }: ExternalArticleCommentsProps) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
@@ -38,27 +39,55 @@ const ExternalArticleComments = ({ articleId, articleTitle, articleContext = '',
   const [replyContent, setReplyContent] = useState('');
   const [replyAuthor, setReplyAuthor] = useState('');
 
-  const fetchComments = async () => {
+  const fetchComments = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
-      const response = await fetch(apiUrl(`${COMMENTS_API}?articleId=${encodeURIComponent(articleId)}`), {
-        cache: 'no-store',
+      const response = await fetch(apiUrl(`${COMMENTS_API}?articleId=${encodeURIComponent(articleId)}${articleUrl ? `&articleUrl=${encodeURIComponent(articleUrl)}` : ''}`), {
+        cache: 'no-store', signal,
       });
       if (!response.ok) throw new Error(`Comments request failed: ${response.status}`);
       const commentsData = await response.json();
+      if (signal?.aborted) return;
       setComments(Array.isArray(commentsData) ? commentsData : []);
     } catch (err) {
+      if (signal?.aborted) return;
       console.warn('Failed to fetch comments:', err);
       // A comment outage must never make the article itself look broken.
       setComments([]);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchComments();
-  }, [articleId]);
+    const controller = new AbortController();
+    fetchComments(controller.signal);
+    return () => controller.abort();
+  }, [articleId, articleUrl]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // The server resolves a known saved/RSS story; client text never becomes a bot prompt.
+    fetch(apiUrl(COMMENTS_API), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+      body: JSON.stringify({ action: 'ensure-community-prompt', articleId, articleUrl }),
+    }).then(async response => {
+      if (!response.ok) { console.warn('[Community Prompt] Request failed:', response.status); return; }
+      const result = await response.json();
+      if (result.created && !controller.signal.aborted) await fetchComments(controller.signal);
+      if (result.skipped === 'already_running') {
+        let attempts = 0;
+        const refresh = async () => {
+          if (controller.signal.aborted) return;
+          await fetchComments(controller.signal);
+          if (++attempts < 3 && !controller.signal.aborted) timer = setTimeout(refresh, 8000);
+        };
+        timer = setTimeout(refresh, 8000);
+      }
+    }).catch(error => { if (!controller.signal.aborted) console.warn('[Community Prompt] Request failed:', error); });
+    return () => { controller.abort(); if (timer) clearTimeout(timer); };
+  }, [articleId, articleUrl]);
 
   const handleSubmitComment = async (e: React.FormEvent, parentId: string | null = null) => {
     e.preventDefault();

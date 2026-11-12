@@ -16,7 +16,7 @@ for (const full of [true, false]) {
     let calls = 0;
     const mod = { exports: {} };
     new Function('require', 'module', readFileSync(resolve(__dirname, '../../api/extract.js'), 'utf8'))(
-      request => request.includes('savedReader') ? { findSavedArticle: async () => row, savedArticleResponse, saveEnrichment: async () => {} } : request.includes('summariser') ? { generateAIAnalysis: async () => ({ generated: false }) } : {
+      request => request === 'crypto' ? require('crypto') : request.includes('savedReader') ? { findSavedArticle: async () => row, savedArticleResponse, saveEnrichment: async () => {} } : request.includes('summariser') ? { generateAIAnalysis: async () => ({ generated: false }) } : {
         extractArticle: async () => { calls++; throw new Error('Publisher unavailable'); }
       }, mod);
     let status, payload;
@@ -24,6 +24,7 @@ for (const full of [true, false]) {
     await mod.exports({ method: 'POST', body: { url: 'https://example.com/story' } }, res);
     assert.equal(status, 200);
     assert.equal(payload.title, row.title);
+    assert.match(payload.articleId, /^rss-[a-f0-9]{16}$/);
     assert.ok(payload.textContent.includes('200 books'));
     assert.equal(calls, full ? 0 : 1);
     assert.equal(payload.partial, !full);
