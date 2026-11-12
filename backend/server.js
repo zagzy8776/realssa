@@ -3497,7 +3497,7 @@ app.get('/api/distribute', async (req, res) => {
     }
 
     // Pull a larger pool of recent articles to score
-    const rawRows = await pgSelect(`
+    const { rows: rawRows } = await pool.query(`
       SELECT 
         \'rss-\' || id AS id,
         title,

@@ -500,7 +500,7 @@ app.handle = async function realssaVercelHandle(req, res, out) {
 
   // Health and Cinema do not require PostgreSQL. They must never be blocked by
   // a cold/unhealthy database connection on Vercel.
-  if (isHealthRequest || isCinemaRequest || isNotificationsRequest || isStreakRequest || isReactionRequest || isRssArticlesRequest) {
+  if ((parsed.pathname === '/api/bot/comment-reply' && req.method === 'POST') || isHealthRequest || isCinemaRequest || isNotificationsRequest || isStreakRequest || isReactionRequest || isRssArticlesRequest) {
     return originalHandle(req, res, out);
   }
 
