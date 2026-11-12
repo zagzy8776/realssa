@@ -3514,7 +3514,7 @@ app.get('/api/distribute', async (req, res) => {
       WHERE image IS NOT NULL AND image != \'\'
       ORDER BY published_at DESC
       LIMIT \$1
-    ", [limit * 5]); // fetch extra for scoring
+    `, [limit * 5]); // fetch extra for scoring
 
     const scored = rawRows.map(row => {
       const affScore = affinities[row.category] || 0;
@@ -3538,7 +3538,7 @@ app.get('/api/distribute', async (req, res) => {
       externalLink: r.external_link,
       date: r.date,
       contentType: r.content_type,
-      source: \'rss\',
+      source: 'rss',
     }));
 
     res.json({ articles });
@@ -6358,33 +6358,9 @@ app.get('/api/cron/summarize', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
-    console.log('🤖 Cron: Starting automated AI summarization...');
-    const articlesResult = await pool.query(
-      `SELECT id, title, original_excerpt, content_type
-       FROM rss_articles 
-       WHERE ai_summary IS NULL 
-       AND content_type = 'article'
-       AND original_excerpt IS NOT NULL
-       AND published_at > NOW() - INTERVAL '7 days'
-       ORDER BY published_at DESC
-       LIMIT 15`
-    );
-    const articles = articlesResult.rows;
-    console.log(`📊 Found ${articles.length} articles needing summaries`);
-    let successCount = 0;
-    for (const article of articles) {
-      try {
-        const summary = await generateSummary(article.title, article.original_excerpt);
-        if (summary) {
-          await pool.query('UPDATE rss_articles SET ai_summary = $1 WHERE id = $2', [summary, article.id]);
-          successCount++;
-        }
-      } catch (err) {
-        console.error(`❌ Error summarizing article ${article.id}:`, err.message);
-      }
-    }
-    console.log(`✅ Summarization complete: ${successCount}/${articles.length} succeeded`);
-    res.status(200).json({ success: true, summarized: successCount, total: articles.length, timestamp: new Date().toISOString() });
+    const { runEnrichmentCycle } = require('./services/articleEnrichment.cjs');
+    const result = await runEnrichmentCycle(pool);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     console.error('❌ Summarization job error:', error.message);
     res.status(500).json({ error: 'Summarization failed', message: error.message });

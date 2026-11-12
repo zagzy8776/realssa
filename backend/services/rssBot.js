@@ -373,6 +373,7 @@ function initRssBot(sharedPool) {
   startGrowthSchedule(sharedPool);
   pool = sharedPool;
   console.log('🤖 RSS Aggregation Bot initialized. Running on Fly.io...');
+  require('./discussionBot').initDiscussionBot().catch(error => console.warn('[Community Bot] Startup failed:', error.code || error.name));
 
   // Trigger initial Buffer post cycle on startup after 10s delay
   setTimeout(async () => {
@@ -390,6 +391,8 @@ function initRssBot(sharedPool) {
       console.log(`[${new Date().toISOString()}] Starting scheduled RSS ingestion cycle...`);
       const results = await ingestAllFeeds(pool, rssParser);
       console.log(`[${new Date().toISOString()}] Cycle complete. Added ${results?.newCount || 0} articles.`);
+
+      await require('./articleEnrichment.cjs').runEnrichmentCycle(pool);
 
       // Automatically trigger Buffer social post cycle after RSS ingestion
       await runBufferCron();

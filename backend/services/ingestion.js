@@ -1042,11 +1042,11 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         // Run the Smart Extractor Engine — ONLY for articles with no RSS excerpt
         // On free tier we skip full extraction to keep DB lean and cycles fast
         let fullContent = null;
-        if (contentType === 'article' && !originalExcerpt && !process.env.VERCEL) {
+        if (contentType === 'article' && aiProcessedCount < 5 && !process.env.VERCEL) {
           const extracted = await extractArticle(externalLink);
           if (extracted && extracted.textContent) {
             // Only store a 1000-char summary of full content, not the whole page
-            fullContent = extracted.htmlContent ? extracted.htmlContent.slice(0, 2000) : null;
+            fullContent = extracted.partial ? null : extracted.textContent.slice(0, 24000);
             if (!imageUrl || imageUrl === 'https://realssanews.com.ng/logo.png') {
               if (extracted.image) imageUrl = extracted.image;
             }
@@ -1064,9 +1064,9 @@ async function ingestAllFeeds(pool, rssParser, targetCategory = null) {
         if (contentType === 'article' && aiProcessedCount < 5) {
           try {
             console.log(`🤖 Running AI analysis for: "${title.slice(0, 60)}"`);
-            const analysis = await generateAIAnalysis(title, description || originalExcerpt);
+            const analysis = await generateAIAnalysis(title, fullContent || description || originalExcerpt);
             if (analysis) {
-              aiSummary = analysis.summary;
+              aiSummary = analysis.generated ? analysis.summary : null;
               titleTrans = analysis.translations || {};
               summaryTrans = analysis.translations || {};
               extractedEntities = analysis.entities || [];

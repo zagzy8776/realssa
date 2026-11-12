@@ -12,11 +12,11 @@ test('saved body is readable and safely escaped', () => {
 });
 for (const full of [true, false]) {
   test(`URL-only reader recovers saved ${full ? 'body without publisher fetch' : 'excerpt after publisher failure'}`, async () => {
-    const row = { title: 'Library opens', [full ? 'full_content' : 'original_excerpt']: 'The new library contains 200 books and opens Monday.' };
+    const row = { title: 'Library opens', [full ? 'full_content' : 'original_excerpt']: full ? 'The library contains 200 books and opens Monday. '.repeat(14) : 'The new library contains 200 books and opens Monday.' };
     let calls = 0;
     const mod = { exports: {} };
     new Function('require', 'module', readFileSync(resolve(__dirname, '../../api/extract.js'), 'utf8'))(
-      request => request.includes('savedReader') ? { findSavedArticle: async () => row, savedArticleResponse } : {
+      request => request.includes('savedReader') ? { findSavedArticle: async () => row, savedArticleResponse, saveEnrichment: async () => {} } : request.includes('summariser') ? { generateAIAnalysis: async () => ({ generated: false }) } : {
         extractArticle: async () => { calls++; throw new Error('Publisher unavailable'); }
       }, mod);
     let status, payload;

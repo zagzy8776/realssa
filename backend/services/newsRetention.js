@@ -46,8 +46,7 @@ async function enforceNewsRetention(pool, { force = false } = {}) {
     // columns to dominate storage.
     const trimmed = await client.query(
       `UPDATE rss_articles
-       SET full_content = NULL,
-           title_translations = NULL,
+       SET title_translations = NULL,
            summary_translations = NULL,
            embedding = NULL
        WHERE id IN (

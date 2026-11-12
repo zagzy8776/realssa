@@ -7,7 +7,7 @@
  */
 
 const { getAiPool, queryMultiDb } = require('../config/multiDb');
-const { callGeminiText } = require('./aiAgentService');
+const { runAI } = require('./aiRouter.cjs');
 
 const BOT_NAME = '@RealSSA_Bot';
 const MAX_COMMENT_LENGTH = 2000;
@@ -100,7 +100,7 @@ async function handleCommentBotMention(commentText, articleTitle, articleContext
   let botReply = null;
   try {
     botReply = normalizeText(
-      await callGeminiText(`You are ${BOT_NAME}, an official RealSSA News AI assistant.`, prompt),
+      await runAI('comment', prompt, { maxTokens: 600, budgetMs: 25000 }),
       900
     );
   } catch (error) {

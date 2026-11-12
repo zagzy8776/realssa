@@ -1,22 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { formatSocialCaption, sourceSummary, cleanSocialText } = require('../services/socialCaption.cjs');
-// Backend .js sources are CommonJS despite the inherited module package type.
-// Load the existing service without changing the application's runtime setup.
-const { readFileSync } = require('node:fs');
-const { createRequire } = require('node:module');
-const { resolve } = require('node:path');
-const servicePath = resolve(__dirname, '../services/summariser.js');
-const serviceModule = { exports: {} };
-new Function('require', 'module', 'exports', readFileSync(servicePath, 'utf8'))(
-  (request) => {
-    if (request !== './aiProvider') return createRequire(servicePath)(request);
-    const providerModule = { exports: {} };
-    new Function('require', 'module', 'exports', readFileSync(resolve(__dirname, '../services/aiProvider.js'), 'utf8'))(
-      createRequire(servicePath), providerModule, providerModule.exports);
-    return providerModule.exports;
-  }, serviceModule, serviceModule.exports);
-const { generateSocialHooks } = serviceModule.exports;
+const { generateSocialHooks } = require('../services/summariser');
 process.env.GROQ_API_KEY = 'test-only-key';
 
 test('normalizes legacy media captions to one hashtag and one bio ending', () => {
@@ -81,9 +66,9 @@ test('Gemini uses current configurable model and falls back after HTTP failure',
     return { ok: true, json: async () => ({ choices: [{ message: { content: 'A verified source summary explaining the library opening and its 200 books.' } }] }) };
   };
   try {
-    const hooks = await generateSocialHooks('Council opens library', 'It contains 200 books.');
+    const result = await require('../services/aiRouter.cjs').runAI('summary', 'Explain the library and its 200 books.');
     assert.ok(urls.some(url => url.includes('/test-model:generateContent')));
-    assert.ok(hooks.instagram.includes('200 books'));
+    assert.ok(result.includes('200 books'));
   } finally {
     global.fetch = originalFetch;
     if (oldKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = oldKey;

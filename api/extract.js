@@ -1,5 +1,5 @@
 const { extractArticle } = require('../backend/services/extractor');
-const { findSavedArticle, savedArticleResponse } = require('../backend/services/savedReader.cjs');
+const { findSavedArticle, savedArticleResponse, saveEnrichment } = require('../backend/services/savedReader.cjs');
 
 function sendJson(res, status, payload) {
   res.status(status);
@@ -52,13 +52,15 @@ module.exports = async function handler(req, res) {
 
   const saved = await findSavedArticle(target.toString());
   const savedResponse = savedArticleResponse(saved, target.toString());
-  if (savedResponse && saved.full_content) return sendJson(res, 200, savedResponse);
-  fallbackText = fallbackText || savedResponse?.textContent || '';
+  if (savedResponse && saved.ai_summary && saved.ai_summary.length >= 800) return sendJson(res, 200, savedResponse);
+  fallbackText = savedResponse?.textContent || fallbackText || '';
   fallbackImage = fallbackImage || saved?.image || null;
   fallbackTitle = fallbackTitle || saved?.title || null;
 
   try {
-    const article = await extractArticle(target.toString(), {
+    let article = saved?.full_content && saved.full_content.split(/\s+/).length >= 80
+      ? { ...savedResponse, textContent: saved.full_content, htmlContent: savedResponse.content, partial: false }
+      : await extractArticle(target.toString(), {
       fallbackText,
       fallbackImage,
       fallbackTitle,
@@ -69,6 +71,7 @@ module.exports = async function handler(req, res) {
       const rescue = fallbackText.length >= 15 ? fallbackText : (fallbackTitle || '');
       if (rescue.length >= 15) {
         return sendJson(res, 200, {
+          articleId: saved?.id ? `rss-${saved.id}` : undefined,
           title: fallbackTitle || target.hostname,
           content: `<p>${escapeHtml(rescue)}</p>`,
           textContent: rescue,
@@ -92,8 +95,21 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    if (!article.partial && article.textContent.split(/\s+/).length >= 80) {
+      try {
+        const { generateAIAnalysis } = require('../backend/services/summariser');
+        const analysis = await generateAIAnalysis(article.title || fallbackTitle, article.textContent);
+        const source = article.textContent;
+        if (analysis.generated) {
+          article = { ...article, textContent: analysis.summary,
+            htmlContent: analysis.summary.split(/\n\s*\n/).map(p => `<p>${escapeHtml(p)}</p>`).join('') };
+        }
+        await saveEnrichment(target.toString(), { source: source.slice(0, 24000), summary: analysis.generated ? analysis.summary : null, image: article.image || fallbackImage });
+      } catch (error) { console.warn('[Reader] Enrichment unavailable:', error.code || error.name); }
+    }
     const text = article.textContent.trim();
     return sendJson(res, 200, {
+      articleId: saved?.id ? `rss-${saved.id}` : undefined,
       title: article.title || fallbackTitle || target.hostname,
       content: article.htmlContent || `<p>${escapeHtml(text)}</p>`,
       textContent: text,
@@ -113,6 +129,7 @@ module.exports = async function handler(req, res) {
     const rescue = fallbackText.length >= 15 ? fallbackText : (fallbackTitle || '');
     if (rescue.length >= 15) {
       return sendJson(res, 200, {
+        articleId: saved?.id ? `rss-${saved.id}` : undefined,
         title: fallbackTitle || target.hostname,
         content: `<p>${escapeHtml(rescue)}</p>`,
         textContent: rescue,

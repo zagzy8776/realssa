@@ -143,7 +143,7 @@ function cleanText(value) {
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 4000);
+    .slice(0, 24000);
 }
 
 function publishedDate(item) {
@@ -326,6 +326,7 @@ async function ingestCronCategory(category) {
         urlHash: hash(String(externalLink)),
         title: title.slice(0, 1000),
         excerpt: cleanText(item.contentSnippet || item.summary || item.content || item.description).slice(0, 4000),
+        fullContent: cleanText(item['content:encoded'] || item.content || item.description || ''),
         image: pickImage(item),
         sourceName,
         externalLink: String(externalLink).slice(0, 2000),
@@ -363,8 +364,8 @@ async function ingestCronCategory(category) {
       const result = await pool.query(
         `INSERT INTO rss_articles
           (url_hash, title, original_excerpt, category, image, author, source_name,
-           external_link, published_at, content_type, is_featured)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'article', false)
+           external_link, published_at, content_type, is_featured, full_content)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'article', false, $10)
          ON CONFLICT (url_hash) DO NOTHING
          RETURNING id`,
         [
@@ -376,7 +377,8 @@ async function ingestCronCategory(category) {
           article.sourceName,
           article.sourceName,
           article.externalLink,
-          article.publishedAt
+          article.publishedAt,
+          article.fullContent && article.fullContent.length > article.excerpt.length ? article.fullContent : null
         ]
       );
 

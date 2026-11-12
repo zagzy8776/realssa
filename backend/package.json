@@ -2,7 +2,7 @@
   "name": "realssa-news",
   "version": "0.0.85",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "db:migrate": "node migrate-aiven.cjs",
     "worker": "node --max-old-space-size=450 worker.js",

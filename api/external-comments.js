@@ -45,10 +45,15 @@ const normalize = (row, source) => ({
 });
 
 const getComments = async (articleId) => {
+  const aliases = [articleId];
+  if (/^rss-\d+$/.test(articleId)) {
+    const row = (await pool.query('SELECT external_link FROM rss_articles WHERE id = $1', [articleId.slice(4)])).rows[0];
+    if (row?.external_link) aliases.push('rss-' + require('crypto').createHash('sha1').update(row.external_link.split('#')[0]).digest('hex').slice(0, 16));
+  }
   const external = await pool.query(
     `SELECT id, article_id, author_name, content, parent_id, likes, is_bot, bot_key, created_at
-     FROM external_comments WHERE article_id = $1 ORDER BY created_at ASC, id ASC`,
-    [articleId]
+     FROM external_comments WHERE article_id = ANY($1::text[]) ORDER BY created_at ASC, id ASC`,
+    [aliases]
   );
 
   let legacy = { rows: [] };
@@ -57,8 +62,8 @@ const getComments = async (articleId) => {
       `SELECT id, article_id, author_name, content, parent_id, likes, created_at,
               CASE WHEN device_id = 'realssa-community-bot' THEN TRUE ELSE FALSE END AS is_bot,
               CASE WHEN device_id = 'realssa-community-bot' THEN 'community-discussion' ELSE NULL END AS bot_key
-       FROM comments WHERE article_id = $1 ORDER BY created_at ASC, id ASC`,
-      [articleId]
+       FROM comments WHERE article_id = ANY($1::text[]) ORDER BY created_at ASC, id ASC`,
+      [aliases]
     );
   } catch (error) {
     console.warn('[External Comments] Legacy comments read skipped:', error.message);

@@ -60,6 +60,9 @@ ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS embedding TEXT;
 ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS local_verified_count INT DEFAULT 0;
 ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS rumor_flag_count INT DEFAULT 0;
 
+ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS enrichment_attempts INT DEFAULT 0;
+ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS enrichment_retry_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS notified_articles (
     id BIGSERIAL PRIMARY KEY,
     story_hash TEXT UNIQUE,

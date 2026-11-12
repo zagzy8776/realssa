@@ -1,172 +1,63 @@
 const { Pool } = require('pg');
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : undefined });
-const usersDbUrl = process.env.USERS_DATABASE_URL || process.env.DATABASE_URL;
-const usersPool = new Pool({ connectionString: usersDbUrl, ssl: usersDbUrl ? { rejectUnauthorized: false } : undefined });
-
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
-const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
+const { runAI } = require('./aiRouter.cjs');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2, connectionTimeoutMillis: 3000, statement_timeout: 5000 });
 const BOT_NAME = 'RealSSA Community Bot 🤖';
-const BOT_DEVICE_ID = 'realssa-community-bot';
 const BOT_KEY = 'community-discussion';
-const SCAN_WINDOW_MINUTES = 120;
-const MAX_ARTICLES_PER_CYCLE = 12;
-const MAX_DAILY_PROMPTS = 30;
-const CYCLE_MS = 5 * 60 * 1000;
-
-const FALLBACK_QUESTIONS = {
-  sports: 'What do you make of this result, and what should happen next?',
-  politics: 'What impact do you think this development could have, and what should readers watch next?',
-  crypto: 'What is the biggest thing readers should understand about this development?',
-  tech: 'How significant do you think this development is for users and businesses?',
-  business: 'What do you think this development means for businesses and consumers?',
-  general: 'What is your take on this development, and what should readers watch next?'
-};
-
-const DISCUSSION_PROMPT = (title, excerpt, category) => [
-  'You are the RealSSA News Community Editor.',
-  'Write ONE short discussion question for a public news comment section.',
-  'This is an official AI-generated RealSSA community prompt. Never pretend to be a human reader.',
-  'Do not invent facts, names, quotes, statistics, events, or claims not supported by the supplied article context.',
-  'Do not give financial, medical, legal, or investment instructions.',
-  'Keep the question neutral, useful, and directly related to the article.',
-  'Use standard Nigerian English. No hashtags, emojis, or fake engagement language.',
-  'Maximum 2 sentences. Return only the question.',
-  `Title: ${title}`,
-  `Excerpt: ${excerpt || ''}`,
-  `Category: ${category || 'news'}`
-].join('\n');
-
-function clean(value) {
-  if (!value || typeof value !== 'string') return null;
-  const text = value.replace(/^\s*(discussion question|comment|response)\s*:\s*/i, '').replace(/^['"]|['"]$/g, '').replace(/\s+/g, ' ').trim();
-  return text.length >= 12 && text.length <= 500 ? text : null;
-}
-
-async function callGemini(prompt) {
-  const keys = (process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
-  if (!keys.length) return null;
-  try {
-    const key = keys[Math.floor(Math.random() * keys.length)];
-    // NVIDIA key → route to NVIDIA chat completions instead of Google Gemini
-    const { isNvidiaKey, callNvidia } = require('./aiProvider');
-    if (isNvidiaKey(key)) {
-      return clean(await callNvidia(key, prompt, { maxTokens: 512, temperature: 0.35, timeout: 60000 }));
-    }
-    const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(key)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 100, temperature: 0.35 } }),
-      signal: AbortSignal.timeout(6000)
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return clean(data?.candidates?.[0]?.content?.parts?.[0]?.text);
-  } catch (err) { console.warn('[Community Bot] Gemini failed:', err.message); return null; }
-}
-
-async function callCerebras(prompt) {
-  if (!process.env.CEREBRAS_API_KEY) return null;
-  try {
-    const res = await fetch(CEREBRAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.CEREBRAS_API_KEY}` },
-      body: JSON.stringify({ model: 'gpt-oss-120b', messages: [{ role: 'user', content: prompt }], max_tokens: 100, temperature: 0.35 }),
-      signal: AbortSignal.timeout(6000)
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return clean(data?.choices?.[0]?.message?.content);
-  } catch (err) { console.warn('[Community Bot] Cerebras failed:', err.message); return null; }
-}
-
-async function generateDiscussionPrompt(title, excerpt, category) {
-  const prompt = DISCUSSION_PROMPT(title, excerpt, category);
-  return (await callGemini(prompt)) || (await callCerebras(prompt));
-}
-
+let timer;
 async function ensureBotSchema() {
-  await usersPool.query(`
-    CREATE TABLE IF NOT EXISTS comments (
-      id SERIAL PRIMARY KEY,
-      article_id VARCHAR(255) NOT NULL,
-      parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
-      author_name VARCHAR(100) NOT NULL,
-      device_id VARCHAR(255) NOT NULL,
-      content TEXT NOT NULL,
-      likes INTEGER DEFAULT 0,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    ALTER TABLE comments ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT false;
-    ALTER TABLE comments ADD COLUMN IF NOT EXISTS bot_key VARCHAR(80);
-    CREATE INDEX IF NOT EXISTS idx_comments_article ON comments (article_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_comments_bot_article ON comments (article_id, bot_key) WHERE is_bot = true;
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_comments_bot_article ON comments (article_id, bot_key) WHERE is_bot = true AND bot_key IS NOT NULL;
-  `);
+  await pool.query(`CREATE TABLE IF NOT EXISTS external_comments (
+    id BIGSERIAL PRIMARY KEY, article_id TEXT NOT NULL, author_name VARCHAR(100) NOT NULL,
+    content TEXT NOT NULL, parent_id BIGINT, likes INTEGER DEFAULT 0,
+    is_bot BOOLEAN DEFAULT false, bot_key TEXT, created_at TIMESTAMPTZ DEFAULT NOW());
+    ALTER TABLE external_comments ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT false;
+    ALTER TABLE external_comments ADD COLUMN IF NOT EXISTS bot_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_external_community_prompt
+      ON external_comments(article_id, bot_key) WHERE is_bot = true AND bot_key = 'community-discussion';`);
 }
-
-async function dailyLimitReached() {
-  const result = await usersPool.query(`SELECT COUNT(*)::int AS count FROM comments WHERE is_bot = true AND bot_key = $1 AND created_at >= CURRENT_DATE`, [BOT_KEY]);
-  return Number(result.rows[0]?.count || 0) >= MAX_DAILY_PROMPTS;
+async function generateDiscussionPrompt(title, excerpt, category) {
+  return runAI('comment', [
+    'You are the official RealSSA AI Community Bot, openly identified as a bot.',
+    'Ask one useful, neutral discussion question about this article. Maximum two sentences.',
+    'Use only the supplied context. Do not invent facts or impersonate a human reader.',
+    'Return just the question, no labels, hashtags, or quotation marks.',
+    `Title: ${JSON.stringify(title)}`, `Category: ${JSON.stringify(category)}`,
+    `Context: ${JSON.stringify(String(excerpt || '').slice(0, 5000))}`
+  ].join('\n'), { maxTokens: 250, budgetMs: 20000, validate: text => text.length >= 12 && text.length <= 500 });
 }
-
-async function hasPrompt(articleId) {
-  const result = await usersPool.query(`SELECT id FROM comments WHERE article_id = $1 AND is_bot = true AND bot_key = $2 LIMIT 1`, [articleId, BOT_KEY]);
-  return result.rows.length > 0;
-}
-
-async function createPrompt(articleId, title, excerpt, category) {
-  if (!articleId || !title || await hasPrompt(articleId)) return null;
-  const content = (await generateDiscussionPrompt(title, excerpt, category)) || FALLBACK_QUESTIONS[String(category || 'general').toLowerCase()] || FALLBACK_QUESTIONS.general;
-
+async function monitorAndSimulate() {
+  await ensureBotSchema();
+  const client = await pool.connect();
+  let locked = false;
   try {
-    const result = await usersPool.query(`
-      INSERT INTO comments (article_id, parent_id, author_name, device_id, content, likes, created_at, is_bot, bot_key)
-      SELECT $1, NULL, $2, $3, $4, 0, NOW(), true, $5
-      WHERE NOT EXISTS (
-        SELECT 1 FROM comments WHERE article_id = $1 AND is_bot = true AND bot_key = $5
-      )
-      RETURNING id
-    `, [articleId, BOT_NAME, BOT_DEVICE_ID, content, BOT_KEY]);
-    return result.rows[0]?.id || null;
-  } catch (err) {
-    console.error(`[Community Bot] Insert failed for ${articleId}:`, err.message);
-    return null;
+    locked = (await client.query('SELECT pg_try_advisory_lock(728393) AS locked')).rows[0]?.locked;
+    if (!locked) return { created: 0, skipped: 'already_running' };
+    const count = Number((await client.query(`SELECT COUNT(*)::int AS count FROM external_comments
+      WHERE is_bot = true AND bot_key = $1 AND created_at >= CURRENT_DATE`, [BOT_KEY])).rows[0]?.count || 0);
+    const limit = Math.min(3, Math.max(0, 30 - count));
+    if (!limit) return { created: 0, skipped: 'daily_limit' };
+    const rows = (await client.query(`SELECT 'rss-' || a.id AS id, a.title,
+      COALESCE(a.ai_summary, a.full_content, a.original_excerpt) AS excerpt, a.category
+      FROM rss_articles a WHERE a.published_at >= NOW() - INTERVAL '2 days'
+      AND NOT EXISTS (SELECT 1 FROM external_comments c WHERE c.article_id = 'rss-' || a.id AND c.bot_key = $1 AND c.is_bot = true)
+      ORDER BY a.published_at DESC LIMIT $2`, [BOT_KEY, limit])).rows;
+    let created = 0;
+    for (const article of rows) {
+      const content = await generateDiscussionPrompt(article.title, article.excerpt, article.category);
+      if (!content) continue; // Keep failed articles eligible for a later provider reset.
+      const result = await client.query(`INSERT INTO external_comments
+        (article_id, author_name, content, is_bot, bot_key) VALUES ($1, $2, $3, true, $4)
+        ON CONFLICT DO NOTHING RETURNING id`, [article.id, BOT_NAME, content, BOT_KEY]);
+      created += result.rows.length;
+    }
+    return { created, selected: rows.length };
+  } finally {
+    if (locked) await client.query('SELECT pg_advisory_unlock(728393)').catch(() => {});
+    client.release();
   }
 }
-
-async function monitorAndSimulate() {
-  try {
-    if (await dailyLimitReached()) {
-      console.log(`[Community Bot] Daily limit reached (${MAX_DAILY_PROMPTS}).`);
-      return;
-    }
-
-    const articlesRes = await pool.query(`
-      SELECT 'rss-' || id AS id, title, original_excerpt AS excerpt, category
-      FROM rss_articles
-      WHERE published_at >= NOW() - INTERVAL '${SCAN_WINDOW_MINUTES} minutes'
-        AND COALESCE(TRIM(title), '') <> ''
-      ORDER BY published_at DESC
-      LIMIT $1
-    `, [MAX_ARTICLES_PER_CYCLE]);
-
-    let created = 0;
-    for (const article of articlesRes.rows) {
-      if (created >= MAX_ARTICLES_PER_CYCLE || await dailyLimitReached()) break;
-      const id = await createPrompt(article.id, article.title, article.excerpt, article.category);
-      if (id) created += 1;
-    }
-    console.log(`[Community Bot] Cycle complete: ${created} official prompts created.`);
-  } catch (err) { console.error('[Community Bot] Cycle failed:', err.message); }
-}
-
 async function initDiscussionBot() {
-  try {
-    await ensureBotSchema();
-    console.log('📢 RealSSA Community Bot initialized.');
-    await monitorAndSimulate();
-    setInterval(() => monitorAndSimulate().catch(err => console.error('[Community Bot] Scheduled cycle failed:', err.message)), CYCLE_MS);
-  } catch (err) { console.error('[Community Bot] Initialization failed:', err.message); }
+  if (timer) return;
+  timer = setInterval(() => monitorAndSimulate().catch(error => console.error('[Community Bot]', error.code || error.name)), 5 * 60000);
+  await monitorAndSimulate();
 }
-
-module.exports = { initDiscussionBot, monitorAndSimulate };
+module.exports = { initDiscussionBot, monitorAndSimulate, generateDiscussionPrompt };

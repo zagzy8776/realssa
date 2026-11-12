@@ -488,7 +488,10 @@ app.handle = async function realssaVercelHandle(req, res, out) {
     if (!isAuthorizedCron(req, parsed)) return sendJson(res, 401, { error: 'Unauthorized' });
     try {
       const pool = await waitForDatabasePool(8000);
-      if (pool) await ensureRssSchema(pool);
+      if (!pool) return sendJson(res, 503, { success: false, error: 'Database unavailable' });
+      const { runEnrichmentCycle } = require('../backend/services/articleEnrichment.cjs');
+      const result = await runEnrichmentCycle(pool);
+      return sendJson(res, 200, { success: true, ...result });
     } catch (error) {
       console.error('[Vercel Cron Summarize] schema bootstrap failed:', error.message);
       return sendJson(res, 500, { success: false, error: error.message, timestamp: new Date().toISOString() });
@@ -554,12 +557,12 @@ app.post('/api/cron/prices', async (req, res) => {
   }
 });
 
-app.post('/api/cron/discussion', async (req, res) => {
+app.all('/api/cron/discussion', async (req, res) => {
   if (!(await requireCronAuth(req, res))) return;
   try {
     const { monitorAndSimulate } = require('../backend/services/discussionBot');
-    await monitorAndSimulate();
-    sendJson(res, 200, { ok: true, bot: 'discussion' });
+    const result = await monitorAndSimulate();
+    sendJson(res, 200, { ok: true, bot: 'discussion', ...result });
   } catch (err) {
     console.error('[cron/discussion]', err.message);
     sendJson(res, 500, { error: err.message });

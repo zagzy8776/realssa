@@ -92,7 +92,7 @@ async function callAI(apiKey, prompt, opts = {}) {
         temperature = 0.3,
         timeout = 15000,
         jsonMode = false,
-        geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
+        geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(process.env.GEMINI_MODEL || 'gemini-3.8-flash')}:generateContent`
     } = opts;
     try {
         const config = { maxOutputTokens: maxTokens, temperature, topP: 0.9 };

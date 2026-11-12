@@ -22,12 +22,13 @@ interface Comment {
 interface ExternalArticleCommentsProps {
   articleId: string;
   articleTitle: string;
+  articleContext?: string;
   onCommentPosted?: () => void;
 }
 
 const COMMENTS_API = '/api/external-comments';
 
-const ExternalArticleComments = ({ articleId, articleTitle, onCommentPosted }: ExternalArticleCommentsProps) => {
+const ExternalArticleComments = ({ articleId, articleTitle, articleContext = '', onCommentPosted }: ExternalArticleCommentsProps) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
@@ -78,16 +79,17 @@ const ExternalArticleComments = ({ articleId, articleTitle, onCommentPosted }: E
         throw new Error(error.error || `Comment failed: ${response.status}`);
       }
 
+      const postedComment = await response.json();
       await fetchComments();
 
       // The mention bot is intentionally opt-in: it only answers when a reader
       // explicitly mentions @RealSSA_Bot.
-      if (content.includes('@RealSSA_Bot')) {
+      if (/@RealSSA_Bot\b/i.test(content)) {
         try {
           const botRes = await fetch(apiUrl('/api/bot/comment-reply'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ commentText: content, articleTitle: articleTitle || 'Breaking Story' }),
+            body: JSON.stringify({ commentText: content, articleTitle: articleTitle || 'Breaking Story', articleContext: articleContext.slice(0, 6000) }),
           });
           const botData = await botRes.json().catch(() => ({}));
           if (botRes.ok && botData?.reply) {
@@ -98,7 +100,7 @@ const ExternalArticleComments = ({ articleId, articleTitle, onCommentPosted }: E
                 articleId,
                 author: '@RealSSA_Bot',
                 content: botData.reply,
-                parentId,
+                parentId: postedComment.id,
                 isBot: true,
                 botKey: 'mention-reply',
               }),

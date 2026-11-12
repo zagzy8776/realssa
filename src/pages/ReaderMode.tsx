@@ -13,6 +13,7 @@ import { useDwellTime } from "@/hooks/useDwellTime";
 
 interface ExtractedArticle {
   title: string;
+  articleId?: string;
   content: string;
   textContent: string;
   length: number;
@@ -69,6 +70,7 @@ const ReaderMode = () => {
       try {
         setLoading(true);
         setError(false);
+        setImgError(false);
         const response = await fetch(apiUrl("/api/extract"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -89,6 +91,7 @@ const ReaderMode = () => {
         
         // Always prefer extracted content; fall back to RSS/query params
         const resolved: ExtractedArticle = {
+          articleId: data.articleId || articleId,
           title: data.title || fallbackTitle || "Article",
           content: data.content || (fallbackExcerpt ? `<p>${fallbackExcerpt}</p>` : "<p>Content could not be extracted. Please visit the original source.</p>"),
           textContent: data.textContent || fallbackExcerpt || "",
@@ -141,7 +144,7 @@ const ReaderMode = () => {
       } catch {}
     };
     loadRelated();
-  }, [url, navigate, fallbackExcerpt, fallbackImage, fallbackTitle, fallbackCategory]);
+  }, [url, navigate, fallbackExcerpt, fallbackImage, fallbackTitle, fallbackCategory, articleId]);
 
   const handleShare = async () => {
     const title = article?.title || fallbackTitle || "Article";
@@ -244,7 +247,11 @@ const ReaderMode = () => {
           </div>
         )}
 
-        {articleId && <ExternalArticleComments articleId={articleId} />}
+        {(article.articleId || articleId) && <ExternalArticleComments
+          articleId={article.articleId || articleId!}
+          articleTitle={article.title}
+          articleContext={article.textContent || article.excerpt}
+        />}
 
         {relatedNews.length > 0 && (
           <section className="mt-12">
