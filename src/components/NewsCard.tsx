@@ -228,11 +228,39 @@ const NewsCard = ({
 
   const resolveCardImage = (url?: string) => (!url || isLogoPattern(url) ? CARD_FALLBACK_IMAGE : url);
   const [currentImage, setCurrentImage] = useState(() => resolveCardImage(image));
+  const [imageRecovered, setImageRecovered] = useState(false);
 
   useEffect(() => {
     setCurrentImage(resolveCardImage(image));
     setImgError(false);
+    setImageRecovered(false);
   }, [image]);
+
+  // Aggressively pull the real article photo when feed only gave us a logo/empty.
+  useEffect(() => {
+    if (imageRecovered) return;
+    const needsRescue = !image || isLogoPattern(image) || currentImage === CARD_FALLBACK_IMAGE;
+    if (!needsRescue || !externalLink) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(apiUrl('/api/extract'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: externalLink, fallbackTitle: title, fallbackImage: image }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const found = data?.image;
+        if (!cancelled && found && !isLogoPattern(found)) {
+          setCurrentImage(found);
+          setImgError(false);
+          setImageRecovered(true);
+        }
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [image, externalLink, title, currentImage, imageRecovered]);
 
   const hasImage = !!currentImage && !imgError;
   const imgSrc = imgError ? '' : currentImage;
@@ -406,7 +434,7 @@ const NewsCard = ({
 
         {storyHash && (
           <div className="px-4 pb-3 flex gap-2 text-xs">
-            <button disabled={hasVotedVerify} onClick={handleVerifyClick} className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[10px] font-bold ${hasVotedVerify ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' : 'bg-white/5 text-slate-300 border-white/5 hover:bg-emerald-500/10 hover:text-emerald-400'}`}>
+            <button disabled={hasVotedVerify} onClick={handleVerifyClick} className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[10px] font-bold ${hasVotedVerify ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' : 'bg-white/5 text-slate-300 border-white/5 hover:bg-emerald-500/10 hover:text-red-400'}`}>
               ✓ {verifiedCount} Verified
             </button>
             <button disabled={hasVotedVerify} onClick={handleFlagClick} className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[10px] font-bold ${hasVotedVerify ? 'bg-red-500/15 text-red-400 border-red-500/25' : 'bg-white/5 text-slate-300 border-white/5 hover:bg-red-500/10 hover:text-red-400'}`}>
