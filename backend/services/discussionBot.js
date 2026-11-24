@@ -1,6 +1,7 @@
 const { pools } = require('../config/multiDb');
 const { runAI } = require('./aiRouter.cjs');
 const { createHash } = require('crypto');
+const { seedPersonaComments } = require('./communityCommentSeeder');
 const pool = pools?.[0]?.pool;
 const BOT_NAME = 'RealSSA Community Bot 🤖';
 const BOT_KEY = 'community-discussion';
@@ -60,7 +61,10 @@ async function runCycle({ articleId, articleUrl } = {}) {
     const count = Number((await client.query(`SELECT COUNT(*)::int AS count FROM external_comments
       WHERE is_bot = true AND bot_key = $1 AND created_at >= CURRENT_DATE`, [BOT_KEY])).rows[0]?.count || 0);
     const limit = Math.min(articleId ? 1 : 3, Math.max(0, DAILY_LIMIT - count));
-    if (!limit) return { created: 0, skipped: 'daily_limit', dailyLimit: DAILY_LIMIT };
+    // Persona seeds are cheap and critical for empty threads — still allow them
+    // when the AI discussion-prompt daily limit is exhausted.
+    const aiBudgetExhausted = !limit;
+    if (aiBudgetExhausted && !articleId) return { created: 0, skipped: 'daily_limit', dailyLimit: DAILY_LIMIT };
     let saved = [];
     try { saved = await savedCandidates(client, articleId, articleUrl); }
     catch (error) { console.warn('[Community Bot] Saved articles unavailable:', error.code || error.name); }
@@ -79,15 +83,39 @@ async function runCycle({ articleId, articleUrl } = {}) {
     });
     let created = 0, attempted = 0;
     for (const article of candidates) {
-      if (created >= limit || attempted >= limit) break;
-      if (await hasPrompt(client, article)) continue;
-      attempted++;
-      const content = await generateDiscussionPrompt(article.title, article.excerpt, article.category);
-      if (!content) continue;
-      const result = await client.query(`INSERT INTO external_comments
-        (article_id, author_name, content, is_bot, bot_key) VALUES ($1, $2, $3, true, $4)
-        ON CONFLICT DO NOTHING RETURNING id`, [article.id, BOT_NAME, content, BOT_KEY]);
-      created += result.rows.length;
+      if (!aiBudgetExhausted && (created >= limit || attempted >= limit) && !articleId) break;
+      // AI community prompt (once per article)
+      if (!aiBudgetExhausted && !(await hasPrompt(client, article))) {
+        if (!articleId && attempted >= limit) break;
+        attempted++;
+        const content = await generateDiscussionPrompt(article.title, article.excerpt, article.category);
+        if (content) {
+          const result = await client.query(`INSERT INTO external_comments
+            (article_id, author_name, content, is_bot, bot_key) VALUES ($1, $2, $3, true, $4)
+            ON CONFLICT DO NOTHING RETURNING id`, [article.id, BOT_NAME, content, BOT_KEY]);
+          created += result.rows.length;
+        }
+      }
+      // Aggressive persona thread seed so readers always see active discussion
+      try {
+        const seeded = await seedPersonaComments(client, article, { min: 2, max: 4 });
+        if (seeded.created) {
+          created += seeded.created;
+          console.info('[Community Bot] Persona seed', article.id, seeded.personas.join(', '));
+        }
+      } catch (seedErr) {
+        console.warn('[Community Bot] Persona seed failed:', seedErr.message);
+      }
+      if (articleId) break; // reader path: one article only
+    }
+    // Even when AI prompt already exists / failed, still try persona seed once
+    if (articleId && candidates.length) {
+      for (const article of candidates.slice(0, 1)) {
+        try {
+          const seeded = await seedPersonaComments(client, article, { min: 2, max: 4 });
+          if (seeded.created) created += seeded.created;
+        } catch (_) {}
+      }
     }
     return { created, selected: candidates.length, attempted,
       ...(articleId && !candidates.length ? { skipped: 'unknown_article' } : {}) };
