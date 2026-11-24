@@ -3,6 +3,9 @@
 // individual publisher failures. The database remains the persistence layer;
 // RSS is the live ingestion/read fallback.
 
+const crypto = require('crypto');
+const { isBadImage, enrichArticleImages, BRAND_FALLBACK } = require('../backend/services/enrichFeedImages');
+
 const FEEDS = {
   'nigerian-news': [
     'https://www.premiumtimesng.com/feed','https://www.vanguardngr.com/feed/','https://guardian.ng/feed/','https://punchng.com/feed/','https://www.thisdaylive.com/feed/','https://www.channelstv.com/feed/','https://www.arise.tv/feed/','https://www.thecable.ng/feed','https://saharareporters.com/rss.xml','https://www.premiumtimesng.com/rss.xml','https://news.google.com/rss/search?q=Nigeria%20news&hl=en-NG&gl=NG&ceid=NG%3Aen'
@@ -77,7 +80,7 @@ const labels = Object.fromEntries(Object.keys(FEEDS).map(k => [k, k.replace(/-/g
 labels['nigerian-news']='Nigeria'; labels.tech='Technology'; labels.usa='USA'; labels.uk='UK'; labels.ghana='Ghana'; labels.kenya='Kenya'; labels['south-africa']='South Africa'; labels['middle-east']='Middle East'; labels['latin-america']='Latin America';
 const countryByCategory = { 'nigerian-news':'Nigeria', politics:'Nigeria', ghana:'Ghana', kenya:'Kenya', 'south-africa':'South Africa', uk:'UK', usa:'USA', canada:'Canada', australia:'Australia', india:'India', china:'China', japan:'Japan', brazil:'Brazil', mexico:'Mexico', world:'Global', africa:'Africa', europe:'Europe', asia:'Asia', 'middle-east':'Middle East', 'latin-america':'Latin America', sports:'Global', business:'Global', tech:'Global', crypto:'Global', entertainment:'Global', culture:'Africa', lifestyle:'Global', science:'Global', health:'Global', jobs:'Global' };
 
-const cleanText = (value, max=4000) => String(value||'').replace(/<!\[CDATA\[/gi,'').replace(/\]\]>/g,'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&/gi,'&').replace(/"/gi,'"').replace(/&#39;|'/gi,"'").replace(/</gi,'<').replace(/>/gi,'>').replace(/\s+/g,' ').trim().slice(0,max);
+const cleanText = (value, max=4000) => String(value||'').replace(/<!\[CDATA\[/gi,'').replace(/\]\]>/g,'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/\s+/g,' ').trim().slice(0,max);
 const decodeXml = value => cleanText(value,12000);
 function firstTag(block,tags){ for(const tag of tags){ const m=String(block).match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`,'i')); if(m?.[1]) return m[1]; } return ''; }
 function firstAttr(block,tags,attr){ for(const tag of tags){ const m=String(block).match(new RegExp(`<${tag}\\b[^>]*\\b${attr}=["']([^"']+)["'][^>]*>`,'i')); if(m?.[1]) return decodeXml(m[1]); } return ''; }
@@ -89,8 +92,13 @@ function parseXmlFeed(xml){
 async function readFeed(url){ try{ const response=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0 (compatible; RealSSA-News/2.1; +https://realssanews.com.ng)',Accept:'application/rss+xml, application/atom+xml, application/xml, text/xml, */*'},signal:AbortSignal.timeout(7000)}); if(!response.ok) throw new Error(`HTTP ${response.status}`); const feed=parseXmlFeed(await response.text()); if(!feed.items.length) throw new Error('no RSS items'); return feed; }catch(error){ console.warn(`[Vercel News] ${url}: ${error?.message||error}`); return null; } }
 function publishedDate(item){ if(!item.pubDate) return null; const d=new Date(item.pubDate); return Number.isNaN(d.getTime())?null:d; }
 const MAX_ARTICLE_AGE_MS = 30*24*60*60*1000;
-function getImage(item){ if(/^https?:\/\//i.test(String(item.image||''))) return item.image; return String(item.description||'').match(/<img[^>]+src=["']([^"']+)["']/i)?.[1]||'https://realssanews.com.ng/logo.png'; }
-const crypto = require('crypto');
+function getImage(item){
+  const direct = String(item.image || '');
+  if (/^https?:\/\//i.test(direct) && !isBadImage(direct)) return direct;
+  const fromHtml = String(item.description || '').match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || '';
+  if (fromHtml && !isBadImage(fromHtml)) return fromHtml;
+  return '';
+}
 const BLOCKED_HOSTS = new Set([
   'espn.com','skysports.com','dailymaverick.co.za','edition.cnn.com','punchng.com'
 ]);
@@ -109,7 +117,83 @@ function isBlockedLink(link){
 function stableArticleId(link){
   return 'rss-' + crypto.createHash('sha1').update(String(link)).digest('hex').slice(0, 16);
 }
-async function collect(category){ const normalized=aliases[category]||category; const urls=FEEDS[normalized]||FEEDS['world']; const feeds=await Promise.all(urls.map(readFeed)); const articles=[]; const seen=new Set(); feeds.forEach((feed,feedIndex)=>{ if(!feed) return; for(const item of feed.items.slice(0,25)){ const link=String(item.link||item.guid||'').trim(); const title=cleanText(item.title,500); if(!link||!title||seen.has(link)) continue; if(isBlockedLink(link)) continue; if(!/^https?:\/\//i.test(link)) continue; seen.add(link); const date=publishedDate(item); if(!date||Date.now()-date.getTime()>MAX_ARTICLE_AGE_MS||date.getTime()>Date.now()+6*3600*1000) continue; const excerpt=cleanText(item.description||title,1000); const fallback=urls[feedIndex]?new URL(urls[feedIndex]).hostname.replace(/^www\./,''):'RSS'; articles.push({id:stableArticleId(link),title,excerpt,description:excerpt,original_excerpt:cleanText(excerpt,4000),image:getImage(item),author:cleanText(item.author,200),source_name:cleanText(item.source||feed.title||fallback,200),external_link:link,externalLink:link,published_at:date.toISOString(),date:date.toISOString(),category:labels[normalized]||normalized,feed_category:normalized,country:countryByCategory[normalized]||'Global',content_type:'article',featured:false,is_featured:false}); } }); return articles.sort((a,b)=>new Date(b.published_at)-new Date(a.published_at)); }
-async function collectCombined(categories){ const batches=await Promise.all(categories.map(c=>collect(c).catch(e=>{console.error(`[Vercel News] ${c}`,e?.message||e);return [];}))); const seen=new Set(); return batches.flat().filter(a=>{if(seen.has(a.external_link))return false;seen.add(a.external_link);return true;}).sort((a,b)=>new Date(b.published_at)-new Date(a.published_at)); }
+async function collect(category){
+  const normalized=aliases[category]||category;
+  const urls=FEEDS[normalized]||FEEDS['world'];
+  const feeds=await Promise.all(urls.map(readFeed));
+  const articles=[];
+  const seen=new Set();
+  feeds.forEach((feed,feedIndex)=>{
+    if(!feed) return;
+    for(const item of feed.items.slice(0,25)){
+      const link=String(item.link||item.guid||'').trim();
+      const title=cleanText(item.title,500);
+      if(!link||!title||seen.has(link)) continue;
+      if(isBlockedLink(link)) continue;
+      if(!/^https?:\/\//i.test(link)) continue;
+      seen.add(link);
+      const date=publishedDate(item);
+      if(!date||Date.now()-date.getTime()>MAX_ARTICLE_AGE_MS||date.getTime()>Date.now()+6*3600*1000) continue;
+      const excerpt=cleanText(item.description||title,1000);
+      const fallback=urls[feedIndex]?new URL(urls[feedIndex]).hostname.replace(/^www\./,''):'RSS';
+      articles.push({
+        id:stableArticleId(link),
+        title,
+        excerpt,
+        description:excerpt,
+        original_excerpt:cleanText(excerpt,4000),
+        image:getImage(item),
+        author:cleanText(item.author,200),
+        source_name:cleanText(item.source||feed.title||fallback,200),
+        external_link:link,
+        externalLink:link,
+        published_at:date.toISOString(),
+        date:date.toISOString(),
+        category:labels[normalized]||normalized,
+        feed_category:normalized,
+        country:countryByCategory[normalized]||'Global',
+        content_type:'article',
+        featured:false,
+        is_featured:false
+      });
+    }
+  });
+  articles.sort((a,b)=>new Date(b.published_at)-new Date(a.published_at));
+  // Scrape real publisher photos for cards missing images (share-ready WhatsApp/TG/TikTok)
+  await enrichArticleImages(articles.slice(0, 36), { limit: 36, concurrency: 8 });
+  for (const a of articles) {
+    if (!a.image || isBadImage(a.image)) a.image = BRAND_FALLBACK;
+  }
+  return articles;
+}
+async function collectCombined(categories){
+  const batches=await Promise.all(categories.map(c=>collect(c).catch(e=>{console.error(`[Vercel News] ${c}`,e?.message||e);return [];})));
+  const seen=new Set();
+  return batches.flat().filter(a=>{if(seen.has(a.external_link))return false;seen.add(a.external_link);return true;}).sort((a,b)=>new Date(b.published_at)-new Date(a.published_at));
+}
 
-module.exports=async function handler(req,res){ if(req.method!=='GET') return res.status(405).json({error:'Method not allowed'}); try{ const rawPath=String(req.url||'').split('?')[0]; const isLegacy=/^\/news-feed\/?$/i.test(rawPath); const isForYou=/^\/api\/feed\/foryou\/?$/i.test(rawPath); const match=rawPath.match(/^\/api\/news\/([^/]+)\/?$/i); const category=match?decodeURIComponent(match[1]).toLowerCase():''; const allCategories=Object.keys(FEEDS); let articles; if(isLegacy||isForYou||category==='breaking'||category==='latest'||!category) articles=await collectCombined(allCategories); else articles=await collect(category); const requested=Number(req.query?.limit||100); const limit=Math.min(Math.max(Number.isFinite(requested)?requested:100,1),200); const result=articles.slice(0,limit); res.setHeader('Cache-Control','public, s-maxage=60, stale-while-revalidate=300'); if(isLegacy) return res.status(200).json(result); return res.status(200).json({articles:result,nextCursor:null,hasMore:result.length<articles.length,source:'rss-live-network',category:category||(isForYou?'foryou':'latest'),totalAvailable:articles.length}); }catch(error){ console.error('[Vercel News] handler failed:',error); const isLegacy=/^\/news-feed\/?$/i.test(String(req.url||'').split('?')[0]); if(isLegacy)return res.status(200).json([]); return res.status(200).json({articles:[],nextCursor:null,hasMore:false,source:'rss-live-network',error:'News temporarily unavailable'}); } };
+module.exports=async function handler(req,res){
+  if(req.method!=='GET') return res.status(405).json({error:'Method not allowed'});
+  try{
+    const rawPath=String(req.url||'').split('?')[0];
+    const isLegacy=/^\/news-feed\/?$/i.test(rawPath);
+    const isForYou=/^\/api\/feed\/foryou\/?$/i.test(rawPath);
+    const match=rawPath.match(/^\/api\/news\/([^/]+)\/?$/i);
+    const category=match?decodeURIComponent(match[1]).toLowerCase():'';
+    const allCategories=Object.keys(FEEDS);
+    let articles;
+    if(isLegacy||isForYou||category==='breaking'||category==='latest'||!category) articles=await collectCombined(allCategories);
+    else articles=await collect(category);
+    const requested=Number(req.query?.limit||100);
+    const limit=Math.min(Math.max(Number.isFinite(requested)?requested:100,1),200);
+    const result=articles.slice(0,limit);
+    res.setHeader('Cache-Control','public, s-maxage=60, stale-while-revalidate=300');
+    if(isLegacy) return res.status(200).json(result);
+    return res.status(200).json({articles:result,nextCursor:null,hasMore:result.length<articles.length,source:'rss-live-network',category:category||(isForYou?'foryou':'latest'),totalAvailable:articles.length});
+  }catch(error){
+    console.error('[Vercel News] handler failed:',error);
+    const isLegacy=/^\/news-feed\/?$/i.test(String(req.url||'').split('?')[0]);
+    if(isLegacy)return res.status(200).json([]);
+    return res.status(200).json({articles:[],nextCursor:null,hasMore:false,source:'rss-live-network',error:'News temporarily unavailable'});
+  }
+};
