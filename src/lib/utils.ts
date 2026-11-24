@@ -19,6 +19,24 @@ export function decodeHTMLEntities(text: string): string {
   return decoded;
 }
 
+/** Strip HTML tags + decode entities. Use for any user-facing excerpt/description. */
+export function cleanText(text: string, maxLen?: number): string {
+  let s = String(text || '');
+  // Remove script/style blocks entirely
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+       .replace(/<style[\s\S]*?<\/style>/gi, ' ');
+  // Drop all remaining tags
+  s = s.replace(/<[^>]*>/g, ' ');
+  // Decode entities after tags are gone
+  s = decodeHTMLEntities(s);
+  // Collapse whitespace
+  s = s.replace(/\s+/g, ' ').trim();
+  if (typeof maxLen === 'number' && maxLen > 0 && s.length > maxLen) {
+    s = s.slice(0, maxLen).replace(/\s+\S*$/, '').trim() + '…';
+  }
+  return s;
+}
+
 export function safeLocalStorageSet(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
