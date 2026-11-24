@@ -1,5 +1,10 @@
 const crypto = require('crypto');
 const { cleanSocialText } = require('../backend/services/socialCaption.cjs');
+const {
+  isBadImage,
+  enrichArticleImages,
+  BRAND_FALLBACK,
+} = require('../backend/services/enrichFeedImages');
 
 // Resilient homepage read path. It does not depend on PostgreSQL being populated.
 // Aiven remains the persistence/analytics store, while this endpoint can always
@@ -115,7 +120,7 @@ const FEEDS = {
 const BLOCKED_HOSTS = new Set(['espn.com', 'skysports.com', 'dailymaverick.co.za', 'edition.cnn.com']);
 const cache = { articles: [], timestamp: 0, promise: null };
 const CACHE_TTL = 45 * 1000;
-const MAX_ARTICLE_AGE_MS = 30 * 24 * 60 * 60 * 1000; // drop stale/frozen-feed items
+const MAX_ARTICLE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const FEED_TIMEOUT = 5000;
 
 function cleanText(value, max = 1200) {
@@ -124,11 +129,11 @@ function cleanText(value, max = 1200) {
     .replace(/\]\]>/g, '')
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
+    .replace(/&/gi, '&')
+    .replace(/"/gi, '"')
+    .replace(/&#39;|'/gi, "'")
+    .replace(/</gi, '<')
+    .replace(/>/gi, '>')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);
@@ -164,18 +169,36 @@ function parseFeed(xml) {
     const description = tag(block, 'content:encoded') || tag(block, 'content') || tag(block, 'description') || tag(block, 'summary');
     const published = cleanText(tag(block, 'pubDate') || tag(block, 'published') || tag(block, 'updated') || tag(block, 'dc:date'));
     const author = cleanText(tag(block, 'dc:creator') || tag(block, 'author') || tag(block, 'creator'), 160);
-    const image = cleanText(
-      attr(block, 'media:content', 'url') ||
-      attr(block, 'media:thumbnail', 'url') ||
-      attr(block, 'enclosure', 'url') ||
-      String(description).match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || ''
-    );
+
+    // Collect every image candidate from media tags + HTML body
+    const candidates = [];
+    const push = (u) => {
+      const url = String(u || '').trim();
+      if (url && !isBadImage(url)) candidates.push(url);
+    };
+    push(attr(block, 'media:content', 'url'));
+    push(attr(block, 'media:thumbnail', 'url'));
+    push(attr(block, 'enclosure', 'url'));
+    for (const m of String(block).matchAll(
+      /<(?:media:content|media:thumbnail|enclosure)\b[^>]*\burl=["']([^"']+)["'][^>]*>/gi
+    )) push(m[1]);
+    for (const m of String(description || '').matchAll(/<img[^>]+src=["']([^"']+)["']/gi))
+      push(m[1]);
+    for (const m of String(description || '').matchAll(
+      /https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'<>]*)?/gi
+    )) push(m[0]);
 
     if (title && (link || guid)) {
       const externalLink = link || guid;
       const parsedDate = published ? new Date(published) : null;
-      // No valid date => null. Never fake "now": that pins undated/stale items to the top forever.
-      items.push({ title, externalLink, description, publishedAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null, author, image });
+      items.push({
+        title,
+        externalLink,
+        description,
+        publishedAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null,
+        author,
+        image: candidates[0] || '',
+      });
     }
   }
   return items;
@@ -218,8 +241,7 @@ async function refreshCache() {
         if (seen.has(key)) continue;
         seen.add(key);
         const excerpt = cleanText(item.description || item.title, 900);
-        const imageMatch = String(item.description || '').match(/<img[^>]+src=["']([^"']+)["']/i);
-        const image = /^https?:\/\//i.test(item.image) ? item.image : (imageMatch?.[1] || 'https://realssanews.com.ng/logo.png');
+        const image = !isBadImage(item.image) ? item.image : '';
         articles.push({
           id: 'rss-' + crypto.createHash('sha1').update(key).digest('hex').slice(0, 16),
           title: item.title,
@@ -241,6 +263,18 @@ async function refreshCache() {
     }
 
     articles.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Aggressively scrape real publisher photos for cards that only have logo/empty.
+    // Caps to top slice so cold starts stay inside Vercel time budget.
+    await enrichArticleImages(articles.slice(0, 40), { limit: 40, concurrency: 8 });
+    // Copy enriched images back onto the full list by id
+    const byId = new Map(articles.slice(0, 40).map(a => [a.id, a.image]));
+    for (const a of articles) {
+      if (byId.has(a.id)) a.image = byId.get(a.id);
+      if (!a.image || isBadImage(a.image)) a.image = a.image && !isBadImage(a.image) ? a.image : BRAND_FALLBACK;
+      if (isBadImage(a.image)) a.image = BRAND_FALLBACK;
+    }
+
     cache.articles = articles.slice(0, 1200);
     cache.timestamp = Date.now();
     return cache.articles;
