@@ -22,6 +22,7 @@ interface SEOProps {
   tags?: string[];
   claimReview?: ClaimReviewData;
   robots?: string;
+  hreflang?: string; // e.g., 'en-NG', 'en-GH', 'en' (default)
 }
 
 const SITE_URL = 'https://www.realssanews.com.ng';
@@ -46,6 +47,7 @@ const SEO = ({
   tags = [],
   claimReview,
   robots = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
+  hreflang = 'en-NG', // Default to Nigeria for primary targeting
 }: SEOProps) => {
   // Always prefix with brand for branded search
   const pageTitle = title.includes('RealSSA') ? title : `${title} | ${SITE_NAME}`;
@@ -237,7 +239,10 @@ const SEO = ({
       <meta name="description" content={metaDescription} />
       <meta name="author" content={author} />
       <meta name="robots" content={robots} />
+      {/* ── Hreflang (country-specific targeting) ── */}
       <link rel="canonical" href={canonicalUrl} />
+      <link rel="alternate" hreflang={hreflang} href={canonicalUrl} />
+      <link rel="alternate" hreflang="x-default" href={canonicalUrl} />
 
       {/* ── Google site verification ── */}
       <meta name="google-site-verification" content="Xe8qt4m9V_R2A1CeUU8kluW1ZyqYtoWgFfZVmHsogYY" />
@@ -252,7 +257,7 @@ const SEO = ({
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content={pageTitle} />
       <meta property="og:url" content={canonicalUrl} />
-      <meta property="og:locale" content="en_NG" />
+      <meta property="og:locale" content={hreflang.replace('-', '_')} />
 
       {/* ── Article-specific OG ── */}
       {type === 'article' && publishedTime && (

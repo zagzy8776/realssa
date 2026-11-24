@@ -1798,6 +1798,7 @@ app.get('/article/:id', async (req, res) => {
 </html>`;
 
     res.header('Content-Type', 'text/html; charset=utf-8');
+    res.header('Vary', 'User-Agent'); // CRITICAL: Prevents bot/human cache collision
     return res.status(200).send(html);
   } catch (err) {
     console.error('[Article Pre-renderer Error]:', err);
@@ -7541,8 +7542,13 @@ app.get('/api/location-feed', async (req, res) => {
        LIMIT $2`,
       ['%' + name + '%', limit]
     );
+    // Thin content guard: < 3 headlines = noindex (server-side so Googlebot sees it)
+    const isThinContent = result.rows.length < 3;
     res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600');
-    res.json({ articles: result.rows, location: name, hasCoverage: result.rows.length > 0 });
+    if (isThinContent) {
+      res.setHeader('X-Robots-Tag', 'noindex, follow');
+    }
+    res.json({ articles: result.rows, location: name, hasCoverage: result.rows.length > 0, isThinContent });
   } catch (err) {
     console.error('Location feed error:', err.message);
     res.status(200).json({ articles: [], location: name, hasCoverage: false });

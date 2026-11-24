@@ -6,6 +6,72 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { apiUrl } from '@/lib/api-base';
 
+// Country slug to ISO locale code mapping (hreflang & og:locale)
+const COUNTRY_LOCALE_MAP: Record<string, string> = {
+  'algeria': 'en-DZ',
+  'angola': 'en-AO',
+  'benin': 'en-BJ',
+  'botswana': 'en-BW',
+  'burkina-faso': 'en-BF',
+  'burundi': 'en-BI',
+  'cabo-verde': 'en-CV',
+  'cameroon': 'en-CM',
+  'central-african-republic': 'en-CF',
+  'chad': 'en-TD',
+  'comoros': 'en-KM',
+  'democratic-republic-of-the-congo': 'en-CD',
+  'republic-of-the-congo': 'en-CG',
+  "côte-d'ivoire": 'en-CI',
+  'cote-divoire': 'en-CI',
+  'djibouti': 'en-DJ',
+  'egypt': 'en-EG',
+  'equatorial-guinea': 'en-GQ',
+  'eritrea': 'en-ER',
+  'eswatini': 'en-SZ',
+  'ethiopia': 'en-ET',
+  'gabon': 'en-GA',
+  'the-gambia': 'en-GM',
+  'gambia': 'en-GM',
+  'ghana': 'en-GH',
+  'guinea': 'en-GN',
+  'guinea-bissau': 'en-GW',
+  'kenya': 'en-KE',
+  'lesotho': 'en-LS',
+  'liberia': 'en-LR',
+  'libya': 'en-LY',
+  'madagascar': 'en-MG',
+  'malawi': 'en-MW',
+  'mali': 'en-ML',
+  'mauritania': 'en-MR',
+  'mauritius': 'en-MU',
+  'morocco': 'en-MA',
+  'mozambique': 'en-MZ',
+  'namibia': 'en-NA',
+  'niger': 'en-NE',
+  'nigeria': 'en-NG',
+  'rwanda': 'en-RW',
+  'são-tomé-and-príncipe': 'en-ST',
+  'sao-tome-and-principe': 'en-ST',
+  'senegal': 'en-SN',
+  'seychelles': 'en-SC',
+  'sierra-leone': 'en-SL',
+  'somalia': 'en-SO',
+  'south-africa': 'en-ZA',
+  'south-sudan': 'en-SS',
+  'sudan': 'en-SD',
+  'tanzania': 'en-TZ',
+  'togo': 'en-TG',
+  'tunisia': 'en-TN',
+  'uganda': 'en-UG',
+  'zambia': 'en-ZM',
+  'zimbabwe': 'en-ZW',
+};
+
+function getHreflangForCountry(slug: string): string {
+  const normalizedSlug = slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return COUNTRY_LOCALE_MAP[normalizedSlug] || 'en-NG';
+}
+
 const COUNTRIES = [
   'Algeria','Angola','Benin','Botswana','Burkina Faso','Burundi','Cabo Verde','Cameroon',
   'Central African Republic','Chad','Comoros','Democratic Republic of the Congo','Republic of the Congo',
@@ -50,6 +116,7 @@ export default function LocationHub() {
   const description = locationName
     ? `Latest news, headlines and stories from ${locationName} on RealSSA News.`
     : 'Explore RealSSA News by country, state, city and local government across Africa.';
+  const robots = articles.length < 3 ? 'noindex, follow' : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
 
   if (!locationName) {
     return (
@@ -84,7 +151,8 @@ export default function LocationHub() {
   return (
     <>
       <SEO title={title} description={description} url={`/${type}/${slug}`} section={locationName}
-        robots={loading || articles.length > 0 ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' : 'noindex, follow'} />
+        hreflang={type === 'country' ? getHreflangForCountry(slug) : 'en'}
+        robots={robots} />
       <Header />
       <main className="min-h-screen bg-background px-4 py-8 md:px-8">
         <div className="mx-auto max-w-6xl">
