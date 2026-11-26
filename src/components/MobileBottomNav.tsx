@@ -8,7 +8,6 @@ interface NavTab {
   label: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
   path: string;
-  badge?: number;
   matchPaths?: string[];
 }
 
@@ -77,10 +76,14 @@ const MobileBottomNav = () => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [chatOpen, setChatOpen] = useState(false);
+
   const isHidden = HIDDEN_ROUTES.some(route => pathname.startsWith(route));
-  const activeTab = tabs.find(tab => tab.path === '/'
-    ? pathname === '/'
-    : tab.matchPaths?.some(path => pathname === path || pathname.startsWith(`${path}/`)));
+
+  const activeTab = tabs.find(tab =>
+    tab.path === '/'
+      ? pathname === '/'
+      : tab.matchPaths?.some(path => pathname === path || pathname.startsWith(`${path}/`))
+  );
 
   useEffect(() => {
     setChatOpen(false);
@@ -100,32 +103,35 @@ const MobileBottomNav = () => {
         data-active={isActive}
       >
         <span className="mobile-bottom-nav__icon" aria-hidden="true">
-          <tab.icon size={22} strokeWidth={isActive ? 2.3 : 1.8} />
+          <tab.icon size={22} strokeWidth={isActive ? 2.25 : 1.75} />
         </span>
         <span className="mobile-bottom-nav__label">{tab.label}</span>
       </button>
     );
   };
 
-  // Keep fixed navigation outside application scroll and animation containers.
   return createPortal(
     <>
       <RealSSAChat isOpen={chatOpen} onClose={() => setChatOpen(false)} />
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         <div className="mobile-bottom-nav__items">
           {tabs.slice(0, 2).map(renderTab)}
+
+          {/* Center Assistant — elevated but clean */}
           <button
             type="button"
             className="mobile-bottom-nav__item mobile-bottom-nav__assistant"
             onClick={() => setChatOpen(true)}
             aria-label="Open RealSSA Assistant"
             aria-expanded={chatOpen}
+            data-active={chatOpen}
           >
-            <span className="mobile-bottom-nav__icon" aria-hidden="true">
-              <Sparkles size={22} strokeWidth={2} />
+            <span className="mobile-bottom-nav__assistant-icon" aria-hidden="true">
+              <Sparkles size={20} strokeWidth={2.1} />
             </span>
             <span className="mobile-bottom-nav__label">Assistant</span>
           </button>
+
           {tabs.slice(2).map(renderTab)}
         </div>
       </nav>

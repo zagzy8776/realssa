@@ -6,6 +6,10 @@
   z-index: 9998;
   margin: 0;
   transform: none;
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: hsl(var(--background));
+  border-top: 1px solid hsl(var(--border));
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
 }
 
 @media (min-width: 768px) {
@@ -104,14 +108,12 @@
     border-top: 1px solid hsl(var(--border)) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    box-shadow: 0 -8px 22px rgba(0, 0, 0, 0.12) !important;
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18) !important;
   }
 
   nav[aria-label="Mobile navigation"] button {
-    transition: color 160ms ease, transform 120ms ease;
+    transition: color 140ms ease;
   }
-
-
 }
 
 @media (min-width: 1024px) {
@@ -122,26 +124,25 @@
   }
 }
 
-/* Six equal slots keep every destination in one row, including on small phones. */
-.mobile-bottom-nav {
-  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-}
+/* ──────────────────────────────────────────────
+   Professional bottom nav items
+   ────────────────────────────────────────────── */
 
 .mobile-bottom-nav__items {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  height: 64px;
+  height: 60px;
   max-width: 520px;
   margin-inline: auto;
-  padding-inline: 4px;
+  padding-inline: 2px;
 }
 
-.mobile-bottom-nav .mobile-bottom-nav__item {
+.mobile-bottom-nav__item {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   min-height: 48px;
   padding: 4px 0;
@@ -150,34 +151,73 @@
   background: transparent;
   color: hsl(var(--muted-foreground));
   -webkit-tap-highlight-color: transparent;
+  transition: color 140ms ease;
 }
 
 .mobile-bottom-nav__icon {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 30px;
-  border-radius: 10px;
+  width: 36px;
+  height: 28px;
+  border-radius: 9px;
+  transition: background 140ms ease, color 140ms ease;
 }
 
-.mobile-bottom-nav .mobile-bottom-nav__item[data-active="true"],
-.mobile-bottom-nav .mobile-bottom-nav__assistant[aria-expanded="true"] {
+/* Active state — subtle, professional */
+.mobile-bottom-nav__item[data-active="true"] {
   color: hsl(var(--primary));
 }
 
-.mobile-bottom-nav__item[data-active="true"] .mobile-bottom-nav__icon,
-.mobile-bottom-nav__assistant .mobile-bottom-nav__icon {
+.mobile-bottom-nav__item[data-active="true"] .mobile-bottom-nav__icon {
   background: hsl(var(--primary) / 0.12);
   color: hsl(var(--primary));
-}
-
-.mobile-bottom-nav .mobile-bottom-nav__item svg {
-  transform: none;
 }
 
 .mobile-bottom-nav__label {
   font-size: 10px;
   font-weight: 600;
-  line-height: 16px;
+  line-height: 14px;
+  letter-spacing: 0.01em;
   white-space: nowrap;
+}
+
+/* ─── Assistant center button ───
+   Elevated but restrained. No giant glowing circle.
+   ───────────────────────────────── */
+.mobile-bottom-nav__assistant {
+  position: relative;
+}
+
+.mobile-bottom-nav__assistant-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 4px 14px hsl(var(--primary) / 0.35);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.mobile-bottom-nav__assistant:active .mobile-bottom-nav__assistant-icon,
+.mobile-bottom-nav__assistant[data-active="true"] .mobile-bottom-nav__assistant-icon {
+  transform: scale(0.94);
+  box-shadow: 0 2px 8px hsl(var(--primary) / 0.4);
+}
+
+.mobile-bottom-nav__assistant .mobile-bottom-nav__label {
+  color: hsl(var(--muted-foreground));
+  margin-top: -1px;
+}
+
+.mobile-bottom-nav__assistant[data-active="true"] .mobile-bottom-nav__label {
+  color: hsl(var(--primary));
+}
+
+/* Focus visible for accessibility */
+.mobile-bottom-nav__item:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 10px;
 }
