@@ -1,4 +1,7 @@
-/* Viewport anchoring is independent of Tailwind utility generation and app layout. */
+/* ──────────────────────────────────────────────
+   RealSSA Mobile Bottom Nav — Clean + Motion
+   ────────────────────────────────────────────── */
+
 .mobile-bottom-nav {
   position: fixed;
   inset: auto 0 0;
@@ -9,14 +12,14 @@
   padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   background: hsl(var(--background));
   border-top: 1px solid hsl(var(--border));
-  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.22);
 }
 
 @media (min-width: 768px) {
   .mobile-bottom-nav { display: none; }
 }
 
-/* RealSSA mobile navigation: a clean, solid side drawer + restrained bottom bar. */
+/* Side drawer (kept from previous) */
 @media (max-width: 1023px) {
   header {
     background: hsl(var(--background)) !important;
@@ -102,7 +105,7 @@
     border-top: 1px solid hsl(var(--border)) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18) !important;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.22) !important;
   }
 }
 
@@ -114,10 +117,7 @@
   }
 }
 
-/* ──────────────────────────────────────────────
-   Professional bottom nav + spring motion
-   ────────────────────────────────────────────── */
-
+/* ─── Items grid ─── */
 .mobile-bottom-nav__items {
   position: relative;
   display: grid;
@@ -142,7 +142,7 @@
   background: transparent;
   color: hsl(var(--muted-foreground));
   -webkit-tap-highlight-color: transparent;
-  transition: color 180ms ease;
+  transition: color 160ms ease;
   z-index: 1;
 }
 
@@ -165,22 +165,23 @@
   line-height: 14px;
   letter-spacing: 0.01em;
   white-space: nowrap;
-  transition: color 180ms ease;
 }
 
-/* Sliding active indicator */
+/* Sliding active indicator (thin bar under the tab) */
 .mobile-bottom-nav__indicator {
   position: absolute;
-  bottom: 6px;
+  bottom: 5px;
+  left: 0;
   width: 28px;
   height: 3px;
   border-radius: 99px;
   background: hsl(var(--primary));
   z-index: 0;
   pointer-events: none;
+  will-change: transform;
 }
 
-/* ─── Assistant center button ─── */
+/* ─── Assistant (center) — NO GLOW ─── */
 .mobile-bottom-nav__assistant {
   position: relative;
 }
@@ -188,12 +189,12 @@
 .mobile-bottom-nav__assistant-icon {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
-  box-shadow: 0 4px 14px hsl(var(--primary) / 0.32);
+  /* no box-shadow / no glow */
   will-change: transform;
 }
 
@@ -206,7 +207,7 @@
   color: hsl(var(--primary));
 }
 
-/* Focus visible */
+/* Focus */
 .mobile-bottom-nav__item:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
@@ -215,7 +216,9 @@
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .mobile-bottom-nav__indicator {
+  .mobile-bottom-nav__indicator,
+  .mobile-bottom-nav__icon,
+  .mobile-bottom-nav__assistant-icon {
     transition: none !important;
   }
 }
