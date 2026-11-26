@@ -7,6 +7,12 @@
 const express = require('express');
 const router = express.Router();
 
+const LOG = {
+  info: (m) => console.log(`[AI Routes] ${new Date().toISOString()} ${m}`),
+  warn: (m) => console.warn(`[AI Routes] ${new Date().toISOString()} ${m}`),
+  error: (m) => console.error(`[AI Routes] ${new Date().toISOString()} ${m}`),
+};
+
 const { selectBreakingNow } = require('../services/aiHomepageEditor');
 const { diagnoseFeedFailure, searchReplacementFeed, testFeedCandidate } = require('../services/aiFeedRepairAgent');
 const { checkImage } = require('../services/aiImageSanityChecker');
@@ -15,6 +21,7 @@ const { writeToneMatchedNotification, shouldNotify, optimalSendTime } = require(
 const { investigateStoryCluster } = require('../services/aiInvestigativeAgent');
 const { analyzeEngagement } = require('../services/aiEngagementAnalyst');
 const { fillContentGap } = require('../services/aiContentGapNegotiator');
+const { getOrchestrator } = require('../services/newsPipelineOrchestrator');
 
 /**
  * Inject the pool when the routes are mounted.
@@ -473,6 +480,83 @@ function initRouter(pool) {
                 'aiInvestigativeAgent',
                 'aiEngagementAnalyst',
                 'aiContentGapNegotiator',
+                'sportsBot (existing)',
+                'aiMatchEventDetector (existing sportsBot)'
+            ],
+            gemini_api_key_set: !!process.env.GEMINI_API_KEY,
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    // ── News Pipeline Orchestrator ──────────────────────────────────────────
+    // POST /api/ai/run-pipeline — Run full pipeline on new articles
+    router.post('/run-pipeline', async (req, res) => {
+        try {
+            const { articleIds, options } = req.body;
+            const orchestrator = getOrchestrator(pool);
+
+            // Run asynchronously, return immediately
+            const result = await orchestrator.runFullPipeline(articleIds || [], options || {});
+
+            res.json({ success: true, ...result });
+        } catch (err) {
+            console.error('[AI Route] /run-pipeline error:', err.message);
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // GET /api/ai/pipeline-status — Get pipeline status and stats
+    router.get('/pipeline-status', async (req, res) => {
+        try {
+            const orchestrator = getOrchestrator(pool);
+            const status = await orchestrator.healthCheck();
+            res.json({ success: true, ...status });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // POST /api/ai/trigger-pipeline — Trigger pipeline after feed ingestion (webhook endpoint)
+    router.post('/trigger-pipeline', async (req, res) => {
+        try {
+            const { feedUrl, newArticles, source } = req.body;
+            const orchestrator = getOrchestrator(pool);
+
+            LOG.info(`📥 Pipeline triggered by ${source || 'unknown'} for feed: ${feedUrl}`);
+
+            // Extract article IDs if provided
+            const articleIds = newArticles?.map(a => a.id) || [];
+
+            // Run in background
+            orchestrator.runFullPipeline(articleIds, {
+              processAll: !articleIds.length,
+              runEngagementAnalysis: true
+            }).then(result => {
+              LOG.info(`Pipeline triggered by ${source} completed:`, result.success ? 'SUCCESS' : 'FAILED');
+            }).catch(err => {
+              LOG.error(`Pipeline triggered by ${source} error:`, err.message);
+            });
+
+            res.json({ success: true, message: 'Pipeline triggered', articleCount: articleIds.length });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // Add pipeline to agents list in health check
+    router.get('/health', (req, res) => {
+        res.json({
+            status: 'ok',
+            agents: [
+                'aiHomepageEditor',
+                'aiFeedRepairAgent',
+                'aiImageSanityChecker',
+                'aiWebSearchAgent',
+                'aiNotificationOptimizer',
+                'aiInvestigativeAgent',
+                'aiEngagementAnalyst',
+                'aiContentGapNegotiator',
+                'newsPipelineOrchestrator (NEW)',
                 'sportsBot (existing)',
                 'aiMatchEventDetector (existing sportsBot)'
             ],

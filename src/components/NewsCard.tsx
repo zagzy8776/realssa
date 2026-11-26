@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkCheck, Flame, Heart, Image } from "lucide-react";
+import { Bookmark, BookmarkCheck, Flame, Heart } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -7,6 +7,7 @@ import { useStreak } from "@/hooks/useStreak";
 import { rememberStory } from '@/lib/feedRanking';
 import { logCategoryPreference } from "@/lib/preferences";
 import { decodeHTMLEntities, cleanText } from "@/lib/utils";
+import { ThumbnailImage } from "@/components";
 
 type CategoryType =
   | "afrobeats"
@@ -384,23 +385,16 @@ const NewsCard = ({
               className="relative w-full aspect-[2/1] overflow-hidden flex items-center justify-center"
               style={{ background: 'var(--nr-surface)', borderRadius: 'var(--nr-radius-card) var(--nr-radius-card) 0 0' }}
             >
-              {hasImage ? (
-                <img
-                  src={imgSrc}
-                  alt={title}
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
-                  onError={() => {
-                    if (imgSrc !== CARD_FALLBACK_IMAGE) setCurrentImage(CARD_FALLBACK_IMAGE);
-                    else setImgError(true);
-                  }}
-                />
-              ) : (
-                <div className="flex items-center justify-center w-full h-full" style={{ color: 'var(--nr-text-muted)' }}>
-                  <Image className="w-8 h-8" />
-                </div>
-              )}
+              <ThumbnailImage
+                src={currentImage}
+                alt={title}
+                externalLink={externalLink}
+                articleId={id}
+                fallbackSrc={CARD_FALLBACK_IMAGE}
+                enableHoverZoom={true}
+                loading="lazy"
+                className="transition-transform duration-500 group-hover:scale-102"
+              />
               {showHeartPopup && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none z-10 animate-fade-in">
                   <Heart className="w-12 h-12 text-red-500 fill-red-500 animate-bounce" style={{ animationDuration: '0.5s' }} />
