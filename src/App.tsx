@@ -12,6 +12,7 @@ import KeepAlive from "@/components/KeepAlive";
 import GlobalHooks from "@/components/GlobalHooks";
 import OnboardingTopicSelector from "@/components/OnboardingTopicSelector";
 import { GlobalAudioProvider } from "@/contexts/GlobalAudioContext";
+import { PageTransition } from "@/components/PageTransition";
 
 import Index from "./pages/Index";
 
@@ -89,7 +90,9 @@ const AppLayout = () => (
     <OnboardingTopicSelector />
     <main className="pb-20 md:pb-0 overflow-x-hidden w-full max-w-[100vw]">
       <Suspense fallback={<PageLoader />}>
-        <Outlet />
+        <PageTransition type="fade" enabled={true}>
+          <Outlet />
+        </PageTransition>
       </Suspense>
     </main>
   </>
