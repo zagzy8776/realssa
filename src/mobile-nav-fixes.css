@@ -111,20 +111,7 @@
     transition: color 160ms ease, transform 120ms ease;
   }
 
-  /* Center assistant: recognizable but not a giant glowing toy. */
-  nav[aria-label="Mobile navigation"] button[aria-label="Open RealSSA Assistant"] {
-    width: 44px !important;
-    height: 44px !important;
-    top: -14px !important;
-    border: 2px solid hsl(var(--background));
-    border-radius: 50% !important;
-    background: hsl(var(--primary)) !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
-  }
 
-  nav[aria-label="Mobile navigation"] button[aria-label="Open RealSSA Assistant"] span:last-child {
-    font-size: 6px !important;
-  }
 }
 
 @media (min-width: 1024px) {
@@ -133,4 +120,64 @@
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
+}
+
+/* Six equal slots keep every destination in one row, including on small phones. */
+.mobile-bottom-nav {
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+.mobile-bottom-nav__items {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  height: 64px;
+  max-width: 520px;
+  margin-inline: auto;
+  padding-inline: 4px;
+}
+
+.mobile-bottom-nav .mobile-bottom-nav__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-bottom-nav__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.mobile-bottom-nav .mobile-bottom-nav__item[data-active="true"],
+.mobile-bottom-nav .mobile-bottom-nav__assistant[aria-expanded="true"] {
+  color: hsl(var(--primary));
+}
+
+.mobile-bottom-nav__item[data-active="true"] .mobile-bottom-nav__icon,
+.mobile-bottom-nav__assistant .mobile-bottom-nav__icon {
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+
+.mobile-bottom-nav .mobile-bottom-nav__item svg {
+  transform: none;
+}
+
+.mobile-bottom-nav__label {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
 }
