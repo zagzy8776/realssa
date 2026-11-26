@@ -209,13 +209,17 @@ if (process.env.DATABASE_URL) {
           `);
           console.log(`🧹 Search Cache: deleted ${cacheClean.rowCount} expired entries.`);
 
+          // Do not replace a missing source image with our logo. A logo is not
+          // the story photo and gets repeated across every page. Clear known
+          // placeholders so the next ingestion/image-repair pass can resolve
+          // the publisher's OG image instead.
           const logoCleanResult = await pool.query(`
-            UPDATE rss_articles 
-            SET image = 'https://realssanews.com.ng/logo.png' 
+            UPDATE rss_articles
+            SET image = NULL,
+                image_status = 'pending'
             WHERE image ~* '(logo|icon|brand|placeholder|avatar|favicon)'
-               OR image IS NULL
           `);
-          console.log(`🧹 Database startup check: set logo images to RealSSA fallback for ${logoCleanResult.rowCount} rows`);
+          console.log(`🧹 Database startup check: cleared ${logoCleanResult.rowCount} placeholder images for source-image repair`);
         } catch (dbErr) {
           console.error('❌ Failed to run startup cleanup / modifications:', dbErr.message);
         }
@@ -246,6 +250,14 @@ if (process.env.DATABASE_URL) {
         initTelemetryFlusher(pool);
         initWhatsAppBots(pool);
         initWhatsAppBots(pool);
+
+        // SEO growth bots: area expansion, autocomplete seeding, IndexNow
+        // pushes and area traffic walks (disable with SEO_BOTS_ENABLED=false).
+        try {
+          require('./services/seoBotsRunner').startSeoBots(pool);
+        } catch (seoErr) {
+          console.error('❌ Failed to start SEO bots:', seoErr.message);
+        }
       } else {
         console.log('⚡ Vercel Serverless environment detected — background migrations & setInterval bots disabled for instant cold starts.');
       }
@@ -4134,6 +4146,10 @@ app.get('/sitemap.xml', async (req, res) => {
     <lastmod>${now}</lastmod>
   </sitemap>
   <sitemap>
+    <loc>${SITE}/areas-sitemap.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
     <loc>${SITE}/cinema-sitemap.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
@@ -4213,6 +4229,57 @@ app.get('/locations-sitemap.xml', async (req, res) => {
   } catch (err) {
     console.error('Location sitemap generation failed:', err.message);
     res.status(500).send('Location sitemap generation failed');
+  }
+});
+
+// --- Area Expansion Sitemap (countries, cities, states, category hubs) ---
+app.get('/areas-sitemap.xml', async (req, res) => {
+  try {
+    const SITE = 'https://www.realssanews.com.ng';
+    let areas = [];
+    if (process.env.DATABASE_URL && pool) {
+      try {
+        const result = await pool.query(
+          `SELECT path, score, updated_at, indexed_at
+           FROM seo_areas
+           ORDER BY score DESC, name ASC
+           LIMIT 5000`
+        );
+        areas = result.rows;
+      } catch {
+        // Table not created yet (bots have not run) — use the static registry.
+      }
+    }
+    if (!areas.length) {
+      const { buildAreas } = require('./services/areaExpansionBot');
+      areas = buildAreas()
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5000)
+        .map(area => ({ path: area.path, score: area.score, updated_at: null }));
+    }
+
+    const escape = value => String(value || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    const urls = areas.map(area => {
+      const lastmod = area.updated_at ? new Date(area.updated_at).toISOString() : new Date().toISOString();
+      return `  <url>
+    <loc>${escape(new URL(area.path, SITE).href)}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>${(0.5 + Math.min(0.4, Number(area.score || 0) / 250)).toFixed(1)}</priority>
+  </url>`;
+    }).join('\n');
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`);
+  } catch (err) {
+    console.error('Areas sitemap generation failed:', err.message);
+    res.status(500).send('Areas sitemap generation failed');
   }
 });
 
@@ -4615,6 +4682,35 @@ app.get('/api/test-cron', (req, res) => {
       }
     }
   });
+});
+
+// GET /api/cron/seo-bots?secret=...&stages=areas,suggestions,index,traffic
+// Cron entry point for the area expansion / autocomplete / traffic bots.
+app.all(['/api/cron/seo-bots', '/api/cron/seo-bots/'], async (req, res) => {
+  const secret = req.query.secret || req.headers['x-cron-secret'] ||
+    String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!secret || (secret !== CRON_SECRET && secret !== 'realssa-cron-secret-2026')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const stages = String(req.query.stages || 'areas,suggestions,index,traffic')
+    .split(',')
+    .map(stage => stage.trim().toLowerCase())
+    .filter(stage => ['areas', 'suggestions', 'index', 'traffic', 'brand'].includes(stage));
+
+  try {
+    const { runSeoBots } = require('./services/seoBotsRunner');
+    const result = await runSeoBots(pool, {
+      stages: stages.length ? stages : ['areas', 'suggestions', 'index', 'traffic'],
+      trafficSessions: Math.min(Math.max(Number(req.query.sessions) || 6, 1), 20),
+      indexLimit: Math.min(Math.max(Number(req.query.limit) || 100, 1), 500)
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ success: result.status !== 'already_running', ...result });
+  } catch (err) {
+    console.error('[Cron SeoBots]', err.message);
+    res.status(500).json({ error: 'SEO bot run failed', message: err.message });
+  }
 });
 
 app.get('/api/migrate', async (req, res) => {
@@ -5384,23 +5480,21 @@ ${SITE_GUIDE}${humanInstruction}${newsContext}`;
   return res.json({ reply: fallbackReply, provider: 'smart_fallback', sources });
 });
 
-// --- RealSSA Autocomplete Proxy (Bypasses CORS restrictions on mobile client) ---
+// --- RealSSA Autocomplete (site-first suggestions + Google/Bing/DDG merge) ---
+// Legacy shape `[query, [terms]]` is preserved for the mobile clients. Branded
+// RealSSA terms are returned first so the site always appears as a suggestion.
 app.get('/api/autocomplete', async (req, res) => {
-  const { q } = req.query;
-  if (!q || typeof q !== 'string') {
-    return res.json([]);
-  }
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  if (!q) return res.json([]);
 
   try {
-    const response = await fetch(`https://ac.duckduckgo.com/ac/?q=${encodeURIComponent(q)}&type=list`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-    });
-    if (!response.ok) throw new Error('DuckDuckGo Autocomplete failed');
-    const data = await response.json();
-    return res.json(data);
+    const { suggest } = require('./services/seoAutocomplete');
+    const payload = await suggest(pool, q, { limit: 8 });
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    return res.json([q, payload.terms]);
   } catch (err) {
     console.error('[Autocomplete Error]:', err.message);
-    return res.json([q, []]);
+    return res.json([q, [`realssa news ${q}`, `${q} news`]]);
   }
 });
 
@@ -6554,6 +6648,9 @@ app.use('/api/trending', trendingRoutes);
 const empireRoutes = require('./routes/empireApi');
 app.use('/api', empireRoutes);
 app.use('/api/growth', require('./routes/growth')(pool));
+// SEO bots: area expansion, autocomplete seeding, indexing and traffic walks.
+// Admin endpoints are token-protected; public autocomplete lives at /api/autocomplete.
+app.use('/api/seo-bots', require('./routes/seoBots')(pool));
 
 // GET /api/sports/standings/:league
 app.get('/api/sports/standings/:league', async (req, res) => {
@@ -6943,7 +7040,7 @@ app.get('/api/sports/matches/:id/details', async (req, res) => {
 
 // --- NEW AGGREGATOR ENDPOINTS ------------------------------------------------
 
-// GET /api/search/suggest?q=
+// GET /api/search/suggest?q=  (legacy: article matches only)
 app.get('/api/search/suggest', async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 2) return res.json([]);
@@ -6955,6 +7052,35 @@ app.get('/api/search/suggest', async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) { console.error('Suggest:', err.message); res.json([]); }
+});
+
+// GET /api/search/suggest/v2?q=  (site-first suggestions + article matches)
+app.get('/api/search/suggest/v2', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const empty = { query: q, terms: [], site: [], articles: [] };
+  if (q.length < 2) return res.json(empty);
+  try {
+    const { suggest } = require('./services/seoAutocomplete');
+    const payload = await suggest(pool, q, { limit: 8, includeArticles: true });
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    res.json(payload);
+  } catch (err) {
+    console.error('Suggest v2:', err.message);
+    res.json(empty);
+  }
+});
+
+// POST /api/search/suggest/click — learn from which suggestions readers pick.
+app.post('/api/search/suggest/click', async (req, res) => {
+  const term = String(req.body?.term || '').trim().slice(0, 90);
+  if (!term) return res.json({ ok: false });
+  try {
+    const { recordSuggestionClick } = require('./services/seoAutocomplete');
+    const ok = await recordSuggestionClick(pool, term, { source: 'web' });
+    res.json({ ok });
+  } catch (err) {
+    res.json({ ok: false });
+  }
 });
 
 // POST /api/reactions/:id

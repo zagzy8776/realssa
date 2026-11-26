@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useXPStore } from '@/stores/useXPStore';
 import { useWeather } from '@/hooks/useWeather';
 import { getHistoryMatches } from '@/lib/searchHistory';
+import { trackSuggestionClick } from '@/lib/searchSuggest';
 import RealSSAChat from './RealSSAChat';
 
 const primaryLinks = [
@@ -93,6 +94,7 @@ const Header: React.FC = () => {
   const goSearch = (query: string) => {
     const q = query.trim();
     if (!q) return;
+    trackSuggestionClick(q);
     setSuggestions([]);
     setSearchFocused(false);
     setSearchQuery(q);
@@ -108,24 +110,35 @@ const Header: React.FC = () => {
       return;
     }
     const local = getHistoryMatches(trimmed);
+    const brandedSuggestion: Suggestion = {
+      url: `realssa://search?q=${encodeURIComponent(`realssa news ${trimmed}`)}`,
+      title: `realssa news ${trimmed}`,
+      isSearch: true,
+    };
     const searchSuggestion: Suggestion = {
       url: `realssa://search?q=${encodeURIComponent(trimmed)}`,
       title: `Search RealSSA for “${trimmed}”`,
       isSearch: true,
     };
-    setSuggestions([...local, searchSuggestion]);
+    setSuggestions([brandedSuggestion, ...local, searchSuggestion]);
     searchTimer.current = setTimeout(() => {
       fetch(apiUrl(`/api/autocomplete?q=${encodeURIComponent(trimmed)}`))
         .then(res => (res.ok ? res.json() : []))
         .then(data => {
           const terms = Array.isArray(data?.[1]) ? data[1] : [];
+          const known = new Set([
+            brandedSuggestion.title.toLowerCase(),
+            searchSuggestion.title.toLowerCase(),
+            trimmed.toLowerCase(),
+            ...local.map(item => item.title.toLowerCase())
+          ]);
           const live = terms
-            .filter((term: unknown): term is string => typeof term === 'string' && term.trim() && term.toLowerCase() !== trimmed.toLowerCase())
+            .filter((term: unknown): term is string => typeof term === 'string' && term.trim() && !known.has(term.trim().toLowerCase()))
             .slice(0, 5)
             .map((term: string) => ({ url: `realssa://search?q=${encodeURIComponent(term)}`, title: term, isSearch: true }));
-          setSuggestions([...local, searchSuggestion, ...live]);
+          setSuggestions([brandedSuggestion, ...local, searchSuggestion, ...live]);
         })
-        .catch(() => setSuggestions([...local, searchSuggestion]));
+        .catch(() => setSuggestions([brandedSuggestion, ...local, searchSuggestion]));
     }, 220);
   };
 
@@ -205,7 +218,14 @@ const Header: React.FC = () => {
                       <button
                         key={`${item.title}-${index}`}
                         onMouseDown={e => e.preventDefault()}
-                        onClick={() => item.isSearch ? goSearch(item.title.replace(/^Search RealSSA for \u201c|\u201d$/g, '')) : navigate(`/browser?url=${encodeURIComponent(item.url)}`)}
+                        onClick={() => {
+                          if (item.isSearch) {
+                            goSearch(item.title.replace(/^Search RealSSA for \u201c|\u201d$/g, ''));
+                          } else {
+                            trackSuggestionClick(item.title);
+                            navigate(`/browser?url=${encodeURIComponent(item.url)}`);
+                          }
+                        }}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-foreground hover:bg-muted"
                       >
                         <Search size={14} className="shrink-0 text-primary" />

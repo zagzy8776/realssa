@@ -2,8 +2,15 @@ import { apiUrl } from '@/lib/api-base';
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ExternalLink, Clock, X } from "lucide-react";
+import { Search, ExternalLink, Clock, X, Newspaper } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import {
+  fetchSiteSuggestions,
+  trackSuggestionClick,
+  type ArticleMatch,
+  type SearchSuggestion,
+  type SiteSuggestion
+} from "@/lib/searchSuggest";
 
 interface Article {
   id: string;
@@ -22,7 +29,8 @@ const SearchBar = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [suggestions, setSuggestions] = useState<Article[]>([]);
+  const [siteSuggestions, setSiteSuggestions] = useState<SiteSuggestion[]>([]);
+  const [articleSuggestions, setArticleSuggestions] = useState<ArticleMatch[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,29 +74,36 @@ const SearchBar = () => {
     return () => clearInterval(interval);
   }, [articles]);
 
-  // Autocomplete: debounce 300ms
+  // Autocomplete: debounce 250ms, site-first suggestions + article matches
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const q = e.target.value;
     setQuery(q);
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
-    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (q.trim().length < 2) {
+      setSiteSuggestions([]);
+      setArticleSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
     suggestTimer.current = setTimeout(async () => {
-      try {
-        const res = await fetch(apiUrl(`/api/search/suggest?q=${encodeURIComponent(q)}`));
-        if (res.ok) {
-          const data = await res.json();
-          setSuggestions(Array.isArray(data) ? data.slice(0, 6) : []);
-          setShowSuggestions(true);
-        }
-      } catch { setSuggestions([]); }
-    }, 300);
+      const payload = await fetchSiteSuggestions(q);
+      setSiteSuggestions(payload.site.slice(0, 6));
+      setArticleSuggestions(payload.articles.slice(0, 3));
+      setShowSuggestions(true);
+    }, 250);
+  };
+
+  const goSearch = (term: string) => {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    trackSuggestionClick(trimmed);
+    setShowSuggestions(false);
+    setQuery(trimmed);
+    navigate(`/browser?url=${encodeURIComponent(`realssa://search?q=${encodeURIComponent(trimmed)}`)}`);
   };
 
   const handleSearch = () => {
-    if (query.trim()) {
-      setShowSuggestions(false);
-      navigate(`/browser?url=${encodeURIComponent(`realssa://search?q=${encodeURIComponent(query.trim())}`)}`)
-    }
+    goSearch(query);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -96,13 +111,14 @@ const SearchBar = () => {
     if (e.key === "Escape") setShowSuggestions(false);
   };
 
-  const handleSuggestionClick = (article: Article) => {
-    setShowSuggestions(false);
-    setQuery(article.title);
-    const link = article.externalLink
-      ? `/browser?url=${encodeURIComponent(article.externalLink)}`
-      : `/article/${article.id}`;
-    navigate(link);
+  const handleSuggestionClick = (item: SearchSuggestion) => {
+    if (item.type === 'article') {
+      trackSuggestionClick(item.title);
+      setShowSuggestions(false);
+      navigate(`/article/${item.id}`);
+      return;
+    }
+    goSearch(item.term);
   };
 
   const currentArticle = articles[currentIndex];
@@ -146,10 +162,14 @@ const SearchBar = () => {
           >
             <Search className="w-5 h-5 text-amber-500 shrink-0" />
             <input
+              ref={inputRef}
               type="text"
               placeholder="Search news or paste a direct URL (e.g. www.google.com)..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={handleQueryChange}
+              onKeyDown={handleKeyPress}
+              onFocus={() => { if (query.trim().length >= 2) setShowSuggestions(true); }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 160)}
               className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-base md:text-sm py-1.5 focus:ring-0"
             />
             <button
@@ -159,6 +179,61 @@ const SearchBar = () => {
               ⚡ Search
             </button>
           </form>
+
+          {/* Site-first autocomplete dropdown (always offers RealSSA terms) */}
+          {showSuggestions && (siteSuggestions.length > 0 || articleSuggestions.length > 0) && (
+            <div className="relative z-30 -mt-3 mb-6 overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-2xl">
+              {siteSuggestions.length > 0 && (
+                <>
+                  <p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                    Suggested on RealSSA
+                  </p>
+                  {siteSuggestions.map(suggestion => (
+                    <button
+                      key={`site-${suggestion.term}`}
+                      type="button"
+                      onMouseDown={event => event.preventDefault()}
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-foreground transition-colors hover:bg-amber-500/10 hover:text-amber-600"
+                    >
+                      <Search size={14} className="shrink-0 text-amber-500" />
+                      <span className="truncate">{suggestion.title}</span>
+                      {suggestion.term.includes('realssa') && (
+                        <span className="ml-auto shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-600">
+                          RealSSA
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {articleSuggestions.length > 0 && (
+                <>
+                  <p className="px-3 pb-1 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                    Matching stories
+                  </p>
+                  {articleSuggestions.map(article => (
+                    <button
+                      key={article.id}
+                      type="button"
+                      onMouseDown={event => event.preventDefault()}
+                      onClick={() => handleSuggestionClick(article)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                    >
+                      <Newspaper size={14} className="shrink-0 text-muted-foreground" />
+                      <span className="truncate">{article.title}</span>
+                      {article.category && (
+                        <span className="ml-auto shrink-0 text-[10px] font-bold uppercase text-muted-foreground">
+                          {article.category}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Rotating Headlines */}
           <div className="bg-background rounded-lg p-6 shadow-sm border">
