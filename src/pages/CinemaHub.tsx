@@ -800,13 +800,13 @@ export default function CinemaHub() {
         url={page > 1 ? `/videos?page=${page}` : '/videos'}
         section="Cinema"
       />
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
+    <div className="cinema-hub-shell min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
       <ReadProgressBar />
       <Header />
 
       {/* ── Tab Bar — Floating Glassmorphic Pill ── */}
-      <div className="sticky top-16 z-40 px-4 py-3 flex justify-center pointer-events-none">
-        <div className="pointer-events-auto bg-zinc-950/65 backdrop-blur-2xl border border-white/10 p-1.5 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.1)] flex items-center gap-1 max-w-full overflow-x-auto scrollbar-none">
+      <div className="cinema-primary-nav sticky top-16 z-40 px-4 py-3 flex justify-center pointer-events-none">
+        <div className="cinema-primary-nav__inner pointer-events-auto bg-zinc-950/65 backdrop-blur-2xl border border-white/10 p-1.5 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.1)] flex items-center gap-1 max-w-full overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('movies')}
             className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 select-none ${
@@ -888,7 +888,9 @@ export default function CinemaHub() {
           </div>
 
           {/* Live / Upcoming / Results Toggle */}
-          <div className="flex items-center justify-center gap-2 mb-4">
+          <div className="sports-filter-panel mb-4">
+            <span className="sports-filter-panel__label">Match status</span>
+            <div className="sports-status-tabs">
             {([['All', 'All Fixtures'], ['Live', '● Live Now'], ['Upcoming', 'Upcoming'], ['Results', '✓ Finished']] as const).map(([key, label]) => {
               const isLiveKey = key === 'Live';
               const isResultsKey = key === 'Results';
@@ -896,7 +898,7 @@ export default function CinemaHub() {
                 <button
                   key={key}
                   onClick={() => setSportsTimeFilter(key)}
-                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-black transition-all active:scale-95 border ${
+                  className={`sports-status-tab px-3.5 py-1.5 rounded-full text-[11px] font-black transition-all active:scale-95 border ${
                     sportsTimeFilter === key
                       ? (isLiveKey ? 'bg-red-600 text-white border-red-500' : isResultsKey ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-white text-black border-white')
                       : 'bg-zinc-900/70 text-zinc-400 hover:text-white border-zinc-800'
@@ -906,10 +908,11 @@ export default function CinemaHub() {
                 </button>
               );
             })}
+            </div>
           </div>
 
           {/* Sport Filter Tabs (Pills) */}
-          <div className="flex items-center justify-start sm:justify-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none shrink-0">
+          <div className="sports-type-rail flex items-center justify-start sm:justify-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none shrink-0">
             {['All', 'Football', 'Basketball', 'F1 / Motor', 'Combat', 'Tennis', 'Other'].map(tab => (
               <button
                 key={tab}

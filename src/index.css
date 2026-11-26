@@ -254,6 +254,95 @@
     transform: translateZ(0);
     backface-visibility: hidden;
   }
+
+  /* Page transition utilities */
+  .page-transition-container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* Smooth enter/exit animations for page transitions */
+  .page-enter {
+    animation: pageEnter 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+
+  .page-exit {
+    animation: pageExit 0.25s cubic-bezier(0.55, 0.055, 0.675, 0.19) forwards;
+  }
+
+  @keyframes pageEnter {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes pageExit {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-20px) scale(1.02);
+    }
+  }
+
+  /* Slide transitions */
+  .page-slide-enter-left {
+    animation: slideEnterLeft 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+
+  .page-slide-exit-left {
+    animation: slideExitLeft 0.3s cubic-bezier(0.55, 0.055, 0.675, 0.19) forwards;
+  }
+
+  .page-slide-enter-right {
+    animation: slideEnterRight 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+
+  .page-slide-exit-right {
+    animation: slideExitRight 0.3s cubic-bezier(0.55, 0.055, 0.675, 0.19) forwards;
+  }
+
+  @keyframes slideEnterLeft {
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes slideExitLeft {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(-30px); }
+  }
+
+  @keyframes slideEnterRight {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes slideExitRight {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(30px); }
+  }
+
+  /* Mobile bottom nav styles */
+  .mobile-bottom-nav {
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.95);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .light .mobile-bottom-nav {
+    background: hsl(var(--background) / 0.96);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+  }
 }
 
 /* Animations */
@@ -305,8 +394,20 @@
   .animate-bounce,
   .animate-pulse,
   .animate-shine-sweep,
-  .animate-ticking-pulse {
+  .animate-ticking-pulse,
+  .page-enter,
+  .page-exit,
+  .page-slide-enter-left,
+  .page-slide-exit-left,
+  .page-slide-enter-right,
+  .page-slide-exit-right {
     animation: none !important;
+  }
+
+  /* Disable framer-motion animations too */
+  [data-framer-motion] {
+    animation: none !important;
+    transition: none !important;
   }
 }
 
@@ -829,6 +930,119 @@ api-sports-widget[data-theme="RealSSA"] {
   --teams-logo-size: 24px;
 }
 
+/* Cinema + live sports controls: compact, thumb-friendly mobile hierarchy. */
+.cinema-primary-nav__inner {
+  scrollbar-width: none;
+}
+
+.cinema-primary-nav__inner::-webkit-scrollbar,
+.sports-type-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.sports-filter-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 5px;
+  border: 1px solid rgb(39 39 42);
+  border-radius: 16px;
+  background: rgb(24 24 27 / 0.78);
+}
+
+.sports-filter-panel__label {
+  padding-inline: 9px;
+  color: rgb(161 161 170);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sports-status-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sports-status-tab {
+  min-height: 34px;
+  border-color: transparent;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .cinema-primary-nav {
+    top: 56px;
+    padding: 8px 12px 10px;
+  }
+
+  .cinema-primary-nav__inner {
+    width: 100%;
+    justify-content: space-between;
+    border-radius: 18px;
+    padding: 4px;
+  }
+
+  .cinema-primary-nav__inner > button {
+    min-height: 40px;
+    flex: 1 1 0;
+    justify-content: center;
+    padding-inline: 8px;
+    font-size: 9px;
+    letter-spacing: .06em;
+  }
+
+  .cinema-primary-nav__inner > button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sports-filter-panel {
+    width: 100%;
+    display: block;
+    padding: 6px;
+    border-radius: 18px;
+  }
+
+  .sports-filter-panel__label {
+    display: block;
+    padding: 3px 7px 6px;
+  }
+
+  .sports-status-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .sports-status-tab {
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sports-type-rail {
+    justify-content: flex-start;
+    margin-inline: -4px;
+    padding-inline: 4px;
+    padding-bottom: 12px;
+  }
+
+  .sports-type-rail > button {
+    min-height: 38px;
+    padding-inline: 13px;
+    border: 1px solid rgb(39 39 42);
+    background: rgb(24 24 27 / 0.9);
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════
    REALSSA NEWSROOM DESIGN SYSTEM — "The Newsroom" Redesign
    Editorial dark theme: Guardian × Bloomberg dark mode
@@ -1027,4 +1241,112 @@ api-sports-widget[data-theme="RealSSA"] {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Mobile Bottom Navigation Enhancements ─── */
+.mobile-bottom-nav {
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--background) / 0.95);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.light .mobile-bottom-nav {
+  background: hsl(var(--background) / 0.96);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+}
+
+/* Active tab indicator smooth animation */
+.mobile-bottom-nav [data-active-indicator] {
+  position: absolute;
+  bottom: 8px;
+  height: 3px;
+  border-radius: 2px;
+  background: hsl(var(--primary));
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Tab icon scale animation on activation */
+.mobile-bottom-nav button:has([data-active-indicator]) svg {
+  transition: stroke-width 0.2s ease, transform 0.2s ease;
+}
+
+.mobile-bottom-nav button[data-active="true"] svg {
+  stroke-width: 2.5;
+  transform: scale(1.1);
+}
+
+/* FAB pulse animation */
+@keyframes fabPulse {
+  0%, 100% { box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 8px 32px rgba(245, 158, 11, 0.6), 0 0 0 4px rgba(245, 158, 11, 0.2); }
+}
+
+.mobile-bottom-nav .fab-main {
+  animation: fabPulse 2s ease-in-out infinite;
+}
+
+/* Reduced motion for bottom nav */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-bottom-nav [data-active-indicator] {
+    transition: none;
+  }
+  .mobile-bottom-nav button:has([data-active-indicator]) svg {
+    transition: none;
+  }
+  .mobile-bottom-nav .fab-main {
+    animation: none;
+  }
+  .fab-menu-item {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Fab menu items stagger animation */
+.fab-menu-item {
+  opacity: 0;
+  transform: translateY(20px) scale(0.9);
+  animation: fabMenuEnter 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes fabMenuEnter {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Ensure proper touch targets on mobile */
+@media (max-width: 768px) {
+  .mobile-bottom-nav button {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  .mobile-bottom-nav .fab-main {
+    min-height: 56px;
+    min-width: 56px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .mobile-bottom-nav {
+    border-top-width: 2px;
+  }
+
+  .mobile-bottom-nav button[data-active="true"] {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+  }
+}
+
+/* Focus visible for keyboard navigation */
+.mobile-bottom-nav button:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 8px;
 }
