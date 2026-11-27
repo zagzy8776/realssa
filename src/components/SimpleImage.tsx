@@ -1,3 +1,4 @@
+import { optimizeImageUrl } from '@/lib/image';
 import { useState, useEffect } from 'react';
 
 interface SimpleImageProps {
@@ -19,12 +20,12 @@ const SimpleImage: React.FC<SimpleImageProps> = ({
   loading = 'lazy',
   priority = false
 }) => {
-  const [imageSrc, setImageSrc] = useState(src);
+  const [imageSrc, setImageSrc] = useState(() => optimizeImageUrl(src, 'card'));
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
-    setImageSrc(src);
+    setImageSrc(optimizeImageUrl(src, 'card'));
     setIsLoaded(false);
     setHasError(false);
   }, [src]);

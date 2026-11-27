@@ -2,6 +2,7 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Image as LucideImage, Loader2, RefreshCw } from 'lucide-react';
+import { optimizeImageUrl, type ImageSize } from '@/lib/image';
 
 interface NewsImageProps {
   src: string | null | undefined;
@@ -22,6 +23,8 @@ interface NewsImageProps {
   imageRecoveryEndpoint?: string; // API endpoint for image recovery
   articleId?: string;
   externalLink?: string;
+  /** Resize tier for the image proxy (card default) */
+  size?: ImageSize;
 }
 
 const DEFAULT_FALLBACK = '/logo.png';
@@ -63,6 +66,7 @@ export const NewsImage = ({
   imageRecoveryEndpoint = '/api/extract',
   articleId,
   externalLink,
+  size = 'card',
 }: NewsImageProps) => {
   const [currentSrc, setCurrentSrc] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,16 +93,16 @@ export const NewsImage = ({
     ([y, scale, rx, ry]) => `translate3d(0, ${y}px, 0) scale(${scale}) rotateX(${rx}deg) rotateY(${ry}deg)`
   );
 
-  // Determine initial source
+  // Determine initial source — always go through image proxy for remote URLs
   useEffect(() => {
     if (src && !isLogoOrPlaceholder(src)) {
-      setCurrentSrc(src);
+      setCurrentSrc(optimizeImageUrl(src, size));
       setHasError(false);
     } else {
       setCurrentSrc(null); // Will trigger recovery or fallback
     }
     setIsLoading(true);
-  }, [src]);
+  }, [src, size]);
 
   // Attempt image recovery from article URL
   const attemptImageRecovery = useCallback(async () => {
@@ -121,7 +125,7 @@ export const NewsImage = ({
         const data = await response.json();
         const found = data?.image;
         if (found && !isLogoOrPlaceholder(found)) {
-          setCurrentSrc(found);
+          setCurrentSrc(optimizeImageUrl(found, size));
           setHasError(false);
           setIsLoading(true); // Reload with new src
           return;
@@ -270,6 +274,8 @@ export const NewsImage = ({
           alt={alt}
           loading={loading}
           decoding="async"
+          // @ts-expect-error fetchPriority is valid in modern browsers
+          fetchPriority={priority ? "high" : "auto"}
           className={cn(
             'absolute inset-0 w-full h-full transition-opacity duration-300',
             isLoading ? 'opacity-0' : 'opacity-100',
@@ -325,6 +331,7 @@ export const HeroImage = ({
       enableHoverZoom={true}
       priority={true}
       loading="eager"
+      size="hero"
       {...props}
     />
   );
@@ -350,6 +357,7 @@ export const ThumbnailImage = ({
       enableHoverZoom={true}
       enableParallax={false}
       loading="lazy"
+      size="card"
       {...props}
     />
   );

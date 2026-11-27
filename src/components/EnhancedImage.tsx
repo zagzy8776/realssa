@@ -1,3 +1,4 @@
+import { optimizeImageUrl } from '@/lib/image';
 import { useState, useRef, useEffect } from 'react';
 
 interface EnhancedImageProps {
@@ -29,7 +30,7 @@ const EnhancedImage: React.FC<EnhancedImageProps> = ({
   onError,
   priority = false
 }) => {
-  const [imageSrc, setImageSrc] = useState<string | null>(priority ? src : null);
+  const [imageSrc, setImageSrc] = useState<string | null>(priority ? optimizeImageUrl(src, 'card') : null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isInView, setIsInView] = useState(priority);

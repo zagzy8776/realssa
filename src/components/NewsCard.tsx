@@ -8,6 +8,7 @@ import { rememberStory } from '@/lib/feedRanking';
 import { logCategoryPreference } from "@/lib/preferences";
 import { decodeHTMLEntities, cleanText } from "@/lib/utils";
 import { ThumbnailImage } from "@/components";
+import { optimizeImageUrl } from "@/lib/image";
 
 type CategoryType =
   | "afrobeats"
@@ -227,7 +228,10 @@ const NewsCard = ({
     return /(logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo)/i.test(url);
   };
 
-  const resolveCardImage = (url?: string) => (!url || isLogoPattern(url) ? CARD_FALLBACK_IMAGE : url);
+  const resolveCardImage = (url?: string) => {
+    if (!url || isLogoPattern(url)) return CARD_FALLBACK_IMAGE;
+    return optimizeImageUrl(url, 'card');
+  };
   const [currentImage, setCurrentImage] = useState(() => resolveCardImage(image));
   const [imageRecovered, setImageRecovered] = useState(false);
 
@@ -254,7 +258,7 @@ const NewsCard = ({
         const data = await res.json();
         const found = data?.image;
         if (!cancelled && found && !isLogoPattern(found)) {
-          setCurrentImage(found);
+          setCurrentImage(optimizeImageUrl(found, 'card'));
           setImgError(false);
           setImageRecovered(true);
         }
