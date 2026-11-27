@@ -7,7 +7,7 @@ import { useStreak } from "@/hooks/useStreak";
 import { rememberStory } from '@/lib/feedRanking';
 import { logCategoryPreference } from "@/lib/preferences";
 import { decodeHTMLEntities, cleanText } from "@/lib/utils";
-import { ThumbnailImage } from "@/components";
+import CardImage from "@/components/CardImage";
 
 type CategoryType =
   | "afrobeats"
@@ -388,15 +388,10 @@ const NewsCard = ({
               className="relative w-full aspect-[2/1] overflow-hidden flex items-center justify-center"
               style={{ background: 'var(--nr-surface)', borderRadius: 'var(--nr-radius-card) var(--nr-radius-card) 0 0' }}
             >
-              <ThumbnailImage
-                src={currentImage}
+              <CardImage
+                src={currentImage && currentImage !== CARD_FALLBACK_IMAGE ? currentImage : (image || null)}
                 alt={title}
-                externalLink={externalLink}
-                articleId={id}
-                fallbackSrc={CARD_FALLBACK_IMAGE}
-                enableHoverZoom={true}
-                loading="lazy"
-                className="transition-transform duration-500 group-hover:scale-102"
+                className="transition-transform duration-500 group-hover:scale-[1.02]"
               />
               {showHeartPopup && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none z-10 animate-fade-in">
