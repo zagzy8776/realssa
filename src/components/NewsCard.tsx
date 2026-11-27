@@ -379,17 +379,17 @@ const NewsCard = ({
     <article
       ref={cardRef}
       className="group nr-card overflow-hidden w-full relative"
-      style={{ borderRadius: 'var(--nr-radius-card)', touchAction: 'manipulation', contentVisibility: 'auto', containIntrinsicSize: '420px' }}
+      style={{ borderRadius: 'var(--nr-radius-card)', touchAction: 'manipulation' }}
     >
       <div className="flex flex-col w-full">
         <div className="w-full">
           <Link to={linkTo} onClick={handleImageClick} className="block w-full">
             <div
-              className="relative w-full aspect-[2/1] overflow-hidden flex items-center justify-center"
-              style={{ background: 'var(--nr-surface)', borderRadius: 'var(--nr-radius-card) var(--nr-radius-card) 0 0' }}
+              className="relative w-full aspect-[2/1] overflow-hidden bg-zinc-900"
+              style={{ borderRadius: 'var(--nr-radius-card) var(--nr-radius-card) 0 0' }}
             >
               <CardImage
-                src={currentImage && currentImage !== CARD_FALLBACK_IMAGE ? currentImage : (image || null)}
+                src={(image && image !== CARD_FALLBACK_IMAGE ? image : null) || (currentImage !== CARD_FALLBACK_IMAGE ? currentImage : null)}
                 alt={title}
                 className="transition-transform duration-500 group-hover:scale-[1.02]"
               />

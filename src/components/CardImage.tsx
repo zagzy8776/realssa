@@ -5,15 +5,13 @@ interface CardImageProps {
   src?: string | null;
   alt: string;
   className?: string;
-  /** Prefer original URL first (like Hero) for speed; cascade on error */
   preferOriginal?: boolean;
 }
 
 /**
- * Lightweight card image — same reliability model as HeroSection.
- * 1) Try original (referrerPolicy=no-referrer)
- * 2) Then CDN / engine proxies from imageCandidates
- * 3) Never leave a pure-black hole: soft gradient fallback
+ * Fills parent (must be position:relative + aspect-ratio).
+ * Uses absolute inset-0 so height never collapses before the image loads
+ * (the old w-full/h-full flex child bug left Discover Feed cards blank).
  */
 export default function CardImage({
   src,
@@ -39,9 +37,8 @@ export default function CardImage({
       return;
     }
 
-    const proxied = imageCandidates(src, 'card');
-    // Original first (hero-style) — often works and is fastest when CDN is cold
     const original = src.startsWith('//') ? `https:${src}` : src;
+    const proxied = imageCandidates(original, 'card');
     const list = preferOriginal
       ? [original, ...proxied.filter((u) => u !== original)]
       : proxied.length
@@ -65,10 +62,11 @@ export default function CardImage({
     setFailed(true);
   };
 
+  // Always fill the aspect-ratio parent
   if (failed || !current) {
     return (
       <div
-        className={`w-full h-full min-h-[120px] bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950 ${className}`}
+        className={`absolute inset-0 bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950 ${className}`}
         aria-hidden
       />
     );
@@ -78,8 +76,8 @@ export default function CardImage({
     <img
       src={current}
       alt={alt}
-      className={`w-full h-full object-cover transition-opacity duration-300 ${
-        loaded ? 'opacity-100' : 'opacity-70'
+      className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+        loaded ? 'opacity-100' : 'opacity-80'
       } ${className}`}
       loading="lazy"
       decoding="async"
