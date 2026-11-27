@@ -1,145 +1,150 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Outlet, useLocation } from 'react-router-dom';
-import { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { Outlet, useLocation, useNavigationType } from "react-router-dom";
 
 /**
- * Page transition variants for different transition types
+ * Modern page transitions for RealSSA
+ * - Direction-aware slide (forward / back)
+ * - Soft fade + lift for same-level routes
+ * - Respects prefers-reduced-motion
+ * - Shared layout chrome stays outside this wrapper
  */
-const pageVariants = {
-  initial: {
-    opacity: 0,
-    y: 20,
-    scale: 0.98,
-  },
+
+const EASE_OUT = [0.22, 1, 0.36, 1] as const;
+const EASE_IN = [0.4, 0, 1, 1] as const;
+
+type Direction = "forward" | "back" | "none";
+
+function pathDepth(path: string) {
+  return path.split("/").filter(Boolean).length;
+}
+
+function getDirection(
+  from: string,
+  to: string,
+  navType: "POP" | "PUSH" | "REPLACE"
+): Direction {
+  if (navType === "POP") return "back";
+  if (navType === "REPLACE") return "none";
+
+  const fromDepth = pathDepth(from);
+  const toDepth = pathDepth(to);
+
+  if (to === "/" && from !== "/") return "back";
+  if (from === "/" && to !== "/") return "forward";
+
+  if (toDepth > fromDepth) return "forward";
+  if (toDepth < fromDepth) return "back";
+  return "none";
+}
+
+const fadeLift = {
+  initial: { opacity: 0, y: 14, filter: "blur(4px)" },
   enter: {
     opacity: 1,
     y: 0,
-    scale: 1,
-    transition: {
-      duration: 0.35,
-      ease: [0.25, 0.46, 0.45, 0.94], // Custom cubic-bezier for natural feel
-    },
+    filter: "blur(0px)",
+    transition: { duration: 0.38, ease: EASE_OUT },
   },
   exit: {
     opacity: 0,
-    y: -20,
-    scale: 1.02,
-    transition: {
-      duration: 0.25,
-      ease: [0.55, 0.055, 0.675, 0.19],
-    },
+    y: -10,
+    filter: "blur(3px)",
+    transition: { duration: 0.22, ease: EASE_IN },
   },
 };
 
-/**
- * Slide transition variants (horizontal slide based on navigation direction)
- */
-const slideVariants = (direction: 'left' | 'right') => ({
-  initial: {
-    opacity: 0,
-    x: direction === 'left' ? 30 : -30,
-  },
+const slideForward = {
+  initial: { opacity: 0, x: 28 },
   enter: {
     opacity: 1,
     x: 0,
-    transition: {
-      duration: 0.4,
-      ease: [0.25, 0.46, 0.45, 0.94],
-    },
+    transition: { duration: 0.4, ease: EASE_OUT },
   },
   exit: {
     opacity: 0,
-    x: direction === 'left' ? -30 : 30,
-    transition: {
-      duration: 0.3,
-      ease: [0.55, 0.055, 0.675, 0.19],
-    },
-  },
-});
-
-/**
- * Fade + scale transition for modals/overlays
- */
-const fadeScaleVariants = {
-  initial: { opacity: 0, scale: 0.95 },
-  enter: {
-    opacity: 1,
-    scale: 1,
-    transition: { duration: 0.2, ease: 'easeOut' }
-  },
-  exit: {
-    opacity: 0,
-    scale: 0.95,
-    transition: { duration: 0.15, ease: 'easeIn' }
+    x: -18,
+    transition: { duration: 0.24, ease: EASE_IN },
   },
 };
 
-/**
- * Determines navigation direction based on path depth
- * Deeper paths = forward (slide left), shallower = back (slide right)
- */
-function getNavigationDirection(fromPath: string, toPath: string): 'left' | 'right' {
-  const fromDepth = fromPath.split('/').filter(Boolean).length;
-  const toDepth = toPath.split('/').filter(Boolean).length;
+const slideBack = {
+  initial: { opacity: 0, x: -28 },
+  enter: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.4, ease: EASE_OUT },
+  },
+  exit: {
+    opacity: 0,
+    x: 18,
+    transition: { duration: 0.24, ease: EASE_IN },
+  },
+};
 
-  // Special cases for known navigation patterns
-  if (fromPath === '/' && toPath !== '/') return 'left';
-  if (toPath === '/' && fromPath !== '/') return 'right';
-
-  return toDepth > fromDepth ? 'left' : 'right';
-}
+const reduced = {
+  initial: { opacity: 0 },
+  enter: { opacity: 1, transition: { duration: 0.15 } },
+  exit: { opacity: 0, transition: { duration: 0.1 } },
+};
 
 interface PageTransitionProps {
-  /** Transition type: 'fade' | 'slide' | 'fadeScale' */
-  type?: 'fade' | 'slide' | 'fadeScale';
-  /** Custom className for the container */
+  /** "auto" picks slide vs fade from navigation direction */
+  type?: "auto" | "fade" | "slide" | "fadeScale";
   className?: string;
-  /** Whether to enable transitions (can be disabled for specific routes) */
   enabled?: boolean;
 }
 
 export const PageTransition = ({
-  type = 'fade',
-  className = '',
+  type = "auto",
+  className = "",
   enabled = true,
 }: PageTransitionProps) => {
   const location = useLocation();
-  const pathname = location.pathname;
+  const navType = useNavigationType();
+  const prefersReduced = useReducedMotion();
+  const prevPath = useRef(location.pathname);
 
-  // Memoize the direction to prevent unnecessary recalculations
   const direction = useMemo(() => {
-    // We can't easily get previous location in React Router v6 without extra setup
-    // For now, we'll use path depth as a heuristic
-    return 'left';
-  }, [pathname]);
+    return getDirection(prevPath.current, location.pathname, navType);
+  }, [location.pathname, navType]);
 
-  // Select variants based on type
+  useEffect(() => {
+    prevPath.current = location.pathname;
+  }, [location.pathname]);
+
   const variants = useMemo(() => {
-    switch (type) {
-      case 'slide':
-        return slideVariants(direction);
-      case 'fadeScale':
-        return fadeScaleVariants;
-      default:
-        return pageVariants;
+    if (prefersReduced) return reduced;
+
+    if (type === "fade" || type === "fadeScale") return fadeLift;
+    if (type === "slide") {
+      return direction === "back" ? slideBack : slideForward;
     }
-  }, [type, direction]);
+
+    // auto
+    if (direction === "forward") return slideForward;
+    if (direction === "back") return slideBack;
+    return fadeLift;
+  }, [type, direction, prefersReduced]);
 
   if (!enabled) {
     return <Outlet />;
   }
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="wait" initial={false}>
       <motion.div
-        key={pathname}
+        key={location.pathname}
         initial="initial"
         animate="enter"
         exit="exit"
         variants={variants}
-        className={`w-full ${className}`}
-        style={{ position: 'relative', width: '100%' }}
+        className={`w-full min-h-[50vh] ${className}`}
+        style={{
+          position: "relative",
+          width: "100%",
+          willChange: "opacity, transform",
+        }}
       >
         <Outlet />
       </motion.div>
@@ -148,19 +153,21 @@ export const PageTransition = ({
 };
 
 /**
- * Layout-level transition wrapper that provides shared layout animations
- * Use this at the router level for shared element transitions
+ * Shared layout wrapper for elements that should morph between routes
  */
 export const PageTransitionLayout = ({
   children,
-  className = '',
-}: { children: React.ReactNode; className?: string }) => {
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => {
   return (
     <motion.div
       className={className}
       layout
-      transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-      style={{ width: '100%' }}
+      transition={{ duration: 0.35, ease: EASE_OUT }}
+      style={{ width: "100%" }}
     >
       {children}
     </motion.div>
@@ -168,66 +175,64 @@ export const PageTransitionLayout = ({
 };
 
 /**
- * Hook to track navigation direction for smarter transitions
+ * Hook: current navigation direction for custom UI
  */
-export function useNavigationDirection() {
+export function useNavigationDirection(): Direction {
   const location = useLocation();
-  const prevPathRef = React.useRef<string>('/');
-  const directionRef = React.useRef<'left' | 'right'>('left');
+  const navType = useNavigationType();
+  const prev = useRef(location.pathname);
+  const dir = useRef<Direction>("none");
 
-  React.useEffect(() => {
-    const currentPath = location.pathname;
-    directionRef.current = getNavigationDirection(prevPathRef.current, currentPath);
-    prevPathRef.current = currentPath;
-  }, [location.pathname]);
+  useEffect(() => {
+    dir.current = getDirection(prev.current, location.pathname, navType);
+    prev.current = location.pathname;
+  }, [location.pathname, navType]);
 
-  return directionRef.current;
+  return dir.current;
 }
 
-// Need to import React for the hook
-import React from 'react';
-
-/**
- * Staggered children animation for lists/grids entering with page
- */
+/** Stagger helpers for list / card grids inside a page */
 export const staggerContainer = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.1,
+      staggerChildren: 0.06,
+      delayChildren: 0.08,
     },
   },
 };
 
 export const staggerItem = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 16 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] },
+    transition: { duration: 0.4, ease: EASE_OUT },
   },
 };
 
 /**
- * Page transition with staggered children for content-heavy pages
+ * Optional: wrap page content so children stagger in after the route transition
  */
 export const StaggeredPageTransition = ({
-  className = '',
-}: { className?: string }) => {
+  className = "",
+}: {
+  className?: string;
+}) => {
   const location = useLocation();
+  const prefersReduced = useReducedMotion();
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="wait" initial={false}>
       <motion.div
         key={location.pathname}
-        variants={staggerContainer}
+        variants={prefersReduced ? reduced : staggerContainer}
         initial="hidden"
         animate="show"
         exit="hidden"
         className={`w-full ${className}`}
-        style={{ position: 'relative', width: '100%' }}
+        style={{ position: "relative", width: "100%" }}
       >
         <Outlet />
       </motion.div>

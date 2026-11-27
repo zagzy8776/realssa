@@ -90,9 +90,8 @@ const AppLayout = () => (
     <OnboardingTopicSelector />
     <main className="pb-20 md:pb-0 overflow-x-hidden w-full max-w-[100vw]">
       <Suspense fallback={<PageLoader />}>
-        <PageTransition type="fade" enabled={true}>
-          <Outlet />
-        </PageTransition>
+        {/* auto = direction-aware slide + soft fade; chrome stays outside */}
+        <PageTransition type="auto" enabled={true} />
       </Suspense>
     </main>
   </>

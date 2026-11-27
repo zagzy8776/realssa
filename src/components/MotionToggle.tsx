@@ -322,7 +322,7 @@ export const StaggeredList = ({
     show: {
       opacity: 1,
       [direction]: 0,
-      transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] },
+      transition: { duration: 0.42, ease: [0.22, 1, 0.36, 1] },
     },
   };
 
@@ -370,8 +370,9 @@ export const MotionCard = ({
         onClick && 'cursor-pointer',
         className
       )}
-      whileHover={{ scale: hoverScale, y: -4, boxShadow: elevated ? '0 20px 40px -10px rgba(0,0,0,0.3)' : '0 10px 30px -5px rgba(0,0,0,0.2)' }}
+      whileHover={{ scale: hoverScale, y: -6, boxShadow: elevated ? '0 24px 48px -12px rgba(0,0,0,0.35)' : '0 14px 36px -8px rgba(0,0,0,0.22)' }}
       whileTap={{ scale: tapScale }}
+      transition={{ type: 'spring', stiffness: 420, damping: 28 }}
       onClick={onClick}
       style={{ willChange: 'transform, box-shadow' }}
     >

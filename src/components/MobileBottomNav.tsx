@@ -28,7 +28,7 @@ const HIDDEN_ROUTES = [
   '/local-government', '/ads', '/download', '/login',
 ];
 
-const spring = { type: 'spring' as const, stiffness: 600, damping: 28, mass: 0.55 };
+const spring = { type: 'spring' as const, stiffness: 480, damping: 32, mass: 0.6 };
 
 const MobileBottomNav = () => {
   const { pathname } = useLocation();
