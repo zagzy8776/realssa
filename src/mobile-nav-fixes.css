@@ -1,5 +1,5 @@
 /* ──────────────────────────────────────────────
-   RealSSA Mobile Bottom Nav — zero glow, strong motion
+   RealSSA Mobile Bottom Nav — clean, no glow
    ────────────────────────────────────────────── */
 
 .mobile-bottom-nav {
@@ -18,7 +18,6 @@
   .mobile-bottom-nav { display: none; }
 }
 
-/* drawer styles kept */
 @media (max-width: 1023px) {
   header {
     background: hsl(var(--background)) !important;
@@ -109,7 +108,6 @@
   }
 }
 
-/* grid */
 .mobile-bottom-nav__items {
   position: relative;
   display: grid;
@@ -159,7 +157,7 @@
   white-space: nowrap;
 }
 
-/* thin sliding indicator */
+/* sliding indicator */
 .mobile-bottom-nav__indicator {
   position: absolute;
   bottom: 5px;
@@ -173,42 +171,11 @@
   will-change: transform;
 }
 
-/* ─── Assistant — ZERO GLOW ─── */
-.mobile-bottom-nav__assistant {
-  position: relative;
-}
-
-.mobile-bottom-nav__assistant-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
-  box-shadow: none !important;
-  filter: none !important;
-  outline: none !important;
-  will-change: transform;
-}
-
-/* kill any possible glow from parent or theme */
-.mobile-bottom-nav__assistant-icon::before,
-.mobile-bottom-nav__assistant-icon::after {
-  display: none !important;
-  content: none !important;
-}
-
-.mobile-bottom-nav__assistant .mobile-bottom-nav__label {
-  color: hsl(var(--muted-foreground));
-  margin-top: -1px;
-}
-
-.mobile-bottom-nav__assistant[data-active="true"] .mobile-bottom-nav__label {
+/* Assistant now looks exactly like other tabs — no solid disc, no glow */
+.mobile-bottom-nav__assistant[data-active="true"] {
   color: hsl(var(--primary));
 }
 
-/* focus */
 .mobile-bottom-nav__item:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
@@ -217,8 +184,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .mobile-bottom-nav__indicator,
-  .mobile-bottom-nav__icon,
-  .mobile-bottom-nav__assistant-icon {
+  .mobile-bottom-nav__icon {
     transition: none !important;
   }
 }

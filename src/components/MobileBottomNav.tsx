@@ -42,7 +42,6 @@ const MobileBottomNav = () => {
     tab.path === '/' ? pathname === '/' : tab.matchPaths?.some(p => pathname === p || pathname.startsWith(`${p}/`))
   );
 
-  // slots: 0 Home, 1 Cinema, 2 Assistant, 3 For You, 4 Trending, 5 Profile
   const indicatorSlot = activeIndex < 0 ? 0 : activeIndex < 2 ? activeIndex : activeIndex + 1;
 
   useEffect(() => { setChatOpen(false); }, [pathname]);
@@ -88,7 +87,6 @@ const MobileBottomNav = () => {
       <RealSSAChat isOpen={chatOpen} onClose={() => setChatOpen(false)} />
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         <div className="mobile-bottom-nav__items">
-          {/* sliding indicator */}
           {activeIndex >= 0 && (
             <motion.div
               className="mobile-bottom-nav__indicator"
@@ -101,7 +99,7 @@ const MobileBottomNav = () => {
           <Tab tab={tabs[0]} />
           <Tab tab={tabs[1]} />
 
-          {/* Assistant — solid, zero glow */}
+          {/* Assistant — same visual weight as other tabs, no solid disc, no glow */}
           <button
             type="button"
             className="mobile-bottom-nav__item mobile-bottom-nav__assistant"
@@ -111,13 +109,16 @@ const MobileBottomNav = () => {
             data-active={chatOpen}
           >
             <motion.span
-              className="mobile-bottom-nav__assistant-icon"
+              className="mobile-bottom-nav__icon"
               aria-hidden
-              animate={{ scale: chatOpen ? 0.88 : 1 }}
-              whileTap={{ scale: 0.78 }}
+              animate={{
+                scale: chatOpen ? 1.12 : 1,
+                y: chatOpen ? -2 : 0,
+              }}
+              whileTap={{ scale: 0.72 }}
               transition={spring}
             >
-              <Bot size={20} strokeWidth={2.2} />
+              <Bot size={22} strokeWidth={chatOpen ? 2.4 : 1.7} />
             </motion.span>
             <span className="mobile-bottom-nav__label">Assistant</span>
           </button>
