@@ -1,5 +1,5 @@
 /* ──────────────────────────────────────────────
-   RealSSA Mobile Bottom Nav — Clean + Motion
+   RealSSA Mobile Bottom Nav — zero glow, strong motion
    ────────────────────────────────────────────── */
 
 .mobile-bottom-nav {
@@ -8,18 +8,17 @@
   width: 100%;
   z-index: 9998;
   margin: 0;
-  transform: none;
   padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   background: hsl(var(--background));
   border-top: 1px solid hsl(var(--border));
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.25);
 }
 
 @media (min-width: 768px) {
   .mobile-bottom-nav { display: none; }
 }
 
-/* Side drawer (kept from previous) */
+/* drawer styles kept */
 @media (max-width: 1023px) {
   header {
     background: hsl(var(--background)) !important;
@@ -71,9 +70,7 @@
     padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   }
 
-  header > div[class*="border-t"][class*="bg-background"] .grid {
-    gap: 0.25rem;
-  }
+  header > div[class*="border-t"][class*="bg-background"] .grid { gap: 0.25rem; }
 
   header > div[class*="border-t"][class*="bg-background"] a,
   header > div[class*="border-t"][class*="bg-background"] button,
@@ -82,13 +79,8 @@
     box-shadow: none;
   }
 
-  header > div[class*="border-t"][class*="bg-background"] a {
-    background: transparent;
-  }
-
-  header > div[class*="border-t"][class*="bg-background"] a:hover {
-    background: hsl(var(--muted));
-  }
+  header > div[class*="border-t"][class*="bg-background"] a { background: transparent; }
+  header > div[class*="border-t"][class*="bg-background"] a:hover { background: hsl(var(--muted)); }
 
   header > div[class*="border-t"][class*="bg-background"] a.col-span-2 {
     margin-bottom: 0.35rem;
@@ -105,7 +97,7 @@
     border-top: 1px solid hsl(var(--border)) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.22) !important;
+    box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.25) !important;
   }
 }
 
@@ -117,7 +109,7 @@
   }
 }
 
-/* ─── Items grid ─── */
+/* grid */
 .mobile-bottom-nav__items {
   position: relative;
   display: grid;
@@ -142,7 +134,7 @@
   background: transparent;
   color: hsl(var(--muted-foreground));
   -webkit-tap-highlight-color: transparent;
-  transition: color 160ms ease;
+  transition: color 140ms ease;
   z-index: 1;
 }
 
@@ -167,7 +159,7 @@
   white-space: nowrap;
 }
 
-/* Sliding active indicator (thin bar under the tab) */
+/* thin sliding indicator */
 .mobile-bottom-nav__indicator {
   position: absolute;
   bottom: 5px;
@@ -181,7 +173,7 @@
   will-change: transform;
 }
 
-/* ─── Assistant (center) — NO GLOW ─── */
+/* ─── Assistant — ZERO GLOW ─── */
 .mobile-bottom-nav__assistant {
   position: relative;
 }
@@ -192,10 +184,19 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  /* no box-shadow / no glow */
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  outline: none !important;
   will-change: transform;
+}
+
+/* kill any possible glow from parent or theme */
+.mobile-bottom-nav__assistant-icon::before,
+.mobile-bottom-nav__assistant-icon::after {
+  display: none !important;
+  content: none !important;
 }
 
 .mobile-bottom-nav__assistant .mobile-bottom-nav__label {
@@ -207,14 +208,13 @@
   color: hsl(var(--primary));
 }
 
-/* Focus */
+/* focus */
 .mobile-bottom-nav__item:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
   border-radius: 10px;
 }
 
-/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .mobile-bottom-nav__indicator,
   .mobile-bottom-nav__icon,

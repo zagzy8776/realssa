@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -13,36 +13,11 @@ interface NavTab {
 }
 
 const tabs: NavTab[] = [
-  {
-    label: 'Home',
-    icon: Home,
-    path: '/',
-    matchPaths: ['/'],
-  },
-  {
-    label: 'Cinema',
-    icon: Film,
-    path: '/videos',
-    matchPaths: ['/videos', '/cinema', '/movies', '/video-news', '/live-tv'],
-  },
-  {
-    label: 'For You',
-    icon: Sparkles,
-    path: '/for-you',
-    matchPaths: ['/for-you'],
-  },
-  {
-    label: 'Trending',
-    icon: TrendingUp,
-    path: '/trending',
-    matchPaths: ['/trending'],
-  },
-  {
-    label: 'Profile',
-    icon: User,
-    path: '/profile',
-    matchPaths: ['/profile', '/reading-list', '/reading-history', '/downloads', '/bookmarks'],
-  },
+  { label: 'Home', icon: Home, path: '/', matchPaths: ['/'] },
+  { label: 'Cinema', icon: Film, path: '/videos', matchPaths: ['/videos', '/cinema', '/movies', '/video-news', '/live-tv'] },
+  { label: 'For You', icon: Sparkles, path: '/for-you', matchPaths: ['/for-you'] },
+  { label: 'Trending', icon: TrendingUp, path: '/trending', matchPaths: ['/trending'] },
+  { label: 'Profile', icon: User, path: '/profile', matchPaths: ['/profile', '/reading-list', '/reading-history', '/downloads', '/bookmarks'] },
 ];
 
 const HIDDEN_ROUTES = [
@@ -53,66 +28,55 @@ const HIDDEN_ROUTES = [
   '/local-government', '/ads', '/download', '/login',
 ];
 
-const spring = {
-  type: 'spring' as const,
-  stiffness: 520,
-  damping: 32,
-  mass: 0.6,
-};
+const spring = { type: 'spring' as const, stiffness: 600, damping: 28, mass: 0.55 };
 
 const MobileBottomNav = () => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [chatOpen, setChatOpen] = useState(false);
-  const [pressedPath, setPressedPath] = useState<string | null>(null);
+  const [pressed, setPressed] = useState<string | null>(null);
 
-  const isHidden = HIDDEN_ROUTES.some(route => pathname.startsWith(route));
+  const isHidden = HIDDEN_ROUTES.some(r => pathname.startsWith(r));
 
   const activeIndex = tabs.findIndex(tab =>
-    tab.path === '/'
-      ? pathname === '/'
-      : tab.matchPaths?.some(path => pathname === path || pathname.startsWith(`${path}/`))
+    tab.path === '/' ? pathname === '/' : tab.matchPaths?.some(p => pathname === p || pathname.startsWith(`${p}/`))
   );
 
-  // Visual slots: 0 Home | 1 Cinema | 2 Assistant | 3 For You | 4 Trending | 5 Profile
-  // Indicator only moves under the 5 real tabs (skips Assistant slot)
-  const indicatorSlot = activeIndex === -1 ? 0 : activeIndex < 2 ? activeIndex : activeIndex + 1;
+  // slots: 0 Home, 1 Cinema, 2 Assistant, 3 For You, 4 Trending, 5 Profile
+  const indicatorSlot = activeIndex < 0 ? 0 : activeIndex < 2 ? activeIndex : activeIndex + 1;
 
-  useEffect(() => {
-    setChatOpen(false);
-  }, [pathname]);
+  useEffect(() => { setChatOpen(false); }, [pathname]);
 
   if (isHidden) return null;
 
-  const handleTabClick = (path: string) => {
-    setPressedPath(path);
+  const go = (path: string) => {
+    setPressed(path);
     navigate(path);
-    setTimeout(() => setPressedPath(null), 220);
+    setTimeout(() => setPressed(null), 240);
   };
 
-  const renderTab = (tab: NavTab) => {
-    const isActive = activeIndex !== -1 && tabs[activeIndex]?.path === tab.path;
-    const isPressed = pressedPath === tab.path;
+  const Tab = ({ tab }: { tab: NavTab }) => {
+    const isActive = activeIndex >= 0 && tabs[activeIndex].path === tab.path;
+    const isPressed = pressed === tab.path;
 
     return (
       <button
-        key={tab.path}
         type="button"
         className="mobile-bottom-nav__item"
-        onClick={() => handleTabClick(tab.path)}
+        onClick={() => go(tab.path)}
         aria-current={isActive ? 'page' : undefined}
         data-active={isActive}
       >
         <motion.span
           className="mobile-bottom-nav__icon"
-          aria-hidden="true"
+          aria-hidden
           animate={{
-            scale: isPressed ? 0.72 : isActive ? 1.15 : 1,
-            y: isActive ? -2 : 0,
+            scale: isPressed ? 0.68 : isActive ? 1.18 : 1,
+            y: isActive ? -3 : 0,
           }}
           transition={spring}
         >
-          <tab.icon size={22} strokeWidth={isActive ? 2.4 : 1.7} />
+          <tab.icon size={22} strokeWidth={isActive ? 2.5 : 1.7} />
         </motion.span>
         <span className="mobile-bottom-nav__label">{tab.label}</span>
       </button>
@@ -124,22 +88,20 @@ const MobileBottomNav = () => {
       <RealSSAChat isOpen={chatOpen} onClose={() => setChatOpen(false)} />
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         <div className="mobile-bottom-nav__items">
-          {/* Sliding indicator */}
-          {activeIndex !== -1 && (
+          {/* sliding indicator */}
+          {activeIndex >= 0 && (
             <motion.div
               className="mobile-bottom-nav__indicator"
               initial={false}
-              animate={{
-                x: `calc(${indicatorSlot} * 100% / 6 + 50% / 6 - 14px)`,
-              }}
+              animate={{ x: `calc(${indicatorSlot} * 16.666% + 8.333% - 14px)` }}
               transition={spring}
             />
           )}
 
-          {renderTab(tabs[0])}
-          {renderTab(tabs[1])}
+          <Tab tab={tabs[0]} />
+          <Tab tab={tabs[1]} />
 
-          {/* Center Assistant — no glow, Bot icon */}
+          {/* Assistant — solid, zero glow */}
           <button
             type="button"
             className="mobile-bottom-nav__item mobile-bottom-nav__assistant"
@@ -150,21 +112,19 @@ const MobileBottomNav = () => {
           >
             <motion.span
               className="mobile-bottom-nav__assistant-icon"
-              aria-hidden="true"
-              animate={{
-                scale: chatOpen ? 0.9 : 1,
-              }}
-              whileTap={{ scale: 0.82 }}
+              aria-hidden
+              animate={{ scale: chatOpen ? 0.88 : 1 }}
+              whileTap={{ scale: 0.78 }}
               transition={spring}
             >
-              <Bot size={20} strokeWidth={2.1} />
+              <Bot size={20} strokeWidth={2.2} />
             </motion.span>
             <span className="mobile-bottom-nav__label">Assistant</span>
           </button>
 
-          {renderTab(tabs[2])}
-          {renderTab(tabs[3])}
-          {renderTab(tabs[4])}
+          <Tab tab={tabs[2]} />
+          <Tab tab={tabs[3]} />
+          <Tab tab={tabs[4]} />
         </div>
       </nav>
     </>,
