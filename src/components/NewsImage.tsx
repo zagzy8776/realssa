@@ -2,7 +2,7 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Image as LucideImage, Loader2, RefreshCw } from 'lucide-react';
-import { optimizeImageUrl, type ImageSize } from '@/lib/image';
+import { imageCandidates, type ImageSize } from '@/lib/image';
 
 interface NewsImageProps {
   src: string | null | undefined;
@@ -28,7 +28,7 @@ interface NewsImageProps {
 }
 
 const DEFAULT_FALLBACK = '/logo.png';
-const LOGO_PATTERNS = /logo|icon|brand|placeholder|avatar|favicon|punchng.*logo|cropped-punch|PUNCH-Logo/i;
+const LOGO_PATTERNS = /(?:^|[\/._-])(logo|favicon|avatar|placeholder|brand-logo|site-icon|punchng.*logo|cropped-punch|PUNCH-Logo)(?:[\/._-]|$)/i;
 
 /**
  * Check if an image URL is a logo/placeholder
@@ -93,13 +93,20 @@ export const NewsImage = ({
     ([y, scale, rx, ry]) => `translate3d(0, ${y}px, 0) scale(${scale}) rotateX(${rx}deg) rotateY(${ry}deg)`
   );
 
-  // Determine initial source — always go through image proxy for remote URLs
+  // Candidate cascade: CDN proxy → engine → original (resilient on slow networks)
+  const candidatesRef = useRef<string[]>([]);
+  const candidateIdx = useRef(0);
+
   useEffect(() => {
+    candidateIdx.current = 0;
     if (src && !isLogoOrPlaceholder(src)) {
-      setCurrentSrc(optimizeImageUrl(src, size));
+      const list = imageCandidates(src, size);
+      candidatesRef.current = list;
+      setCurrentSrc(list[0] || null);
       setHasError(false);
     } else {
-      setCurrentSrc(null); // Will trigger recovery or fallback
+      candidatesRef.current = [];
+      setCurrentSrc(null);
     }
     setIsLoading(true);
   }, [src, size]);
@@ -125,9 +132,12 @@ export const NewsImage = ({
         const data = await response.json();
         const found = data?.image;
         if (found && !isLogoOrPlaceholder(found)) {
-          setCurrentSrc(optimizeImageUrl(found, size));
+          const list = imageCandidates(found, size);
+          candidatesRef.current = list;
+          candidateIdx.current = 0;
+          setCurrentSrc(list[0] || found);
           setHasError(false);
-          setIsLoading(true); // Reload with new src
+          setIsLoading(true);
           return;
         }
       }
@@ -152,14 +162,21 @@ export const NewsImage = ({
 
   // Handle image error
   const handleError = useCallback(() => {
-    if (currentSrc && currentSrc !== fallbackSrc) {
-      // Try fallback
-      setCurrentSrc(fallbackSrc);
-    } else {
-      setHasError(true);
-      setIsLoading(false);
-      onError?.();
+    const next = candidateIdx.current + 1;
+    const list = candidatesRef.current;
+    if (next < list.length) {
+      candidateIdx.current = next;
+      setIsLoading(true);
+      setCurrentSrc(list[next]);
+      return;
     }
+    if (currentSrc !== fallbackSrc && fallbackSrc) {
+      setCurrentSrc(fallbackSrc);
+      return;
+    }
+    setHasError(true);
+    setIsLoading(false);
+    onError?.();
   }, [currentSrc, fallbackSrc, onError]);
 
   // Parallax effect on scroll
@@ -278,7 +295,7 @@ export const NewsImage = ({
           fetchPriority={priority ? "high" : "auto"}
           className={cn(
             'absolute inset-0 w-full h-full transition-opacity duration-300',
-            isLoading ? 'opacity-0' : 'opacity-100',
+            isLoading ? 'opacity-40' : 'opacity-100',
             objectFit === 'cover' && 'object-cover',
             objectFit === 'contain' && 'object-contain',
             objectFit === 'fill' && 'object-fill',
