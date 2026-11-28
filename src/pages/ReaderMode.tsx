@@ -1,3 +1,4 @@
+import MoreArticleStories from '@/components/MoreArticleStories';
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, ExternalLink, Share2, AlertCircle } from "lucide-react";
@@ -251,6 +252,7 @@ const ReaderMode = () => {
           </div>
         )}
 
+        <a className="story-read-link" href="#more-articles">Read more articles ↓</a>
         {(article.articleId || articleId) && <ExternalArticleComments
           articleId={article.articleId || articleId!}
           articleTitle={article.title}
@@ -279,7 +281,8 @@ const ReaderMode = () => {
             </div>
           </section>
         )}
-      </article>
+      <MoreArticleStories key={article.articleId || articleId} excludeIds={[article.articleId || articleId, ...relatedNews.map(item => item.id)]} excludeUrls={[url, ...relatedNews.map(item => item.externalLink)]} />
+        </article>
     </div>
   );
 };

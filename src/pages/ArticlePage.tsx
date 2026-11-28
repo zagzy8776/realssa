@@ -1,3 +1,4 @@
+import MoreArticleStories from '@/components/MoreArticleStories';
 import { apiUrl } from '@/lib/api-base';
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -694,6 +695,7 @@ const ArticlePage = () => {
             <LiveViewerCount articleId={article.id} category={article.category || 'general'} />
           </div>
 
+        <a className="story-read-link" href="#more-articles">Read more articles ↓</a>
           {/* Comments Section */}
           <div className="mt-12 border-t border-border pt-8">
             <ExternalArticleComments
@@ -759,6 +761,7 @@ const ArticlePage = () => {
           <div className="mt-12 border-t border-border pt-8">
             <PsychoacousticSoundscape className="w-full" />
           </div>
+        <MoreArticleStories key={article.id} excludeIds={[article.id, ...relatedArticles.map(item => item.id)]} excludeUrls={[article.externalLink, ...relatedArticles.map(item => item.externalLink)]} />
         </article>
       </div>
       <Footer />
