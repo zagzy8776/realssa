@@ -695,7 +695,7 @@ const ArticlePage = () => {
             <LiveViewerCount articleId={article.id} category={article.category || 'general'} />
           </div>
 
-        <a className="story-read-link" href="#more-articles">Read more articles ↓</a>
+
           {/* Comments Section */}
           <div className="mt-12 border-t border-border pt-8">
             <ExternalArticleComments
@@ -711,35 +711,8 @@ const ArticlePage = () => {
           </div>
 
           {/* Related Articles Section */}
-          {relatedArticles.length > 0 && (
-            <div className="mt-16 border-t border-border pt-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold">Up Next</h2>
-                <Link to="/">
-                  <Button variant="ghost" className="text-primary hover:text-primary/80">
-                    View All Articles →
-                  </Button>
-                </Link>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {relatedArticles.map((relatedArticle, index) => (
-                  <NewsCard
-                    key={relatedArticle.id}
-                    title={relatedArticle.title}
-                    excerpt={relatedArticle.excerpt}
-                    category={relatedArticle.category}
-                    image={relatedArticle.image}
-                    readTime={relatedArticle.readTime}
-                    date={relatedArticle.date}
-                    id={relatedArticle.id}
-                    externalLink={relatedArticle.externalLink}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Cross-Pollination: News → Movie Rail */}
+          <MoreArticleStories key={article.id} initialStories={relatedArticles} excludeIds={[article.id]} excludeUrls={[article.externalLink]} />
+{/* Cross-Pollination: News → Movie Rail */}
           {article && (
             <MovieRail headline={article.title || ''} articleId={article.id} />
           )}
@@ -761,7 +734,6 @@ const ArticlePage = () => {
           <div className="mt-12 border-t border-border pt-8">
             <PsychoacousticSoundscape className="w-full" />
           </div>
-        <MoreArticleStories key={article.id} excludeIds={[article.id, ...relatedArticles.map(item => item.id)]} excludeUrls={[article.externalLink, ...relatedArticles.map(item => item.externalLink)]} />
         </article>
       </div>
       <Footer />

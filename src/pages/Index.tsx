@@ -245,16 +245,9 @@ const Index = () => {
         const { Network } = await import('@capacitor/network');
         const netStatus = await Network.getStatus();
         if (netStatus.connected && netStatus.connectionType === 'wifi') {
-          fetch(apiUrl('/api/digest/daily'))
-            .then(res => res.ok ? res.json() : null)
-            .then(digestData => {
-              if (digestData) {
-                localStorage.setItem('realssa_offline_digest', JSON.stringify({
-                  timestamp: Date.now(),
-                  articles: digestData
-                }));
-              }
-            }).catch(() => { });
+          if (initialFiltered.length) localStorage.setItem('realssa_offline_digest', JSON.stringify({
+            timestamp: Date.now(), articles: initialFiltered.slice(0, 20)
+          }));
         }
       } catch (e) { }
 
