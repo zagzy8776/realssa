@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useQueryClient } from "@tanstack/react-query";
+import CinemaDialog from '@/components/CinemaDialog';
+import './cinema.css';
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2, Activity, Shield, Trophy, Clapperboard, MapPin } from 'lucide-react';
 import { HighlightsModal } from '@/components/HighlightsPanel';
 import { Button } from "@/components/ui/button";
@@ -106,82 +108,32 @@ const getYear = (item: MovieOrShow) => {
 
 const getRating = (item: MovieOrShow) => ((item.vote_average ?? 0)).toFixed(1);
 
+const mediaKey = (item: MovieOrShow) => `${item.media_type}-${item.id}`;
+
+async function cinemaJson(path: string, signal: AbortSignal) {
+  const res = await fetch(`${API_BASE_URL}/api/cinema/${path}`, { signal });
+  if (!res.ok) throw new Error(`Cinema returned HTTP ${res.status}`);
+  return res.json();
+}
+
 function MediaCard({ item, onOpen }: { item: MovieOrShow; onOpen: (item: MovieOrShow) => void }) {
-  const posterUrl = getPoster(item);
+  const title = item.title || item.name || 'Untitled';
+  const poster = getPoster(item);
   return (
-    <div
-      onClick={() => onOpen(item)}
-      className="group relative cursor-pointer rounded-2xl overflow-hidden border border-white/5 hover:border-amber-500/35 transition-all duration-300 hover:scale-[1.04] hover:shadow-[0_12px_28px_rgba(0,0,0,0.85),0_8px_24px_rgba(245,158,11,0.12)] bg-zinc-900 aspect-[2/3] select-none"
-      style={{ transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
-    >
-      {posterUrl ? (
-        <>
-        <img
-          src={posterUrl}
-          alt={item.title || item.name}
-          className="w-full h-full object-cover"
-          loading="lazy" decoding="async"
-          onError={(e) => {
-            const img = e.currentTarget;
-            img.style.display = 'none';
-            const fallback = img.nextElementSibling as HTMLElement | null;
-            if (fallback) fallback.style.display = 'flex';
-          }}
-        />
-        <div
-          className="hidden absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black flex-col items-center justify-center p-3 text-center"
-          aria-hidden="true"
-        >
-          <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500">
-            {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
-          </div>
-          <p className="text-zinc-400 text-[10px] font-extrabold max-w-full truncate px-1 uppercase tracking-wider">
-            {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
-          </p>
-        </div>
-        </>
-      ) : (
-        <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-3 text-center">
-          <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500 group-hover:text-amber-400 group-hover:bg-amber-500/10 transition-colors">
-            {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
-          </div>
-          <p className="text-zinc-400 text-[10px] font-extrabold max-w-full truncate px-1 uppercase tracking-wider">
-            {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
-          </p>
-        </div>
-      )}
-
-      {/* Shadow Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300" />
-
-      {/* Ambient top highlight */}
-      <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-      {/* Play Icon Badge */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-90 group-hover:scale-100">
-        <div className="w-12 h-12 bg-amber-500 hover:bg-amber-400 text-black rounded-full flex items-center justify-center shadow-xl shadow-amber-500/25 active:scale-90 transition-transform">
-          <Play size={20} className="fill-black ml-1" />
-        </div>
-      </div>
-
-      {/* Card Metadata info */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 transform translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
-        <p className="text-white text-xs font-black leading-tight line-clamp-1 group-hover:line-clamp-2 transition-all">{item.title || item.name}</p>
-        <div className="flex items-center gap-1.5 mt-1 opacity-80 group-hover:opacity-100 transition-opacity">
-          {(item.vote_average ?? 0) > 0 && (
-            <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold bg-amber-500/10 px-1 py-0.5 rounded">
-              <Star size={9} className="fill-current" />{getRating(item)}
-            </span>
-          )}
-          {getYear(item) && <span className="text-zinc-400 text-[9px] font-bold">{getYear(item)}</span>}
-          <span className="ml-auto text-[8px] uppercase font-black bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-400 border border-white/5">
-            {item.media_type === 'tv' ? 'TV' : 'FILM'}
-          </span>
-        </div>
-      </div>
-    </div>
+    <button type="button" className="cinema-card" aria-label={`Open ${title}`} onClick={() => onOpen(item)}>
+      <span className="cinema-poster">
+        <Film aria-hidden size={24} />
+        {poster && <img src={poster} alt="" loading="lazy" decoding="async"
+          onError={event => { event.currentTarget.hidden = true; }} />}
+      </span>
+      <strong>{title}</strong>
+      <span className="cinema-card-meta">
+        {item.media_type === 'tv' ? 'Series' : 'Film'}{getYear(item) && ` · ${getYear(item)}`}
+        {(item.vote_average ?? 0) > 0 && <span> ★ {getRating(item)}</span>}
+      </span>
+    </button>
   );
-};
+}
 
 export default function CinemaHub() {
   const queryClient = useQueryClient();
@@ -196,34 +148,62 @@ export default function CinemaHub() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const seenIds = useRef<Set<number>>(new Set());
+  const seenIds = useRef(new Set<string>());
+  const catalogPending = useRef(false);
+  const [catalogError, setCatalogError] = useState(false);
 
   // Infinite scroll sentinel
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Horizontal scroll rail refs
-  const movieRailRef = useRef<HTMLDivElement>(null);
-  const showRailRef = useRef<HTMLDivElement>(null);
-
-  // Search state
+  const [filter, setFilter] = useState<'all' | 'movie' | 'tv'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<MovieOrShow[]>([]);
-  const [suggestions, setSuggestions] = useState<MovieOrShow[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchRef = useRef<HTMLDivElement>(null);
+  const [submitted, setSubmitted] = useState('');
+  const term = searchQuery.trim().toLowerCase();
+  const isSearching = term.length > 0;
+  useEffect(() => {
+    if (!term) return;
+    const timer = window.setTimeout(() => setSubmitted(term), 220);
+    return () => window.clearTimeout(timer);
+  }, [term]);
+  const search = useQuery({
+    queryKey: ['cinema', 'search', term],
+    enabled: !!term && submitted === term && activeTab === 'movies',
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: async ({ signal }): Promise<MovieOrShow[]> => {
+      const data = await cinemaJson(`search?q=${encodeURIComponent(term)}&catalog=tmdb`, signal);
+      if (!Array.isArray(data.results)) throw new Error('Invalid search results');
+      return data.results.filter((item: MovieOrShow) => item.media_type === 'movie' || item.media_type === 'tv');
+    },
+  });
+  const localMatches = catalog.filter(item => (item.title || item.name || '').toLowerCase().includes(term));
+  const remoteKeys = new Set(search.data?.map(mediaKey));
+  const searchResults = [...(search.data || []), ...localMatches.filter(item => !remoteKeys.has(mediaKey(item)))];
 
-  // Detail Modal
   const [selectedMedia, setSelectedMedia] = useState<MovieOrShow | null>(null);
-  const [mediaDetails, setMediaDetails] = useState<any | null>(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
-  const [seasons, setSeasons] = useState<any[]>([]);
-  const [selectedSeasonNum, setSelectedSeasonNum] = useState<number>(1);
-  const [episodes, setEpisodes] = useState<Episode[]>([]);
-  const [episodesLoading, setEpisodesLoading] = useState(false);
+  const [seasonChoice, setSeasonChoice] = useState<number | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
+  const details = useQuery({
+    queryKey: ['cinema', 'details', selectedMedia?.media_type, selectedMedia?.id],
+    enabled: !!selectedMedia,
+    staleTime: 10 * 60_000,
+    retry: false,
+    queryFn: ({ signal }) => cinemaJson(`${selectedMedia!.media_type === 'tv' ? 'shows' : 'movies'}/${selectedMedia!.id}`, signal),
+  });
+  const mediaDetails = details.data;
+  const allSeasons: { id: number; season_number: number; name: string }[] = mediaDetails?.seasons || [];
+  const regularSeasons = allSeasons.filter(season => season.season_number > 0);
+  const seasons = regularSeasons.length ? regularSeasons : allSeasons;
+  const selectedSeasonNum = seasonChoice ?? seasons[0]?.season_number;
+  const season = useQuery({
+    queryKey: ['cinema', 'episodes', selectedMedia?.id, selectedSeasonNum],
+    enabled: selectedMedia?.media_type === 'tv' && selectedSeasonNum != null,
+    staleTime: 10 * 60_000,
+    retry: false,
+    queryFn: ({ signal }) => cinemaJson(`shows/${selectedMedia!.id}/season/${selectedSeasonNum}`, signal),
+  });
+  const episodes: Episode[] = season.data?.episodes || [];
+  const episodesLoading = details.isFetching || season.isFetching;
 
   // Player
   const [activePlayer, setActivePlayer] = useState<{
@@ -401,57 +381,6 @@ export default function CinemaHub() {
     }
   }, []);
 
-  // ── Scraper & DevTools Anti-Hack Protection ──
-  useEffect(() => {
-    if (import.meta.env?.MODE === 'development') return;
-
-    // Skip inspect/anti-hack loops on mobile to avoid background thread CPU throttling
-    const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (isMobile) return;
-
-    // 1. Disable right-click context menu
-    const preventContextMenu = (e: MouseEvent) => e.preventDefault();
-    document.addEventListener('contextmenu', preventContextMenu);
-
-    // 2. Disable inspect keyboard shortcuts (F12, Ctrl+Shift+I/J/C, Ctrl+U)
-    const preventShortcuts = (e: KeyboardEvent) => {
-      if (
-        e.key === 'F12' ||
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
-        (e.ctrlKey && (e.key === 'U' || e.key === 'u'))
-      ) {
-        e.preventDefault();
-      }
-    };
-    document.addEventListener('keydown', preventShortcuts);
-
-    // 3. Disable text selection
-    const preventSelection = (e: Event) => e.preventDefault();
-    document.addEventListener('selectstart', preventSelection);
-
-    // 4. Anti-DevTools Debugger Loop (checked every 3 seconds)
-    // Triggers debugger breakpoint if browser devtools console is open, freezing the window
-    const antiDevTools = setInterval(() => {
-      const startTime = Date.now();
-      debugger; // Breakpoint triggers if DevTools console is open
-      const duration = Date.now() - startTime;
-      if (duration > 100) {
-        // DevTools opened, clear body or slow down execution
-        try {
-          const main = document.querySelector('main');
-          if (main) main.style.filter = 'blur(10px)';
-        } catch (_) {}
-      }
-    }, 3000);
-
-    return () => {
-      document.removeEventListener('contextmenu', preventContextMenu);
-      document.removeEventListener('keydown', preventShortcuts);
-      document.removeEventListener('selectstart', preventSelection);
-      clearInterval(antiDevTools);
-    };
-  }, []);
-
   // ── Time of day detection for contextual hero ──
   useEffect(() => {
     const h = new Date().getHours();
@@ -493,28 +422,32 @@ export default function CinemaHub() {
   }, []);
 
   const fetchPage = async (pageNum: number, isFirst = false) => {
+    if (catalogPending.current) return;
+    catalogPending.current = true;
+    setCatalogError(false);
     if (isFirst) setLoading(true);
     else setLoadingMore(true);
 
     try {
-      const raw = await queryClient.fetchQuery({
-        queryKey: ['cinema', 'trending', 'week', pageNum],
+      const result = await queryClient.fetchQuery({
+        queryKey: ['cinema', 'catalog', 'week', pageNum],
         staleTime: 5 * 60_000,
         gcTime: 30 * 60_000,
-        queryFn: async ({ signal }): Promise<MovieOrShow[]> => {
+        queryFn: async ({ signal }) => {
           const res = await fetch(`${API_BASE_URL}/api/cinema/trending?page=${pageNum}&time_window=week`, { signal });
           if (!res.ok) throw new Error(`Cinema API returned HTTP ${res.status}`);
           const data = await res.json();
           if (!Array.isArray(data?.results)) throw new Error('Invalid cinema catalog');
-          return data.results;
+          return { items: data.results as MovieOrShow[], pages: Number(data.total_pages) || 20 };
         },
       });
       if (isFirst) seenIds.current.clear();
 
       // Deduplicate by id — never show same card twice
-      const fresh = raw.filter(item => {
-        if (seenIds.current.has(item.id)) return false;
-        seenIds.current.add(item.id);
+      const fresh = result.items.filter(item => {
+        const key = mediaKey(item);
+        if (!['tv', 'movie'].includes(item.media_type) || seenIds.current.has(key)) return false;
+        seenIds.current.add(key);
         return true;
       });
 
@@ -532,10 +465,11 @@ export default function CinemaHub() {
         setHeroPool(prev => [...prev, ...newPool]);
       }
 
-      setHasMore(fresh.length > 0 && pageNum < 20);
+      setHasMore(result.items.length > 0 && pageNum < Math.min(20, result.pages));
       setPage(pageNum);
 
     } catch (err) {
+      setCatalogError(true);
       console.error('Failed to fetch catalog:', err);
       if (isFirst) {
         setCatalog(FALLBACK_CATALOG);
@@ -546,6 +480,7 @@ export default function CinemaHub() {
         setHasMore(false);
       }
     } finally {
+      catalogPending.current = false;
       if (isFirst) setLoading(false);
       else setLoadingMore(false);
     }
@@ -558,7 +493,7 @@ export default function CinemaHub() {
 
   // ── IntersectionObserver for true automatic infinite scroll ──
   useEffect(() => {
-    if (activeTab !== 'movies' || isSearching || loading) return;
+    if (activeTab !== 'movies' || isSearching || loading || catalogError || selectedMedia || activePlayer) return;
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
@@ -573,18 +508,7 @@ export default function CinemaHub() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [activeTab, loading, loadingMore, hasMore, isSearching, loadNextPage]);
-
-  // ── Close suggestions on outside click ──
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
+  }, [activeTab, loading, loadingMore, hasMore, isSearching, loadNextPage, catalogError, selectedMedia, activePlayer]);
 
   // ── Hero auto-rotation every 6 seconds ──
   useEffect(() => {
@@ -613,131 +537,10 @@ export default function CinemaHub() {
     setFeatured(heroPool[prev]);
   };
 
-  const scrollRail = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
-    if (ref.current) {
-      const { scrollLeft, clientWidth } = ref.current;
-      const offset = direction === 'left' ? -clientWidth * 0.75 : clientWidth * 0.75;
-      ref.current.scrollTo({ left: scrollLeft + offset, behavior: 'smooth' });
-    }
-  };
-
-  // ── Autocomplete (debounced 300ms) ──
-  const handleSearchInput = (value: string) => {
-    setSearchQuery(value);
-    if (suggestTimer.current) clearTimeout(suggestTimer.current);
-
-    if (value.trim().length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      if (!value.trim()) { setIsSearching(false); setSearchResults([]); }
-      return;
-    }
-
-    suggestTimer.current = setTimeout(async () => {
-      try {
-        const res = await fetch(apiUrl(`/api/cinema/search?q=${encodeURIComponent(value)}`));
-        const data = await res.json();
-        // Filter: must be movie/tv, must have a real poster, must have a known rating
-        const results = (data.results || []).filter((i: MovieOrShow) =>
-          (i.media_type === 'movie' || i.media_type === 'tv') &&
-          i.poster_path &&
-          (i.vote_average ?? 0) > 0
-        );
-        setSuggestions(results.slice(0, 8));
-        setShowSuggestions(results.length > 0);
-      } catch (_) {}
-    }, 300);
-  };
-
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setShowSuggestions(false);
-    const q = searchQuery.trim();
-    if (!q) {
-      setIsSearching(false);
-      setSearchResults([]);
-      return;
-    }
-    setIsSearching(true);
-    setSearchLoading(true);
-    try {
-      const res = await fetch(apiUrl(`/api/cinema/search?q=${encodeURIComponent(q)}`));
-      const data = await res.json();
-      const results = (data.results || []).filter((i: MovieOrShow) =>
-        i.media_type === 'movie' || i.media_type === 'tv'
-      );
-      setSearchResults(results);
-    } catch (err) {
-      console.error('Search failed:', err);
-    } finally {
-      setSearchLoading(false);
-      // Keep query visible so user can edit and search again
-    }
-  };
-
-  const handleSuggestionClick = (item: MovieOrShow) => {
-    setShowSuggestions(false);
-    setSuggestions([]);
-    // Keep search query for context but close suggestion list
-    // Open detail immediately
-    handleOpenDetails(item);
-  };
-
-  const clearSearch = () => {
-    setIsSearching(false);
-    setSearchResults([]);
-    setSearchQuery('');
-    setSuggestions([]);
-    setShowSuggestions(false);
-  };
-
-  // ── Detail Modal ──
-  const handleOpenDetails = async (media: MovieOrShow) => {
-    setSelectedMedia(media);
-    setMediaDetails(null);
-    setSeasons([]);
-    setEpisodes([]);
+  const handleOpenDetails = (item: MovieOrShow) => {
+    setSeasonChoice(null);
     setSelectedEpisode(null);
-    setDetailsLoading(true);
-    try {
-      const pathType = media.media_type === 'tv' ? 'shows' : 'movies';
-      const res = await fetch(apiUrl(`/api/cinema/${pathType}/${media.id}`));
-      const details = await res.json();
-      setMediaDetails(details);
-      if (media.media_type === 'tv') {
-        const rawSeasons = details.seasons || [];
-        const regularSeasons = rawSeasons.filter((s: any) => s.season_number > 0);
-        const activeSeasons = regularSeasons.length > 0 ? regularSeasons : rawSeasons;
-        setSeasons(activeSeasons);
-        if (activeSeasons.length > 0) {
-          setSelectedSeasonNum(activeSeasons[0].season_number);
-          fetchSeasonEpisodes(media.id, activeSeasons[0].season_number);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load details:', err);
-    } finally {
-      setDetailsLoading(false);
-    }
-  };
-
-  const fetchSeasonEpisodes = async (showId: number, seasonNum: number) => {
-    setEpisodesLoading(true);
-    setEpisodes([]);
-    try {
-      const res = await fetch(apiUrl(`/api/cinema/shows/${showId}/season/${seasonNum}`));
-      const data = await res.json();
-      setEpisodes(data.episodes || []);
-    } catch (err) {
-      console.error('Episodes fetch failed:', err);
-    } finally {
-      setEpisodesLoading(false);
-    }
-  };
-
-  const handleSeasonChange = (seasonNum: number) => {
-    setSelectedSeasonNum(seasonNum);
-    if (selectedMedia) fetchSeasonEpisodes(selectedMedia.id, seasonNum);
+    setSelectedMedia(item);
   };
 
   // ── Save to Continue Watching history ──
@@ -787,10 +590,7 @@ export default function CinemaHub() {
   const formatGenres = (genres: any[]) =>
     genres?.length ? genres.slice(0, 3).map(g => g.name).join(' · ') : '';
 
-  // Split catalog into movies and shows for the two sections
-  const movies = catalog.filter(i => i.media_type === 'movie');
-  const shows = catalog.filter(i => i.media_type === 'tv');
-
+  const visibleCatalog = filter === 'all' ? catalog : catalog.filter(item => item.media_type === filter);
 
   return (
     <>
@@ -1455,6 +1255,16 @@ export default function CinemaHub() {
       {/* ── Movies & Shows Tab ── */}
       {activeTab === 'movies' && (
         <>
+          <form className="cinema-search" role="search" onSubmit={event => {
+            event.preventDefault();
+            setSubmitted(term);
+            event.currentTarget.querySelector('input')?.blur();
+          }}>
+            <Search size={18} aria-hidden />
+            <input type="search" aria-label="Search movies and series" placeholder="Search movies and series"
+              enterKeyHint="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} />
+            {isSearching && <button type="button" aria-label="Clear search" onClick={() => { setSearchQuery(''); setSubmitted(''); }}><X size={18} /></button>}
+          </form>
           {/* Interactive Hero Carousel */}
           {!isSearching && featured && (
             <section className="relative w-full h-[56vh] sm:h-[75vh] flex flex-col justify-end overflow-hidden group/hero">
@@ -1619,273 +1429,41 @@ export default function CinemaHub() {
               </div>
             )}
 
-            {/* ── Search Bar with Live Autocomplete ── */}
-            <div ref={searchRef} className="relative w-full max-w-xl mx-auto mb-8">
-              <form onSubmit={handleSearch} className="relative flex items-center">
-                <input
-                  type="text"
-                  placeholder="Search any movie or TV show..."
-                  value={searchQuery}
-                  onChange={e => handleSearchInput(e.target.value)}
-                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                  className="w-full bg-white/5 border border-white/10 hover:border-white/20 focus:border-amber-500 text-zinc-200 placeholder-zinc-500 rounded-full pl-6 pr-14 py-3.5 text-sm outline-none transition-all duration-300 backdrop-blur-md shadow-inner shadow-black/40 focus:bg-white/10"
-                />
-                <button
-                  type="submit"
-                  className="absolute right-2.5 p-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black rounded-full transition-all duration-300 shadow-md shadow-amber-500/10 active:scale-90 flex items-center justify-center"
-                >
-                  {searchLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                </button>
-              </form>
-
-              {/* ── Live Autocomplete Dropdown ── */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full mt-2 left-0 right-0 bg-zinc-900/98 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/80 z-50 overflow-hidden backdrop-blur-sm">
-                  <p className="text-[9px] uppercase font-extrabold text-zinc-600 px-4 pt-3 pb-1 tracking-widest">Suggestions</p>
-                  {suggestions.map(item => (
-                    <button
-                      key={item.id}
-                      onMouseDown={() => handleSuggestionClick(item)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800 transition-colors text-left"
-                    >
-                      {getPoster(item) ? (
-                        <img
-                          src={getPoster(item)!}
-                          alt=""
-                          className="w-9 h-12 object-cover rounded-lg shrink-0 border border-white/5"
-                        />
-                      ) : (
-                        <div className="w-9 h-12 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0 border border-white/5 text-zinc-500">
-                          {item.media_type === 'tv' ? <Tv size={14} /> : <Film size={14} />}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-zinc-100 truncate">{item.title || item.name}</p>
-                        <p className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-0.5">
-                          {item.media_type === 'tv' ? <Tv size={9} /> : <Film size={9} />}
-                          <span className="uppercase font-bold">{item.media_type === 'tv' ? 'Series' : 'Movie'}</span>
-                          {getYear(item) && <><span>·</span><span>{getYear(item)}</span></>}
-                          {(item.vote_average ?? 0) > 0 && (
-                            <span className="text-amber-400 flex items-center gap-0.5 ml-1">
-                              <Star size={9} className="fill-current" />{getRating(item)}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <Play size={14} className="text-zinc-600 shrink-0" />
+            {isSearching ? (
+              <section aria-label="Search results">
+                <h2 className="cinema-section-title">Search results</h2>
+                <p role="status" className="cinema-status">
+                  {search.isError ? 'Online search is unavailable.' : search.isPending || search.isFetching
+                    ? 'Searching the catalog…' : searchResults.length ? '' : `No titles found for “${searchQuery.trim()}”.`}
+                  {search.isError && <button onClick={() => search.refetch()}>Retry search</button>}
+                </p>
+                <div className="cinema-grid">{searchResults.map(item =>
+                  <MediaCard key={mediaKey(item)} item={item} onOpen={handleOpenDetails} />)}</div>
+              </section>
+            ) : (
+              <section aria-label="Browse cinema">
+                <h2 className="cinema-section-title">Browse cinema</h2>
+                <div className="cinema-filters" aria-label="Filter catalog">
+                  {(['all', 'movie', 'tv'] as const).map(type => (
+                    <button key={type} aria-pressed={filter === type} onClick={() => setFilter(type)}>
+                      {type === 'all' ? 'All titles' : type === 'movie' ? 'Movies' : 'Series'}
                     </button>
                   ))}
-                  <div className="border-t border-zinc-800 px-4 py-2">
-                    <button
-                      onMouseDown={(e) => { e.preventDefault(); handleSearch(e as any); }}
-                      className="text-xs text-amber-500 font-bold hover:text-amber-400"
-                    >
-                      See all results for "{searchQuery}" →
+                </div>
+                <div className="cinema-grid">
+                  {visibleCatalog.map(item => <MediaCard key={mediaKey(item)} item={item} onOpen={handleOpenDetails} />)}
+                  {loading && !catalog.length && Array.from({ length: 6 }, (_, i) => <span key={i} className="cinema-poster animate-pulse" />)}
+                </div>
+                <div ref={sentinelRef} className="cinema-pagination">
+                  <span role="status">{loading || loadingMore ? 'Loading titles…' : catalogError ? 'The catalog could not refresh.' : !hasMore && !visibleCatalog.length ? 'No titles available.' : ''}</span>
+                  {(catalogError || hasMore) && !loading && !loadingMore && (
+                    <button onClick={() => hasMore ? loadNextPage() : fetchPage(1, true)}>
+                      {catalogError ? 'Retry catalog' : 'Load more titles'}
                     </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ── Search Results Grid ── */}
-            {isSearching && (
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-extrabold text-white">
-                    Results for <span className="text-amber-400">"{searchQuery}"</span>
-                  </h3>
-                  <button
-                    onClick={() => { setIsSearching(false); setSearchResults([]); setSearchQuery(''); }}
-                    className="flex items-center gap-1 text-xs text-zinc-500 hover:text-white transition-colors"
-                  >
-                    <X size={12} /> Clear
-                  </button>
-                </div>
-                {searchLoading ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
-                    {[...Array(12)].map((_, i) => (
-                      <div key={i} className="aspect-[2/3] bg-zinc-900 rounded-xl animate-pulse" />
-                    ))}
-                  </div>
-                ) : searchResults.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
-                    {searchResults.map(item => <MediaCard onOpen={handleOpenDetails} key={item.id} item={item} />)}
-                  </div>
-                ) : (
-                  <div className="text-center py-16 text-zinc-600 flex flex-col items-center gap-3">
-                    <EyeOff size={36} />
-                    <p className="text-sm">No results for "{searchQuery}"</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Catalog: Two-section vertical scroll ── */}
-            {!isSearching && (
-              <div className="space-y-10">
-
-                {/* Loading shimmer */}
-                {loading && (
-                  <>
-                    <div>
-                      <div className="h-5 w-40 bg-zinc-900 rounded-full animate-pulse mb-4" />
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
-                        {[...Array(12)].map((_, i) => (
-                          <div key={i} className="aspect-[2/3] bg-zinc-900 rounded-xl animate-pulse" />
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {!loading && (
-                  <>
-                    {/* Popular Movies Rail */}
-                    {movies.length > 0 && (
-                      <div className="relative group/rail">
-                        <h3 className="text-base sm:text-lg font-black text-white mb-4 flex items-center gap-2 tracking-wide">
-                          🔥 Popular Movies
-                        </h3>
-                        
-                        {/* Left scroll button */}
-                        <button
-                          onClick={() => scrollRail(movieRailRef, 'left')}
-                          className="absolute left-2 top-[55%] -translate-y-1/2 z-20 w-10 h-10 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover/rail:opacity-100 transition-opacity duration-300 shadow-2xl backdrop-blur-md"
-                        >
-                          &lsaquo;
-                        </button>
-
-                        {/* Right scroll button */}
-                        <button
-                          onClick={() => scrollRail(movieRailRef, 'right')}
-                          className="absolute right-2 top-[55%] -translate-y-1/2 z-20 w-10 h-10 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover/rail:opacity-100 transition-opacity duration-300 shadow-2xl backdrop-blur-md"
-                        >
-                          &rsaquo;
-                        </button>
-
-                        {/* Horizontal track container */}
-                        <div
-                          ref={movieRailRef}
-                          className="flex gap-3.5 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-none pb-4 pt-1 px-1 w-full overscroll-contain touch-pan-x"
-                        >
-                          {movies.map(item => (
-                            <div key={item.id} className="flex-shrink-0 w-[30%] sm:w-[22%] md:w-[16%] lg:w-[12.5%] snap-start">
-                              <MediaCard onOpen={handleOpenDetails} item={item} />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Trending Series Rail */}
-                    {shows.length > 0 && (
-                      <div className="relative group/rail mt-8">
-                        <h3 className="text-base sm:text-lg font-black text-white mb-4 flex items-center gap-2 tracking-wide">
-                          📺 Trending Series
-                        </h3>
-                        
-                        {/* Left scroll button */}
-                        <button
-                          onClick={() => scrollRail(showRailRef, 'left')}
-                          className="absolute left-2 top-[55%] -translate-y-1/2 z-20 w-10 h-10 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover/rail:opacity-100 transition-opacity duration-300 shadow-2xl backdrop-blur-md"
-                        >
-                          &lsaquo;
-                        </button>
-
-                        {/* Right scroll button */}
-                        <button
-                          onClick={() => scrollRail(showRailRef, 'right')}
-                          className="absolute right-2 top-[55%] -translate-y-1/2 z-20 w-10 h-10 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover/rail:opacity-100 transition-opacity duration-300 shadow-2xl backdrop-blur-md"
-                        >
-                          &rsaquo;
-                        </button>
-
-                        {/* Horizontal track container */}
-                        <div
-                          ref={showRailRef}
-                          className="flex gap-3.5 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-none pb-4 pt-1 px-1 w-full overscroll-contain touch-pan-x"
-                        >
-                          {shows.map(item => (
-                            <div key={item.id} className="flex-shrink-0 w-[30%] sm:w-[22%] md:w-[16%] lg:w-[12.5%] snap-start">
-                              <MediaCard onOpen={handleOpenDetails} item={item} />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* ── Infinite Scroll Sentinel ── */}
-                <div ref={sentinelRef} className="relative min-h-[92px] py-6 flex items-center justify-center">
-                  {loadingMore && (
-                    <div className="w-full max-w-xl px-4">
-                      <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-zinc-950/80 px-4 py-3.5 shadow-2xl shadow-black/20 backdrop-blur-md">
-                        {/* Subtle animated loading sweep */}
-                        <div className="pointer-events-none absolute inset-x-0 top-0 h-px overflow-hidden bg-white/[0.05]">
-                          <div className="h-full w-1/3 animate-pulse bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-400/20 bg-amber-400/10">
-                            <Loader2 size={17} className="animate-spin text-amber-400" />
-                            <span className="absolute inset-0 rounded-xl ring-1 ring-amber-400/10 animate-pulse" />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-200">
-                                Loading more
-                              </p>
-                              <span className="flex items-center gap-0.5" aria-hidden="true">
-                                <span className="h-1 w-1 rounded-full bg-amber-400 animate-bounce [animation-delay:-0.3s]" />
-                                <span className="h-1 w-1 rounded-full bg-amber-400 animate-bounce [animation-delay:-0.15s]" />
-                                <span className="h-1 w-1 rounded-full bg-amber-400 animate-bounce" />
-                              </span>
-                            </div>
-                            <p className="mt-0.5 truncate text-[10px] font-medium text-zinc-500">
-                              Fetching more movies &amp; series for you
-                            </p>
-                          </div>
-
-                          <span className="hidden shrink-0 text-[9px] font-bold uppercase tracking-widest text-zinc-600 sm:block">
-                            Cinema
-                          </span>
-                        </div>
-                      </div>
-                    </div>
                   )}
-
-                  {!isSearching && hasMore && page < 20 && (
-                    <nav aria-label="Cinema pagination" className="sr-only">
-                      <a href={`/videos?page=${page + 1}`}>Next cinema page</a>
-                    </nav>
-                  )}
-
-                  {catalog.length === 0 && !loading ? (
-                    <div className="flex flex-col items-center justify-center text-center py-16 px-4 bg-zinc-900/30 border border-white/5 rounded-2xl max-w-md mx-auto my-8 space-y-4 backdrop-blur-sm animate-fade-in w-full">
-                      <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
-                        <Film size={24} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <h4 className="text-sm font-bold text-zinc-200">Cinema Catalog Offline</h4>
-                        <p className="text-xs text-zinc-500 leading-relaxed">Could not load streaming media list. Please check your network connection and try again.</p>
-                      </div>
-                      <button
-                        onClick={() => fetchPage(1, true)}
-                        className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-full transition-all active:scale-95 shadow-lg shadow-amber-500/10 flex items-center gap-1.5"
-                      >
-                        <span>Retry Connection</span>
-                      </button>
-                    </div>
-                  ) : (
-                    !hasMore && !loading && (
-                      <p className="text-zinc-700 text-xs">You've seen everything — check back later for new releases.</p>
-                    )
-                  )}
+                  {hasMore && <a className="sr-only" href={`/videos?page=${page + 1}`}>Next cinema page</a>}
                 </div>
-
-              </div>
+              </section>
             )}
           </main>
         </>
@@ -1893,11 +1471,11 @@ export default function CinemaHub() {
 
       {/* ── Detail Drawer ── */}
       {selectedMedia && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/85 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full sm:max-w-xl h-[93vh] sm:h-[90vh] bg-zinc-950 border border-zinc-900 sm:border-l rounded-t-3xl sm:rounded-2xl overflow-y-auto relative flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-right duration-300">
+        <CinemaDialog label={selectedMedia.title || selectedMedia.name || 'Title details'} onDismiss={() => setSelectedMedia(null)}>
+          <div className="cinema-detail">
 
             {/* Backdrop */}
-            <div className="relative h-52 sm:h-64 w-full shrink-0 bg-zinc-900">
+            <div className="cinema-detail-art relative shrink-0 bg-zinc-900">
               {getBackdrop(selectedMedia) ? (
                 <img src={getBackdrop(selectedMedia)!} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -1905,7 +1483,7 @@ export default function CinemaHub() {
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-black/30 to-transparent" />
               <button
-                onClick={() => setSelectedMedia(null)}
+                aria-label="Close details" onClick={() => setSelectedMedia(null)}
                 className="absolute top-4 right-4 p-2 bg-black/70 hover:bg-zinc-800 rounded-full border border-white/10 text-white"
               >
                 <X size={18} />
@@ -1919,8 +1497,13 @@ export default function CinemaHub() {
                   {selectedMedia.media_type === 'movie' ? '🎬 Movie' : '📺 TV Series'}
                 </span>
                 <h2 className="text-xl sm:text-2xl font-extrabold text-white mt-2 leading-snug">
-                  {selectedMedia.title || selectedMedia.name}
+                  {selectedMedia.title || selectedMedia.name || mediaDetails?.title || mediaDetails?.name}
                 </h2>
+                {selectedMedia.media_type === 'movie' && (
+                  <button className="cinema-watch" onClick={() => handlePlayMedia(selectedMedia)}>
+                    <Play size={17} fill="currentColor" /> Watch Now
+                  </button>
+                )}
                 <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-400 font-semibold flex-wrap">
                   {(selectedMedia.vote_average ?? 0) > 0 && (
                     <span className="text-amber-400 flex items-center gap-0.5">
@@ -1960,15 +1543,10 @@ export default function CinemaHub() {
 
               <div>
                 <h4 className="text-[10px] uppercase font-extrabold text-zinc-500 tracking-wider mb-1.5">Synopsis</h4>
-                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{selectedMedia.overview}</p>
+                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{selectedMedia.overview || mediaDetails?.overview}</p>
               </div>
 
 
-              {detailsLoading ? (
-                <div className="flex justify-center p-8">
-                  <div className="w-7 h-7 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
                 <div className="border-t border-zinc-900 pt-4 flex flex-col gap-4">
                   {/* Share buttons */}
                   <div className="flex items-center gap-2">
@@ -1996,26 +1574,14 @@ export default function CinemaHub() {
                     </button>
                   </div>
 
-                  {selectedMedia.media_type === 'movie' ? (
-                    // Movie play button
-                    <div>
-                      <button
-                        onClick={() => handlePlayMedia(selectedMedia)}
-                        className="w-full flex items-center justify-center gap-2.5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-2xl font-extrabold text-black text-sm shadow-lg shadow-amber-500/25 transition-all active:scale-95"
-                      >
-                        <Play size={18} className="fill-black" /> Watch Now
-                      </button>
-                      <p className="text-[10px] text-zinc-600 text-center mt-2">Server 1 plays instantly · Tap Servers to switch</p>
-                    </div>
-                  ) : (
-                    // TV episodes
+                  {selectedMedia.media_type === 'tv' && (
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">Episodes</h4>
                         {seasons.length > 1 && (
                           <select
                             value={selectedSeasonNum}
-                            onChange={e => handleSeasonChange(parseInt(e.target.value))}
+                            onChange={e => setSeasonChoice(Number(e.target.value))}
                             className="bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-amber-500"
                           >
                             {seasons.map(s => (
@@ -2026,6 +1592,8 @@ export default function CinemaHub() {
                           </select>
                         )}
                       </div>
+                      {!episodesLoading && !episodes.length && <p role="status" className="cinema-status">Episodes unavailable.
+                        <button onClick={() => selectedSeasonNum == null ? details.refetch() : season.refetch()}>Retry</button></p>}
                       {episodesLoading ? (
                         <div className="flex justify-center p-6">
                           <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -2058,24 +1626,21 @@ export default function CinemaHub() {
                     </div>
                   )}
                 </div>
-              )}
             </div>
           </div>
-        </div>
+        </CinemaDialog>
       )}
 
       {/* ── RealSSA Player ── */}
-      <Suspense fallback={<div role="status" className="fixed inset-0 z-[9999] grid place-items-center bg-zinc-950 text-white">Opening player…</div>}>
-        {activePlayer && (
-          <CinemaPlayer
-            tmdbId={activePlayer.tmdbId}
-            mediaType={activePlayer.mediaType}
-            season={activePlayer.season}
-            episode={activePlayer.episode}
-            title={activePlayer.title}
-            onClose={() => setActivePlayer(null)}
-          />
-        )}
+      {activePlayer && (
+        <CinemaDialog player label={activePlayer.title} onDismiss={() => setActivePlayer(null)}>
+          <Suspense fallback={<div role="status" className="p-5">Opening player…</div>}>
+            <CinemaPlayer key={`${activePlayer.tmdbId}-${activePlayer.mediaType}-${activePlayer.season}-${activePlayer.episode}`}
+              {...activePlayer} onClose={() => setActivePlayer(null)} />
+          </Suspense>
+        </CinemaDialog>
+      )}
+      <Suspense fallback={<div role="status">Opening player…</div>}>
         {/* ── Highlights modal (finished matches) ── */}
         <HighlightsModal source={highlightsMatch} onClose={() => setHighlightsMatch(null)} />
 

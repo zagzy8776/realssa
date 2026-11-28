@@ -199,7 +199,8 @@ router.get('/search', async (req, res) => {
 
     // TVmaze fallback — kicks in when TMDB TV results are thin
     const tvResults = results.filter(r => r.media_type === 'tv');
-    if (tvResults.length < 3) {
+    // The player uses TMDB IDs. TVmaze IDs belong to a different catalog.
+    if (req.query.catalog !== 'tmdb' && tvResults.length < 3) {
       try {
         const tvmazeResults = await tvmazeService.searchShows(query);
         const existingNames = new Set(results.map(r => (r.title || r.name || '').toLowerCase()));
