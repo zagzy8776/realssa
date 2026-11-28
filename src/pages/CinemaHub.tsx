@@ -146,7 +146,7 @@ function MediaCard({ item, onOpen, priority = false }: { priority?: boolean; ite
 
 export default function CinemaHub() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'movies' | 'news' | 'sports'>('movies');
+  const [activeTab, setActiveTab] = useState<'movies' | 'news' | 'sports'>(() => new URLSearchParams(window.location.search).has('match') ? 'sports' : 'movies');
 
   // Catalog state — single flat list, infinite scroll
   const [catalog, setCatalog] = useState<MovieOrShow[]>([]);
@@ -248,14 +248,16 @@ export default function CinemaHub() {
   useEffect(() => {
     if (handoffDone.current || activeSportsPlayer) return;
     const handoff = (location.state as { sportsMatch?: Record<string, unknown> } | null)?.sportsMatch;
-    if (!handoff) return;
+    const matchId = new URLSearchParams(location.search).get('match');
+    if (!handoff && !matchId) return;
     const list = sportsMatches || [];
     if (!list.length) return;   // feed still loading — retry when it lands
     const norm = (s: unknown) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-    const hh = norm(handoff.home), aa = norm(handoff.away);
-    if (!hh || !aa) return;
+    const hh = norm(handoff?.home), aa = norm(handoff?.away);
+    if (!matchId && (!hh || !aa)) return;
     const overlap = (x: string, y: string) => !!x && !!y && (x === y || x.includes(y) || y.includes(x));
     const target = list.find((m: any) => {
+      if (matchId) return String(m.id) === matchId && m.isLive && (m.directSources.length || m.exactEmbedUrl);
       const h = norm(m.home), a = norm(m.away);
       return (overlap(h, hh) || overlap(h, aa)) && (overlap(a, aa) || overlap(a, hh));
     });
@@ -263,24 +265,24 @@ export default function CinemaHub() {
     handoffDone.current = true;
     setActiveSportsPlayer({
       channelId: target.streamId || target.id || 'superabbit',
-      title: target.event || `${handoff.home} vs ${handoff.away}`,
+      title: target.event || `${target.home} vs ${target.away}`,
       directSources: target.directSources,
-      home: target.home || (handoff.home as string) || null,
-      away: target.away || (handoff.away as string) || null,
+      home: target.home || (handoff?.home as string) || null,
+      away: target.away || (handoff?.away as string) || null,
       homeCrest: target.homeCrest || null,
       awayCrest: target.awayCrest || null,
       isLive: !!target.isLive,
-      sport: target.sport || (handoff.sport as string) || null,
-      league: target.league || (handoff.league as string) || null,
+      sport: target.sport || (handoff?.sport as string) || null,
+      league: target.league || (handoff?.league as string) || null,
       liveConfidence: target.liveConfidence || null,
-      kickoff: target.kickoff ?? (handoff.kickoff as string) ?? null,
+      kickoff: target.kickoff ?? (handoff?.kickoff as string) ?? null,
       streamId: target.streamId || null,
       exactEmbedUrl: target.exactEmbedUrl || null,
       venue: target.venue || null,
     });
     // Clear the state so a refresh does not re-open the player.
     window.history.replaceState({}, '');
-  }, [location.state, sportsMatches, activeSportsPlayer]);
+  }, [location.search, location.state, sportsMatches, activeSportsPlayer]);
 
   // ── Continue Watching (localStorage persistence) ──
   const [continueWatching, setContinueWatching] = useState<Array<{
@@ -418,6 +420,7 @@ export default function CinemaHub() {
         // Construct dummy item to fetch and open drawer
         const dummy: MovieOrShow = {
           id: idNum,
+          title: params.get('title') || undefined,
           media_type: mediaType as 'movie' | 'tv',
           overview: '',
           poster_path: '',

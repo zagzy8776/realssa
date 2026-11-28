@@ -710,14 +710,9 @@ const ArticlePage = () => {
             />
           </div>
 
-          {/* Related Articles Section */}
+          <MovieRail headline={article.title || ''} category={article.category} />
           <MoreArticleStories key={article.id} initialStories={relatedArticles} excludeIds={[article.id]} excludeUrls={[article.externalLink]} />
-{/* Cross-Pollination: News → Movie Rail */}
-          {article && (
-            <MovieRail headline={article.title || ''} articleId={article.id} />
-          )}
-
-          {/* Prophecy Engine — for sports articles */}
+{/* Prophecy Engine — for sports articles */}
           {article && (article.category === 'sports' || article.category === 'football') && (
             <div className="mt-12 border-t border-border pt-8">
               <ProphecyCard
