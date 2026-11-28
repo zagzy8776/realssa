@@ -252,7 +252,7 @@ const ReaderMode = () => {
           </div>
         )}
 
-        <a className="story-read-link" href="#more-articles">Read more articles ↓</a>
+
         {(article.articleId || articleId) && <ExternalArticleComments
           articleId={article.articleId || articleId!}
           articleTitle={article.title}
@@ -260,28 +260,8 @@ const ReaderMode = () => {
           articleContext={article.textContent || article.excerpt}
         />}
 
-        {relatedNews.length > 0 && (
-          <section className="mt-12">
-            <h2 className="text-xl font-bold mb-4">More stories</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {relatedNews.map((news: any) => (
-                <NewsCard
-                  key={news.id || news.externalLink}
-                  id={news.id}
-                  title={news.title}
-                  excerpt={news.excerpt || ''}
-                  category={(news.category || fallbackCategory) as any}
-                  image={news.image}
-                  readTime={news.readTime || '3 min'}
-                  date={news.date || news.publishedAt || ''}
-                  externalLink={news.externalLink}
-                  sourceName={news.sourceName || news.author}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-      <MoreArticleStories key={article.articleId || articleId} excludeIds={[article.articleId || articleId, ...relatedNews.map(item => item.id)]} excludeUrls={[url, ...relatedNews.map(item => item.externalLink)]} />
+        <MoreArticleStories key={article.articleId || articleId} initialStories={relatedNews} excludeIds={[article.articleId || articleId]} excludeUrls={[url]} />
+
         </article>
     </div>
   );

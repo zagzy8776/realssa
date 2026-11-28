@@ -44,6 +44,11 @@ const ensureTable = async () => {
   if (existing) return existing;
 
   const promise = (async () => {
+    const existingTable = await pool.query("SELECT to_regclass('external_comments') AS relation");
+    if (existingTable.rows[0]?.relation) {
+      const columns = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'external_comments' AND column_name IN ('is_bot', 'bot_key')");
+      if (columns.rows.length === 2) return true;
+    }
     await pool.query(`
       CREATE TABLE IF NOT EXISTS external_comments (
         id BIGSERIAL PRIMARY KEY,

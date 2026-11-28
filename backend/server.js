@@ -979,7 +979,9 @@ app.get('/api/digest/daily', async (req, res) => {
       });
 
       // Cache it
-      fs.writeFileSync(digestPath, JSON.stringify(digestArticles, null, 2));
+      if (!process.env.VERCEL) {
+        try { fs.writeFileSync(digestPath, JSON.stringify(digestArticles)); } catch {}
+      }
       return res.json(digestArticles);
     } catch (dbErr) {
       console.error('Failed to run on-demand digest compile:', dbErr.message);
@@ -1011,37 +1013,36 @@ app.post('/api/client-error', async (req, res) => {
   res.json({ success: true, message: 'Logged to standard output' });
 });
 
-let affinitiesTableVerified = false;
+let affinityTimestampColumn;
 
 app.post('/api/profile/sync', async (req, res) => {
-  const { deviceId, counts } = req.body;
+  let payload = req.body;
+  if (typeof payload === 'string') {
+    try { payload = JSON.parse(payload); } catch { return res.status(400).json({ error: 'Invalid profile payload' }); }
+  }
+  const { deviceId, counts } = payload || {};
   if (!deviceId || !counts) return res.status(400).json({ error: 'deviceId and counts required' });
 
-  if (process.env.DATABASE_URL) {
+  if (usersPool) {
     try {
       // Ensure User affinities table exists in usersPool within request lifecycle (Serverless-safe)
-      if (!affinitiesTableVerified) {
-        await usersPool.query(`
-          CREATE TABLE IF NOT EXISTS user_category_affinities (
-            device_id VARCHAR(255) NOT NULL,
-            category VARCHAR(100) NOT NULL,
-            score INTEGER DEFAULT 0,
-            last_interacted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (device_id, category)
-          );
-          CREATE INDEX IF NOT EXISTS idx_user_category_affinities_device ON user_category_affinities(device_id);
-        `);
-        affinitiesTableVerified = true;
-        console.log('✅ User affinities table verified inline.');
+      if (!affinityTimestampColumn) {
+        const columns = await usersPool.query("SELECT attname FROM pg_attribute WHERE attrelid = to_regclass('user_category_affinities') AND attnum > 0 AND NOT attisdropped");
+        if (!columns.rows.length) {
+          await usersPool.query(`CREATE TABLE IF NOT EXISTS user_category_affinities (
+            device_id VARCHAR(255) NOT NULL, category VARCHAR(100) NOT NULL, score INTEGER DEFAULT 0,
+            last_interacted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (device_id, category))`);
+        }
+        affinityTimestampColumn = columns.rows.some(row => row.attname === 'updated_at') ? 'updated_at' : 'last_interacted_at';
       }
 
       for (const [category, score] of Object.entries(counts)) {
         // Upsert engagement score (starts at 1 if not exists, caps around 50 later to prevent runaway scaling)
         await usersPool.query(
-          `INSERT INTO user_category_affinities (device_id, category, score, last_interacted_at)
+          `INSERT INTO user_category_affinities (device_id, category, score, ${affinityTimestampColumn})
            VALUES ($1, $2, $3, NOW())
           ON CONFLICT (device_id, category) 
-          DO UPDATE SET score = EXCLUDED.score, last_interacted_at = NOW()
+          DO UPDATE SET score = EXCLUDED.score, ${affinityTimestampColumn} = NOW()
         `, [deviceId, category, score]);
       }
       return res.json({ success: true });
@@ -1510,7 +1511,9 @@ app.post('/api/articles/:id/view', async (req, res) => {
     const dbId = rawId.startsWith('rss-') ? rawId.replace('rss-', '') : rawId;
     let viewCount = 1;
 
-    if (process.env.DATABASE_URL && rawId.startsWith('rss-')) {
+    // RSS aggregator hashes have no corresponding numeric row in rss_articles.
+    if (/^rss-[a-f0-9]{16}$/i.test(rawId)) return res.json({ views: null });
+    if (process.env.DATABASE_URL && /^rss-\d+$/.test(rawId)) {
       const result = await pool.query(
         'UPDATE rss_articles SET view_count = COALESCE(view_count, 0) + 1 WHERE id = $1 RETURNING view_count',
         [dbId]

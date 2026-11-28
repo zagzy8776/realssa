@@ -223,12 +223,12 @@ const NewsCard = ({
   }, [id]);
 
   const isLogoPattern = (url?: string) => {
-    if (!url) return true;
+    if (!url || url.split(/[?#]/)[0].replace(/\/$/, '') === externalLink?.split(/[?#]/)[0].replace(/\/$/, '')) return true;
     return /(?:^|[\/._-])(logo|favicon|avatar|placeholder|brand-logo|site-icon|punchng.*logo|cropped-punch|PUNCH-Logo)(?:[\/._-]|$)/i.test(url);
   };
 
   const resolveCardImage = (url?: string) => {
-    if (!url || isLogoPattern(url)) return CARD_FALLBACK_IMAGE;
+    if (!url || url === externalLink || isLogoPattern(url)) return CARD_FALLBACK_IMAGE;
     return url; // NewsImage applies proxy cascade
   };
   const [currentImage, setCurrentImage] = useState(() => resolveCardImage(image));
@@ -256,7 +256,7 @@ const NewsCard = ({
         if (!res.ok) return;
         const data = await res.json();
         const found = data?.image;
-        if (!cancelled && found && !isLogoPattern(found)) {
+        if (!cancelled && found && found !== externalLink && !isLogoPattern(found)) {
           setCurrentImage(found);
           setImgError(false);
           setImageRecovered(true);
@@ -389,7 +389,7 @@ const NewsCard = ({
               style={{ borderRadius: 'var(--nr-radius-card) var(--nr-radius-card) 0 0' }}
             >
               <CardImage
-                src={(image && image !== CARD_FALLBACK_IMAGE ? image : null) || (currentImage !== CARD_FALLBACK_IMAGE ? currentImage : null)}
+                src={currentImage !== CARD_FALLBACK_IMAGE ? currentImage : null}
                 alt={title}
                 className="transition-transform duration-500 group-hover:scale-[1.02]"
               />

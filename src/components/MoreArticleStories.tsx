@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import NewsCard from './NewsCard';
+import type { ComponentProps } from 'react';
 import { apiUrl } from '@/lib/api-base';
-import { cleanText, decodeHTMLEntities } from '@/lib/utils';
 
 interface Story {
   id: string;
@@ -10,10 +10,17 @@ interface Story {
   externalLink?: string;
   image?: string;
   excerpt?: string;
-  category?: string;
+  category?: ComponentProps<typeof NewsCard>['category'];
+  date?: string;
+  publishedAt?: string;
+  source_name?: string;
+  author?: string;
+  readTime?: string;
+  external_link?: string;
 }
 
-export default function MoreArticleStories({ excludeIds, excludeUrls }: {
+export default function MoreArticleStories({ excludeIds, excludeUrls, initialStories = [] }: {
+  initialStories?: Story[];
   excludeIds: (string | undefined)[];
   excludeUrls: (string | null | undefined)[];
 }) {
@@ -37,7 +44,7 @@ export default function MoreArticleStories({ excludeIds, excludeUrls }: {
   });
   const { hasNextPage, fetchNextPage, isFetching, isError } = feed;
   useEffect(() => {
-    if (!sentinel.current || isFetching || isError || (started && !hasNextPage)) return;
+    if (typeof IntersectionObserver === "undefined" || !sentinel.current || isFetching || isError || (started && !hasNextPage)) return;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       observer.disconnect();
@@ -50,27 +57,24 @@ export default function MoreArticleStories({ excludeIds, excludeUrls }: {
 
   const ids = new Set(excludeIds.filter(Boolean).map(String));
   const urls = new Set(excludeUrls.filter(Boolean));
-  const stories = (feed.data?.pages.flatMap(page => page.articles) || []).filter(item => {
+  const stories = [...initialStories, ...(feed.data?.pages.flatMap(page => page.articles) || [])].map(item => ({ ...item, externalLink: item.externalLink || item.external_link })).filter(item => {
     if (!item.id || !item.title || ids.has(String(item.id)) || (item.externalLink && urls.has(item.externalLink))) return false;
     ids.add(String(item.id));
     if (item.externalLink) urls.add(item.externalLink);
     return true;
   });
   return <section id="more-articles" className="mt-10 border-t border-border pt-6" aria-label="More articles">
-    <h2 className="text-2xl font-bold">More articles</h2>
-    {stories.map(item => {
-      const params = new URLSearchParams({ url: item.externalLink || '', id: String(item.id), title: item.title,
-        excerpt: cleanText(item.excerpt || '', 500), image: item.image || '', category: item.category || 'news' });
-      return <Link key={item.id} className="block border-b border-border py-4" to={item.externalLink ? `/read?${params}` : `/article/${encodeURIComponent(item.id)}`}>
-        <strong>{decodeHTMLEntities(item.title)}</strong>
-        <span className="block text-sm text-primary">Read more →</span>
-      </Link>;
-    })}
+    <h2 className="text-2xl font-bold mb-4">More stories</h2>
+    <div className="grid gap-4 sm:grid-cols-2">
+      {stories.map(item => <NewsCard key={item.id} id={item.id} title={item.title} image={item.image || ''}
+        excerpt={item.excerpt || ''} category={item.category || 'general'} readTime={item.readTime || '3 min'}
+        date={item.date || item.publishedAt || ''} externalLink={item.externalLink} sourceName={item.source_name || item.author} />)}
+    </div>
     <div ref={sentinel} className="py-4">
-      {isFetching ? <span role="status">Loading articles…</span> : !started || hasNextPage || isError ?
+      {isFetching ? <span role="status">Loading articles…</span> : isError || ((!started || hasNextPage) && typeof IntersectionObserver === "undefined") ?
         <button onClick={() => !started ? setStarted(true) : hasNextPage ? fetchNextPage() : feed.refetch()} className="min-h-11 text-primary">
           {isError ? 'Retry loading articles' : 'Load more articles'}
-        </button> : <p>You’ve reached the end of the current feed.</p>}
+        </button> : !hasNextPage && started ? <p>You’ve reached the end of the current feed.</p> : null}
     </div>
   </section>;
 }
