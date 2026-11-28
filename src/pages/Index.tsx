@@ -1,4 +1,4 @@
-import { apiUrl } from '@/lib/api-base';
+import { API_BASE_URL, apiUrl } from '@/lib/api-base';
 import { rankFeed, getReaderProfile, rememberStory } from '@/lib/feedRanking';
 import Header from "@/components/Header";
 import SocialButtons from "@/components/SocialButtons";
@@ -11,15 +11,13 @@ import NewsTicker from "@/components/NewsTicker";
 import SEO from "@/components/SEO";
 import { useEffect, useState, useRef, useCallback } from "react";
 import ReadProgressBar from "@/components/ReadProgressBar";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { SkeletonGrid } from "@/components/SkeletonCard";
 import MostRead from "@/components/MostRead";
-import BreakingNowRail from "@/components/BreakingNowRail";
-import { SplashScreen } from "@capacitor/splash-screen";
 import { Capacitor } from "@capacitor/core";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import StoryGroupCard from "@/components/StoryGroupCard";
-import LocalNewsRail from "@/components/LocalNewsRail";
 import { Search, RefreshCw } from "lucide-react";
 import RealSSASearchModal from "@/components/RealSSASearchModal";
 import { useNavigate } from "react-router-dom";
@@ -32,6 +30,7 @@ let initialLoadDone = true; // Always true — HTML skeleton replaces this
 
 const Index = () => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const lastSyncTimeRef = useRef(0);
   const [initialProfile] = useState(getReaderProfile);
   const profileRef = useRef(initialProfile);
@@ -44,7 +43,7 @@ const Index = () => {
   const [allArticles, setAllArticles] = useState([]);
   const [trendingArticles, setTrendingArticles] = useState([]);
   const [storyGroups, setStoryGroups] = useState([]);
-  const [breakingIds, setBreakingIds] = useState<string[]>([]);
+  const homeRequest = useRef<AbortController | null>(null);
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -126,6 +125,7 @@ const Index = () => {
     }
 
     return () => {
+      homeRequest.current?.abort();
       window.removeEventListener('beforeunload', handleCloseSync);
       if (nativeAppListener) {
         nativeAppListener.remove();
@@ -134,6 +134,10 @@ const Index = () => {
   }, []);
 
   const fetchStories = async (isRefresh = false) => {
+    homeRequest.current?.abort();
+    const request = new AbortController();
+    homeRequest.current = request;
+    let servedFromCache = false;
     try {
       setError(null);
       profileRef.current = getReaderProfile();
@@ -142,23 +146,19 @@ const Index = () => {
         seenFeedIds.current.clear();
         setFeedCursor(null);
         setFeedHasMore(true);
-        setAllArticles([]);
         setVisibleCount(12);
       }
 
       // Generate or retrieve persistent device UUID
-      let deviceId = '';
       try {
         let savedId = localStorage.getItem('realssa_device_uuid');
         if (!savedId) {
           savedId = crypto.randomUUID ? crypto.randomUUID() : 'dev-' + Math.random().toString(36).substring(2, 15);
           localStorage.setItem('realssa_device_uuid', savedId);
         }
-        deviceId = savedId;
       } catch (uuidErr) { }
 
       const ts = Date.now();
-      const deviceParam = deviceId ? `&deviceId=${deviceId}` : '';
 
       const isNotPunch = (item: any) => {
         const sourceName = (item.source_name || item.source || '').toLowerCase().trim();
@@ -171,47 +171,45 @@ const Index = () => {
       // page feels instant, then fetch fresh data silently in the background.
       const CACHE_KEY = 'realssa_home_cache_v2';
       const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-      let servedFromCache = false;
+      let cachedStories = [];
       try {
         const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
         if (cached && ts - cached.ts < CACHE_TTL && Array.isArray(cached.articles) && cached.articles.length > 0) {
           setAllArticles(rankFeed(cached.articles, profileRef.current));
-          if (Array.isArray(cached.stories)) setStories(cached.stories);
+          cachedStories = Array.isArray(cached.stories) ? cached.stories : [];
+          setStories(cachedStories);
           setLoading(false);
           servedFromCache = true;
         }
       } catch (cacheReadErr) { }
 
-      // ── Pre-warm the Vercel serverless function with a lightweight ping ──
-      // Fire-and-forget — wakes up the cold function before the real fetch hits
-      fetch(apiUrl('/api/articles?limit=1')).catch(() => {});
+      const readList = async (path: string) => {
+        // The Vercel candidate pool and featured headlines are public and ranked on-device.
+        const shared = !Capacitor.isNativePlatform() && path.startsWith('/api/articles');
+        const response = await fetch(shared ? API_BASE_URL + path : apiUrl(path), { signal: request.signal });
+        if (!response.ok) throw new Error(`Home feed returned ${response.status}`);
+        const rows = await response.json();
+        if (!Array.isArray(rows)) throw new Error('Invalid home feed');
+        return rows;
+      };
 
-      // Stage 1: Load critical above-the-fold content immediately (reduced to 20 articles for speed)
-      const [featuredRes, articlesRes, groupsRes] = await Promise.allSettled([
-        fetch(apiUrl(`/api/articles/featured?t=${ts}`)),
-        fetch(apiUrl(`/api/articles?t=${ts}${deviceParam}&limit=240&candidates=1`)),
-        fetch(apiUrl(`/api/stories/grouped?t=${ts}`))
-      ]);
+      // Each section paints as its own response arrives.
+      const featured = readList('/api/articles/featured').then(rows => {
+        const items = rows.filter(isNotPunch);
+        if (!request.signal.aborted && items.length) setStories(items);
+        return items.length ? items : cachedStories;
+      }).catch(() => cachedStories);
+      void readList('/api/stories/grouped').then(groups => {
+        if (request.signal.aborted) return;
+        setStoryGroups(groups
+          .map(g => ({ ...g, sources: (g.sources || []).filter(isNotPunch) }))
+          .filter(g => g.sources.length));
+      }).catch(() => {});
 
-      let loadedStories = [];
-      if (featuredRes.status === 'fulfilled' && featuredRes.value.ok) {
-        loadedStories = (await featuredRes.value.json()).filter(isNotPunch);
-        setStories(loadedStories);
-      }
-
-      if (groupsRes.status === 'fulfilled' && groupsRes.value.ok) {
-        const groups = await groupsRes.value.json();
-        const filteredGroups = groups
-          .map((g: any) => ({ ...g, sources: (g.sources || []).filter(isNotPunch) }))
-          .filter((g: any) => (g.sources || []).length > 0);
-        setStoryGroups(filteredGroups);
-      }
-
-      let initialNews = [];
-      if (articlesRes.status === 'fulfilled' && articlesRes.value.ok) {
-        initialNews = await articlesRes.value.json();
-      }
-
+      const initialLimit = 48;
+      const initialNews = await readList(`/api/articles?limit=${initialLimit}&candidates=1`);
+      if (request.signal.aborted) return;
+      if (!initialNews.length && servedFromCache) return;
       const initialFiltered = (initialNews || []).filter(isNotPunch);
 
       // Reset error state on successful fetch
@@ -219,7 +217,7 @@ const Index = () => {
 
       const initialUnique = rankFeed(initialFiltered, profileRef.current);
       setFeedCursor(String(initialNews.length));
-      setFeedHasMore(initialNews.length >= 240);
+      setFeedHasMore(initialNews.length >= initialLimit);
 
       // Keep the reader-specific order stable while scrolling
       // register seen IDs so cursor-based loadMore won't repeat them
@@ -228,19 +226,19 @@ const Index = () => {
       setLoading(false);
       if (isRefresh) setRefreshing(false);
 
-      // ── Save to cache for next visit ─────────────────────────────────────
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({
-          ts: Date.now(),
-          articles: initialFiltered.slice(0, 240), // Keep the reusable candidate pool for local ranking
-          stories: loadedStories.slice(0, 5),
-        }));
-      } catch (cacheWriteErr) { }
-
-      // Immediately trigger loadMore to get next batch of articles
-      if (initialUnique.length < 20 && feedHasMore) {
-        loadMoreFeed();
-      }
+      // Keep the current articles available even if the featured service is slow.
+      const saveCache = (loadedStories: any[]) => {
+        if (request.signal.aborted) return;
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            ts: Date.now(),
+            articles: initialFiltered,
+            stories: loadedStories.slice(0, 5),
+          }));
+        } catch { /* Storage may be full or unavailable. */ }
+      };
+      saveCache(cachedStories);
+      void featured.then(saveCache);
 
       // Offline digest caching (WiFi only)
       try {
@@ -267,7 +265,7 @@ const Index = () => {
         try { sessionStorage.setItem(SPLASH_SESSION_KEY, '1'); } catch { }
       }
     } catch (err) {
-
+      if (request.signal.aborted || servedFromCache) return;
       // Offline fallback trigger: attempt to load from cached offline Daily Digest
       let loadedFromCache = false;
       try {
@@ -297,7 +295,10 @@ const Index = () => {
         initialLoadDone = true;
       }
     } finally {
-      setLoading(false);
+      if (!request.signal.aborted) {
+        setRefreshing(false);
+        setLoading(false);
+      }
     }
   };
 
@@ -348,7 +349,7 @@ const Index = () => {
   };
 
   const filteredArticles = getFilteredArticles();
-  const heroArticle = allArticles.find((art: any) => art.image && !/(placeholder|logo|icon|favicon)/i.test(art.image)) || allArticles[0];
+  const heroArticle = allArticles.find((art: any) => art.image && !/(placeholder|logo|icon|favicon)/i.test(art.image)) || allArticles[0] || stories[0];
   const discoverArticles = filteredArticles.filter((article: any) => article.id !== heroArticle?.id);
   const visibleArticles = discoverArticles.slice(0, visibleCount);
 
@@ -399,23 +400,20 @@ const Index = () => {
       {/* News ticker sits right below header */}
       <NewsTicker />
 
-      {/* Breaking rail still runs but doesn't eat layout above the fold */}
-      <div className="hidden">
-        <BreakingNowRail excludeIds={[...stories.map((s: any) => s.id), ...(heroArticle ? [heroArticle.id] : [])]} onLoaded={(ids) => setBreakingIds(ids)} />
-        <LocalNewsRail excludeIds={[...stories.map((s: any) => s.id), ...breakingIds]} />
-      </div>
       <SocialButtons />
 
       <main style={{ paddingTop: "0.5rem" }}>
 
         {/* ══ HERO — Full-bleed editorial breaking story ══ */}
-        <HeroSection article={heroArticle} />
+        {heroArticle ? <HeroSection article={heroArticle} /> : loading && (
+          <div aria-label="Loading top story" role="status" className="mx-3 mt-2 min-h-[clamp(280px,55vw,520px)] rounded-2xl bg-muted animate-pulse" />
+        )}
 
         {/* ══ CATEGORY PILL BAR ══ */}
         <div
           className="sticky z-40 px-3 sm:px-4 py-2.5"
           style={{
-            top: "56px",
+            top: "var(--home-filter-top, 56px)",
             background: "rgba(10,10,15,0.92)",
             backdropFilter: "blur(16px)",
             WebkitBackdropFilter: "blur(16px)",
@@ -506,7 +504,7 @@ const Index = () => {
         )}
 
         {/* ══ LIVE TV STRIP — desktop only ══ */}
-        <section className="px-3 sm:px-4 py-4 hidden md:block max-w-screen-xl mx-auto">
+        {!isMobile && <section className="px-3 sm:px-4 py-4 hidden md:block max-w-screen-xl mx-auto">
           <h2 className="nr-section-title mb-3">
             <span
               className="inline-flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded animate-pulse"
@@ -525,6 +523,7 @@ const Index = () => {
               >
                 <iframe
                   className="w-full aspect-video"
+                  loading="lazy"
                   src={video.embedUrl}
                   title={video.title}
                   allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -539,7 +538,7 @@ const Index = () => {
               </div>
             ))}
           </div>
-        </section>
+        </section>}
 
         {/* ══ DISCOVER FEED + MOST READ SIDEBAR ══ */}
         <section className="px-3 sm:px-4 py-6 max-w-screen-xl mx-auto">

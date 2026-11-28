@@ -1,3 +1,4 @@
+import mastheadLogo from '@/assets/realssa-masthead.webp';
 import React, { useEffect, useRef, useState } from 'react';
 import { Bell, BookOpen, ChevronDown, Clock3, Film, Globe2, Home, KeyRound, LogOut, Menu, MonitorSmartphone, Moon, Newspaper, Radio, Search, Sparkles, Sun, Tv, X } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -157,7 +158,7 @@ const Header: React.FC = () => {
   return (
     <>
       <header className={cn(
-        'sticky top-0 z-[9999] border-b border-border/80 bg-background/95 backdrop-blur-2xl transition-shadow',
+        'realssa-masthead sticky top-0 z-[9999] border-b border-border/80 bg-background/95 backdrop-blur-2xl transition-shadow',
         compact && 'shadow-[0_8px_30px_rgba(0,0,0,0.08)]'
       )}>
         <div className="mx-auto max-w-[1500px] px-3 sm:px-5 lg:px-7">
@@ -165,6 +166,7 @@ const Header: React.FC = () => {
             <button
               onClick={toggleMobileNavigation}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-sm lg:hidden"
+              aria-expanded={mobileOpen}
               aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'}
             >
               {mobileOpen ? <X size={20} /> : <Menu size={20} />}
@@ -172,7 +174,7 @@ const Header: React.FC = () => {
 
             <Link to="/" className="group flex min-w-0 shrink-0 items-center gap-3" aria-label="RealSSA News home">
               <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-card shadow-sm sm:h-12 sm:w-12">
-                <img src="/logo.png" alt="RealSSA" className="h-full w-full object-contain" />
+                <img src={mastheadLogo} alt="RealSSA" className="h-full w-full object-contain" />
               </div>
               <div className="min-w-0 leading-none">
                 <div className="font-serif text-[22px] font-black tracking-[-0.04em] text-foreground sm:text-[25px]">
@@ -250,7 +252,7 @@ const Header: React.FC = () => {
               </button>
             </div>
 
-            <Link to="/browser" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-primary/35 bg-primary/10 text-primary shadow-sm lg:hidden" aria-label="Open RealSSA Browser">
+            <Link to="/browser" className="ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-primary/35 bg-primary/10 text-primary shadow-sm lg:hidden" aria-label="Open RealSSA Browser">
               <MonitorSmartphone size={19} />
             </Link>
           </div>

@@ -1,3 +1,4 @@
+import mastheadLogo from '@/assets/realssa-masthead.webp';
 import { Facebook, Twitter, Instagram, Youtube, Rss, MessageCircle, Send } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
@@ -28,7 +29,7 @@ const Footer = () => {
           {/* Logo & Description */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-2 mb-3">
-              <img src="/logo.png" alt="RealSSA Logo" className="h-8 w-auto" />
+              <img src={mastheadLogo} alt="RealSSA Logo" className="h-8 w-auto" />
               <h3 className="font-display text-xl font-bold">
                 <span className="text-foreground">Real</span>
                 <span className="text-gradient-gold">SSA</span>

@@ -5,13 +5,12 @@ import { Outlet, useLocation, useNavigationType } from "react-router-dom";
 /**
  * Modern page transitions for RealSSA
  * - Direction-aware slide (forward / back)
- * - Soft fade + lift for same-level routes
+ * - Immediate cross-route entry with a soft fade
  * - Respects prefers-reduced-motion
  * - Shared layout chrome stays outside this wrapper
  */
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const;
-const EASE_IN = [0.4, 0, 1, 1] as const;
 
 type Direction = "forward" | "back" | "none";
 
@@ -38,50 +37,6 @@ function getDirection(
   return "none";
 }
 
-const fadeLift = {
-  initial: { opacity: 0, y: 14, filter: "blur(4px)" },
-  enter: {
-    opacity: 1,
-    y: 0,
-    filter: "blur(0px)",
-    transition: { duration: 0.38, ease: EASE_OUT },
-  },
-  exit: {
-    opacity: 0,
-    y: -10,
-    filter: "blur(3px)",
-    transition: { duration: 0.22, ease: EASE_IN },
-  },
-};
-
-const slideForward = {
-  initial: { opacity: 0, x: 28 },
-  enter: {
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.4, ease: EASE_OUT },
-  },
-  exit: {
-    opacity: 0,
-    x: -18,
-    transition: { duration: 0.24, ease: EASE_IN },
-  },
-};
-
-const slideBack = {
-  initial: { opacity: 0, x: -28 },
-  enter: {
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.4, ease: EASE_OUT },
-  },
-  exit: {
-    opacity: 0,
-    x: 18,
-    transition: { duration: 0.24, ease: EASE_IN },
-  },
-};
-
 const reduced = {
   initial: { opacity: 0 },
   enter: { opacity: 1, transition: { duration: 0.15 } },
@@ -102,7 +57,6 @@ export const PageTransition = ({
 }: PageTransitionProps) => {
   const location = useLocation();
   const navType = useNavigationType();
-  const prefersReduced = useReducedMotion();
   const prevPath = useRef(location.pathname);
 
   const direction = useMemo(() => {
@@ -113,42 +67,14 @@ export const PageTransition = ({
     prevPath.current = location.pathname;
   }, [location.pathname]);
 
-  const variants = useMemo(() => {
-    if (prefersReduced) return reduced;
-
-    if (type === "fade" || type === "fadeScale") return fadeLift;
-    if (type === "slide") {
-      return direction === "back" ? slideBack : slideForward;
-    }
-
-    // auto
-    if (direction === "forward") return slideForward;
-    if (direction === "back") return slideBack;
-    return fadeLift;
-  }, [type, direction, prefersReduced]);
-
-  if (!enabled) {
-    return <Outlet />;
-  }
-
+  const slide = type === 'slide' || (type === 'auto' && direction !== 'none');
+  const transition = slide ? (direction === 'back' ? 'back' : 'forward') : 'fade';
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={location.pathname}
-        initial="initial"
-        animate="enter"
-        exit="exit"
-        variants={variants}
-        className={`w-full min-h-[50vh] ${className}`}
-        style={{
-          position: "relative",
-          width: "100%",
-          willChange: "opacity, transform",
-        }}
-      >
-        <Outlet />
-      </motion.div>
-    </AnimatePresence>
+    <div key={location.pathname}
+      data-route-enter={enabled && prevPath.current !== location.pathname ? transition : undefined}
+      className={`w-full min-h-[50vh] ${className}`}>
+      <Outlet />
+    </div>
   );
 };
 

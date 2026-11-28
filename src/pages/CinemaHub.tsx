@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
-import VideoNews from "@/pages/VideoNews";
+import { useQueryClient } from "@tanstack/react-query";
 import { Play, Info, Search, Star, Film, Tv, X, Clock, EyeOff, Youtube, Loader2, Share2, Activity, Shield, Trophy, Clapperboard, MapPin } from 'lucide-react';
 import { HighlightsModal } from '@/components/HighlightsPanel';
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
-import { apiUrl } from "@/lib/api-base";
+import { apiUrl, API_BASE_URL } from "@/lib/api-base";
 import { normalizeFeedMatches, type FeedMatch } from "@/lib/sportsMatchNormalize";
-import CinemaPlayer from "@/components/CinemaPlayer";
-import SportsPlayer from "@/components/SportsPlayer";
 import Header from "@/components/Header";
 import ReadProgressBar from "@/components/ReadProgressBar";
 import SEO from "@/components/SEO";
+
+const VideoNews = lazy(() => import("@/pages/VideoNews"));
+const CinemaPlayer = lazy(() => import("@/components/CinemaPlayer"));
+const SportsPlayer = lazy(() => import("@/components/SportsPlayer"));
 
 interface MovieOrShow {
   id: number;
@@ -91,7 +93,98 @@ const FALLBACK_CATALOG: MovieOrShow[] = [
   }
 ];
 
+const getPoster = (item: MovieOrShow) =>
+  item.r2_poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : null);
+
+const getBackdrop = (item: MovieOrShow) =>
+  item.r2_backdrop_url || (item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : null);
+
+const getYear = (item: MovieOrShow) => {
+  const d = item.release_date || item.first_air_date || '';
+  return d ? d.substring(0, 4) : '';
+};
+
+const getRating = (item: MovieOrShow) => ((item.vote_average ?? 0)).toFixed(1);
+
+function MediaCard({ item, onOpen }: { item: MovieOrShow; onOpen: (item: MovieOrShow) => void }) {
+  const posterUrl = getPoster(item);
+  return (
+    <div
+      onClick={() => onOpen(item)}
+      className="group relative cursor-pointer rounded-2xl overflow-hidden border border-white/5 hover:border-amber-500/35 transition-all duration-300 hover:scale-[1.04] hover:shadow-[0_12px_28px_rgba(0,0,0,0.85),0_8px_24px_rgba(245,158,11,0.12)] bg-zinc-900 aspect-[2/3] select-none"
+      style={{ transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
+    >
+      {posterUrl ? (
+        <>
+        <img
+          src={posterUrl}
+          alt={item.title || item.name}
+          className="w-full h-full object-cover"
+          loading="lazy" decoding="async"
+          onError={(e) => {
+            const img = e.currentTarget;
+            img.style.display = 'none';
+            const fallback = img.nextElementSibling as HTMLElement | null;
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+        <div
+          className="hidden absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black flex-col items-center justify-center p-3 text-center"
+          aria-hidden="true"
+        >
+          <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500">
+            {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
+          </div>
+          <p className="text-zinc-400 text-[10px] font-extrabold max-w-full truncate px-1 uppercase tracking-wider">
+            {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
+          </p>
+        </div>
+        </>
+      ) : (
+        <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-3 text-center">
+          <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500 group-hover:text-amber-400 group-hover:bg-amber-500/10 transition-colors">
+            {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
+          </div>
+          <p className="text-zinc-400 text-[10px] font-extrabold max-w-full truncate px-1 uppercase tracking-wider">
+            {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
+          </p>
+        </div>
+      )}
+
+      {/* Shadow Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300" />
+
+      {/* Ambient top highlight */}
+      <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+      {/* Play Icon Badge */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-90 group-hover:scale-100">
+        <div className="w-12 h-12 bg-amber-500 hover:bg-amber-400 text-black rounded-full flex items-center justify-center shadow-xl shadow-amber-500/25 active:scale-90 transition-transform">
+          <Play size={20} className="fill-black ml-1" />
+        </div>
+      </div>
+
+      {/* Card Metadata info */}
+      <div className="absolute bottom-0 left-0 right-0 p-3 transform translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
+        <p className="text-white text-xs font-black leading-tight line-clamp-1 group-hover:line-clamp-2 transition-all">{item.title || item.name}</p>
+        <div className="flex items-center gap-1.5 mt-1 opacity-80 group-hover:opacity-100 transition-opacity">
+          {(item.vote_average ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold bg-amber-500/10 px-1 py-0.5 rounded">
+              <Star size={9} className="fill-current" />{getRating(item)}
+            </span>
+          )}
+          {getYear(item) && <span className="text-zinc-400 text-[9px] font-bold">{getYear(item)}</span>}
+          <span className="ml-auto text-[8px] uppercase font-black bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-400 border border-white/5">
+            {item.media_type === 'tv' ? 'TV' : 'FILM'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function CinemaHub() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'movies' | 'news' | 'sports'>('movies');
 
   // Catalog state — single flat list, infinite scroll
@@ -394,12 +487,7 @@ export default function CinemaHub() {
         };
         handleOpenDetails(dummy);
 
-        // If play parameter was used, auto-trigger play once data loads
-        if (params.has('play')) {
-          setTimeout(() => {
-            handlePlayMedia(dummy);
-          }, 1200);
-        }
+        if (params.has('play')) handlePlayMedia(dummy);
       }
     }
   }, []);
@@ -409,18 +497,19 @@ export default function CinemaHub() {
     else setLoadingMore(true);
 
     try {
-      const res = await fetch(apiUrl(`/api/cinema/trending?page=${pageNum}&time_window=week`), {
-        headers: { Accept: 'application/json' },
-        cache: 'no-store'
+      const raw = await queryClient.fetchQuery({
+        queryKey: ['cinema', 'trending', 'week', pageNum],
+        staleTime: 5 * 60_000,
+        gcTime: 30 * 60_000,
+        queryFn: async ({ signal }): Promise<MovieOrShow[]> => {
+          const res = await fetch(`${API_BASE_URL}/api/cinema/trending?page=${pageNum}&time_window=week`, { signal });
+          if (!res.ok) throw new Error(`Cinema API returned HTTP ${res.status}`);
+          const data = await res.json();
+          if (!Array.isArray(data?.results)) throw new Error('Invalid cinema catalog');
+          return data.results;
+        },
       });
-      if (!res.ok) {
-        throw new Error(`Cinema API returned HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      if (!data || !Array.isArray(data.results)) {
-        throw new Error('Cinema API returned an invalid catalog payload');
-      }
-      const raw: MovieOrShow[] = data.results;
+      if (isFirst) seenIds.current.clear();
 
       // Deduplicate by id — never show same card twice
       const fresh = raw.filter(item => {
@@ -469,7 +558,7 @@ export default function CinemaHub() {
 
   // ── IntersectionObserver for true automatic infinite scroll ──
   useEffect(() => {
-    if (isSearching || loading) return;
+    if (activeTab !== 'movies' || isSearching || loading) return;
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
@@ -484,7 +573,7 @@ export default function CinemaHub() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loading, loadingMore, hasMore, isSearching, loadNextPage]);
+  }, [activeTab, loading, loadingMore, hasMore, isSearching, loadNextPage]);
 
   // ── Close suggestions on outside click ──
   useEffect(() => {
@@ -499,7 +588,7 @@ export default function CinemaHub() {
 
   // ── Hero auto-rotation every 6 seconds ──
   useEffect(() => {
-    if (heroPool.length < 2) return;
+    if (heroPool.length < 2 || activeTab !== 'movies' || activePlayer || selectedMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const timer = setInterval(() => {
       setHeroIdx(prev => {
         const next = (prev + 1) % heroPool.length;
@@ -508,7 +597,7 @@ export default function CinemaHub() {
       });
     }, 6000);
     return () => clearInterval(timer);
-  }, [heroPool]);
+  }, [heroPool, activeTab, activePlayer, selectedMedia]);
 
   const handleNextHero = () => {
     if (heroPool.length === 0) return;
@@ -695,19 +784,6 @@ export default function CinemaHub() {
     });
   };
 
-  const getPoster = (item: MovieOrShow) =>
-    item.r2_poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : null);
-
-  const getBackdrop = (item: MovieOrShow) =>
-    item.r2_backdrop_url || (item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null);
-
-  const getYear = (item: MovieOrShow) => {
-    const d = item.release_date || item.first_air_date || '';
-    return d ? d.substring(0, 4) : '';
-  };
-
-  const getRating = (item: MovieOrShow) => ((item.vote_average ?? 0)).toFixed(1);
-
   const formatGenres = (genres: any[]) =>
     genres?.length ? genres.slice(0, 3).map(g => g.name).join(' · ') : '';
 
@@ -715,82 +791,6 @@ export default function CinemaHub() {
   const movies = catalog.filter(i => i.media_type === 'movie');
   const shows = catalog.filter(i => i.media_type === 'tv');
 
-  const MediaCard = ({ item }: { item: MovieOrShow }) => {
-    const posterUrl = getPoster(item);
-    return (
-      <div
-        onClick={() => handleOpenDetails(item)}
-        className="group relative cursor-pointer rounded-2xl overflow-hidden border border-white/5 hover:border-amber-500/35 transition-all duration-300 hover:scale-[1.04] hover:shadow-[0_12px_28px_rgba(0,0,0,0.85),0_8px_24px_rgba(245,158,11,0.12)] bg-zinc-900 aspect-[2/3] select-none"
-        style={{ transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
-      >
-        {posterUrl ? (
-          <>
-          <img
-            src={posterUrl}
-            alt={item.title || item.name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-            onError={(e) => {
-              const img = e.currentTarget;
-              img.style.display = 'none';
-              const fallback = img.nextElementSibling as HTMLElement | null;
-              if (fallback) fallback.style.display = 'flex';
-            }}
-          />
-          <div
-            className="hidden absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black flex-col items-center justify-center p-3 text-center"
-            aria-hidden="true"
-          >
-            <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500">
-              {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
-            </div>
-            <p className="text-zinc-400 text-[10px] font-extrabold max-w-full truncate px-1 uppercase tracking-wider">
-              {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
-            </p>
-          </div>
-          </>
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-3 text-center">
-            <div className="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center mb-2.5 text-zinc-500 group-hover:text-amber-400 group-hover:bg-amber-500/10 transition-colors">
-              {item.media_type === 'tv' ? <Tv size={18} /> : <Film size={18} />}
-            </div>
-            <p className="text-zinc-400 text-[10px] font-extrabold max-w-full truncate px-1 uppercase tracking-wider">
-              {item.media_type === 'tv' ? 'TV Series' : 'Movie'}
-            </p>
-          </div>
-        )}
-        
-        {/* Shadow Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300" />
-
-        {/* Ambient top highlight */}
-        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-        {/* Play Icon Badge */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-90 group-hover:scale-100">
-          <div className="w-12 h-12 bg-amber-500 hover:bg-amber-400 text-black rounded-full flex items-center justify-center shadow-xl shadow-amber-500/25 active:scale-90 transition-transform">
-            <Play size={20} className="fill-black ml-1" />
-          </div>
-        </div>
-
-        {/* Card Metadata info */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 transform translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
-          <p className="text-white text-xs font-black leading-tight line-clamp-1 group-hover:line-clamp-2 transition-all">{item.title || item.name}</p>
-          <div className="flex items-center gap-1.5 mt-1 opacity-80 group-hover:opacity-100 transition-opacity">
-            {(item.vote_average ?? 0) > 0 && (
-              <span className="flex items-center gap-0.5 text-amber-400 text-[9px] font-bold bg-amber-500/10 px-1 py-0.5 rounded">
-                <Star size={9} className="fill-current" />{getRating(item)}
-              </span>
-            )}
-            {getYear(item) && <span className="text-zinc-400 text-[9px] font-bold">{getYear(item)}</span>}
-            <span className="ml-auto text-[8px] uppercase font-black bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-400 border border-white/5">
-              {item.media_type === 'tv' ? 'TV' : 'FILM'}
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <>
@@ -846,7 +846,9 @@ export default function CinemaHub() {
       {/* ── Live News Tab ── */}
       {activeTab === 'news' && (
         <div className="flex-1 overflow-auto">
-          <VideoNews isEmbedded={true} />
+          <Suspense fallback={<p role="status" className="p-6 text-center text-zinc-300">Loading live news…</p>}>
+            <VideoNews isEmbedded />
+          </Suspense>
         </div>
       )}
 
@@ -1458,7 +1460,10 @@ export default function CinemaHub() {
             <section className="relative w-full h-[56vh] sm:h-[75vh] flex flex-col justify-end overflow-hidden group/hero">
               {/* Slides background with transition */}
               <div className="absolute inset-0 transition-all duration-700 ease-in-out">
-                <img src={getBackdrop(featured)} alt="" className="w-full h-full object-cover animate-fade-in" />
+                <img src={getBackdrop(featured)} alt=""
+                  srcSet={featured.backdrop_path && (!featured.r2_backdrop_url || featured.r2_backdrop_url.startsWith('https://image.tmdb.org/'))
+                    ? `https://image.tmdb.org/t/p/w780${featured.backdrop_path} 780w, https://image.tmdb.org/t/p/w1280${featured.backdrop_path} 1280w` : undefined}
+                  sizes="100vw" fetchPriority="high" className="w-full h-full object-cover animate-fade-in" />
                 {/* Netflix-style vignette masks */}
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/45 to-transparent" />
@@ -1704,7 +1709,7 @@ export default function CinemaHub() {
                   </div>
                 ) : searchResults.length > 0 ? (
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
-                    {searchResults.map(item => <MediaCard key={item.id} item={item} />)}
+                    {searchResults.map(item => <MediaCard onOpen={handleOpenDetails} key={item.id} item={item} />)}
                   </div>
                 ) : (
                   <div className="text-center py-16 text-zinc-600 flex flex-col items-center gap-3">
@@ -1765,7 +1770,7 @@ export default function CinemaHub() {
                         >
                           {movies.map(item => (
                             <div key={item.id} className="flex-shrink-0 w-[30%] sm:w-[22%] md:w-[16%] lg:w-[12.5%] snap-start">
-                              <MediaCard item={item} />
+                              <MediaCard onOpen={handleOpenDetails} item={item} />
                             </div>
                           ))}
                         </div>
@@ -1802,7 +1807,7 @@ export default function CinemaHub() {
                         >
                           {shows.map(item => (
                             <div key={item.id} className="flex-shrink-0 w-[30%] sm:w-[22%] md:w-[16%] lg:w-[12.5%] snap-start">
-                              <MediaCard item={item} />
+                              <MediaCard onOpen={handleOpenDetails} item={item} />
                             </div>
                           ))}
                         </div>
@@ -2060,64 +2065,64 @@ export default function CinemaHub() {
       )}
 
       {/* ── RealSSA Player ── */}
-      {activePlayer && (
-        <CinemaPlayer
-          tmdbId={activePlayer.tmdbId}
-          mediaType={activePlayer.mediaType}
-          season={activePlayer.season}
-          episode={activePlayer.episode}
-          title={activePlayer.title}
-          onClose={() => setActivePlayer(null)}
-        />
-      )}
-      {/* ── Highlights modal (finished matches) ── */}
-      <HighlightsModal source={highlightsMatch} onClose={() => setHighlightsMatch(null)} />
+      <Suspense fallback={<div role="status" className="fixed inset-0 z-[9999] grid place-items-center bg-zinc-950 text-white">Opening player…</div>}>
+        {activePlayer && (
+          <CinemaPlayer
+            tmdbId={activePlayer.tmdbId}
+            mediaType={activePlayer.mediaType}
+            season={activePlayer.season}
+            episode={activePlayer.episode}
+            title={activePlayer.title}
+            onClose={() => setActivePlayer(null)}
+          />
+        )}
+        {/* ── Highlights modal (finished matches) ── */}
+        <HighlightsModal source={highlightsMatch} onClose={() => setHighlightsMatch(null)} />
 
-      {/* ── RealSSA Sports Player ── */}
-      {/* ── RealSSA Sports Player (native direct HLS + fallback servers) ── */}
-      {activeSportsPlayer && (
-        <SportsPlayer
-          // Remount per fixture. Without this, switching from Parma to Getafe
-          // reused the same <video>/hls instance and kept playing the PREVIOUS
-          // match's channel under the new title — the "wrong match" bleed.
-          key={`${activeSportsPlayer.channelId}|${activeSportsPlayer.streamId || ''}|${activeSportsPlayer.title}`}
-          channelId={activeSportsPlayer.channelId}
-          title={activeSportsPlayer.title}
-          directSources={activeSportsPlayer.directSources}
-          home={activeSportsPlayer.home}
-          away={activeSportsPlayer.away}
-          homeCrest={activeSportsPlayer.homeCrest}
-          awayCrest={activeSportsPlayer.awayCrest}
-          isLive={activeSportsPlayer.isLive}
-          sport={activeSportsPlayer.sport}
-          league={activeSportsPlayer.league}
-          liveConfidence={activeSportsPlayer.liveConfidence}
-          kickoff={activeSportsPlayer.kickoff}
-          streamId={activeSportsPlayer.streamId}
-          exactEmbedUrl={activeSportsPlayer.exactEmbedUrl}
-          venue={activeSportsPlayer.venue}
-          onSwitchMatch={m => setActiveSportsPlayer({
-            channelId: m.streamId || 'superabbit',
-            title: m.event || 'Live Match',
-            directSources: m.directSources,
-            home: m.home || null,
-            away: m.away || null,
-            homeCrest: m.homeCrest || null,
-            awayCrest: m.awayCrest || null,
-            isLive: true,
-            sport: m.sport || null,
-            league: m.league || null,
-            liveConfidence: m.liveConfidence || null,
-            kickoff: m.kickoff ?? null,
-            streamId: m.streamId || null,
-            exactEmbedUrl: m.exactEmbedUrl || null,
-            venue: m.venue || null,
-          })}
-          onClose={() => setActiveSportsPlayer(null)}
-        />
-      )}
-
-
+        {/* ── RealSSA Sports Player ── */}
+        {/* ── RealSSA Sports Player (native direct HLS + fallback servers) ── */}
+        {activeSportsPlayer && (
+          <SportsPlayer
+            // Remount per fixture. Without this, switching from Parma to Getafe
+            // reused the same <video>/hls instance and kept playing the PREVIOUS
+            // match's channel under the new title — the "wrong match" bleed.
+            key={`${activeSportsPlayer.channelId}|${activeSportsPlayer.streamId || ''}|${activeSportsPlayer.title}`}
+            channelId={activeSportsPlayer.channelId}
+            title={activeSportsPlayer.title}
+            directSources={activeSportsPlayer.directSources}
+            home={activeSportsPlayer.home}
+            away={activeSportsPlayer.away}
+            homeCrest={activeSportsPlayer.homeCrest}
+            awayCrest={activeSportsPlayer.awayCrest}
+            isLive={activeSportsPlayer.isLive}
+            sport={activeSportsPlayer.sport}
+            league={activeSportsPlayer.league}
+            liveConfidence={activeSportsPlayer.liveConfidence}
+            kickoff={activeSportsPlayer.kickoff}
+            streamId={activeSportsPlayer.streamId}
+            exactEmbedUrl={activeSportsPlayer.exactEmbedUrl}
+            venue={activeSportsPlayer.venue}
+            onSwitchMatch={m => setActiveSportsPlayer({
+              channelId: m.streamId || 'superabbit',
+              title: m.event || 'Live Match',
+              directSources: m.directSources,
+              home: m.home || null,
+              away: m.away || null,
+              homeCrest: m.homeCrest || null,
+              awayCrest: m.awayCrest || null,
+              isLive: true,
+              sport: m.sport || null,
+              league: m.league || null,
+              liveConfidence: m.liveConfidence || null,
+              kickoff: m.kickoff ?? null,
+              streamId: m.streamId || null,
+              exactEmbedUrl: m.exactEmbedUrl || null,
+              venue: m.venue || null,
+            })}
+            onClose={() => setActiveSportsPlayer(null)}
+          />
+        )}
+      </Suspense>
       <Footer />
     </div>
     </>
