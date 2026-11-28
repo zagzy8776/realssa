@@ -22,7 +22,7 @@ const { cleanSocialText, sourceSummary, formatSocialCaption } = require('./socia
 function narrativePrompt(title, context) {
   return [
     'You are the RealSSA News editor. Explain this story in clear, engaging, detailed narrative prose.',
-    'Lead with the main verified development. Write in your own words, in 2-4 short paragraphs. A brief story may need only a few sentences. Omit sharing controls, subscription prompts and navigation.',
+    'Lead with the main verified development. Write in your own words, using as many short paragraphs as the verified facts warrant. Explain the main development first, then how it unfolded and what happens next if known. A brief story may need only a few sentences. Omit sharing controls, subscription prompts and navigation.',
     'Cover what happened, the people and places involved, chronology, attributed statements, supported background, and consequences.',
     'Preserve names, dates, numbers, attribution and the distinction between allegations and confirmed facts.',
     'Use ONLY the supplied source. Never invent context, reactions, quotes, motives or implications to reach a word count.',
@@ -33,7 +33,15 @@ function narrativePrompt(title, context) {
     `Title: ${JSON.stringify(title)}`, `Source: ${JSON.stringify(context)}`
   ].join('\n');
 }
-async function generateAIAnalysis(title, excerpt) {
+const inFlightReports = new Map();
+function generateAIAnalysis(title, excerpt) {
+  const key = require('node:crypto').createHash('sha256').update(JSON.stringify([title, excerpt])).digest('hex');
+  if (inFlightReports.has(key)) return inFlightReports.get(key);
+  const task = writeReport(title, excerpt).finally(() => inFlightReports.delete(key));
+  inFlightReports.set(key, task);
+  return task;
+}
+async function writeReport(title, excerpt) {
   const context = cleanArticleText(excerpt || ' ').slice(0, 24000);
   // An RSS teaser cannot support a full report. Preserve it and retry extraction later.
   if (context.split(/\s+/).length < 80) return { summary: context || title, entities: [], translations: {}, generated: false };

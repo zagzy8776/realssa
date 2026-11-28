@@ -39,3 +39,28 @@ test('feed-only stories reuse a bounded warm cache when no database row exists',
   assert.equal(row.title,'Library opens');
   assert.equal(row.ai_summary,'A full sourced report.');
 });
+
+test('summary-only reader never returns publisher copy during an outage', async () => {
+  const { saveEnrichment } = require('../services/savedReader.cjs');
+  const url = 'https://example.test/summary-outage';
+  const source = 'Publisher text with confirmed details about the library opening on Monday. '.repeat(12);
+  await saveEnrichment(url, { title: 'Library opens', source, summary: null });
+  const handler = require('../services/readerHandler.cjs');
+  const summariser = require('../services/summariser');
+  const previous = summariser.generateAIAnalysis;
+  summariser.generateAIAnalysis = async () => ({ generated: false, summary: source });
+  let payload;
+  const res = { status() {}, setHeader() {}, end(value) { payload = JSON.parse(value); } };
+  try {
+    await handler({ method: 'POST', body: { mode: 'summary', url } }, res);
+    assert.equal(payload.contentKind, 'unavailable');
+    assert.equal(payload.retryable, true);
+    assert.ok(!JSON.stringify(payload).includes('Publisher text'));
+    const summary = 'Readers will be able to visit the new library on Monday. Staff have prepared the collection and the council says that entry will be free for residents.';
+    await saveEnrichment(url, { title: 'Library opens', source, summary });
+    await handler({ method: 'POST', body: { mode: 'summary', url } }, res);
+    assert.equal(payload.contentKind, 'summary');
+    assert.equal(payload.textContent, summary);
+    assert.ok(!JSON.stringify(payload).includes('Publisher text'));
+  } finally { summariser.generateAIAnalysis = previous; }
+});
