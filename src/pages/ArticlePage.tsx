@@ -203,7 +203,7 @@ const ArticlePage = () => {
   };
 
   const sourceUrl = article?.externalLink;
-  const [readerKind, setReaderKind] = useState('source-preview');
+  const [readerAttempt, setReaderAttempt] = useState(0);
   useEffect(() => {
     setReaderContent(null);
     setParseError(false);
@@ -214,13 +214,13 @@ const ArticlePage = () => {
     fetch(apiUrl('/api/extract'), {
       method: 'POST', signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: sourceUrl }),
+      body: JSON.stringify({ url: sourceUrl, mode: 'summary' }),
     }).then(async response => {
       if (!response.ok) throw new Error('Reader unavailable');
       const data = await response.json();
       if (!controller.signal.aborted) {
-        setReaderKind(data.contentKind || 'source-preview');
-        setReaderContent(data.content);
+        if (data.contentKind === 'summary' && data.content) setReaderContent(data.content);
+        else setParseError(true);
       }
     }).catch(() => {
       if (!controller.signal.aborted) setParseError(true);
@@ -228,7 +228,7 @@ const ArticlePage = () => {
       if (!controller.signal.aborted) setIsParsing(false);
     });
     return () => controller.abort();
-  }, [sourceUrl]);
+  }, [sourceUrl, readerAttempt]);
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -496,15 +496,15 @@ const ArticlePage = () => {
 
           {/* Content */}
           <div className="prose max-w-none dark:prose-invert">
-            {!readerContent && article.excerpt && <p>{article.excerpt}</p>}
-            {readerContent && <h2>{readerKind === 'summary' ? 'RealSSA summary' : 'Source preview'}</h2>}
+            {(!sourceUrl || sourceUrl === '#') && article.excerpt && <p>{article.excerpt}</p>}
+            {readerContent && <h2>RealSSA summary</h2>}
 
             {/* Reader Engine Loading State */}
             {isParsing && (
               <div className="my-12 p-8 bg-black border border-primary/20 rounded-2xl flex flex-col items-center justify-center text-center shadow-lg">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-5"></div>
-                <h3 className="text-xl font-display font-bold text-white mb-2">Initializing Reader Mode</h3>
-                <p className="text-sm text-gray-400">Stripping ads and trackers for a clean, distraction-free reading experience...</p>
+                <h3 className="text-xl font-display font-bold text-white mb-2">Preparing your RealSSA summary</h3>
+
               </div>
             )}
 
@@ -527,8 +527,8 @@ const ArticlePage = () => {
             {/* Parser Error State */}
             {parseError && !readerContent && (
               <div className="my-6 p-5 bg-red-950/20 border border-red-900/50 text-red-400 rounded-xl text-center text-sm">
-                We couldn't automatically extract this article. 
-                <a href={article.externalLink} target="_blank" rel="noopener noreferrer" className="underline font-bold ml-1 hover:text-red-300">Read directly on source</a>
+                The RealSSA summary is unavailable right now.
+                <button className="ml-2 py-2 font-semibold underline" onClick={() => setReaderAttempt(n => n + 1)}>Try again</button>
               </div>
             )}
 

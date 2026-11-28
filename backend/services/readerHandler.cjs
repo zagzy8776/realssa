@@ -34,6 +34,17 @@ module.exports = async function handler(req, res) {
   }
 
   const body = normalizeBody(req.body);
+  // Other consumers use extraction for image recovery and previews.
+  function sendArticle(payload) {
+    if (body.mode !== 'summary') return sendJson(res, 200, payload);
+    if (payload.contentKind === 'summary') {
+      return sendJson(res, 200, { ...payload, excerpt: payload.textContent.slice(0, 240), byline: 'RealSSA' });
+    }
+    return sendJson(res, 200, {
+      contentKind: 'unavailable', title: payload.title, image: payload.image,
+      articleId: payload.articleId, siteName: payload.siteName, retryable: true,
+    });
+  }
   const rawUrl = String(body.url || '').trim();
   let fallbackText = String(body.fallbackText || body.excerpt || '').trim();
   let fallbackImage = body.fallbackImage || body.image || null;
@@ -54,7 +65,7 @@ module.exports = async function handler(req, res) {
   const sourceThread = 'rss-' + require('crypto').createHash('sha1').update(rawUrl.split('#')[0]).digest('hex').slice(0, 16);
   const saved = await findSavedArticle(target.toString());
   const savedResponse = savedArticleResponse(saved, target.toString());
-  if (savedResponse && saved?.ai_summary && savedResponse.textContent.split(/\s+/).length >= 25 && !copiesSource(savedResponse.textContent, cleanArticleText(saved.full_content || saved.original_excerpt))) return sendJson(res, 200, { ...savedResponse, contentKind: 'summary', articleId: savedResponse.articleId || sourceThread });
+  if (savedResponse && saved?.ai_summary && savedResponse.textContent.split(/\s+/).length >= 25 && !copiesSource(savedResponse.textContent, cleanArticleText(saved.full_content || saved.original_excerpt))) return sendArticle({ ...savedResponse, contentKind: 'summary', articleId: savedResponse.articleId || sourceThread });
   fallbackText = saved?.original_excerpt || fallbackText || '';
   fallbackImage = fallbackImage || saved?.image || null;
   fallbackTitle = fallbackTitle || saved?.title || null;
@@ -62,11 +73,14 @@ module.exports = async function handler(req, res) {
   try {
     let generated = false;
     let article = saved?.full_content && saved.full_content.split(/\s+/).length >= 80
-      ? { ...savedResponse, textContent: saved.full_content, htmlContent: savedResponse.content, partial: false }
+      ? { ...savedResponse, textContent: saved.full_content, htmlContent: savedResponse?.content, partial: false }
       : await extractArticle(target.toString(), {
       fallbackText,
       fallbackImage,
       fallbackTitle,
+    }).catch(error => {
+      if (body.mode !== 'summary' || cleanArticleText(fallbackText).split(/\s+/).length < 80) throw error;
+      return { title: fallbackTitle, textContent: fallbackText, partial: true };
     });
 
     if (article) article.textContent = cleanArticleText(article.textContent);
@@ -74,7 +88,7 @@ module.exports = async function handler(req, res) {
       // Absolute last resort: still return something readable if client sent excerpt/title
       const rescue = cleanArticleText(fallbackText || fallbackTitle).split(/\s+/).slice(0, 55).join(' ');
       if (rescue.length >= 15) {
-        return sendJson(res, 200, {
+        return sendArticle({
           articleId: saved?.id ? `rss-${saved.id}` : sourceThread,
           title: fallbackTitle || target.hostname,
           content: `<p>${escapeHtml(rescue)}</p>`,
@@ -99,7 +113,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (!article.partial && article.textContent.split(/\s+/).length >= 80) {
+    if ((!article.partial || body.mode === 'summary') && article.textContent.split(/\s+/).length >= 80) {
       try {
         const { generateAIAnalysis } = require('./summariser');
         const analysis = await generateAIAnalysis(article.title || fallbackTitle, article.textContent);
@@ -109,11 +123,11 @@ module.exports = async function handler(req, res) {
           article = { ...article, textContent: analysis.summary,
             htmlContent: analysis.summary.split(/\n\s*\n/).map(p => `<p>${escapeHtml(p)}</p>`).join('') };
         }
-        await saveEnrichment(target.toString(), { title: article.title || fallbackTitle, source: source.slice(0, 24000), summary: analysis.generated ? analysis.summary : null, image: article.image || fallbackImage });
+        await saveEnrichment(target.toString(), { title: article.title || fallbackTitle, source: article.partial ? null : source.slice(0, 24000), summary: analysis.generated ? analysis.summary : null, image: article.image || fallbackImage });
       } catch (error) { console.warn('[Reader] Enrichment unavailable:', error.code || error.name); }
     }
     const text = generated ? article.textContent.trim() : article.textContent.trim().split(/\s+/).slice(0, 55).join(" ");
-    return sendJson(res, 200, {
+    return sendArticle({
       articleId: saved?.id ? `rss-${saved.id}` : sourceThread,
       title: article.title || fallbackTitle || target.hostname,
       contentKind: generated ? 'summary' : 'source-preview',
@@ -134,7 +148,7 @@ module.exports = async function handler(req, res) {
     console.error('[Vercel Extract] Extraction failed:', error.message);
     const rescue = cleanArticleText(fallbackText || fallbackTitle).split(/\s+/).slice(0, 55).join(' ');
     if (rescue.length >= 15) {
-      return sendJson(res, 200, {
+      return sendArticle({
         articleId: saved?.id ? `rss-${saved.id}` : sourceThread,
         title: fallbackTitle || target.hostname,
         content: `<p>${escapeHtml(rescue)}</p>`,

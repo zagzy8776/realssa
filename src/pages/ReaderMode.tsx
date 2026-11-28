@@ -42,7 +42,7 @@ const ReaderMode = () => {
   
   const [article, setArticle] = useState<ExtractedArticle | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [imgError, setImgError] = useState(false);
   const [relatedNews, setRelatedNews] = useState<any[]>([]);
   const [viewCount, setViewCount] = useState<number | null>(null);
@@ -70,14 +70,14 @@ const ReaderMode = () => {
     const runExtract = async () => {
       try {
         setLoading(true);
-        setError(false);
+
         setImgError(false);
         const response = await fetch(apiUrl("/api/extract"), {
           signal: controller.signal,
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            url,
+            url, mode: "summary",
             fallbackText: fallbackExcerpt || undefined,
             fallbackImage: fallbackImage || undefined,
             fallbackTitle: fallbackTitle || undefined,
@@ -91,21 +91,21 @@ const ReaderMode = () => {
 
         const data = await response.json();
         
-        // Always prefer extracted content; fall back to RSS/query params
+        const ready = data.contentKind === "summary" && Boolean(data.content);
         const resolved: ExtractedArticle = {
           articleId: data.articleId || articleId,
           title: data.title || fallbackTitle || "Article",
-          content: data.content || (fallbackExcerpt ? `<p>${fallbackExcerpt}</p>` : "<p>Content could not be extracted. Please visit the original source.</p>"),
-          textContent: data.textContent || fallbackExcerpt || "",
-          length: data.length || 0,
-          excerpt: data.excerpt || fallbackExcerpt || "",
+          content: ready ? data.content : "",
+          textContent: ready ? data.textContent : "",
+          length: ready ? data.length : 0,
+          excerpt: ready ? data.excerpt : "",
           byline: data.byline || "",
           dir: data.dir || "ltr",
           siteName: data.siteName || "",
           lang: data.lang || "en",
           publishedTime: data.publishedTime || "",
           image: data.image || fallbackImage || null,
-          contentKind: data.contentKind,
+          contentKind: ready ? "summary" : "unavailable",
           partial: data.partial || !data.content,
         };
 
@@ -116,10 +116,7 @@ const ReaderMode = () => {
         // Soft-fail: still show something useful from RSS fallbacks
         setArticle({
           title: fallbackTitle || "Article",
-          content: fallbackExcerpt ? `<p>${fallbackExcerpt}</p><p class=\"text-muted-foreground\">Full extraction unavailable. Use the source link below.</p>` : "<p>Unable to load article content. Please open the original source.</p>",
-          textContent: fallbackExcerpt || "",
-          length: 0,
-          excerpt: fallbackExcerpt || "",
+          content: "", textContent: "", length: 0, excerpt: "",
           byline: "",
           dir: "ltr",
           siteName: "",
@@ -128,7 +125,7 @@ const ReaderMode = () => {
           image: fallbackImage || null,
           partial: true,
         });
-        setError(true);
+
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -149,14 +146,14 @@ const ReaderMode = () => {
     };
     loadRelated();
     return () => controller.abort();
-  }, [url, navigate, fallbackExcerpt, fallbackImage, fallbackTitle, fallbackCategory, articleId]);
+  }, [url, navigate, fallbackExcerpt, fallbackImage, fallbackTitle, fallbackCategory, articleId, attempt]);
 
   const handleShare = async () => {
     const title = article?.title || fallbackTitle || "Article";
     const shareUrl = window.location.href;
     await shareContent({
       title,
-      text: article?.excerpt || fallbackExcerpt || title,
+      text: article?.excerpt || title,
       url: shareUrl,
     });
   };
@@ -167,8 +164,8 @@ const ReaderMode = () => {
         <Header />
         <div className="story-reader max-w-3xl mx-auto px-4 py-8 space-y-5" aria-busy="true">
           {fallbackTitle && <h1>{decodeHTMLEntities(fallbackTitle)}</h1>}
-          {fallbackExcerpt && <p>{decodeHTMLEntities(fallbackExcerpt)}</p>}
-          <span role="status">Loading full article…</span>
+
+          <span role="status">Preparing your RealSSA summary…</span>
           <div className="h-8 bg-muted rounded w-3/4" />
           <div className="h-4 bg-muted rounded w-1/2" />
           <div className="h-64 bg-muted rounded-xl" />
@@ -237,25 +234,16 @@ const ReaderMode = () => {
           </div>
         )}
 
-        <h2 className="mb-3 text-lg font-semibold">{article.contentKind === 'summary' ? 'RealSSA summary' : 'Source preview'}</h2>
+        <h2 className="mb-3 text-lg font-semibold">RealSSA summary</h2>
         <div
           className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-display prose-a:text-primary mb-12"
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content || '') }}
         />
 
-        {url && (
-          <div className="mb-12">
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-amber-500 text-black font-semibold"
-            >
-              <ExternalLink className="w-4 h-4" /> Read on original site
-            </a>
-          </div>
-        )}
-
+        {article.contentKind !== 'summary' && <div className="mb-8" role="status">
+          <p>The RealSSA summary is unavailable right now.</p>
+          <button className="py-3 font-semibold text-primary" onClick={() => setAttempt(n => n + 1)}>Try again</button>
+        </div>}
 
         {(article.articleId || articleId) && <ExternalArticleComments
           articleId={article.articleId || articleId!}
