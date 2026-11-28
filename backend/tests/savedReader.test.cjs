@@ -15,8 +15,8 @@ for (const full of [true, false]) {
     const row = { title: 'Library opens', [full ? 'full_content' : 'original_excerpt']: full ? 'The library contains 200 books and opens Monday. '.repeat(14) : 'The new library contains 200 books and opens Monday.' };
     let calls = 0;
     const mod = { exports: {} };
-    new Function('require', 'module', readFileSync(resolve(__dirname, '../../api/extract.js'), 'utf8'))(
-      request => request === 'crypto' ? require('crypto') : request.includes('savedReader') ? { findSavedArticle: async () => row, savedArticleResponse, saveEnrichment: async () => {} } : request.includes('summariser') ? { generateAIAnalysis: async () => ({ generated: false }) } : {
+    new Function('require', 'module', readFileSync(resolve(__dirname, '../services/readerHandler.cjs'), 'utf8'))(
+      request => request.includes('articleContent') ? require('../services/articleContent.cjs') : request === 'crypto' ? require('crypto') : request.includes('savedReader') ? { findSavedArticle: async () => row, savedArticleResponse, saveEnrichment: async () => {} } : request.includes('summariser') ? { generateAIAnalysis: async () => ({ generated: false }) } : {
         extractArticle: async () => { calls++; throw new Error('Publisher unavailable'); }
       }, mod);
     let status, payload;

@@ -1361,3 +1361,12 @@ api-sports-widget[data-theme="RealSSA"] {
     to { opacity: 1; transform: none; }
   }
 }
+
+.story-reader :is(button, a) {
+  -webkit-tap-highlight-color: hsl(var(--primary) / .15);
+  scroll-margin-block: 5rem;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .story-reader :is(button, a) { transition: background-color 140ms ease, opacity 140ms ease; }
+  .story-reader :is(button, a):active { opacity: .78; }
+}

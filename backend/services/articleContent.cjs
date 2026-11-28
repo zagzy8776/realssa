@@ -1,6 +1,9 @@
 const { JSDOM } = require('jsdom');
 const { cleanSocialText } = require('./socialCaption.cjs');
 const UI_TEXT = [
+  /^(?:bluesky|reddit|print|email|revcontent feed|authorization response|subscribe log in|gift this article|what is article sharing\?)$/i,
+  /^(?:print|email a link to a friend|share on .{1,30}) \(opens in new window\)(?: .{1,15})?$/i,
+  /^(?:click to share a free article with a friend|gift this article what is article sharing\?|subscribers are entitled to \d+ gift sharing articles|subscribe now! or sign in to your account)/i,
   /^get alerts on significant breaking news/i,
   /^you have reached your maximum number of saved items/i,
   /^remove items from your saved list to add more/i,
@@ -38,4 +41,15 @@ function cleanArticleText(text) {
   if (/<\/?(?:p|div|article|section|button|script)\b/i.test(raw)) return cleanArticleHtml(raw).textContent;
   return raw.split(/\n+/).map(line => cleanSocialText(line)).filter(line => line && !isUiText(line)).join('\n\n');
 }
-module.exports = { cleanArticleHtml, cleanArticleText, removeArticleChrome };
+function copiesSource(summary, source) {
+  const normalize = text => String(text || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const original = normalize(source);
+  const words = normalize(summary).split(' ');
+  if (!original) return false;
+  if (original.includes(normalize(summary))) return true;
+  for (let i = 0; i + 18 <= words.length; i++) {
+    if (original.includes(words.slice(i, i + 18).join(' '))) return true;
+  }
+  return false;
+}
+module.exports = { cleanArticleHtml, cleanArticleText, removeArticleChrome, copiesSource };

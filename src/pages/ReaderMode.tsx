@@ -27,6 +27,7 @@ interface ExtractedArticle {
   publishedTime: string;
   image?: string | null;
   partial?: boolean;
+  contentKind?: string;
 }
 
 const ReaderMode = () => {
@@ -104,6 +105,7 @@ const ReaderMode = () => {
           lang: data.lang || "en",
           publishedTime: data.publishedTime || "",
           image: data.image || fallbackImage || null,
+          contentKind: data.contentKind,
           partial: data.partial || !data.content,
         };
 
@@ -235,6 +237,7 @@ const ReaderMode = () => {
           </div>
         )}
 
+        <h2 className="mb-3 text-lg font-semibold">{article.contentKind === 'summary' ? 'RealSSA summary' : 'Source preview'}</h2>
         <div
           className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-display prose-a:text-primary mb-12"
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content || '') }}
