@@ -6,6 +6,7 @@ interface CardImageProps {
   alt: string;
   className?: string;
   preferOriginal?: boolean;
+  fallbackSrc?: string;
 }
 
 /**
@@ -18,6 +19,7 @@ export default function CardImage({
   alt,
   className = '',
   preferOriginal = true,
+  fallbackSrc,
 }: CardImageProps) {
   const [candidates, setCandidates] = useState<string[]>([]);
   const [idx, setIdx] = useState(0);
@@ -64,6 +66,7 @@ export default function CardImage({
 
   // Always fill the aspect-ratio parent
   if (failed || !current) {
+    if (fallbackSrc) return <img src={fallbackSrc} alt="" loading="lazy" className={`absolute inset-0 w-full h-full object-cover ${className}`} />;
     return (
       <div
         className={`absolute inset-0 bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950 ${className}`}

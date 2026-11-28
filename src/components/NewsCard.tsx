@@ -37,6 +37,7 @@ type CategoryType =
 interface NewsCardProps {
   title: string;
   excerpt: string;
+  fallbackArtwork?: string;
   category: CategoryType;
   image: string;
   readTime: string;
@@ -90,6 +91,7 @@ const getSourceLabel = (_sName?: string, _auth?: string, _extLink?: string) => {
 const NewsCard = ({
   title,
   excerpt,
+  fallbackArtwork,
   category,
   image,
   readTime,
@@ -389,6 +391,7 @@ const NewsCard = ({
               style={{ borderRadius: 'var(--nr-radius-card) var(--nr-radius-card) 0 0' }}
             >
               <CardImage
+                fallbackSrc={fallbackArtwork}
                 src={currentImage !== CARD_FALLBACK_IMAGE ? currentImage : null}
                 alt={title}
                 className="transition-transform duration-500 group-hover:scale-[1.02]"

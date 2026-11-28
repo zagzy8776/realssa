@@ -7,7 +7,8 @@ import Footer from "@/components/Footer";
 import NewsTicker from "@/components/NewsTicker";
 import Pagination from "@/components/Pagination";
 import { SkeletonGrid } from "@/components/SkeletonCard";
-import SimpleImage from "@/components/SimpleImage";
+import CardImage from "@/components/CardImage";
+import { cleanText } from "@/lib/utils";
 import CategoryBadge from "@/components/CategoryBadge";
 import { ArrowRight } from "lucide-react";
 
@@ -141,12 +142,11 @@ const Nigeria = () => {
                   : `/article/${item.id}`}
                 className="group bg-card text-foreground rounded-xl overflow-hidden shadow hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border"
               >
-                <div className="relative">
-                  <SimpleImage
-                    src={item.image}
-                    alt={item.title}
-                    className="w-full h-36 md:h-44 object-cover"
-                    fallback="https://placehold.co/400x200/1a1a2e/ffffff?text=Nigeria+News"
+                <div className="relative h-36 md:h-44">
+                  <CardImage
+                    src={item.image && !/\/logo\.png(?:$|\?)/i.test(item.image) ? item.image : null}
+                    alt={cleanText(item.title)}
+                    fallbackSrc="/images/nigeria_heritage_bg.png"
                   />
                   <div className="absolute top-2 left-2">
                     <CategoryBadge category={item.category as any} />
@@ -154,9 +154,9 @@ const Nigeria = () => {
                 </div>
                 <div className="p-3">
                   <h3 className="text-foreground text-sm font-bold line-clamp-2 mb-1 group-hover:text-primary transition-colors leading-snug">
-                    {item.title}
+                    {cleanText(item.title)}
                   </h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{item.excerpt}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{cleanText(item.excerpt)}</p>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span className="truncate max-w-[60%]">{item.author}</span>
                     <span className="flex items-center gap-1 text-primary font-medium">

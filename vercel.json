@@ -59,6 +59,6 @@
     {"source":"/locations-sitemap.xml","destination":"/api/index.js"},
     {"source":"/areas-sitemap.xml","destination":"/api/index.js"},
     {"source":"/cinema-sitemap.xml","destination":"/api/index.js"},
-    {"source":"/(.*)","destination":"/index.html"}
+    {"source":"/((?!assets/).*)","destination":"/index.html"}
   ]
 }

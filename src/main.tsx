@@ -13,23 +13,16 @@ import { applyUiVersion } from "./lib/uiFlag";
 
 applyUiVersion();
 
-// Detect stale chunk loading errors and force reload once
-// This happens when Vercel deploys new code with new hashed filenames
-// but the user's browser has cached the old index.html
-window.addEventListener('error', (event) => {
-  const isChunkError = event.message?.includes('Failed to fetch dynamically imported module') ||
-                       event.message?.includes('Importing a module script failed');
-  
-  if (isChunkError) {
-    const hasReloaded = sessionStorage.getItem('chunk-reload-attempted');
-    if (!hasReloaded) {
-      console.warn('[ChunkError] Stale build detected, forcing reload...');
-      sessionStorage.setItem('chunk-reload-attempted', 'true');
-      window.location.reload();
-    } else {
-      console.error('[ChunkError] Reload already attempted, showing error');
-    }
-  }
+// Vite emits this before a rejected lazy import reaches React Router.
+window.addEventListener('vite:preloadError', event => {
+  if (!navigator.onLine) return;
+  try {
+    const key = 'realssa:last-chunk-recovery';
+    if (Date.now() - Number(sessionStorage.getItem(key)) < 60000) return;
+    sessionStorage.setItem(key, String(Date.now()));
+    event.preventDefault();
+    window.location.reload();
+  } catch { /* Let the router handle the failure when storage is unavailable. */ }
 });
 
 // Sync dark mode with system preference
