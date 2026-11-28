@@ -447,7 +447,7 @@ const ArticlePage = () => {
       <ReadProgressBar />
       <Header />
       <div className="container mx-auto px-4 py-8">
-        <article className="max-w-4xl mx-auto">
+        <article className="story-reader max-w-4xl mx-auto">
           {/* Breadcrumb Trail */}
           <nav className="mb-4 text-xs md:text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
             <Link to="/" className="hover:text-primary transition-colors">Home</Link>

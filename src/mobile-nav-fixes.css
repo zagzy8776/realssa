@@ -260,3 +260,27 @@
     box-shadow: 0 3px 12px rgb(0 0 0 / .24), inset 0 1px rgb(255 255 255 / .08);
   }
 }
+
+.story-read-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 44px;
+  align-self: flex-start;
+  margin-inline: 1rem;
+  color: var(--nr-amber);
+  font-weight: 650;
+}
+@media (max-width: 767px) {
+  .story-reader { overflow-wrap: anywhere; }
+  .story-reader h1 { font-size: clamp(1.85rem, 7vw, 2.65rem); line-height: 1.12; }
+  .story-reader .prose { font-size: 1.1rem; line-height: 1.72; }
+  .story-reader .prose :is(img, video) { max-width: 100%; height: auto; }
+  .story-reader .prose :is(pre,table) { display: block; overflow-x: auto; max-width: 100%; }
+  .story-reader :is(h2,h3) { scroll-margin-top: 6rem; }
+  .cinema-hub-shell:has(.cinema-search input:not(:placeholder-shown)) .cinema-primary-nav { position: static; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .story-read-link span { transition: transform 150ms ease-out; }
+  .story-read-link:is(:focus-visible,:hover) span { transform: translateX(3px); }
+}

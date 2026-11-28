@@ -62,16 +62,15 @@ const ReaderMode = () => {
       return;
     }
 
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-
+    const controller = new AbortController();
+    setRelatedNews([]);
     const runExtract = async () => {
       try {
         setLoading(true);
         setError(false);
         setImgError(false);
         const response = await fetch(apiUrl("/api/extract"), {
+          signal: controller.signal,
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -106,8 +105,9 @@ const ReaderMode = () => {
           partial: data.partial || !data.content,
         };
 
-        setArticle(resolved);
+        if (!controller.signal.aborted) setArticle(resolved);
       } catch (err) {
+        if (controller.signal.aborted) return;
         console.error("ReaderMode extract error:", err);
         // Soft-fail: still show something useful from RSS fallbacks
         setArticle({
@@ -126,7 +126,7 @@ const ReaderMode = () => {
         });
         setError(true);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
@@ -135,15 +135,16 @@ const ReaderMode = () => {
     // Related news
     const loadRelated = async () => {
       try {
-        const res = await fetch(apiUrl(`/api/news?limit=6&category=${encodeURIComponent(fallbackCategory)}`));
+        const res = await fetch(apiUrl(`/api/news?limit=6&category=${encodeURIComponent(fallbackCategory)}`), { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
           const items = Array.isArray(data) ? data : (data.articles || data.items || []);
-          setRelatedNews(items.slice(0, 4));
+          if (!controller.signal.aborted) setRelatedNews(items.slice(0, 4));
         }
       } catch {}
     };
     loadRelated();
+    return () => controller.abort();
   }, [url, navigate, fallbackExcerpt, fallbackImage, fallbackTitle, fallbackCategory, articleId]);
 
   const handleShare = async () => {
@@ -160,7 +161,10 @@ const ReaderMode = () => {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="max-w-3xl mx-auto px-4 py-12 animate-pulse space-y-6">
+        <div className="story-reader max-w-3xl mx-auto px-4 py-8 space-y-5" aria-busy="true">
+          {fallbackTitle && <h1>{decodeHTMLEntities(fallbackTitle)}</h1>}
+          {fallbackExcerpt && <p>{decodeHTMLEntities(fallbackExcerpt)}</p>}
+          <span role="status">Loading full article…</span>
           <div className="h-8 bg-muted rounded w-3/4" />
           <div className="h-4 bg-muted rounded w-1/2" />
           <div className="h-64 bg-muted rounded-xl" />
@@ -192,7 +196,7 @@ const ReaderMode = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <article className="max-w-3xl mx-auto px-4 py-8">
+      <article className="story-reader max-w-3xl mx-auto px-4 py-8">
         <button
           onClick={() => navigate(-1)}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"

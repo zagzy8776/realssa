@@ -424,6 +424,8 @@ const NewsCard = ({
           </div>
         )}
 
+        <Link to={linkTo} onClick={handleClick} className="story-read-link" aria-label={`Read more: ${decodeHTMLEntities(title)}`}>Read more <span aria-hidden>→</span></Link>
+
         {storyHash && (
           <div className="px-4 pb-3 flex gap-2 text-xs">
             <button disabled={hasVotedVerify} onClick={handleVerifyClick} className={`px-3 py-1 rounded-full flex items-center gap-1 border transition-all duration-200 cursor-pointer text-[10px] font-bold ${hasVotedVerify ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' : 'bg-white/5 text-slate-300 border-white/5 hover:bg-emerald-500/10 hover:text-red-400'}`}>

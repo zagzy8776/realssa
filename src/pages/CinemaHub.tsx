@@ -1,3 +1,4 @@
+import { imageCandidates } from '@/lib/image';
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import CinemaDialog from '@/components/CinemaDialog';
@@ -95,8 +96,18 @@ const FALLBACK_CATALOG: MovieOrShow[] = [
   }
 ];
 
-const getPoster = (item: MovieOrShow) =>
-  item.r2_poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : null);
+function Poster({ item, priority }: { item: MovieOrShow; priority: boolean }) {
+  const path = item.poster_path;
+  const tmdb = path?.startsWith('/') && !path.startsWith('//') ? `https://image.tmdb.org/t/p/w342${path}` : '';
+  const original = item.r2_poster_url || path || '';
+  const primary = tmdb && (!original.startsWith('https://') || original.startsWith('https://image.tmdb.org/') || original.endsWith('/logo.png')) ? tmdb : original;
+  const urls = [...new Set([primary, tmdb, ...imageCandidates(tmdb || primary)].filter(Boolean))];
+  const [attempt, setAttempt] = useState(0);
+  if (!urls[attempt]) return null;
+  return <img src={urls[attempt]} alt="" width={342} height={513}
+    loading={priority ? 'eager' : 'lazy'} fetchPriority={priority ? 'high' : 'auto'} decoding="async"
+    onError={() => setAttempt(index => index + 1)} />;
+}
 
 const getBackdrop = (item: MovieOrShow) =>
   item.r2_backdrop_url || (item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : null);
@@ -116,15 +127,13 @@ async function cinemaJson(path: string, signal: AbortSignal) {
   return res.json();
 }
 
-function MediaCard({ item, onOpen }: { item: MovieOrShow; onOpen: (item: MovieOrShow) => void }) {
+function MediaCard({ item, onOpen, priority = false }: { priority?: boolean; item: MovieOrShow; onOpen: (item: MovieOrShow) => void }) {
   const title = item.title || item.name || 'Untitled';
-  const poster = getPoster(item);
   return (
     <button type="button" className="cinema-card" aria-label={`Open ${title}`} onClick={() => onOpen(item)}>
       <span className="cinema-poster">
         <Film aria-hidden size={24} />
-        {poster && <img src={poster} alt="" loading="lazy" decoding="async"
-          onError={event => { event.currentTarget.hidden = true; }} />}
+        <Poster key={`${item.poster_path}|${item.r2_poster_url}`} item={item} priority={priority} />
       </span>
       <strong>{title}</strong>
       <span className="cinema-card-meta">
@@ -1432,8 +1441,8 @@ export default function CinemaHub() {
                     ? 'Searching the catalog…' : searchResults.length ? '' : `No titles found for “${searchQuery.trim()}”.`}
                   {search.isError && <button onClick={() => search.refetch()}>Retry search</button>}
                 </p>
-                <div className="cinema-grid">{searchResults.map(item =>
-                  <MediaCard key={mediaKey(item)} item={item} onOpen={handleOpenDetails} />)}</div>
+                <div className="cinema-grid">{searchResults.map((item, index) =>
+                  <MediaCard priority={index < 2} key={mediaKey(item)} item={item} onOpen={handleOpenDetails} />)}</div>
               </section>
             ) : (
               <section aria-label="Browse cinema">
@@ -1446,7 +1455,7 @@ export default function CinemaHub() {
                   ))}
                 </div>
                 <div className="cinema-grid">
-                  {visibleCatalog.map(item => <MediaCard key={mediaKey(item)} item={item} onOpen={handleOpenDetails} />)}
+                  {visibleCatalog.map((item, index) => <MediaCard priority={index < 2} key={mediaKey(item)} item={item} onOpen={handleOpenDetails} />)}
                   {loading && !catalog.length && Array.from({ length: 6 }, (_, i) => <span key={i} className="cinema-poster animate-pulse" />)}
                 </div>
                 <div ref={sentinelRef} className="cinema-pagination">
