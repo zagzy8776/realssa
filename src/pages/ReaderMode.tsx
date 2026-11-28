@@ -1,3 +1,4 @@
+import MovieRail from '@/components/MovieRail';
 import MoreArticleStories from '@/components/MoreArticleStories';
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -260,6 +261,7 @@ const ReaderMode = () => {
           articleContext={article.textContent || article.excerpt}
         />}
 
+        <MovieRail headline={article.title || fallbackTitle} category={fallbackCategory} />
         <MoreArticleStories key={article.articleId || articleId} initialStories={relatedNews} excludeIds={[article.articleId || articleId]} excludeUrls={[url]} />
 
         </article>
