@@ -35,11 +35,11 @@ test('invalid provider output falls through and reasoning model has headroom',as
 test('detailed analysis receives full source and preserves translations and entities',async()=>{
  const restore=env({GROQ_API_KEY:'test-long-report'}), original=global.fetch;
  const context='The council opened a library with 200 books on Monday. '.repeat(35)+'Final source detail: free entry.';
- const report='The council opened a library with 200 books on Monday. '.repeat(30);
+ const report='Residents can visit the new library free of charge. The council opened its doors on Monday with an initial collection of two hundred books available to readers.';
  global.fetch=async(_url,options)=>{
   const prompt=JSON.parse(options.body).messages[0].content;
   assert.ok(prompt.includes('Final source detail'));
-  assert.ok(prompt.includes('350-600'));
+  assert.ok(prompt.includes('in your own words'));
   return ok(JSON.stringify({summary:report,entities:[{name:'Council',type:'organization'}],translations:{pidgin:{title:'Library opens',summary:'A sourced recap'}}}));
  };
  try{const result=await generateAIAnalysis('Library opens',context);assert.equal(result.generated,true);assert.equal(result.summary,report);assert.equal(result.entities.length,1);assert.ok(result.translations.pidgin);}
@@ -84,4 +84,12 @@ test('main API and reader load normally under deployed CommonJS package scopes',
  });
  assert.equal(result.status,0,result.stderr);
  assert.ok(result.stdout.includes('HANDLERS_OK'));
+});
+
+test('reader filters publisher controls and rejects copied prose', () => {
+  const { cleanArticleText, copiesSource } = require('../services/articleContent.cjs');
+  const fact = 'Officials confirmed the bridge would reopen on Monday following inspections.';
+  assert.equal(cleanArticleText([fact, 'Bluesky', 'Print (Opens in new window) Print', 'Authorization Response'].join('\n')), fact);
+  assert.ok(copiesSource(fact, fact));
+  assert.equal(copiesSource('Inspectors cleared the bridge for reopening on Monday.', fact), false);
 });

@@ -202,45 +202,33 @@ const ArticlePage = () => {
     }
   };
 
-  // Reader View Engine Effect
+  const sourceUrl = article?.externalLink;
+  const [readerKind, setReaderKind] = useState('source-preview');
   useEffect(() => {
-    if (!article) return;
-    
-    const content = (article as any).content;
-    const hasSubstantialContent = content && content.length > 500;
-    
-    // Trigger Reader Engine if we have an external link, lack substantial local content, and haven't tried yet
-    if (article.externalLink && article.externalLink !== '#' && !hasSubstantialContent && !readerContent && !isParsing && !parseError) {
-      const fetchReaderMode = async () => {
-        setIsParsing(true);
-        try {
-          const response = await fetch(apiUrl('/api/extract'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: article.externalLink })
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.content) {
-              setReaderContent(data.content);
-            } else {
-              setParseError(true);
-            }
-          } else {
-            setParseError(true);
-          }
-        } catch (err) {
-          console.error('Reader extraction failed:', err);
-          setParseError(true);
-        } finally {
-          setIsParsing(false);
-        }
-      };
-      
-      fetchReaderMode();
-    }
-  }, [article, readerContent, isParsing, parseError]);
+    setReaderContent(null);
+    setParseError(false);
+    setIsParsing(false);
+    if (!sourceUrl || sourceUrl === '#') return;
+    const controller = new AbortController();
+    setIsParsing(true);
+    fetch(apiUrl('/api/extract'), {
+      method: 'POST', signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: sourceUrl }),
+    }).then(async response => {
+      if (!response.ok) throw new Error('Reader unavailable');
+      const data = await response.json();
+      if (!controller.signal.aborted) {
+        setReaderKind(data.contentKind || 'source-preview');
+        setReaderContent(data.content);
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) setParseError(true);
+    }).finally(() => {
+      if (!controller.signal.aborted) setIsParsing(false);
+    });
+    return () => controller.abort();
+  }, [sourceUrl]);
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -508,34 +496,9 @@ const ArticlePage = () => {
 
           {/* Content */}
           <div className="prose max-w-none dark:prose-invert">
-            {/* AI Summary (TL;DR) */}
-            <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-2xl border border-blue-100 dark:border-blue-900 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                <span className="text-6xl">✨</span>
-              </div>
-              <h3 className="flex items-center gap-2 text-lg font-bold text-blue-800 dark:text-blue-300 mb-3 mt-0">
-                <span className="animate-pulse">⚡</span> Quick Read
-              </h3>
-              <ul className="space-y-2 mb-0 text-foreground selectable-text">
-                {(article as any).ai_summary ? (
-                  // If we have an actual array of summary points from backend
-                  Array.isArray((article as any).ai_summary) 
-                    ? (article as any).ai_summary.map((point: string, i: number) => <li key={i}>{point}</li>)
-                    : <li>{(article as any).ai_summary}</li>
-                ) : (
-                  // Fallback: Split excerpt into 2 pseudo-bullet points for the demo
-                  <>
-                    <li>{article.excerpt ? (decodeHTMLEntities(article.excerpt).split('.')[0] || decodeHTMLEntities(article.excerpt)) : "Stay updated with RealSSA News"}.</li>
-                    {article.excerpt && article.excerpt.split('.').length > 1 && (
-                      <li>{decodeHTMLEntities(article.excerpt).split('.').slice(1).join('.').trim() || "Stay updated with RealSSA for more details."}</li>
-                    )}
-                  </>
-                )}
-              </ul>
-            </div>
+            {!readerContent && article.excerpt && <p>{article.excerpt}</p>}
+            {readerContent && <h2>{readerKind === 'summary' ? 'RealSSA summary' : 'Source preview'}</h2>}
 
-            <p className="text-base md:text-lg mb-6 leading-relaxed text-foreground selectable-text">{article.excerpt}</p>
-            
             {/* Reader Engine Loading State */}
             {isParsing && (
               <div className="my-12 p-8 bg-black border border-primary/20 rounded-2xl flex flex-col items-center justify-center text-center shadow-lg">
@@ -554,7 +517,7 @@ const ArticlePage = () => {
             )}
 
             {/* Fallback Native Content */}
-            {!isParsing && !readerContent && (
+            {!isParsing && !readerContent && (!sourceUrl || sourceUrl === '#') && (
               <div
                 className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-display prose-a:text-primary mt-6 mb-12 selectable-text"
                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((article as any).content || '') }}

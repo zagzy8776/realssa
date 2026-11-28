@@ -3,19 +3,19 @@ const cursors = new Map();
 const cooling = new Map();
 const recent = new Map();
 const ORDERS = {
-  summary: ['cerebras', 'waterfall', 'gemini', 'nvidia', 'groq', 'cloudflare'],
+  summary: ['cerebras', 'waterfall', 'gemini', 'nvidia', 'groq', 'openrouter', 'cloudflare'],
   social: ['waterfall', 'cerebras', 'groq', 'gemini', 'nvidia', 'cloudflare'],
   comment: ['groq', 'gemini', 'waterfall', 'cerebras', 'nvidia', 'cloudflare'],
   extraction: ['groq', 'gemini', 'waterfall', 'cerebras', 'nvidia', 'cloudflare'],
 };
 function keysFor(provider) {
-  const names = { gemini: ['GEMINI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'], nvidia: ['NVIDIA_API_KEY', 'GEMINI_API_KEY'], groq: ['GROQ_API_KEY'], cerebras: ['CEREBRAS_API_KEY'], waterfall: ['WATERFALL_API_KEY'], cloudflare: ['CF_API_TOKEN'] };
+  const names = { openrouter: ['OPENROUTER_API_KEY'], gemini: ['GEMINI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'], nvidia: ['NVIDIA_API_KEY', 'GEMINI_API_KEY'], groq: ['GROQ_API_KEY'], cerebras: ['CEREBRAS_API_KEY'], waterfall: ['WATERFALL_API_KEY'], cloudflare: ['CF_API_TOKEN'] };
   return [...new Set(names[provider].flatMap(name => String(process.env[name] || '').split(',')).map(k => k.trim()).filter(Boolean))]
     .filter(k => provider === 'nvidia' ? k.startsWith('nvapi-') : provider !== 'gemini' || !k.startsWith('nvapi-'));
 }
 function providerConfig(provider) {
-  const model = { gemini: process.env.GEMINI_MODEL || 'gemini-3.8-flash', nvidia: process.env.NVIDIA_AI_MODEL || 'nvidia/nemotron-3-super-120b-a12b', groq: process.env.GROQ_MODEL || 'llama-3.1-8b-instant', cerebras: process.env.CEREBRAS_MODEL || 'gpt-oss-120b', waterfall: process.env.WATERFALL_MODEL || 'auto', cloudflare: process.env.CF_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct' }[provider];
-  const url = { gemini: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, nvidia: 'https://integrate.api.nvidia.com/v1/chat/completions', groq: 'https://api.groq.com/openai/v1/chat/completions', cerebras: 'https://api.cerebras.ai/v1/chat/completions', waterfall: `${(process.env.WATERFALL_BASE_URL || 'https://api.getwaterfall.org/v1').replace(/\/+$/, '')}/chat/completions`, cloudflare: `https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID || ''}/ai/run/${model}` }[provider];
+  const model = { openrouter: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct', gemini: process.env.GEMINI_MODEL || 'gemini-3.8-flash', nvidia: process.env.NVIDIA_AI_MODEL || 'nvidia/nemotron-3-super-120b-a12b', groq: process.env.GROQ_MODEL || 'llama-3.1-8b-instant', cerebras: process.env.CEREBRAS_MODEL || 'gpt-oss-120b', waterfall: process.env.WATERFALL_MODEL || 'auto', cloudflare: process.env.CF_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct' }[provider];
+  const url = { openrouter: 'https://openrouter.ai/api/v1/chat/completions', gemini: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, nvidia: 'https://integrate.api.nvidia.com/v1/chat/completions', groq: 'https://api.groq.com/openai/v1/chat/completions', cerebras: 'https://api.cerebras.ai/v1/chat/completions', waterfall: `${(process.env.WATERFALL_BASE_URL || 'https://api.getwaterfall.org/v1').replace(/\/+$/, '')}/chat/completions`, cloudflare: `https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID || ''}/ai/run/${model}` }[provider];
   return { model, url };
 }
 function stripFence(raw) { return String(raw || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim(); }

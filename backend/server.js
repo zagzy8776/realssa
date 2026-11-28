@@ -740,60 +740,7 @@ app.post('/api/extract', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'URL required' });
   if (!(await isSafeUrl(url))) return res.status(400).json({ error: 'Invalid or unsafe URL' });
 
-  try {
-    // 1. Try extractor.js chain: Readability → Gemini AI fallback → Firecrawl
-    const extracted = await extractArticle(url);
-    if (extracted && extracted.textContent && extracted.textContent.length > 100) {
-      // Run AI breakdown on the extracted content
-      try {
-        const fullBreakdown = await generateFullArticleBreakdown(extracted.title, extracted.textContent);
-        if (fullBreakdown?.full_breakdown) {
-          const bulletHtml = Array.isArray(fullBreakdown.bullet_points)
-            ? fullBreakdown.bullet_points.map(b => `<li style="margin-bottom:6px;">${b}</li>`).join('')
-            : `<li>${extracted.title}</li>`;
-          extracted.content = `
-            <div class="full-ai-article space-y-6">
-              <div style="background:rgba(245,158,11,0.1);border-left:4px solid #f59e0b;padding:16px;border-radius:0 12px 12px 0;margin-bottom:24px;">
-                <h3 style="margin:0 0 8px 0;color:#f59e0b;font-weight:700;font-size:1.1rem;">📌 Key Takeaways</h3>
-                <ul style="margin:0;padding-left:20px;font-size:0.95rem;line-height:1.6;">${bulletHtml}</ul>
-              </div>
-              <div style="font-size:1.05rem;line-height:1.8;margin-bottom:24px;">
-                <h3 style="font-size:1.25rem;font-weight:700;margin-bottom:12px;">📰 Full Story Breakdown</h3>
-                <p style="white-space:pre-line;">${fullBreakdown.full_breakdown}</p>
-              </div>
-              <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);padding:20px;border-radius:16px;margin-bottom:24px;">
-                <h3 style="margin:0 0 8px 0;color:#3b82f6;font-weight:700;font-size:1.1rem;">🌍 Why It Matters to Nigeria & Africa</h3>
-                <p style="margin:0;font-size:0.95rem;line-height:1.6;">${fullBreakdown.why_it_matters}</p>
-              </div>
-            </div>`;
-          extracted.byline = 'RealSSA AI News Desk';
-        }
-      } catch (_) { }
-      return res.json(extracted);
-    }
-
-    // 2. DB fallback (handles query string variations and canonical URLs)
-    if (process.env.DATABASE_URL) {
-      const cleanUrl = url.split('?')[0];
-      const dbRes = await pool.query(
-        `SELECT title, COALESCE(ai_summary, original_excerpt) AS content, original_excerpt, ai_summary, source_name, image 
-         FROM rss_articles 
-         WHERE external_link = $1 OR external_link LIKE $2 
-         ORDER BY published_at DESC LIMIT 1`,
-        [url, `${cleanUrl}%`]
-      );
-      if (dbRes.rows.length > 0) {
-        const row = dbRes.rows[0];
-        const content = row.content || row.original_excerpt || row.title;
-        return res.json({ title: row.title, content, textContent: content, length: content.length, excerpt: row.original_excerpt || '', byline: row.source_name || 'RealSSA News Desk', siteName: row.source_name || 'RealSSA', image: row.image });
-      }
-    }
-
-    res.status(422).json({ error: 'Could not extract article' });
-  } catch (err) {
-    console.error('Extract error:', err.message);
-    res.status(500).json({ error: 'Extraction failed', message: err.message });
-  }
+  return require('./services/readerHandler.cjs')(req, res);
 });
 app._legacyExtractPlaceholder = async url => {  // dead code placeholder
   try {

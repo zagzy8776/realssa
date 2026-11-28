@@ -12,7 +12,7 @@
  * null and the existing provider chain is used unchanged.
  */
 
-const { cleanArticleText } = require('./articleContent.cjs');
+const { cleanArticleText, copiesSource } = require('./articleContent.cjs');
 const { runAI } = require('./aiRouter.cjs');
 const { cleanSocialText, sourceSummary, formatSocialCaption } = require('./socialCaption.cjs');
 
@@ -22,7 +22,7 @@ const { cleanSocialText, sourceSummary, formatSocialCaption } = require('./socia
 function narrativePrompt(title, context) {
   return [
     'You are the RealSSA News editor. Explain this story in clear, engaging, detailed narrative prose.',
-    'Aim for 350-600 words in 4-6 developed paragraphs when the source supports that detail.',
+    'Lead with the main verified development. Write in your own words, in 2-4 short paragraphs. A brief story may need only a few sentences. Omit sharing controls, subscription prompts and navigation.',
     'Cover what happened, the people and places involved, chronology, attributed statements, supported background, and consequences.',
     'Preserve names, dates, numbers, attribution and the distinction between allegations and confirmed facts.',
     'Use ONLY the supplied source. Never invent context, reactions, quotes, motives or implications to reach a word count.',
@@ -37,15 +37,15 @@ async function generateAIAnalysis(title, excerpt) {
   const context = cleanArticleText(excerpt || ' ').slice(0, 24000);
   // An RSS teaser cannot support a full report. Preserve it and retry extraction later.
   if (context.split(/\s+/).length < 80) return { summary: context || title, entities: [], translations: {}, generated: false };
-  const minimum = Math.min(220, Math.floor(context.length * 0.35));
   let parsed;
   const raw = await runAI('summary', narrativePrompt(title, context), {
     maxTokens: 5000, timeout: 18000,
     validate: text => {
       try {
         const value = JSON.parse(text);
-        const requiredWords = Math.min(250, Math.floor(context.split(/\s+/).length * 0.65));
-        if (typeof value.summary !== 'string' || value.summary.length < minimum || value.summary.split(/\s+/).length < requiredWords) return false;
+        const requiredWords = 25;
+        if (typeof value.summary !== 'string' || value.summary.split(/\s+/).length < requiredWords) return false;
+        if (copiesSource(value.summary, context)) return false;
         parsed = value;
         return true;
       } catch { return false; }

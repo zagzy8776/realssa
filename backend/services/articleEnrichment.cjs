@@ -33,7 +33,7 @@ async function runEnrichmentCycle(pool, { limit = 2, budgetMs = 70000 } = {}) {
     if (!locked) return { skipped: true, reason: 'already_running' };
     const rows = (await client.query(`SELECT id, title, external_link, full_content, original_excerpt, ai_summary, image
       FROM rss_articles WHERE content_type = 'article'
-      AND (ai_summary IS NULL OR length(ai_summary) < 800)
+      AND (ai_summary IS NULL OR btrim(ai_summary) = '')
       AND COALESCE(enrichment_attempts, 0) < 4
       AND (enrichment_retry_at IS NULL OR enrichment_retry_at <= NOW())
       ORDER BY enrichment_retry_at ASC NULLS FIRST, published_at DESC LIMIT $1`, [limit])).rows;
