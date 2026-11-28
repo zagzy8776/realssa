@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type Hls from 'hls.js';
 import { apiUrl } from '@/lib/api-base';
 import { X, Server, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -98,12 +98,6 @@ export default function CinemaPlayer({
     };
   }, []);
 
-  const goNext = useCallback(() => {
-    manualServer.current = true;
-    setDirectStream(null);
-    setActiveIdx(prev => (prev + 1) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
-  }, [servers, fallbackSources]);
-
   const availableServers = [...servers, ...fallbackSources.filter(source => !servers.some(server => server.url === source.url))];
   const activeServer = availableServers[activeIdx % availableServers.length];
 
@@ -167,7 +161,7 @@ export default function CinemaPlayer({
 
       <div className="cinema-player-bar">
         <button aria-label="Close player" onClick={onClose}><ChevronLeft size={20}/> Back</button>
-        <div><small>{directStream ? 'Direct playback' : activeServer.name}</small><strong>{title}</strong></div>
+        <div><small role="status">{directStream ? 'Direct playback' : streamLoading ? `Connecting to ${activeServer.name}…` : activeServer.name}</small><strong>{title}</strong></div>
         <button aria-expanded={showServers} onClick={() => setShowServers(v => !v)}><Server size={16}/> Servers</button>
       </div>
       {/* ── SERVER PICKER DRAWER (hidden by default) ── */}
@@ -226,10 +220,7 @@ export default function CinemaPlayer({
 
         </div>
       </div>
-      {!directStream && <div className="cinema-player-status">
-        <span role="status">{streamLoading ? `Connecting to ${activeServer.name}…` : activeServer.name}</span>
-        <button onClick={goNext}>Try another server</button>
-      </div>}
+
     </div>
   );
 }
