@@ -9,7 +9,7 @@ self.addEventListener('message', (event) => {
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
 // Service Worker for RealSSA News — offline caching & push notifications
-const CACHE_NAME = 'realssa-v7';
+const CACHE_NAME = 'realssa-v8';
 const MAX_CACHE_SIZE = 20;
 
 self.addEventListener('install', (event) => {
@@ -44,8 +44,26 @@ self.addEventListener('fetch', (event) => {
   // Never intercept API requests. They must always reach the live backend.
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/rss/')) return;
 
+  // Vite fingerprints build assets. A cached hash already identifies the exact bytes.
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME).catch(() => null);
+      const hit = await cache?.match(event.request).catch(() => undefined);
+      const isHtml = response => /text\/html/i.test(response.headers.get('content-type') || '');
+      if (hit && !isHtml(hit)) return hit;
+      if (hit) await cache.delete(event.request);
+      const response = await fetch(event.request);
+      if (isHtml(response)) return new Response(null, { status: 404 });
+      if (cache && response.ok && response.type === 'basic') {
+        event.waitUntil(cache.put(event.request, response.clone()).catch(() => {}));
+      }
+      return response;
+    })().catch(() => Response.error()));
+    return;
+  }
+
   // Navigation requests: network-first, then cached HTML, then a valid offline response.
-  if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+  if (!url.pathname.startsWith('/assets/') && (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html'))) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
@@ -66,21 +84,6 @@ self.addEventListener('fetch', (event) => {
           );
         })
     );
-    return;
-  }
-
-  // Vite fingerprints build assets. A cached hash already identifies the exact bytes.
-  if (url.pathname.startsWith('/assets/')) {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME).catch(() => null);
-      const hit = await cache?.match(event.request).catch(() => undefined);
-      if (hit) return hit;
-      const response = await fetch(event.request);
-      if (cache && response.ok && response.type === 'basic') {
-        event.waitUntil(cache.put(event.request, response.clone()).catch(() => {}));
-      }
-      return response;
-    })().catch(() => Response.error()));
     return;
   }
 

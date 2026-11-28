@@ -80,7 +80,16 @@ const labels = Object.fromEntries(Object.keys(FEEDS).map(k => [k, k.replace(/-/g
 labels['nigerian-news']='Nigeria'; labels.tech='Technology'; labels.usa='USA'; labels.uk='UK'; labels.ghana='Ghana'; labels.kenya='Kenya'; labels['south-africa']='South Africa'; labels['middle-east']='Middle East'; labels['latin-america']='Latin America';
 const countryByCategory = { 'nigerian-news':'Nigeria', politics:'Nigeria', ghana:'Ghana', kenya:'Kenya', 'south-africa':'South Africa', uk:'UK', usa:'USA', canada:'Canada', australia:'Australia', india:'India', china:'China', japan:'Japan', brazil:'Brazil', mexico:'Mexico', world:'Global', africa:'Africa', europe:'Europe', asia:'Asia', 'middle-east':'Middle East', 'latin-america':'Latin America', sports:'Global', business:'Global', tech:'Global', crypto:'Global', entertainment:'Global', culture:'Africa', lifestyle:'Global', science:'Global', health:'Global', jobs:'Global' };
 
-const cleanText = (value, max=4000) => String(value||'').replace(/<!\[CDATA\[/gi,'').replace(/\]\]>/g,'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/\s+/g,' ').trim().slice(0,max);
+function decodeFeedHtml(value) {
+  let text = String(value || '').replace(/<!\[CDATA\[|\]\]>/gi, '');
+  for (let i = 0; i < 3; i++) {
+    const decoded = text.replace(/&amp;/gi,'&').replace(/&nbsp;/gi,' ').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;|&#60;/gi,'<').replace(/&gt;|&#62;/gi,'>');
+    if (text === decoded) break;
+    text = decoded;
+  }
+  return text;
+}
+const cleanText = (value, max=4000) => decodeFeedHtml(value).replace(/<\/?[a-z][^>]*(?:>|$)/gi,' ').replace(/\s+/g,' ').trim().slice(0,max);
 const decodeXml = value => cleanText(value,12000);
 function firstTag(block,tags){ for(const tag of tags){ const m=String(block).match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`,'i')); if(m?.[1]) return m[1]; } return ''; }
 function firstAttr(block,tags,attr){ for(const tag of tags){ const m=String(block).match(new RegExp(`<${tag}\\b[^>]*\\b${attr}=["']([^"']+)["'][^>]*>`,'i')); if(m?.[1]) return decodeXml(m[1]); } return ''; }
@@ -95,7 +104,7 @@ const MAX_ARTICLE_AGE_MS = 30*24*60*60*1000;
 function getImage(item){
   const direct = String(item.image || '');
   if (/^https?:\/\//i.test(direct) && !isBadImage(direct)) return direct;
-  const fromHtml = String(item.description || '').match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || '';
+  const fromHtml = decodeFeedHtml(item.description).match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || '';
   if (fromHtml && !isBadImage(fromHtml)) return fromHtml;
   return '';
 }
