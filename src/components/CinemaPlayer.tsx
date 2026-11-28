@@ -57,6 +57,8 @@ interface CinemaPlayerProps {
   season?: number;
   episode?: number;
   title: string;
+  resumeAt?: number;
+  onProgress?: (position: number, duration: number) => void;
   onClose: () => void;
 }
 
@@ -66,7 +68,7 @@ export default function CinemaPlayer({
   season = 1,
   episode = 1,
   title,
-  onClose,
+  resumeAt, onProgress, onClose,
 }: CinemaPlayerProps) {
   const servers = buildServerList(tmdbId, mediaType, season, episode);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -76,6 +78,10 @@ export default function CinemaPlayer({
   const [streamError, setStreamError] = useState<string | null>(null);
   const [fallbackSources, setFallbackSources] = useState<Array<{ name: string; url: string }>>([]);
   const manualServer = useRef(false);
+  const lastSave = useRef(0);
+  const save = (video: HTMLVideoElement) => {
+    if (Number.isFinite(video.duration) && video.currentTime > 0) onProgress?.(video.currentTime, video.duration);
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -97,12 +103,6 @@ export default function CinemaPlayer({
     setDirectStream(null);
     setActiveIdx(prev => (prev + 1) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
   }, [servers, fallbackSources]);
-
-  const goPrev = useCallback(() => {
-    manualServer.current = true;
-    setDirectStream(null);
-    setActiveIdx(prev => (prev - 1 + (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length)) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
-  }, [servers.length, fallbackSources.length]);
 
   const availableServers = [...servers, ...fallbackSources.filter(source => !servers.some(server => server.url === source.url))];
   const activeServer = availableServers[activeIdx % availableServers.length];
@@ -165,62 +165,11 @@ export default function CinemaPlayer({
     // TRUE FULLSCREEN — covers entire phone/screen, bg gradient for spatial feel
     <div className="fixed inset-0 z-[9999] bg-gradient-to-b from-zinc-950 via-black to-zinc-950 flex flex-col">
 
-      {/* ── TOP BAR ── */}
-      <div className="flex items-center justify-between px-4 py-3 bg-zinc-950/80 backdrop-blur-md border-b border-white/10 shrink-0">
-        <div className="flex flex-col min-w-0">
-          {/* Brand */}
-          <span className="text-[9px] uppercase font-black tracking-widest text-amber-500 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
-            RealSSA Player · {activeServer.name}
-          </span>
-          <h3 className="text-white text-xs sm:text-sm font-black truncate max-w-[200px] sm:max-w-md leading-tight mt-0.5 drop-shadow">
-            {title}
-          </h3>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Prev server */}
-          <button
-            onClick={goPrev}
-            title="Previous server"
-            className="p-2 bg-zinc-900/60 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-all border border-white/5 active:scale-90"
-          >
-            <ChevronLeft size={14} />
-          </button>
-
-          {/* Server toggle */}
-          <button
-            onClick={() => setShowServers(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border ${
-              showServers
-                ? 'bg-amber-500 text-black border-amber-600 font-bold shadow-md shadow-amber-500/20'
-                : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 border-white/5'
-            }`}
-          >
-            <Server size={11} />
-            <span>Servers</span>
-          </button>
-
-          {/* Next server */}
-          <button
-            onClick={goNext}
-            title="Next server"
-            className="p-2 bg-zinc-900/60 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-all border border-white/5 active:scale-90"
-          >
-            <ChevronRight size={14} />
-          </button>
-
-          {/* Close */}
-          <button
-            aria-label="Close player"
-            onClick={onClose}
-            className="p-2 bg-zinc-900/60 hover:bg-red-600 rounded-full text-zinc-400 hover:text-white transition-all border border-white/5 ml-1 active:scale-90"
-          >
-            <X size={14} />
-          </button>
-        </div>
+      <div className="cinema-player-bar">
+        <button aria-label="Close player" onClick={onClose}><ChevronLeft size={20}/> Back</button>
+        <div><small>{directStream ? 'Direct playback' : activeServer.name}</small><strong>{title}</strong></div>
+        <button aria-expanded={showServers} onClick={() => setShowServers(v => !v)}><Server size={16}/> Servers</button>
       </div>
-
       {/* ── SERVER PICKER DRAWER (hidden by default) ── */}
       {showServers && (
         <div className="shrink-0 bg-zinc-950/90 backdrop-blur-xl border-b border-white/10 px-4 py-3 animate-in slide-in-from-top duration-300">
@@ -253,6 +202,13 @@ export default function CinemaPlayer({
             <video
               ref={videoRef}
               className="absolute inset-0 w-full h-full"
+              onLoadedMetadata={e => {
+                if (resumeAt > 0 && resumeAt < e.currentTarget.duration - 2) e.currentTarget.currentTime = resumeAt;
+              }}
+              onTimeUpdate={e => {
+                if (Date.now() - lastSave.current >= 5000) { lastSave.current = Date.now(); save(e.currentTarget); }
+              }}
+              onPause={e => save(e.currentTarget)}
               controls
               autoPlay
               onError={() => { setStreamError('The direct stream could not be played.'); setDirectStream(null); }}
@@ -267,32 +223,13 @@ export default function CinemaPlayer({
             />
           )}
 
-          {streamLoading && !directStream && (
-            <p role="status" className="absolute top-3 left-3 rounded-md bg-black/70 px-2 py-1 text-xs text-zinc-200 pointer-events-none">
-              Checking direct stream…
-            </p>
-          )}
 
-          {!streamLoading && !directStream && (
-            <div className="absolute bottom-4 left-4 right-4 z-20 flex justify-center gap-2">
-              <button
-                onClick={() => { goNext(); }}
-                className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-black"
-              >
-                Try another server
-              </button>
-            </div>
-          )}
-
-          {!streamLoading && !directStream && streamError && (
-            <div className="absolute top-3 left-3 right-3 z-20 pointer-events-none">
-              <div className="inline-flex max-w-full rounded-lg bg-black/75 border border-white/10 px-3 py-2 text-[11px] text-zinc-300 backdrop-blur-md">
-                Direct playback unavailable · using {activeServer.name}
-              </div>
-            </div>
-          )}
         </div>
       </div>
+      {!directStream && <div className="cinema-player-status">
+        <span role="status">{streamLoading ? `Connecting to ${activeServer.name}…` : activeServer.name}</span>
+        <button onClick={goNext}>Try another server</button>
+      </div>}
     </div>
   );
 }

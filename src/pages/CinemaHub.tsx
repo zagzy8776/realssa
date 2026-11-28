@@ -276,7 +276,7 @@ export default function CinemaHub() {
   // ── Continue Watching (localStorage persistence) ──
   const [continueWatching, setContinueWatching] = useState<Array<{
     tmdbId: number; title: string; poster: string | null;
-    mediaType: 'movie' | 'tv'; season: number; episode: number; timestamp: number;
+    mediaType: 'movie' | 'tv'; season: number; episode: number; timestamp: number; position?: number; duration?: number;
   }>>([]);
 
   // ── Data Saver Mode (auto-detects Nigerian low-bandwidth connections) ──
@@ -556,8 +556,9 @@ export default function CinemaHub() {
     };
     setContinueWatching(prev => {
       // Remove existing entry for same title, prepend new one, cap at 10
-      const filtered = prev.filter(i => i.tmdbId !== media.id);
-      const updated = [entry, ...filtered].slice(0, 10);
+      const previous = prev.find(i => i.tmdbId === media.id && i.mediaType === entry.mediaType && i.season === season && i.episode === episode);
+      const filtered = prev.filter(i => i.tmdbId !== media.id || i.mediaType !== entry.mediaType);
+      const updated = [{ ...previous, ...entry }, ...filtered].slice(0, 10);
       try { localStorage.setItem('realssa:continue_watching', JSON.stringify(updated)); } catch (_) {}
       return updated;
     });
@@ -1267,7 +1268,7 @@ export default function CinemaHub() {
           </form>
           {/* Interactive Hero Carousel */}
           {!isSearching && featured && (
-            <section className="relative w-full h-[56vh] sm:h-[75vh] flex flex-col justify-end overflow-hidden group/hero">
+            <section className="cinema-feature relative flex flex-col justify-end overflow-hidden group/hero">
               {/* Slides background with transition */}
               <div className="absolute inset-0 transition-all duration-700 ease-in-out">
                 <img src={getBackdrop(featured)} alt=""
@@ -1369,13 +1370,6 @@ export default function CinemaHub() {
               </div>
             )}
 
-            {/* ── Time-aware greeting ── */}
-            {!isSearching && (
-              <p className="text-[10px] uppercase font-extrabold text-zinc-600 tracking-widest mb-4">
-                {timeOfDay === 'night' ? '🌙 Late Night Cinema' : timeOfDay === 'morning' ? '☀️ Good Morning — Start Your Day' : '🔥 Popular Releases'}
-              </p>
-            )}
-
             {/* ── Continue Watching Row ── */}
             {!isSearching && continueWatching.length > 0 && (
               <div className="mb-7">
@@ -1416,6 +1410,7 @@ export default function CinemaHub() {
                             <Play size={14} className="fill-black ml-0.5" />
                           </div>
                         </div>
+                        {item.duration > 0 && item.position > 0 && <progress className="cinema-progress" aria-label="Watched" value={item.position} max={item.duration} />}
                         {item.mediaType === 'tv' && (
                           <div className="absolute bottom-1.5 left-1.5 bg-black/70 text-[9px] font-bold text-amber-400 px-1.5 py-0.5 rounded backdrop-blur-sm">
                             S{item.season}E{item.episode}
@@ -1636,7 +1631,14 @@ export default function CinemaHub() {
         <CinemaDialog player label={activePlayer.title} onDismiss={() => setActivePlayer(null)}>
           <Suspense fallback={<div role="status" className="p-5">Opening player…</div>}>
             <CinemaPlayer key={`${activePlayer.tmdbId}-${activePlayer.mediaType}-${activePlayer.season}-${activePlayer.episode}`}
-              {...activePlayer} onClose={() => setActivePlayer(null)} />
+              {...activePlayer}
+              resumeAt={continueWatching.find(i => i.tmdbId === activePlayer.tmdbId && i.mediaType === activePlayer.mediaType && i.season === activePlayer.season && i.episode === activePlayer.episode)?.position}
+              onProgress={(position, duration) => setContinueWatching(previous => {
+                const updated = previous.map(i => i.tmdbId === activePlayer.tmdbId && i.mediaType === activePlayer.mediaType && i.season === activePlayer.season && i.episode === activePlayer.episode ? { ...i, position, duration } : i);
+                try { localStorage.setItem('realssa:continue_watching', JSON.stringify(updated)); } catch {}
+                return updated;
+              })}
+              onClose={() => setActivePlayer(null)} />
           </Suspense>
         </CinemaDialog>
       )}
