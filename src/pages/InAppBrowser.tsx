@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
-import { InAppBrowser } from '@capgo/inappbrowser';
+import { InAppBrowser as NativeBrowser } from '@capgo/inappbrowser';
 import {
   ArrowLeft, ArrowRight, RotateCw, ExternalLink, Share2, BookMarked,
-  BookOpen, Lock, X, Sparkles, AlertTriangle, Search, History,
+  BookOpen, X, Sparkles, AlertTriangle, Search, History,
   Type, Minus, Plus, ChevronRight, Globe, Home, Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ function getDomain(url: string): string {
 
 function looksLikeUrl(str: string): boolean {
   if (!str) return false;
-  return /^https?:\/\//i.test(str) || (/\.[a-z]{2,}$/i.test(str) && !str.includes(' '));
+  return /^https?:\/\//i.test(str) || /^[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?::\d+)?(?:[/?#]\S*)?$/i.test(str);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ export default function InAppBrowser() {
   // Search result clicks always stay in browser — never route to Reader
   const openNative = useCallback(async (url: string, title?: string, forceFullWeb = false) => {
     if (forceFullWeb) {
-      await InAppBrowser.open({ url });
+      await NativeBrowser.open({ url });
       return;
     }
     const SOCIAL_DOMAINS = [
@@ -144,119 +144,115 @@ export default function InAppBrowser() {
         return;
       }
     } catch { /* fall through to native webview */ }
-    await InAppBrowser.open({ url });
+    await NativeBrowser.open({ url });
   }, [navigate]);
 
-  // ── Core load function — tries renderer first, silently falls back ──────────
+  const pageRequest = useRef<AbortController | null>(null);
+  const suggestRequest = useRef<AbortController | null>(null);
+  const searchRequest = useRef<AbortController | null>(null);
+  const [pageError, setPageError] = useState(false);
+
+  useEffect(() => () => {
+    pageRequest.current?.abort();
+    pageRequest.current = null;
+    suggestRequest.current?.abort();
+    searchRequest.current?.abort();
+  }, []);
+
   const loadUrl = useCallback(async (url: string) => {
-    if (!url) return;
+    pageRequest.current?.abort();
+    suggestRequest.current?.abort();
+    const request = new AbortController();
+    pageRequest.current = request;
     setAddressValue(url);
+    setSuggestions([]);
     setHistoryOpen(false);
-
-    if (url.startsWith('realssa://search?q=')) {
-      setLoading(false);
-      setUsingProxy(false);
-      setPageData(null);
-      return;
-    }
-
-    setLoading(true);
+    setPageError(false);
     setPageData(null);
     setUsingProxy(false);
+    setIsSaved(false);
+    const isSearch = url.startsWith('realssa://search?q=');
+    setLoading(!isSearch);
+    if (isSearch) return;
 
+    const timeout = window.setTimeout(() => request.abort(), 8000);
+    let title = getDomain(url);
     try {
-      const res = await fetch(`${RUST_ENGINE_URL}/render-page?url=${encodeURIComponent(url)}`);
-      if (!res.ok) throw new Error('render-page failed');
+      const res = await fetch(`${RUST_ENGINE_URL}/render-page?url=${encodeURIComponent(url)}`, { signal: request.signal });
+      if (!res.ok) throw new Error('Reader unavailable');
       const data: PageData = await res.json();
-
-      if (data.requiresProxy) {
-        if (Capacitor.isNativePlatform()) {
-          setLoading(false);
-          setUsingProxy(false);
-          await openNative(url, data.meta?.title);
-          return;
-        }
-
-        // Seamlessly mount proxy iframe or webview
-        setUsingProxy(true);
-        setPageData(null);
-        if (isElectron) {
-          if (webviewRef.current) {
-            webviewRef.current.src = url;
-          }
-        } else {
-          if (iframeRef.current) {
-            iframeRef.current.src = proxyUrl(url);
-          }
-        }
-        // Save to history with whatever title we have
-        saveToBrowserHistory(url, data.meta?.title || getDomain(url));
-      } else {
-        // Custom renderer — the engine
-        setUsingProxy(false);
+      if (pageRequest.current !== request || request.signal.aborted) return;
+      title = data.meta?.title || title;
+      if (!data.requiresProxy && data.success !== false && Array.isArray(data.nodes) && data.nodes.length) {
         setPageData(data);
-        saveToBrowserHistory(url, data.meta?.title || getDomain(url));
+        setLoading(false);
+        saveToBrowserHistory(url, title);
+        return;
       }
     } catch {
-      if (Capacitor.isNativePlatform()) {
-        setLoading(false);
-        setUsingProxy(false);
-        try {
-          await openNative(url);
-          return;
-        } catch (_) {}
-      }
-
-      // Network error → fall back to proxy silently
-      setUsingProxy(true);
-      setPageData(null);
-      if (isElectron) {
-        if (webviewRef.current) {
-          webviewRef.current.src = url;
-        }
-      } else {
-        if (iframeRef.current) {
-          iframeRef.current.src = proxyUrl(url);
-        }
-      }
-      saveToBrowserHistory(url, getDomain(url));
+      if (pageRequest.current !== request) return;
     } finally {
-      setLoading(false);
+      window.clearTimeout(timeout);
     }
-  }, [proxyUrl]);
+    saveToBrowserHistory(url, title);
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await openNative(url, title);
+      } catch {
+        if (pageRequest.current === request) setPageError(true);
+      } finally {
+        if (pageRequest.current === request) setLoading(false);
+      }
+    } else {
+      setUsingProxy(true);
+    }
+  }, [openNative]);
+
+  useEffect(() => {
+    if (!usingProxy || !loading) return;
+    const timer = window.setTimeout(() => {
+      setPageError(true);
+      setLoading(false);
+    }, 15000);
+    return () => window.clearTimeout(timer);
+  }, [usingProxy, loading, currentUrl]);
 
   // ── Fetch results from Tavily/Exa endpoint ──────────────────────────────────
   const fetchSearchResults = useCallback(async (query: string, offset: number) => {
+    const signal = searchRequest.current?.signal;
     setSearchLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/search/web?q=${encodeURIComponent(query)}&offset=${offset}&limit=${searchLimit}`);
+      const res = await fetch(`${API_BASE_URL}/api/search/web?q=${encodeURIComponent(query)}&offset=${offset}&limit=${searchLimit}`, { signal });
       if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
+      if (signal?.aborted) return;
       const resultsArray = Array.isArray(data) ? data : (data?.results || []);
       setSearchResults(prev => offset === 0 ? resultsArray : [...prev, ...resultsArray]);
       setSearchHasMore(data?.hasMore !== undefined ? data.hasMore : resultsArray.length === searchLimit);
     } catch (err) {
+      if (signal?.aborted) return;
       console.error(err);
       toast({ title: 'Search Error', description: 'Failed to fetch search results.' });
       setSearchHasMore(false);
     } finally {
-      setSearchLoading(false);
+      if (!signal?.aborted) setSearchLoading(false);
     }
   }, [toast]);
 
   const fetchAiOverview = useCallback(async (query: string) => {
+    const signal = searchRequest.current?.signal;
     setAiLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/search/ai?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`${API_BASE_URL}/api/search/ai?q=${encodeURIComponent(query)}`, { signal });
       if (!res.ok) throw new Error('AI Overview failed');
       const data = await res.json();
-      if (data.success && data.aiOverview) {
+      if (!signal?.aborted && data.success && data.aiOverview) {
         setAiOverview(data.aiOverview);
       }
     } catch (err) {
-      console.error('Failed to fetch AI Overview:', err);
+      if (!signal?.aborted) console.error('Failed to fetch AI Overview:', err);
     } finally {
-      setAiLoading(false);
+      if (!signal?.aborted) setAiLoading(false);
     }
   }, []);
 
@@ -269,8 +265,11 @@ export default function InAppBrowser() {
       setSearchHasMore(true);
       setAiOverview(null);
       setActiveSearchTab('all');
+      const request = new AbortController();
+      searchRequest.current = request;
       fetchSearchResults(q, 0);
       fetchAiOverview(q);
+      return () => request.abort();
     }
   }, [currentUrl, fetchSearchResults, fetchAiOverview]);
 
@@ -289,6 +288,7 @@ export default function InAppBrowser() {
   // ── postMessage from proxy iframe (link clicks inside proxied pages) ────────
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
+      if (!iframeRef.current || e.source !== iframeRef.current?.contentWindow || typeof e.data?.url !== 'string' || !/^https?:\/\//i.test(e.data.url)) return;
       if (e.data?.type === 'REALSSA_NAVIGATE' && e.data?.url) {
         navigateTo(e.data.url);
       }
@@ -300,7 +300,15 @@ export default function InAppBrowser() {
   // ── Webview navigation listener for Electron ────────────────────────────────
   useEffect(() => {
     const webview = webviewRef.current;
-    if (!webview || !isElectron) return;
+    if (!webview || !isElectron || !usingProxy) return;
+    const loaded = () => setLoading(false);
+    const failed = (event: any) => {
+      if (event.isMainFrame === false || event.errorCode === -3) return;
+      setPageError(true);
+      setLoading(false);
+    };
+    webview.addEventListener('did-stop-loading', loaded);
+    webview.addEventListener('did-fail-load', failed);
 
     const handleNavigate = (e: any) => {
       const newUrl = e.url;
@@ -317,10 +325,12 @@ export default function InAppBrowser() {
     webview.addEventListener('did-navigate-in-page', handleNavigate);
 
     return () => {
+      webview.removeEventListener('did-stop-loading', loaded);
+      webview.removeEventListener('did-fail-load', failed);
       webview.removeEventListener('did-navigate', handleNavigate);
       webview.removeEventListener('did-navigate-in-page', handleNavigate);
     };
-  }, [isElectron, stackIndex]);
+  }, [isElectron, stackIndex, usingProxy, currentUrl]);
 
   // ── Navigate to a URL (adds to stack, clears forward history) ───────────────
   const navigateTo = useCallback((url: string) => {
@@ -335,7 +345,7 @@ export default function InAppBrowser() {
       const hostname = new URL(formatted).hostname.toLowerCase();
       const isNative = NATIVE_DOMAINS.some(domain => hostname.includes(domain));
       if (isNative) {
-        InAppBrowser.open({ url: formatted });
+        NativeBrowser.open({ url: formatted });
         return;
       }
     } catch {
@@ -389,6 +399,9 @@ export default function InAppBrowser() {
 
   // ── Address bar autocomplete & live suggestions ───────────────────────────
   const handleAddressChange = (val: string) => {
+    suggestRequest.current?.abort();
+    const request = new AbortController();
+    suggestRequest.current = request;
     setAddressValue(val);
     if (!val.trim()) { setSuggestions([]); return; }
     
@@ -401,25 +414,30 @@ export default function InAppBrowser() {
       .slice(0, 3);
 
     // 2. Fetch live suggestions from our backend autocomplete proxy API (CORS-safe)
-    fetch(`${API_BASE_URL}/api/autocomplete?q=${encodeURIComponent(val)}`)
-      .then(res => res.json())
-      .then((data: any) => {
-        if (Array.isArray(data) && Array.isArray(data[1])) {
-          const searchSuggestions = data[1]
-            .map((s: string) => ({
-              url: `realssa://search?q=${encodeURIComponent(s)}`,
-              title: s,
-              isSearch: true
-            }))
-            .slice(0, 5);
-          setSuggestions([...historyMatches, ...searchSuggestions]);
-        } else {
-          setSuggestions(historyMatches);
-        }
-      })
-      .catch(() => {
-        setSuggestions(historyMatches);
-      });
+    setSuggestions(historyMatches);
+    const timer = window.setTimeout(() => {
+      fetch(`${API_BASE_URL}/api/autocomplete?q=${encodeURIComponent(val)}`, { signal: request.signal })
+        .then(res => res.json())
+        .then((data: any) => {
+          if (request.signal.aborted) return;
+          if (Array.isArray(data) && Array.isArray(data[1])) {
+            const searchSuggestions = data[1]
+              .map((s: string) => ({
+                url: `realssa://search?q=${encodeURIComponent(s)}`,
+                title: s,
+                isSearch: true
+              }))
+              .slice(0, 5);
+            setSuggestions([...historyMatches, ...searchSuggestions]);
+          } else {
+            setSuggestions(historyMatches);
+          }
+        })
+        .catch(() => {
+          if (!request.signal.aborted) setSuggestions(historyMatches);
+        });
+    }, 220);
+    request.signal.addEventListener('abort', () => window.clearTimeout(timer), { once: true });
   };
 
   // ── Bookmark ──────────────────────────────────────────────────────────────────
@@ -463,7 +481,7 @@ export default function InAppBrowser() {
 
   const canGoBack = stackIndex > 0;
   const canGoForward = stackIndex < stack.length - 1;
-  const pageTitle = pageData?.meta?.title || initialTitle || getDomain(currentUrl);
+  const pageTitle = pageData?.meta?.title || (currentUrl === initialUrl && initialTitle) || getDomain(currentUrl);
   const pageFavicon = pageData?.meta?.favicon || '';
 
   return (
@@ -491,7 +509,7 @@ export default function InAppBrowser() {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
             ) : (
-              <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
+              <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
             )}
             <input
               ref={addressRef}
@@ -522,7 +540,7 @@ export default function InAppBrowser() {
             )}
             {!addressFocused && (
               <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full shrink-0 font-mono hidden sm:inline">
-                SECURE
+                {currentUrl.startsWith('https://') ? 'HTTPS' : currentUrl.startsWith('http://') ? 'HTTP' : 'Search'}
               </span>
             )}
           </div>
@@ -751,8 +769,8 @@ export default function InAppBrowser() {
         {/* Loading state */}
         {loading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0b0f17] z-10">
-            <div className="w-10 h-10 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
-            <span className="text-xs text-amber-500/70 font-mono animate-pulse">Loading {getDomain(currentUrl)}…</span>
+            <div className="w-10 h-10 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin motion-reduce:animate-none" />
+            <span className="text-xs text-amber-500/70 font-mono motion-safe:animate-pulse">Loading {getDomain(currentUrl)}…</span>
           </div>
         )}
 
@@ -766,7 +784,7 @@ export default function InAppBrowser() {
         )}
 
         {/* Proxy iframe / WebView — seamless fallback, user doesn't know */}
-        {isElectron ? (
+        {usingProxy && !pageError && (isElectron ? (
           React.createElement('webview', {
             ref: webviewRef,
             src: currentUrl,
@@ -775,14 +793,24 @@ export default function InAppBrowser() {
           } as any)
         ) : (
           <iframe
+            key={currentUrl}
+            src={proxyUrl(currentUrl)}
             ref={iframeRef}
             title={pageTitle}
             className={`w-full flex-1 border-none bg-white ${usingProxy && !loading && !currentUrl.startsWith('realssa://search?q=') ? 'flex' : 'hidden'}`}
             onLoad={() => setLoading(false)}
-            onError={() => setLoading(false)}
+            onError={() => { setLoading(false); setPageError(true); }}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
           />
-        )}
+        ))}
+
+        {pageError && <section role="alert" className="m-auto max-w-sm p-6 text-center">
+          <h2 className="font-semibold">Couldn’t display {getDomain(currentUrl)}</h2>
+          <div className="mt-4 flex justify-center gap-3">
+            <Button onClick={handleRefresh}>Retry</Button>
+            <Button variant="outline" onClick={handleOpenExternal}>Open original</Button>
+          </div>
+        </section>}
 
         {/* Native Search Results UI */}
         {currentUrl.startsWith('realssa://search?q=') && (
@@ -797,7 +825,7 @@ export default function InAppBrowser() {
                 </p>
               </div>
               {(searchLoading || aiLoading) && (
-                <div className="w-4 h-4 border border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+                <div className="w-4 h-4 border border-amber-500/20 border-t-amber-500 rounded-full animate-spin motion-reduce:animate-none" />
               )}
             </div>
 
