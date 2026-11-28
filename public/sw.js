@@ -69,27 +69,32 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static assets: stale-while-revalidate. Never return an
-  // unresolved/rejected promise as the FetchEvent response.
-  event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cachedResponse = await cache.match(event.request);
+  // Vite fingerprints build assets. A cached hash already identifies the exact bytes.
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME).catch(() => null);
+      const hit = await cache?.match(event.request).catch(() => undefined);
+      if (hit) return hit;
+      const response = await fetch(event.request);
+      if (cache && response.ok && response.type === 'basic') {
+        event.waitUntil(cache.put(event.request, response.clone()).catch(() => {}));
+      }
+      return response;
+    })().catch(() => Response.error()));
+    return;
+  }
 
-      const networkResponse = await fetch(event.request)
-        .then((response) => {
-          if (response.ok && response.type === 'basic') {
-            event.waitUntil(
-              cache.put(event.request, response.clone())
-                .catch((error) => console.warn('SW asset cache update failed:', error))
-            );
-          }
-          return response;
-        })
-        .catch(() => null);
-
-      return cachedResponse || networkResponse || Response.error();
-    }).catch(() => Response.error())
-  );
+  // Mutable assets can be painted immediately and updated in the background.
+  const cache = caches.open(CACHE_NAME);
+  const cached = cache.then(store => store.match(event.request)).catch(() => undefined);
+  const network = fetch(event.request);
+  event.waitUntil(network.then(async response => {
+    if (response.ok && response.type === 'basic') {
+      const copy = response.clone();
+      await (await cache).put(event.request, copy);
+    }
+  }).catch(() => {}));
+  event.respondWith(cached.then(hit => hit || network).catch(() => Response.error()));
 });
 
 // Push events are handled by OneSignalSDK.sw.js imported above.

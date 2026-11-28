@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 
 if (Capacitor.isNativePlatform()) {
-  CapacitorUpdater.notifyAppReady();
+  CapacitorUpdater.notifyAppReady().catch(err => console.warn('Capgo notify failed:', err));
 }
 import "./index.css";
 import "./ui-v2.css";

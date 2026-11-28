@@ -11,6 +11,12 @@ export function useBackButton() {
     if (!Capacitor.isNativePlatform()) return;
 
     const handleBackButton = App.addListener('backButton', () => {
+      const cinemaLayers = document.querySelectorAll<HTMLDialogElement>('dialog.cinema-dialog[open]');
+      const currentLayer = cinemaLayers[cinemaLayers.length - 1];
+      if (currentLayer) {
+        currentLayer.dispatchEvent(new Event('cancel', { cancelable: true }));
+        return;
+      }
       const isHome = location.pathname === '/';
 
       if (isHome) {

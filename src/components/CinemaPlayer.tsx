@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import Hls from 'hls.js';
+import type Hls from 'hls.js';
 import { apiUrl } from '@/lib/api-base';
 import { X, Server, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SandboxedIframe } from './SandboxedIframe';
@@ -75,15 +75,9 @@ export default function CinemaPlayer({
   const [streamLoading, setStreamLoading] = useState(true);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [fallbackSources, setFallbackSources] = useState<Array<{ name: string; url: string }>>([]);
+  const manualServer = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Close on Escape key
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   // Protect parent page from being redirected by iframe ads
   useEffect(() => {
@@ -99,10 +93,14 @@ export default function CinemaPlayer({
   }, []);
 
   const goNext = useCallback(() => {
+    manualServer.current = true;
+    setDirectStream(null);
     setActiveIdx(prev => (prev + 1) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
   }, [servers, fallbackSources]);
 
   const goPrev = useCallback(() => {
+    manualServer.current = true;
+    setDirectStream(null);
     setActiveIdx(prev => (prev - 1 + (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length)) % (servers.length + fallbackSources.filter(source => !servers.some(server => server.url === source.url)).length));
   }, [servers.length, fallbackSources.length]);
 
@@ -125,7 +123,7 @@ export default function CinemaPlayer({
         }
         throw new Error('No playable direct stream was found');
       })
-      .then((url) => { if (!cancelled) setDirectStream(url); })
+      .then((url) => { if (!cancelled && !manualServer.current) setDirectStream(url); })
       .catch((err) => { if (!cancelled && err?.name !== 'AbortError') setStreamError(err?.message || 'Direct stream unavailable'); })
       .finally(() => { if (!cancelled) setStreamLoading(false); });
     return () => { cancelled = true; controller.abort(); };
@@ -137,15 +135,30 @@ export default function CinemaPlayer({
     let hls: Hls | null = null;
     const isHls = /\.m3u8(?:$|[?#])/i.test(directStream);
     if (!isHls) { video.src = directStream; return () => { video.removeAttribute('src'); video.load(); }; }
-    if (Hls.isSupported()) {
-      hls = new Hls({ enableWorker: true, lowLatencyMode: false });
-      hls.loadSource(directStream); hls.attachMedia(video);
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) { setStreamError('The direct stream could not be played.'); setDirectStream(null); }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) { video.src = directStream; }
-    else { setStreamError('This browser cannot play the direct stream.'); setDirectStream(null); }
-    return () => { if (hls) hls.destroy(); video.removeAttribute('src'); video.load(); };
+    let cancelled = false;
+    const fail = () => {
+      if (cancelled) return;
+      setStreamError('The direct stream could not be played.');
+      setDirectStream(null);
+    };
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = directStream;
+    } else {
+      import('hls.js').then(({ default: Hls }) => {
+        if (cancelled) return;
+        if (!Hls.isSupported()) return fail();
+        hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+        hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) fail(); });
+        hls.loadSource(directStream);
+        hls.attachMedia(video);
+      }).catch(fail);
+    }
+    return () => {
+      cancelled = true;
+      hls?.destroy();
+      video.removeAttribute('src');
+      video.load();
+    };
   }, [directStream]);
 
   return (
@@ -199,6 +212,7 @@ export default function CinemaPlayer({
 
           {/* Close */}
           <button
+            aria-label="Close player"
             onClick={onClose}
             className="p-2 bg-zinc-900/60 hover:bg-red-600 rounded-full text-zinc-400 hover:text-white transition-all border border-white/5 ml-1 active:scale-90"
           >
@@ -217,7 +231,7 @@ export default function CinemaPlayer({
             {availableServers.map((srv, i) => (
               <button
                 key={i}
-                onClick={() => { setActiveIdx(i); setShowServers(false); }}
+                onClick={() => { manualServer.current = true; setDirectStream(null); setActiveIdx(i); setShowServers(false); }}
                 className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 active:scale-95 ${
                   i === activeIdx
                     ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-md shadow-amber-500/25 scale-105 font-black'
@@ -233,7 +247,7 @@ export default function CinemaPlayer({
 
       {/* ── VIDEO — direct HLS/MP4 first, provider iframe only if direct fails ── */}
       <div className="flex-1 min-h-0 relative bg-black overflow-hidden">
-        <div className="absolute inset-0 bg-black">
+        <div className="cinema-frame absolute inset-0 bg-black">
           {/* Prefer native HLS when the backend successfully resolves a direct stream */}
           {directStream ? (
             <video
@@ -241,6 +255,7 @@ export default function CinemaPlayer({
               className="absolute inset-0 w-full h-full"
               controls
               autoPlay
+              onError={() => { setStreamError('The direct stream could not be played.'); setDirectStream(null); }}
               playsInline
               poster=""
             />
@@ -253,18 +268,15 @@ export default function CinemaPlayer({
           )}
 
           {streamLoading && !directStream && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 pointer-events-none">
-              <div className="text-center">
-                <div className="w-8 h-8 mx-auto mb-3 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
-                <p className="text-zinc-300 text-xs font-bold">Connecting to video server…</p>
-              </div>
-            </div>
+            <p role="status" className="absolute top-3 left-3 rounded-md bg-black/70 px-2 py-1 text-xs text-zinc-200 pointer-events-none">
+              Checking direct stream…
+            </p>
           )}
 
           {!streamLoading && !directStream && (
             <div className="absolute bottom-4 left-4 right-4 z-20 flex justify-center gap-2">
               <button
-                onClick={() => { setActiveIdx(i => (i + 1) % availableServers.length); }}
+                onClick={() => { goNext(); }}
                 className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-black"
               >
                 Try another server

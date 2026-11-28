@@ -4,7 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, ScrollRestoration, Outlet } from "react-router-dom";
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, ScrollRestoration } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import MobileBottomNav from "@/components/MobileBottomNav";
@@ -14,7 +14,7 @@ import OnboardingTopicSelector from "@/components/OnboardingTopicSelector";
 import { GlobalAudioProvider } from "@/contexts/GlobalAudioContext";
 import { PageTransition } from "@/components/PageTransition";
 
-import Index from "./pages/Index";
+const Index = lazy(() => import("./pages/Index"));
 
 const ForYou               = lazy(() => import("./pages/ForYou"));
 const CinemaHub            = lazy(() => import("./pages/CinemaHub"));
@@ -88,7 +88,7 @@ const AppLayout = () => (
     <FeedWatermarkWrapper />
     <MobileBottomNav />
     <OnboardingTopicSelector />
-    <main className="pb-20 md:pb-0 overflow-x-hidden w-full max-w-[100vw]">
+    <main className="pb-20 md:pb-0 overflow-x-clip w-full max-w-[100vw]">
       <Suspense fallback={<PageLoader />}>
         {/* auto = direction-aware slide + soft fade; chrome stays outside */}
         <PageTransition type="auto" enabled={true} />
@@ -170,15 +170,12 @@ const router = createBrowserRouter(
 const App = () => {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    Promise.all([
-      import('@capacitor/splash-screen'),
-      import('@capgo/capacitor-updater'),
-      import('onesignal-cordova-plugin')
-    ]).then(([splash, updater, oneSignal]) => {
-      splash.SplashScreen.hide().catch(err => console.warn('Splash screen hide failed:', err));
-      oneSignal.default.initialize(ONESIGNAL_APP_ID);
-      updater.CapacitorUpdater.notifyAppReady().catch(err => console.warn('Capgo notify failed:', err));
-    }).catch(err => console.warn('Native SDK initialization failed:', err));
+    import('@capacitor/splash-screen')
+      .then(({ SplashScreen }) => SplashScreen.hide())
+      .catch(err => console.warn('Splash screen hide failed:', err));
+    import('onesignal-cordova-plugin')
+      .then(({ default: oneSignal }) => oneSignal.initialize(ONESIGNAL_APP_ID))
+      .catch(err => console.warn('Native notifications initialization failed:', err));
   }, []);
 
   return (
